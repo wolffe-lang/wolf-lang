@@ -323,17 +323,44 @@ handler).
   check. The first dispatch, 40146566459 at `58924a44`, went red at
   `fmt` on this branch's own unformatted code, not the gate; it is
   superseded. The plant branch is to be deleted after the merge.
-- **The gauntlet.** The first run (phase 2b, at the pre-rebase head)
-  went red in `test` at `crates/wolf_driver/tests/copy_write_lanes.rs:221`
-  (`a_failed_copy_write_puts_the_source_back_on_every_lane`: "lupin 0.1.56
-  (28547b4)'s answer on fs/copy_chunk_failed_write.lu: ("unsupported",
-  ""), want the clause's or a pre-mirror pin [("0.1.55", "e642f26", …)]");
-  `fmt`, `fmt-fixpoint`, `clippy` and `rt-none` were green before it
-  (`gauntlet1/`). That phase's script ended 0 over the red; `bdb6fc89`
-  makes it exit with its worst step. The attribution (the test at trunk
-  `6480a27b` in the same container with the same lupin) and the whole
-  gauntlet at the rebased head, every step past a red run alone, are
-  `tools/gauntlet2.sh` — PENDING (§8).
+- **The gauntlet.** Three takes, and what each red was:
+  - Take 1 (phase 2b, the pre-rebase head): red in `test` at
+    `copy_write_lanes.rs:221`; that phase's script ended 0 over the red,
+    which `bdb6fc89` fixes (the phase exits with its worst step).
+  - Take 2 (`tools/gauntlet2.sh`, `53b95d3a`, every step past the red run
+    alone; `gauntlet2/`): `test` 327 targets green and 2 red —
+    `a_failed_copy_write_puts_the_source_back_on_every_lane` (lupin 0.1.56
+    answers `("unsupported", "")` on `fs/copy_chunk_failed_write.lu`) and
+    `a_cwd_asked_in_a_region_keeps_nothing_a_turn`; `fuzz-check` red (no
+    `libfuzzer-sys` in the offline cargo home); **`bench-gates` red on the
+    start-up row itself: 15 over C** (wolf 74, C 59); every other step
+    green (deps-check, corpus, abi-check, debug-check, midend-rate,
+    spec-extract, conformance, print-gate, diag-catalog, doc-catalog,
+    fmt-lu, fmt-fuzz, audit-surface, dist-smoke, differ-self,
+    lane-coverage).
+  - **The causes.** (1) The two `test` rows are the lane's set-up, not
+    the runtime: the lane symlinked the worktree's `target/` to one
+    target directory outside the repository (§2's disk note), and those
+    rows' programs write `target/s260-copy-*.tmp` and ask for their cwd
+    relative to the repository; through the symlink the canonical paths
+    leave the tree lupin serves, and lupin 0.1.56 refuses a canonical path
+    outside its served tree by name (0.2.35's release notes), so it
+    answered `unsupported`. `tools/attr2.sh` ran `copy_write_lanes` at
+    trunk `6480a27b` (a real `target/`: 3/3 green) and at the head (the
+    symlink: red) — the difference it measured was the symlink, not the
+    commit. (2) `fuzz-check`: the lane fetched the workspace's crates
+    only. (3) **The gate's own defect**: under `cargo run` the hellos
+    inherited LD_LIBRARY_PATH, and the loader probes each directory for
+    each library — two libraries for wolf, one for C — so the difference
+    depended on the caller's environment (the plant's CI run read 26 for
+    the same reason, not 22). `efe4fdd6` traces both hellos (and times
+    them) in an empty environment.
+  - Take 3, the recheck at `efe4fdd6` in the gauntlet's own set-up (the
+    worktree's real `target/`, the fuzz crates fetched;
+    `recheck/`): `copy_write_lanes` 3/3, `cwd_region_lanes` 1/1,
+    `fuzz-check` green, **`bench-gates` green: wolf 47, C 35, 12**; the
+    wall row read wolf 194.8 us, C 155.4 us, ratio 1.25. The whole
+    gauntlet at the final head: §8.
 - **The differ against 0.2.35** (`xtask differ <head's wolf> <0.2.35's
   wolf>`, the three tiers, `WOLF_STD` the std pin; `gauntlet1/differ-*.log`):
   checked 3, native 6, release 6 divergences of 1,221 files. Every moved
@@ -392,27 +419,20 @@ takes enough starts; a median of three will keep missing by chance.
   rows over enough starts (here 150 a cell; R-yw07-12's median of five
   still swings 2x on the same binary) before re-pinning; the toolchain's
   share is +0.04 ms. wolf-lang#918 itself closes with this PR.
-- **wolf-lang**: `copy_write_lanes`' lupin pin list stops at 0.1.55
-  while PAIRING names 0.1.56, so the row is red wherever 0.1.56 answers
-  `unsupported` on `fs/copy_chunk_failed_write.lu` (owner: the next lane
-  on wolf-lang or is82's mirror) — conditional on the trunk run in §8.
+- **wolf-lang** (small): rows that write under `target/` relative to the
+  repository (`fs/copy_chunk_failed_write.lu`, the cwd row) go
+  `unsupported` on lupin when `target/` is a symlink out of the tree; a
+  lane that shares one target directory meets it. Worth a line in
+  CONTRIBUTING, or the rows writing under `CARGO_TARGET_TMPDIR`.
 - **wolf-lang**: bench-gates' start-up wall row (report-only) has no
   floor yet; a nightly row on a quiet rig would give it one (D5).
 
-## 8. PENDING at the PR's opening
+## 8. PENDING: the whole gauntlet at the final head
 
-- `tools/gauntlet2.sh` on kasumi: the gauntlet at the rebased head
-  `53b95d3a`, every step past a red one run alone, exiting with the worst
-  step. Its first part, the copy_write test at trunk `6480a27b`, ran with
-  `CARGO_TARGET_DIR` set (unlike the gauntlet) and failed two rows with
-  `error: not_found`, among them one the head passes
-  (`a_copy_into_dev_full_keeps_its_bytes_on_every_lane`): an environment
-  difference of mine, so it attributes nothing.
-- `tools/attr2.sh`, queued on the lane lock behind it: the same test at
-  trunk `6480a27b` and at the head, both in the gauntlet's own
-  configuration (the worktree's `target/`), same container, same lupin
-  0.1.56. Red at trunk too: pre-existing (the lupin pin list stops at
-  0.1.55), cited, not fixed here; green at trunk: this lane's.
+`tools/gauntlet3.sh` on kasumi: `cargo xtask ci` at the final head in
+the gauntlet's own set-up (the worktree's real `target/`, the fuzz crates
+fetched), exiting with the gauntlet's exit. Its log and exit land in
+`gauntlet3/` when it ends.
 
 ## Done-when (the contract's)
 
@@ -427,7 +447,9 @@ takes enough starts; a median of three will keep missing by chance.
 - [x] Item 4: the start-up row in bench-gates (deterministic, 12), the
   wall row report-only with the reason; the plant red by run id
   (40147037892); the differ against 0.2.35 with every moved row named.
-- [ ] Item 4: the gauntlet at the head exit 0 — PENDING (§8).
+- [ ] Item 4: the gauntlet at the head exit 0 — every red of takes 1-2
+  explained and the four red rows green at `efe4fdd6` (§4); the whole
+  run at the final head PENDING (§8).
 - [x] Item 5: this note; `Footprint: cross-cutting` (the runtime moves).
 - [ ] `tier pr` green at the head; `tier full` (the orchestrator's).
 
@@ -439,8 +461,9 @@ or runtime set-up that this change moves (the gates are in
 
 ## Prune list (kasumi, `~/lanes/s265`)
 
-`target/` (14 GB after the first gauntlet; peak about 14 GB plus the
-trunk attribution's separate target, removed by its own job),
+`wolf-head/target/` (moved there from the lane's `target/` for take 3;
+21 GB, the peak; the trunk attribution's 1.3 GB target removed by its own
+job),
 `bisect/` (17 hellos), `tc/` (the unpacked archives and the head's
 staged toolchain), `wolf-lang/`, `wolf-head/`, `wolf-var/`, `wolf-trunk/`,
 `yew/`, `yew-a`, `yew-b`, `yew-fix` (the cells' binaries are hashed in

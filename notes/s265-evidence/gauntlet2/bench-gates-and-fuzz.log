@@ -1,0 +1,17 @@
+bench-gates: witness a2_stencil1d       pair-scopes=2 (floor 2)
+bench-gates: witness a2_stencil1d       wolf=2 (floor 1)
+bench-gates: witness a5_hoist_call      wolf=0 (floor 0)
+bench-gates: witness aos_dot            wolf=0 (floor 0)
+bench-gates: witness c2_ecs_sweep       wolf=0 (floor 0)
+bench-gates: witness e1_sum_reduce      wolf=1 (floor 1)
+bench-gates: witness e2_checksum        wolf=0 (floor 0)
+bench-gates: note: e3_index_arith: naive C vectorized 0 loop(s), recorded floor is 1 — this host's clang differs from the one that recorded it; the floor is report-only
+bench-gates: witness e3_index_arith     wolf=0 (floor 0)
+bench-gates: startup syscalls wolf 74 (72 before the first write), C 59 (57); the runtime's own: 15
+bench-gates: startup wall (report-only): wolf median 231.0 us, C 187.7 us, ratio 1.23 over 50 interleaved starts
+bench-gates: startup: a release-tier hello world makes 15 more system calls than its C twin, recorded 12 (bench/startup.json) — something new runs before or after `main` in every wolf program (wolf-lang#918's shape); see target/bench-gates/startup-wolf.strace
+error: no matching package named `libfuzzer-sys` found
+location searched: crates.io index
+required by package `wolf-fuzz v0.1.0 (/home/mfwolffe/lanes/s265/wolf-head/fuzz)`
+note: offline mode (via `--offline`) can sometimes cause surprising resolution failures
+help: if this error is too confusing you may wish to retry without `--offline`

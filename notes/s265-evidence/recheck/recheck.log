@@ -1,0 +1,20 @@
+drwxr-xr-x 1 mfwolffe mfwolffe 264 Oct 24 22:03 /home/mfwolffe/lanes/s265/wolf-head/target
+fetched fuzz crates
+copy_write_lanes exit=0
+efe4fdd6 Trace the start-up row's hellos in an empty environment
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+cwd_region_lanes exit=0
+efe4fdd6 Trace the start-up row's hellos in an empty environment
+test a_cwd_asked_in_a_region_keeps_nothing_a_turn ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+fuzz-check exit=0
+    Checking wolf-fuzz v0.1.0 (/home/mfwolffe/lanes/s265/wolf-head/fuzz)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.10s
+bench-gates exit=0
+bench-gates: startup syscalls wolf 47 (45 before the first write), C 35 (33); the runtime's own: 12
+bench-gates: startup wall (report-only): wolf median 194.8 us, C 155.4 us, ratio 1.25 over 50 interleaved starts
+bench-gates: deterministic bench gates green
+recheck worst=0

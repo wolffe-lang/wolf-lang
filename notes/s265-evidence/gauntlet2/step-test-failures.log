@@ -1,0 +1,126 @@
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/copy_write_lanes.rs (target/debug/deps/copy_write_lanes-37d27d1ba9956a62)
+
+running 3 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+
+thread 'a_failed_copy_write_puts_the_source_back_on_every_lane' (62295) panicked at crates/wolf_driver/tests/copy_write_lanes.rs:221:5:
+lupin 0.1.56 (28547b4)'s answer on fs/copy_chunk_failed_write.lu: ("unsupported", ""), want the clause's or a pre-mirror pin ([("0.1.55", "e642f26", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n"), ("0.1.56", "28547b4", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n")])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... FAILED
+
+failures:
+
+failures:
+    a_failed_copy_write_puts_the_source_back_on_every_lane
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+error: test failed, to rerun pass `-p wolf_driver --test copy_write_lanes`
+     Running tests/ct_asm_witness.rs (target/debug/deps/ct_asm_witness-95f99a8cdf3de039)
+
+running 2 tests
+test tag_compare_release_body_is_branch_free ... ok
+test cswap_release_body_is_branch_free ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/ctrl_c_lanes.rs (target/debug/deps/ctrl_c_lanes-f6ef073d509cd611)
+
+running 6 tests
+s219 status.lu [checked] "exit(0)" String("pid>0=true a=-9 b=-9 false=1 again=io\n")
+s219 status.lu [["/home/mfwolffe/lanes/s265/wolf-head/target/tmp/ctrl_c_lanes/status_lu/a-native"]] code=Some(0) "pid>0=true a=-9 b=-9 false=1 again=io\n"
+s219 status.lu [["/usr/bin/taskset", "-c", "0-3", "/home/mfwolffe/lanes/s265/wolf-head/target/tmp/ctrl_c_lanes/status_lu/a-native"]] code=Some(0) "pid>0=true a=-9 b=-9 false=1 again=io\n"
+s219 listen.lu [checked] ready=true SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000
+s219 ignore.lu [checked] ready=true SigBlk: 000000000ffb7a27 SigIgn: 0000000000001002
+s219 status.lu [["/home/mfwolffe/lanes/s265/wolf-head/target/tmp/ctrl_c_lanes/status_lu/a-release"]] code=Some(0) "pid>0=true a=-9 b=-9 false=1 again=io\n"
+s219 status.lu [["/usr/bin/taskset", "-c", "0-3", "/home/mfwolffe/lanes/s265/wolf-head/target/tmp/ctrl_c_lanes/status_lu/a-release"]] code=Some(0) "pid>0=true a=-9 b=-9 false=1 again=io\n"
+s219 status.lu [lupin 0.1.56 28547b4] "exit(0)" String("pid>0=true a=-9 b=-9 false=1 again=io\n")
+test a_group_leader_a_joiner_and_their_status ... ok
+s219 group.lu [checked] ready=true SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000
+s219 control.lu [checked] ready=true SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000
+s219 listen.lu [checked] end=Exit(0) SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000 transcript="ready\n^Cgot 16\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/ctrl_c/listen.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.35+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\n"
+s219 listen.lu [native] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 group.lu [checked] end=Exit(0) SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000 transcript="ready child-fg=true mine=true\n^Cchild=-2 back=true\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/ctrl_c/group.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.35+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\n"
+s219 group.lu [native] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 control.lu [checked] end=Signal(2) SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000 transcript="ready\n^C"
+s219 control.lu [native] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 ignore.lu [checked] end=Exit(0) SigBlk: 000000000ffb7a27 SigIgn: 0000000000001002 transcript="ready\n^Cgo\nsurvived 3\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/ctrl_c/ignore.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.35+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\n"
+s219 ignore.lu [native] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000002
+s219 listen.lu [native] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^Cgot 16\n"
+s219 listen.lu [native taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 group.lu [native] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready child-fg=true mine=true\n^Cchild=-2 back=true\n"
+s219 group.lu [native taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 control.lu [native] end=Signal(2) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^C"
+s219 control.lu [native taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 listen.lu [native taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^Cgot 16\n"
+s219 listen.lu [release] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 group.lu [native taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready child-fg=true mine=true\n^Cchild=-2 back=true\n"
+s219 group.lu [release] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 ignore.lu [native] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000002 transcript="ready\n^Cgo\nsurvived 3\n"
+s219 ignore.lu [native taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000002
+s219 control.lu [native taskset -c 0-3] end=Signal(2) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^C"
+s219 control.lu [release] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 listen.lu [release] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^Cgot 16\n"
+s219 listen.lu [release taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 group.lu [release] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready child-fg=true mine=true\n^Cchild=-2 back=true\n"
+s219 group.lu [release taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 control.lu [release] end=Signal(2) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^C"
+s219 control.lu [release taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 listen.lu [release taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^Cgot 16\n"
+s219 ignore.lu [native taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000002 transcript="ready\n^Cgo\nsurvived 3\n"
+s219 ignore.lu [release] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000002
+s219 group.lu [release taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready child-fg=true mine=true\n^Cchild=-2 back=true\n"
+s219 listen.lu [lupin] end=Exit(0) verdict=unsupported why="`os_signal_listen` arms a signal's trampoline, which is `sigaction`: std has none, and this machine admits no `unsafe` ([os.signal.listen], [os.term.note] R8)"
+test a_listened_interrupt_is_an_event ... ok
+s219 group.lu [lupin] end=Exit(0) verdict=unsupported why="`os_pgid` asks the terminal or the process group: this machine admits no `unsafe` and std has no call for it ([os.term], [os.term.note] R8)"
+test a_child_group_takes_ctrl_c_and_the_terminal_comes_back ... ok
+s219 control.lu [release taskset -c 0-3] end=Signal(2) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready\n^C"
+s219 control.lu [lupin] end=Exit(0) verdict=unsupported why="`fs_open_mode(\"/dev/tty\")` resolves outside the working directory — `..` applied and symlinks followed, as the host would (`[os.fs.path.domain]`); this machine serves the fs tier over REAL files inside its own tree and declines the rest by name rather than observing it"
+test control_dies_of_ctrl_c ... ok
+s219 raw.lu [checked] ready=true SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000
+s219 ignore.lu [release] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000002 transcript="ready\n^Cgo\nsurvived 3\n"
+s219 ignore.lu [release taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000002
+s219 raw.lu [checked] end=Exit(0) SigBlk: 000000000ffb7a27 SigIgn: 0000000000001000 transcript="ready raw=260\nkey=120 restored=true\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/ctrl_c/raw.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.35+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\n"
+s219 raw.lu [native] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 raw.lu [native] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready raw=260\nkey=120 restored=true\n"
+s219 raw.lu [native taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 ignore.lu [release taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000002 transcript="ready\n^Cgo\nsurvived 3\n"
+s219 ignore.lu [lupin] end=Exit(0) verdict=unsupported why="`os_signal_ignore` sets a signal's disposition: this machine admits no `unsafe` and std has no `sigaction` ([os.signal.disp], [os.term.note] R8)"
+test an_ignored_interrupt_survives_ctrl_c ... ok
+s219 raw.lu [native taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready raw=260\nkey=120 restored=true\n"
+s219 raw.lu [release] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 raw.lu [release] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready raw=260\nkey=120 restored=true\n"
+s219 raw.lu [release taskset -c 0-3] ready=true SigBlk: 0000000000000000 SigIgn: 0000000000000000
+s219 raw.lu [release taskset -c 0-3] end=Exit(0) SigBlk: 0000000000000000 SigIgn: 0000000000000000 transcript="ready raw=260\nkey=120 restored=true\n"
+s219 raw.lu [lupin] end=Exit(0) verdict=unsupported why="`os_term_mode` asks the terminal or the process group: this machine admits no `unsafe` and std has no call for it ([os.term], [os.term.note] R8)"
+test raw_mode_reads_one_key_and_restores ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.13s
+
+     Running tests/cwd_region_lanes.rs (target/debug/deps/cwd_region_lanes-84343ed52cd4c8e6)
+
+running 1 test
+REPORT cwdregion native cwd (cwd 67 bytes): 200000 turns 2871296 B, 400000 turns 2871296 B, 0 B a turn (t=11400000, 22800000)
+
+thread 'a_cwd_asked_in_a_region_keeps_nothing_a_turn' (62836) panicked at crates/wolf_driver/tests/cwd_region_lanes.rs:141:17:
+assertion `left == right` failed: the native witness asked the name every turn
+  left: "22800000"
+ right: "26800000"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_cwd_asked_in_a_region_keeps_nothing_a_turn ... FAILED
+
+failures:
+
+failures:
+    a_cwd_asked_in_a_region_keeps_nothing_a_turn
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+error: test failed, to rerun pass `-p wolf_driver --test cwd_region_lanes`
+     Running tests/debug_native.rs (target/debug/deps/debug_native-ec183e0620aa7363)
+
+running 6 tests

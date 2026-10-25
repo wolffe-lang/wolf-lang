@@ -1,0 +1,46 @@
+   Compiling libc v0.2.189
+   Compiling find-msvc-tools v0.1.10
+   Compiling shlex v2.0.1
+   Compiling crossbeam-utils v0.8.22
+   Compiling crossbeam-epoch v0.9.20
+    Checking wolf_span v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_span)
+   Compiling crossbeam-deque v0.8.7
+    Checking wolf_diag v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_diag)
+    Checking unicode-ident v1.0.24
+   Compiling rayon-core v1.13.0
+    Checking wolf_lex v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_lex)
+    Checking wolf_ast v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_ast)
+    Checking cfg-if v1.0.4
+    Checking cpufeatures v0.3.0
+    Checking arrayvec v0.7.8
+    Checking either v1.17.0
+    Checking wolf_parse v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_parse)
+    Checking constant_time_eq v0.4.2
+    Checking arrayref v0.3.9
+    Checking rayon v1.12.0
+   Compiling jobserver v0.1.35
+    Checking equivalent v1.0.2
+   Compiling serde_core v1.0.229
+   Compiling cc v1.4.2
+    Checking hashbrown v0.17.1
+   Compiling zmij v1.0.23
+    Checking indexmap v2.14.0
+    Checking hashbrown v0.16.1
+   Compiling serde_json v1.0.151
+    Checking fnv v1.0.7
+    Checking gimli v0.33.0
+   Compiling blake3 v1.8.6
+   Compiling libfuzzer-sys v0.4.13
+    Checking itoa v1.0.18
+    Checking memchr v2.8.3
+    Checking wolf_rt v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_rt)
+    Checking wolf_sema v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_sema)
+    Checking arbitrary v1.4.2
+    Checking xtask v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/xtask)
+    Checking wolf_fmt v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_fmt)
+    Checking wolf_mem v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_mem)
+    Checking wolf_wir v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_wir)
+    Checking wolf_backend v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_backend)
+    Checking wolf_codegen_llvm v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_codegen_llvm)
+    Checking wolf-fuzz v0.1.0 (/home/mfwolffe/lanes/s265/wolf-head/fuzz)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.10s

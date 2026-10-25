@@ -1,0 +1,5 @@
+efe4fdd6 Trace the start-up row's hellos in an empty environment
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s

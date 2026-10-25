@@ -1,0 +1,60 @@
+test the_kitchen_sink_procs_file_runs ... ok
+test the_mid_end_does_not_merge_two_iterations_capture_records ... ok
+test two_sequential_selects_with_timeouts_run ... ok
+X12: corpus/conc/spawn_fanout_loop.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "204\n"
+test when_multi_acquires_whole_sets ... ok
+test wolf_test_schedules_explores_a_native_body ... ok
+test the_release_tier_runs_the_conc_corpus ... ok
+X12: corpus/conc/select_seeded.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/conc/message_passing.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/procs.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+mid-end conc differential: 24 seeded run pair(s) identical
+test mid_end_does_not_change_seeded_conc_behavior ... ok
+X12: corpus/conc/proc_kill_defers.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "released"
+X12: corpus/conc/proc_cancel_defers.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "defer-ran\nreleased"
+X12: corpus/conc/proc_spawn_loop.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/net/spawn_accept.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "echo: howl\n"
+X12: corpus/conc/spawn_fanout_loop.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "204\n"
+X12: corpus/conc/select_seeded.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/conc/message_passing.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/procs.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/conc/proc_kill_defers.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "released"
+X12: corpus/conc/proc_cancel_defers.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "defer-ran\nreleased"
+X12: corpus/conc/proc_spawn_loop.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/net/spawn_accept.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "echo: howl\n"
+test the_same_seed_gives_the_same_output_ten_times ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.61s
+
+     Running tests/container_access.rs (target/debug/deps/container_access-314b89b6bc557afc)
+
+running 5 tests
+test a_provable_index_emits_no_bounds_check ... ok
+test a_list_loop_reaches_the_vectorizer ... ok
+test a_list_sum_carries_no_per_element_call ... ok
+test for_over_a_list_is_a_counted_loop ... ok
+test an_unprovable_index_still_traps_bounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/copy_write_lanes.rs (target/debug/deps/copy_write_lanes-37d27d1ba9956a62)
+
+running 3 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+
+thread 'a_failed_copy_write_puts_the_source_back_on_every_lane' (35711) panicked at crates/wolf_driver/tests/copy_write_lanes.rs:221:5:
+lupin 0.1.56 (28547b4)'s answer on fs/copy_chunk_failed_write.lu: ("unsupported", ""), want the clause's or a pre-mirror pin ([("0.1.55", "e642f26", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n"), ("0.1.56", "28547b4", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n")])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... FAILED
+
+failures:
+
+failures:
+    a_failed_copy_write_puts_the_source_back_on_every_lane
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+error: test failed, to rerun pass `-p wolf_driver --test copy_write_lanes`
+xtask ci: step `test` failed

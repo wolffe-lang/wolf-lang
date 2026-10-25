@@ -1,0 +1,1702 @@
+warning[W0314]: `geo` holds exactly one item
+ --> corpus/generics/list_imported_elem/geo/point.lu:8:12
+  |
+8 | pub struct Point {
+  |            ^^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0314]: `geo` holds exactly one item
+ --> corpus/generics/list_imported_elem/geo/point.lu:8:12
+  |
+8 | pub struct Point {
+  |            ^^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0303]: this `#[allow]` names no warning codes, so it allows nothing
+  --> corpus/lints/allow_nothing.lu:10:3
+   |
+10 | #[allow]
+   |   ^^^^^ no codes to allow
+   |
+   = note: name the codes to suppress (`#[allow(w1301)]`) or delete the attribute.
+
+warning[W0303]: this `#[allow]` names no warning codes, so it allows nothing
+  --> corpus/lints/allow_nothing.lu:10:3
+   |
+10 | #[allow]
+   |   ^^^^^ no codes to allow
+   |
+   = note: name the codes to suppress (`#[allow(w1301)]`) or delete the attribute.
+
+warning[W0302]: `w9999` is not a registered diagnostic code, so this allow suppresses nothing
+  --> corpus/lints/allow_unknown_code.lu:11:9
+   |
+11 | #[allow(w9999)]
+   |         ^^^^^ no such code
+   |
+   = note: codes look like `w1301` (one code) or `w13xx` (a family); the catalog in
+     docs/diagnostics.md lists every registered code.
+
+warning[W0302]: `w9999` is not a registered diagnostic code, so this allow suppresses nothing
+  --> corpus/lints/allow_unknown_code.lu:11:9
+   |
+11 | #[allow(w9999)]
+   |         ^^^^^ no such code
+   |
+   = note: codes look like `w1301` (one code) or `w13xx` (a family); the catalog in
+     docs/diagnostics.md lists every registered code.
+
+warning[W0316]: `outer.inner` imports `outer`, its own ancestor
+ --> corpus/lints/ancestor_import/outer/inner/leaf.lu:5:5
+  |
+5 | use outer
+  |     ^^^^^ one edit away from an import cycle
+  |
+  = note: the ancestor owns this module structurally, and this import couples the two the other
+    way; move the shared items down (or into a sibling) so the dependency runs parent to
+    child.
+
+warning[W0316]: `outer.inner` imports `outer`, its own ancestor
+ --> corpus/lints/ancestor_import/outer/inner/leaf.lu:5:5
+  |
+5 | use outer
+  |     ^^^^^ one edit away from an import cycle
+  |
+  = note: the ancestor owns this module structurally, and this import couples the two the other
+    way; move the shared items down (or into a sibling) so the dependency runs parent to
+    child.
+
+warning[W0312]: `as_length` reads as a borrowed view, but this parameter consumes its operand
+  --> corpus/lints/as_view_consuming.lu:10:14
+   |
+10 | fn as_length(take s: str) -> int {
+   |              ^^^^^^^^^^^ a view must borrow
+   |
+   = note: `as_x` (and bare nouns) are views over an untouched operand; `to_x` is the spelling that
+     builds a new value. Rename the function, or give the parameter the read default.
+
+warning[W0312]: `as_length` reads as a borrowed view, but this parameter consumes its operand
+  --> corpus/lints/as_view_consuming.lu:10:14
+   |
+10 | fn as_length(take s: str) -> int {
+   |              ^^^^^^^^^^^ a view must borrow
+   |
+   = note: `as_x` (and bare nouns) are views over an untouched operand; `to_x` is the spelling that
+     builds a new value. Rename the function, or give the parameter the read default.
+
+warning[W1302]: `q` was an `assume noalias` operand, and this reassigns it
+  --> corpus/lints/assume_reassigned.lu:23:9
+   |
+21 |         assume noalias p, q
+   |         ------------------- the assumption was stated here
+22 |         let spare = q
+23 |         q = p
+   |         ^^^^^ the assumption no longer describes this name
+   |
+   = note: the no-alias license was granted for the pointer this name held then; state the
+     assumption after the last assignment of its operands.
+
+warning[W1302]: `q` was an `assume noalias` operand, and this reassigns it
+  --> corpus/lints/assume_reassigned.lu:23:9
+   |
+21 |         assume noalias p, q
+   |         ------------------- the assumption was stated here
+22 |         let spare = q
+23 |         q = p
+   |         ^^^^^ the assumption no longer describes this name
+   |
+   = note: the no-alias license was granted for the pointer this name held then; state the
+     assumption after the last assignment of its operands.
+
+warning[W0801]: `Zed` binds a new name here — it does not match a case
+  --> corpus/lints/binder_capitalized.lu:15:9
+   |
+15 |         Zed => Zed + 1,
+   |         ^^^ matches every value
+   |
+   = note: the scrutinee has no variants or tags, so a bare name is a binding; compare with a guard
+     (`n if n == …`), or use a lowercase name so it reads as the binding it is.
+
+warning[W0801]: `Zed` binds a new name here — it does not match a case
+  --> corpus/lints/binder_capitalized.lu:15:9
+   |
+15 |         Zed => Zed + 1,
+   |         ^^^ matches every value
+   |
+   = note: the scrutinee has no variants or tags, so a bare name is a binding; compare with a guard
+     (`n if n == …`), or use a lowercase name so it reads as the binding it is.
+
+warning[W0601]: this `int ! {empty}` result is discarded, error row and all
+  --> corpus/lints/discarded_result.lu:16:5
+   |
+16 |     fetch(3)
+   |     ^^^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `int ! {empty}` result is discarded, error row and all
+  --> corpus/lints/discarded_result.lu:16:5
+   |
+16 |     fetch(3)
+   |     ^^^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0318]: the default extends over `+ extra`
+  --> corpus/lints/else_arithmetic.lu:24:40
+   |
+24 |     let swallowed = to_num("x") else 0 + extra
+   |                                        ^ computed on the fallback, not on the value
+   |
+   = note: `else` binds loosest, so the fallback is the whole operator chain after it: this reads
+     `to_num("x") else (0 + extra)`, and the default swallows the `+ extra`. Group the value
+     if the default was meant to end at itself — the edit below is that grouping.
+   = note: in a fallible function the clean spelling removes the `else` altogether: `to_num("x")?`
+     propagates the failure and the arithmetic reads as written.
+help: to default first and compute second, group the `else`
+   |
+24 |     let swallowed = (to_num("x") else 0) + extra
+   |
+
+warning[W0318]: the default extends over `+ extra`
+  --> corpus/lints/else_arithmetic.lu:24:40
+   |
+24 |     let swallowed = to_num("x") else 0 + extra
+   |                                        ^ computed on the fallback, not on the value
+   |
+   = note: `else` binds loosest, so the fallback is the whole operator chain after it: this reads
+     `to_num("x") else (0 + extra)`, and the default swallows the `+ extra`. Group the value
+     if the default was meant to end at itself — the edit below is that grouping.
+   = note: in a fallible function the clean spelling removes the `else` altogether: `to_num("x")?`
+     propagates the failure and the arithmetic reads as written.
+help: to default first and compute second, group the `else`
+   |
+24 |     let swallowed = (to_num("x") else 0) + extra
+   |
+
+warning[W0307]: this `==` applies to the fallback only
+  --> corpus/lints/else_comparison.lu:19:30
+   |
+19 |     let ok = maybe(0) else a == b
+   |                              ^^ compared before the `else` defaults
+   |
+   = note: `else` binds loosest, so the fallback is the whole operator chain after it; parenthesize
+     the reading you mean.
+help: to default first and compare second, group the `else`
+   |
+19 |     let ok = (maybe(0) else a) == b
+   |
+
+warning[W0307]: this `==` applies to the fallback only
+  --> corpus/lints/else_comparison.lu:19:30
+   |
+19 |     let ok = maybe(0) else a == b
+   |                              ^^ compared before the `else` defaults
+   |
+   = note: `else` binds loosest, so the fallback is the whole operator chain after it; parenthesize
+     the reading you mean.
+help: to default first and compare second, group the `else`
+   |
+19 |     let ok = (maybe(0) else a) == b
+   |
+
+warning[W0402]: `0.0 - x` is not negation
+  --> corpus/lints/float_zero_minus.lu:14:19
+   |
+14 |     let flipped = 0.0 - x
+   |                   ^^^^^^^ erases the sign of `-0.0`
+   |
+   = note: subtracting from zero maps `-0.0` to `+0.0`; unary minus negates every value, zeros
+     included.
+help: negate with unary minus
+   |
+14 |     let flipped = -x
+   |
+
+warning[W0402]: `0.0 - x` is not negation
+  --> corpus/lints/float_zero_minus.lu:14:19
+   |
+14 |     let flipped = 0.0 - x
+   |                   ^^^^^^^ erases the sign of `-0.0`
+   |
+   = note: subtracting from zero maps `-0.0` to `+0.0`; unary minus negates every value, zeros
+     included.
+help: negate with unary minus
+   |
+14 |     let flipped = -x
+   |
+
+warning[W0310]: `get_total` wears the `get_` prefix
+  --> corpus/lints/get_prefix.lu:10:4
+   |
+10 | fn get_total(a: int, b: int) -> int {
+   |    ^^^^^^^^^ the prefix says nothing
+   |
+   = note: every function gets something — name it after the noun it fetches (`total`), or, for
+     checked access that can miss, bare `get` with an absence row.
+
+warning[W0310]: `get_total` wears the `get_` prefix
+  --> corpus/lints/get_prefix.lu:10:4
+   |
+10 | fn get_total(a: int, b: int) -> int {
+   |    ^^^^^^^^^ the prefix says nothing
+   |
+   = note: every function gets something — name it after the noun it fetches (`total`), or, for
+     checked access that can miss, bare `get` with an absence row.
+
+warning[W0604]: this `get` declares no absence row
+  --> corpus/lints/get_without_row.lu:10:4
+   |
+10 | fn get(i: int) -> int {
+   |    ^^^ checked access that cannot miss
+   |
+   = note: bare `get` is the checked-access spelling: it answers `T ! {none}` and callers handle
+     the miss. Give it the absence row, or name it after what it computes.
+
+warning[W0604]: this `get` declares no absence row
+  --> corpus/lints/get_without_row.lu:10:4
+   |
+10 | fn get(i: int) -> int {
+   |    ^^^ checked access that cannot miss
+   |
+   = note: bare `get` is the checked-access spelling: it answers `T ! {none}` and callers handle
+     the miss. Give it the absence row, or name it after what it computes.
+
+warning[W0317]: `.get` counts from 0, even inside this `index(1)` scope
+  --> corpus/lints/index_origin_get.lu:16:20
+   |
+16 |     let a = xs.get(1) else { 0 - 1 }
+   |                    ^ a 0-based index
+   |
+   = note: the origin marker shifts subscripts (`xs[i]`) but never method arguments — `xs[1]` and
+     `xs.get(1)` name different elements here. Use the subscript form, or spell the 0-based
+     index deliberately.
+
+warning[W0317]: `.get` counts from 0, even inside this `index(1)` scope
+  --> corpus/lints/index_origin_get.lu:16:20
+   |
+16 |     let a = xs.get(1) else { 0 - 1 }
+   |                    ^ a 0-based index
+   |
+   = note: the origin marker shifts subscripts (`xs[i]`) but never method arguments — `xs[1]` and
+     `xs.get(1)` name different elements here. Use the subscript form, or spell the 0-based
+     index deliberately.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+  --> corpus/lints/match_str_arm_unreachable.lu:15:9
+   |
+13 |         "x" => "one",
+   |         --- this arm already matches those values
+14 |         "y" => "two",
+15 |         "x" => "dup",   // E0802: subsumed by the first `"x"` arm
+   |         ^^^ unreachable arm
+   |
+   = note: delete the arm, or reorder the arms so the more specific pattern comes first.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+  --> corpus/lints/match_str_arm_unreachable.lu:15:9
+   |
+13 |         "x" => "one",
+   |         --- this arm already matches those values
+14 |         "y" => "two",
+15 |         "x" => "dup",   // E0802: subsumed by the first `"x"` arm
+   |         ^^^ unreachable arm
+   |
+   = note: delete the arm, or reorder the arms so the more specific pattern comes first.
+
+warning[W0308]: this interpolation mutates its argument
+  --> corpus/lints/mut_in_interp.lu:18:18
+   |
+18 |     print("{bump(mut a)}")
+   |                  ^^^^^ a write, hidden inside formatting
+   |
+   = note: interpolations read as pure formatting; hoist the call onto its own line and interpolate
+     the result.
+
+warning[W0308]: this interpolation mutates its argument
+  --> corpus/lints/mut_in_interp.lu:18:18
+   |
+18 |     print("{bump(mut a)}")
+   |                  ^^^^^ a write, hidden inside formatting
+   |
+   = note: interpolations read as pure formatting; hoist the call onto its own line and interpolate
+     the result.
+
+warning[W1002]: `base` is `mut`, and the body never writes it
+  --> corpus/lints/mut_param_unwritten.lu:11:11
+   |
+11 | fn offset(mut base: int, delta: int) -> int {
+   |           ^^^ writeback nothing uses
+   |
+   = note: every call site surrenders exclusive access for a write that never happens; the read
+     default is the honest mode.
+help: drop the `mut` here and at every call site — the parameter is never written
+   |
+11 | fn offset(base: int, delta: int) -> int {
+17 |     offset(b, 2) - 3
+   |
+
+warning[W1002]: `base` is `mut`, and the body never writes it
+  --> corpus/lints/mut_param_unwritten.lu:11:11
+   |
+11 | fn offset(mut base: int, delta: int) -> int {
+   |           ^^^ writeback nothing uses
+   |
+   = note: every call site surrenders exclusive access for a write that never happens; the read
+     default is the honest mode.
+help: drop the `mut` here and at every call site — the parameter is never written
+   |
+11 | fn offset(base: int, delta: int) -> int {
+17 |     offset(b, 2) - 3
+   |
+
+warning[W0401]: `300` does not fit `u8`
+  --> corpus/lints/narrowing_literal.lu:14:20
+   |
+14 |         let tiny = 300 as u8
+   |                    ^^^^^^^^^ u8 holds 0..=255
+   |
+   = note: the value is known here, and the target type cannot hold it — the conversion can never
+     preserve it. Widen the target, or make intended wraparound part of the type with
+     `wrapping`.
+
+warning[W0401]: `300` does not fit `u8`
+  --> corpus/lints/narrowing_literal.lu:14:20
+   |
+14 |         let tiny = 300 as u8
+   |                    ^^^^^^^^^ u8 holds 0..=255
+   |
+   = note: the value is known here, and the target type cannot hold it — the conversion can never
+     preserve it. Widen the target, or make intended wraparound part of the type with
+     `wrapping`.
+
+warning[W0314]: `solo` holds exactly one item
+ --> corpus/lints/one_item_module/solo/only.lu:6:8
+  |
+6 | pub fn only() -> int {
+  |        ^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0314]: `solo` holds exactly one item
+ --> corpus/lints/one_item_module/solo/only.lu:6:8
+  |
+6 | pub fn only() -> int {
+  |        ^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0315]: nothing else in the package uses the `pub(pkg)` item `spare`
+  --> corpus/lints/pkg_item_unused/store/data.lu:10:13
+   |
+10 | pub(pkg) fn spare() -> int {
+   |             ^^^^^ package visibility, unearned
+   |
+   = note: the widened visibility claims another module needs this; make the item private, and
+     widen it back the day one does.
+
+warning[W0315]: nothing else in the package uses the `pub(pkg)` item `spare`
+  --> corpus/lints/pkg_item_unused/store/data.lu:10:13
+   |
+10 | pub(pkg) fn spare() -> int {
+   |             ^^^^^ package visibility, unearned
+   |
+   = note: the widened visibility claims another module needs this; make the item private, and
+     widen it back the day one does.
+
+warning[W0311]: `is_positive` reads as a predicate but does not answer `bool`
+  --> corpus/lints/predicate_shape.lu:10:4
+   |
+10 | fn is_positive(n: int) -> int {
+   |    ^^^^^^^^^^^ a question that is not one
+   |
+   = note: `is_`/`has_` names promise a yes-or-no answer; return `bool`, or rename the function
+     after what it produces.
+
+warning[W0311]: `is_positive` reads as a predicate but does not answer `bool`
+  --> corpus/lints/predicate_shape.lu:10:4
+   |
+10 | fn is_positive(n: int) -> int {
+   |    ^^^^^^^^^^^ a question that is not one
+   |
+   = note: `is_`/`has_` names promise a yes-or-no answer; return `bool`, or rename the function
+     after what it produces.
+
+warning[W0306]: this statement is only `-` applied to a value
+  --> corpus/lints/prefix_statement.lu:15:5
+   |
+15 |     -b
+   |     ^^ computes a value and discards it
+   |
+   = note: if this was meant to continue the line above, join the lines — a newline ended that
+     statement; standalone, the result goes nowhere.
+
+warning[W0306]: this statement is only `-` applied to a value
+  --> corpus/lints/prefix_statement.lu:15:5
+   |
+15 |     -b
+   |     ^^ computes a value and discards it
+   |
+   = note: if this was meant to continue the line above, join the lines — a newline ended that
+     statement; standalone, the result goes nowhere.
+
+warning[W0313]: this `pub` item has no doc comment
+  --> corpus/lints/pub_undocumented.lu:10:1
+   |
+10 | pub fn exported(n: int) -> int {
+   | ^^^ exported, but undocumented
+   |
+   = note: an exported item carries a `///` contract: what it computes, what each row tag means,
+     when it traps. If it is not worth documenting, it is rarely worth exporting.
+
+warning[W0313]: this `pub` item has no doc comment
+  --> corpus/lints/pub_undocumented.lu:10:1
+   |
+10 | pub fn exported(n: int) -> int {
+   | ^^^ exported, but undocumented
+   |
+   = note: an exported item carries a `///` contract: what it computes, what each row tag means,
+     when it traps. If it is not worth documenting, it is rarely worth exporting.
+
+warning[W0309]: `{who}` in a raw literal is just braces and letters
+  --> corpus/lints/raw_interp_braces.lu:21:15
+   |
+21 |     let s = r"{who}"
+   |               ^^^^^ raw literals interpolate nothing
+   |
+   = note: drop the `r` prefix to interpolate, or keep it if these exact bytes are wanted — the two
+     readings are one keystroke apart.
+
+warning[W0309]: `{who}` in a raw literal is just braces and letters
+  --> corpus/lints/raw_interp_braces.lu:21:15
+   |
+21 |     let s = r"{who}"
+   |               ^^^^^ raw literals interpolate nothing
+   |
+   = note: drop the `r` prefix to interpolate, or keep it if these exact bytes are wanted — the two
+     readings are one keystroke apart.
+
+warning[W1001]: the region `scratch` never allocates
+  --> corpus/lints/region_never_allocates.lu:12:12
+   |
+12 |     region scratch {
+   |            ^^^^^^^ nothing lives here
+   |
+   = note: no allocation is attributed to this region and its handle stays in this frame; delete
+     the region, or move the allocation it was written for inside it.
+
+warning[W1001]: the region `scratch` never allocates
+  --> corpus/lints/region_never_allocates.lu:12:12
+   |
+12 |     region scratch {
+   |            ^^^^^^^ nothing lives here
+   |
+   = note: no allocation is attributed to this region and its handle stays in this frame; delete
+     the region, or move the allocation it was written for inside it.
+
+warning[W1301]: this `unsafe` block does not state its invariant
+  --> corpus/lints/safety_comment_missing.lu:14:5
+   |
+14 |     unsafe {
+   |     ^^^^^^ add a `# Safety:` comment
+   |
+   = note: the block discharges a proof obligation the checker cannot; write the invariant down for
+     the auditors who will read this ring (`// # Safety: …` above the block).
+
+warning[W1301]: this `unsafe` block does not state its invariant
+  --> corpus/lints/safety_comment_missing.lu:14:5
+   |
+14 |     unsafe {
+   |     ^^^^^^ add a `# Safety:` comment
+   |
+   = note: the block discharges a proof obligation the checker cannot; write the invariant down for
+     the auditors who will read this ring (`// # Safety: …` above the block).
+
+warning[W0304]: this function shadows the prelude name `min`
+  --> corpus/lints/shadow_prelude.lu:12:4
+   |
+12 | fn min(a: int, b: int) -> int {
+   |    ^^^ shadows an ambient name
+   |
+   = note: `min` resolves without an import in every file; this declaration silently wins over it
+     for the whole module (file boundaries create no scopes). Pick another name so both stay
+     reachable.
+
+warning[W0304]: this function shadows the prelude name `min`
+  --> corpus/lints/shadow_prelude.lu:12:4
+   |
+12 | fn min(a: int, b: int) -> int {
+   |    ^^^ shadows an ambient name
+   |
+   = note: `min` resolves without an import in every file; this declaration silently wins over it
+     for the whole module (file boundaries create no scopes). Pick another name so both stay
+     reachable.
+
+warning[W0304]: this function shadows the prelude name `read_line`
+  --> corpus/lints/shadow_prelude_call.lu:22:4
+   |
+22 | fn read_line() -> str {
+   |    ^^^^^^^^^ shadows an ambient name
+   |
+   = note: `read_line` resolves without an import in every file; this declaration silently wins
+     over it for the whole module (file boundaries create no scopes). Pick another name so
+     both stay reachable.
+
+warning[W0304]: this function shadows the prelude name `read_line`
+  --> corpus/lints/shadow_prelude_call.lu:22:4
+   |
+22 | fn read_line() -> str {
+   |    ^^^^^^^^^ shadows an ambient name
+   |
+   = note: `read_line` resolves without an import in every file; this declaration silently wins
+     over it for the whole module (file boundaries create no scopes). Pick another name so
+     both stay reachable.
+
+warning[W0304]: this `let` binding shadows the prelude name `clock_ms`
+  --> corpus/lints/shadow_prelude_local.lu:14:9
+   |
+14 |     let clock_ms = 5
+   |         ^^^^^^^^ shadows an ambient name
+   |
+   = note: every later use of `clock_ms` in this scope means the binding, not the ambient name —
+     silently. Rename the binding.
+
+warning[W0304]: this `let` binding shadows the prelude name `clock_ms`
+  --> corpus/lints/shadow_prelude_local.lu:14:9
+   |
+14 |     let clock_ms = 5
+   |         ^^^^^^^^ shadows an ambient name
+   |
+   = note: every later use of `clock_ms` in this scope means the binding, not the ambient name —
+     silently. Rename the binding.
+
+warning[W0603]: the mark `Stale` is spelled CapCase
+  --> corpus/lints/tag_case_payload.lu:12:28
+   |
+12 | fn fetch(n: int) -> int ! {Stale, flat(int)} {
+   |                            ^^^^^ reads as if there were data to destructure
+   |
+   = note: payload-free marks are lowercase bare words (`none`, `eof`, `parse`); CapCase is the
+     reader's signal that a payload waits inside.
+
+warning[W0603]: the tag `flat` carries a payload but is spelled like a mark
+  --> corpus/lints/tag_case_payload.lu:12:35
+   |
+12 | fn fetch(n: int) -> int ! {Stale, flat(int)} {
+   |                                   ^^^^ lowercase reads as nothing-to-destructure
+   |
+   = note: payload-carrying tags are CapCase and name their payload type (`Parse(ParseErr)`);
+     lowercase bare words are reserved for payload-free marks.
+
+warning[W0603]: the mark `Stale` is spelled CapCase
+  --> corpus/lints/tag_case_payload.lu:12:28
+   |
+12 | fn fetch(n: int) -> int ! {Stale, flat(int)} {
+   |                            ^^^^^ reads as if there were data to destructure
+   |
+   = note: payload-free marks are lowercase bare words (`none`, `eof`, `parse`); CapCase is the
+     reader's signal that a payload waits inside.
+
+warning[W0603]: the tag `flat` carries a payload but is spelled like a mark
+  --> corpus/lints/tag_case_payload.lu:12:35
+   |
+12 | fn fetch(n: int) -> int ! {Stale, flat(int)} {
+   |                                   ^^^^ lowercase reads as nothing-to-destructure
+   |
+   = note: payload-carrying tags are CapCase and name their payload type (`Parse(ParseErr)`);
+     lowercase bare words are reserved for payload-free marks.
+
+warning[W0305]: the row tag `stuck` shares its name with an item of this module
+  --> corpus/lints/tag_name_collision.lu:15:28
+   |
+15 | fn probe(n: int) -> int ! {stuck} {
+   |                            ^^^^^ one word, two meanings
+   |
+   = note: in raise position this word is the tag; everywhere else it is the thing it collides with
+     — programs with this collision have returned a module as a value. Rename the tag.
+
+warning[W0305]: the row tag `stuck` shares its name with an item of this module
+  --> corpus/lints/tag_name_collision.lu:15:28
+   |
+15 | fn probe(n: int) -> int ! {stuck} {
+   |                            ^^^^^ one word, two meanings
+   |
+   = note: in raise position this word is the tag; everywhere else it is the thing it collides with
+     — programs with this collision have returned a module as a value. Rename the tag.
+
+warning[W1003]: `v` is taken, never touched, and returned
+  --> corpus/lints/take_returned.lu:10:9
+   |
+10 | fn keep(take v: int) -> int {
+   |         ^^^^ consumption that consumes nothing
+   |
+   = note: the caller gives the value up only to receive it back; if callers could reasonably keep
+     it, the signature is wrong.
+help: drop the `take` and hand back `copy v` (call sites drop theirs and keep their binding; a `read` parameter returned without the `copy` is E1002, #366)
+   |
+10 | fn keep(v: int) -> int {
+   |
+
+warning[W1003]: `v` is taken, never touched, and returned
+  --> corpus/lints/take_returned.lu:10:9
+   |
+10 | fn keep(take v: int) -> int {
+   |         ^^^^ consumption that consumes nothing
+   |
+   = note: the caller gives the value up only to receive it back; if callers could reasonably keep
+     it, the signature is wrong.
+help: drop the `take` and hand back `copy v` (call sites drop theirs and keep their binding; a `read` parameter returned without the `copy` is E1002, #366)
+   |
+10 | fn keep(v: int) -> int {
+   |
+
+error[E0301]: `map` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:14:19
+   |
+14 |     let tens = xs.map(fn(x) x * k)
+   |                   ^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `filter` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:15:19
+   |
+15 |     let even = xs.filter(fn(x: int) { x % 2 == 0 })
+   |                   ^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `fold` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:16:20
+   |
+16 |     let total = xs.fold(0, fn(a: int, x: int) { a + x })
+   |                    ^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `sum` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:17:55
+   |
+17 |     print("{tens[0]} {tens[3]} {even.len} {total} {xs.sum()}")
+   |                                                       ^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `map` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:14:19
+   |
+14 |     let tens = xs.map(fn(x) x * k)
+   |                   ^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `filter` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:15:19
+   |
+15 |     let even = xs.filter(fn(x: int) { x % 2 == 0 })
+   |                   ^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `fold` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:16:20
+   |
+16 |     let total = xs.fold(0, fn(a: int, x: int) { a + x })
+   |                    ^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `sum` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_map_filter_fold.lu:17:55
+   |
+17 |     print("{tens[0]} {tens[3]} {even.len} {total} {xs.sum()}")
+   |                                                       ^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `sorted_by` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:11:19
+   |
+11 |     let down = xs.sorted_by(fn(a: int, b: int) { a > b })
+   |                   ^^^^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `sort_by` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:12:14
+   |
+12 |     (mut xs).sort_by(fn(a: int, b: int) { a < b })
+   |              ^^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `enumerate` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:13:16
+   |
+13 |     let e = xs.enumerate()
+   |                ^^^^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `zip` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:14:16
+   |
+14 |     let z = xs.zip(["a", "b"])
+   |                ^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `sorted_by` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:11:19
+   |
+11 |     let down = xs.sorted_by(fn(a: int, b: int) { a > b })
+   |                   ^^^^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `sort_by` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:12:14
+   |
+12 |     (mut xs).sort_by(fn(a: int, b: int) { a < b })
+   |              ^^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `enumerate` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:13:16
+   |
+13 |     let e = xs.enumerate()
+   |                ^^^^^^^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+error[E0301]: `zip` is not a builtin method of `List[{integer}]`
+  --> corpus/methods/comb_sort_enumerate_zip.lu:14:16
+   |
+14 |     let z = xs.zip(["a", "b"])
+   |                ^^^ a `List[{integer}]` method outside the builtins comes from `std.list`
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `sorted` is not a builtin method of `List[int]`
+  --> corpus/methods/comb_sorted_ord.lu:10:16
+   |
+10 |     let s = xs.sorted()
+   |                ^^^^^^ a `List[int]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `sorted` is not a builtin method of `List[int]`
+  --> corpus/methods/comb_sorted_ord.lu:10:16
+   |
+10 |     let s = xs.sorted()
+   |                ^^^^^^ a `List[int]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `collect` is not a builtin method of `range[{integer}]`
+ --> corpus/methods/home_range_str_map.lu:9:20
+  |
+9 |     let r = (2..6).collect()
+  |                    ^^^^^^^ a `range[{integer}]` method outside the builtins comes from `std.range`
+  |
+  = note: no standard library is configured, so `std.range` cannot answer this call
+    ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+    `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `is_blank` is not a builtin method of `str`
+  --> corpus/methods/home_range_str_map.lu:12:40
+   |
+12 |     print("{r.len} {r[0]} {r[3]} {"  ".is_blank()} {m.keys().len}")
+   |                                        ^^^^^^^^ a `str` method outside the builtins comes from `std.str`
+   |
+   = note: no standard library is configured, so `std.str` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `keys` is not a builtin method of `Map[str, int]`
+  --> corpus/methods/home_range_str_map.lu:12:55
+   |
+12 |     print("{r.len} {r[0]} {r[3]} {"  ".is_blank()} {m.keys().len}")
+   |                                                       ^^^^ a `Map[str, int]` method outside the builtins comes from `std.map`
+   |
+   = note: no standard library is configured, so `std.map` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `collect` is not a builtin method of `range[{integer}]`
+ --> corpus/methods/home_range_str_map.lu:9:20
+  |
+9 |     let r = (2..6).collect()
+  |                    ^^^^^^^ a `range[{integer}]` method outside the builtins comes from `std.range`
+  |
+  = note: no standard library is configured, so `std.range` cannot answer this call
+    ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+    `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `is_blank` is not a builtin method of `str`
+  --> corpus/methods/home_range_str_map.lu:12:40
+   |
+12 |     print("{r.len} {r[0]} {r[3]} {"  ".is_blank()} {m.keys().len}")
+   |                                        ^^^^^^^^ a `str` method outside the builtins comes from `std.str`
+   |
+   = note: no standard library is configured, so `std.str` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `keys` is not a builtin method of `Map[str, int]`
+  --> corpus/methods/home_range_str_map.lu:12:55
+   |
+12 |     print("{r.len} {r[0]} {r[3]} {"  ".is_blank()} {m.keys().len}")
+   |                                                       ^^^^ a `Map[str, int]` method outside the builtins comes from `std.map`
+   |
+   = note: no standard library is configured, so `std.map` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: module `std` has no item named `list`
+ --> corpus/methods/method_is_free_call.lu:8:9
+  |
+8 | use std.list
+  |         ^^^^ not found in the module
+  |
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: module `std` has no item named `list`
+ --> corpus/methods/method_is_free_call.lu:8:9
+  |
+8 | use std.list
+  |         ^^^^ not found in the module
+  |
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `sorted_by` is not a builtin method of `List[(str, int)]`
+  --> corpus/methods/wordcount_par.lu:32:32
+   |
+32 |     let ranked = total.pairs().sorted_by(fn(a: (str, int), b: (str, int)) { a.1 > b.1 })
+   |                                ^^^^^^^^^ a `List[(str, int)]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `sorted_by` is not a builtin method of `List[(str, int)]`
+  --> corpus/methods/wordcount_par.lu:32:32
+   |
+32 |     let ranked = total.pairs().sorted_by(fn(a: (str, int), b: (str, int)) { a.1 > b.1 })
+   |                                ^^^^^^^^^ a `List[(str, int)]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `map` is not a builtin method of `List[str]`
+  --> corpus/methods/wordcount_serial.lu:25:25
+   |
+25 |     let counts = pieces.map(count)
+   |                         ^^^ a `List[str]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `sorted_by` is not a builtin method of `List[(str, int)]`
+  --> corpus/methods/wordcount_serial.lu:30:32
+   |
+30 |     let ranked = total.pairs().sorted_by(fn(a: (str, int), b: (str, int)) { a.1 > b.1 })
+   |                                ^^^^^^^^^ a `List[(str, int)]` method outside the builtins comes from `std.list`
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: `map` is not a builtin method of `List[str]`
+  --> corpus/methods/wordcount_serial.lu:25:25
+   |
+25 |     let counts = pieces.map(count)
+   |                         ^^^ a `List[str]` method outside the builtins comes from `std.list`
+   |
+   = note: no standard library is configured, so `std.list` cannot answer this call
+     ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+     `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+error[E0301]: `sorted_by` is not a builtin method of `List[(str, int)]`
+  --> corpus/methods/wordcount_serial.lu:30:32
+   |
+30 |     let ranked = total.pairs().sorted_by(fn(a: (str, int), b: (str, int)) { a.1 > b.1 })
+   |                                ^^^^^^^^^ a `List[(str, int)]` method outside the builtins comes from `std.list`
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+warning[W0314]: `store` holds exactly one item
+ --> corpus/resolve/pkgvis/store/data.lu:5:13
+  |
+5 | pub(pkg) fn limit() -> int {
+  |             ^^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0314]: `store` holds exactly one item
+ --> corpus/resolve/pkgvis/store/data.lu:5:13
+  |
+5 | pub(pkg) fn limit() -> int {
+  |             ^^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0314]: `lista` holds exactly one item
+ --> corpus/resolve/same_name/lista/lista.lu:7:8
+  |
+7 | pub fn len(n: int) -> int {
+  |        ^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0314]: `stra` holds exactly one item
+ --> corpus/resolve/same_name/stra/stra.lu:7:8
+  |
+7 | pub fn len(n: int) -> int {
+  |        ^^^ a directory of ceremony around it
+  |
+
+warning[W0314]: `lista` holds exactly one item
+ --> corpus/resolve/same_name/lista/lista.lu:7:8
+  |
+7 | pub fn len(n: int) -> int {
+  |        ^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0314]: `stra` holds exactly one item
+ --> corpus/resolve/same_name/stra/stra.lu:7:8
+  |
+7 | pub fn len(n: int) -> int {
+  |        ^^^ a directory of ceremony around it
+  |
+
+warning[W0602]: this `pub` signature spells a 3-tag error row anonymously
+ --> corpus/rows/cross_module_arms/scan/scan.lu:8:30
+  |
+8 | pub fn miss(k: int) -> int ! {deep, overflow, syntax} {
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+  |
+  = note: every caller depends on this row, and every later tag is a visible change at every
+    boundary; keep the row small — one tag per failure a caller can act on — and reuse one
+    spelling everywhere it flows.
+
+warning[W0602]: this `pub` signature spells a 3-tag error row anonymously
+  --> corpus/rows/cross_module_arms/scan/scan.lu:20:29
+   |
+20 | pub fn hop(k: int) -> int ! {deep, overflow, syntax} {
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+   |
+
+warning[W0602]: this `pub` signature spells a 3-tag error row anonymously
+ --> corpus/rows/cross_module_arms/scan/scan.lu:8:30
+  |
+8 | pub fn miss(k: int) -> int ! {deep, overflow, syntax} {
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+  |
+  = note: every caller depends on this row, and every later tag is a visible change at every
+    boundary; keep the row small — one tag per failure a caller can act on — and reuse one
+    spelling everywhere it flows.
+
+warning[W0602]: this `pub` signature spells a 3-tag error row anonymously
+  --> corpus/rows/cross_module_arms/scan/scan.lu:20:29
+   |
+20 | pub fn hop(k: int) -> int ! {deep, overflow, syntax} {
+   |                             ^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+   |
+
+error[E0301]: module `std` has no item named `process`
+ --> corpus/rows/ctor_arg_qualified/main.lu:8:9
+  |
+8 | use std.process
+  |         ^^^^^^^ not found in the module
+  |
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+error[E0301]: module `std` has no item named `process`
+ --> corpus/rows/ctor_arg_qualified/main.lu:8:9
+  |
+8 | use std.process
+  |         ^^^^^^^ not found in the module
+  |
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+warning[W0602]: this `pub` signature spells a 3-tag error row anonymously
+  --> corpus/rows/propagate/parse/pair.lu:11:33
+   |
+11 | pub fn pair(path: str) -> int ! {bad_digit, Locked(str), NotFound(str)} {
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+   |
+   = note: every caller depends on this row, and every later tag is a visible change at every
+     boundary; keep the row small — one tag per failure a caller can act on — and reuse one
+     spelling everywhere it flows.
+
+warning[W0314]: `io` holds exactly one item
+ --> corpus/rows/propagate/io/read.lu:7:8
+  |
+7 | pub fn read(path: str) -> int ! {Locked(str), NotFound(str)} {
+  |        ^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0602]: this `pub` signature spells a 2-tag error row anonymously
+ --> corpus/rows/propagate/io/read.lu:7:33
+  |
+7 | pub fn read(path: str) -> int ! {Locked(str), NotFound(str)} {
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+  |
+
+warning[W0602]: this `pub` signature spells a 3-tag error row anonymously
+  --> corpus/rows/propagate/parse/pair.lu:11:33
+   |
+11 | pub fn pair(path: str) -> int ! {bad_digit, Locked(str), NotFound(str)} {
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+   |
+   = note: every caller depends on this row, and every later tag is a visible change at every
+     boundary; keep the row small — one tag per failure a caller can act on — and reuse one
+     spelling everywhere it flows.
+
+warning[W0314]: `io` holds exactly one item
+ --> corpus/rows/propagate/io/read.lu:7:8
+  |
+7 | pub fn read(path: str) -> int ! {Locked(str), NotFound(str)} {
+  |        ^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+
+warning[W0602]: this `pub` signature spells a 2-tag error row anonymously
+ --> corpus/rows/propagate/io/read.lu:7:33
+  |
+7 | pub fn read(path: str) -> int ! {Locked(str), NotFound(str)} {
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this exact tag set is now API
+  |
+
+warning[W0305]: the row tag `none` is shadowed by a local binding here
+  --> corpus/rows/tag_shadow_local.lu:20:11
+   |
+20 |     if or(none, 9) == 3 { 0 } else { 1 }
+   |           ^^^^ the local wins
+   |
+   = note: the expected row declares this word as a tag, but locals shadow (resolution's rule
+     everywhere) — this expression is the local's value, never the tag. Rename one of the
+     two; tags are cheap to rename because they exist only in rows, raises, and arms.
+
+warning[W0305]: the row tag `none` is shadowed by a local binding here
+  --> corpus/rows/tag_shadow_local.lu:20:11
+   |
+20 |     if or(none, 9) == 3 { 0 } else { 1 }
+   |           ^^^^ the local wins
+   |
+   = note: the expected row declares this word as a tag, but locals shadow (resolution's rule
+     everywhere) — this expression is the local's value, never the tag. Rename one of the
+     two; tags are cheap to rename because they exist only in rows, raises, and arms.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_fallible_body_stmt.lu:21:16
+   |
+21 |     if n > 1 { maybe(n) }
+   |                ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_fallible_body_stmt.lu:21:16
+   |
+21 |     if n > 1 { maybe(n) }
+   |                ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_if_value.lu:20:23
+   |
+20 |     let v = if true { maybe(3) }
+   |                       ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_if_value.lu:21:23
+   |
+21 |     let w = if true { maybe(9) }
+   |                       ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_if_value.lu:20:23
+   |
+20 |     let v = if true { maybe(3) }
+   |                       ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_if_value.lu:21:23
+   |
+21 |     let w = if true { maybe(9) }
+   |                       ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:28:5
+   |
+28 |     boom()
+   |     ^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:30:5
+   |
+30 |     maybe(9)
+   |     ^^^^^^^^ a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:33:12
+   |
+33 |     if c { boom() }
+   |            ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:36:47
+   |
+36 |     if n > 5 { print("big") } else if n > 1 { boom() }
+   |                                               ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:41:9
+   |
+41 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:47:9
+   |
+47 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:54:9
+   |
+54 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:59:18
+   |
+59 |             1 => boom(),
+   |                  ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:28:5
+   |
+28 |     boom()
+   |     ^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:30:5
+   |
+30 |     maybe(9)
+   |     ^^^^^^^^ a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:33:12
+   |
+33 |     if c { boom() }
+   |            ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:36:47
+   |
+36 |     if n > 5 { print("big") } else if n > 1 { boom() }
+   |                                               ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:41:9
+   |
+41 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:47:9
+   |
+47 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:54:9
+   |
+54 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_stmts.lu:59:18
+   |
+59 |             1 => boom(),
+   |                  ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:19:5
+   |
+19 |     boom()
+   |     ^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:24:5
+   |
+24 |     boom()
+   |     ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:31:9
+   |
+31 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:37:5
+   |
+37 |     boom()
+   |     ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:19:5
+   |
+19 |     boom()
+   |     ^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:24:5
+   |
+24 |     boom()
+   |     ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:31:9
+   |
+31 |         boom()
+   |         ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_raise_unit_fn.lu:37:5
+   |
+37 |     boom()
+   |     ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_return_operand.lu:18:12
+   |
+18 |     return boom()
+   |            ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_return_operand.lu:18:12
+   |
+18 |     return boom()
+   |            ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if.lu:26:12
+   |
+26 |     if c { boom() }
+   |            ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if.lu:33:16
+   |
+33 |         if c { boom() }
+   |                ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if.lu:39:16
+   |
+39 |         if c { boom() }
+   |                ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if.lu:26:12
+   |
+26 |     if c { boom() }
+   |            ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if.lu:33:16
+   |
+33 |         if c { boom() }
+   |                ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if.lu:39:16
+   |
+39 |         if c { boom() }
+   |                ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_chain.lu:19:13
+   |
+19 |     if !c { boom() } else if c { boom() }
+   |             ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_chain.lu:19:34
+   |
+19 |     if !c { boom() } else if c { boom() }
+   |                                  ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_chain.lu:19:13
+   |
+19 |     if !c { boom() } else if c { boom() }
+   |             ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_chain.lu:19:34
+   |
+19 |     if !c { boom() } else if c { boom() }
+   |                                  ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_closure.lu:24:30
+   |
+24 |     run(fn(c: bool) { if c { boom() } }) else |_| { raised = true }
+   |                              ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_closure.lu:24:30
+   |
+24 |     run(fn(c: bool) { if c { boom() } }) else |_| { raised = true }
+   |                              ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_value_row.lu:20:16
+   |
+20 |     if n > 1 { maybe(n) }
+   |                ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_tail_if_value_row.lu:20:16
+   |
+20 |     if n > 1 { maybe(n) }
+   |                ^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_unit_main.lu:18:5
+   |
+18 |     boom()
+   |     ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {bad}` result is discarded, error row and all
+  --> corpus/rows/unit_discard_unit_main.lu:18:5
+   |
+18 |     boom()
+   |     ^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+  --> corpus/typecheck/match_arm_product_unreachable.lu:22:9
+   |
+21 |         Flag { on: false, n } => n * 2,
+   |         --------------------- this arm already matches those values
+22 |         Flag { n, .. } => n * 3,
+   |         ^^^^^^^^^^^^^^ unreachable arm
+   |
+   = note: delete the arm, or reorder the arms so the more specific pattern comes first.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+  --> corpus/typecheck/match_arm_product_unreachable.lu:22:9
+   |
+21 |         Flag { on: false, n } => n * 2,
+   |         --------------------- this arm already matches those values
+22 |         Flag { n, .. } => n * 3,
+   |         ^^^^^^^^^^^^^^ unreachable arm
+   |
+   = note: delete the arm, or reorder the arms so the more specific pattern comes first.
+
+warning[W0603]: the mark `Timeout` is spelled CapCase
+  --> corpus/typecheck/match_exhaustive.lu:24:37
+   |
+24 | fn risky(n: int) -> int ! {Io(int), Timeout} {
+   |                                     ^^^^^^^ reads as if there were data to destructure
+   |
+   = note: payload-free marks are lowercase bare words (`none`, `eof`, `parse`); CapCase is the
+     reader's signal that a payload waits inside.
+
+warning[W0603]: the mark `Timeout` is spelled CapCase
+  --> corpus/typecheck/match_exhaustive.lu:24:37
+   |
+24 | fn risky(n: int) -> int ! {Io(int), Timeout} {
+   |                                     ^^^^^^^ reads as if there were data to destructure
+   |
+   = note: payload-free marks are lowercase bare words (`none`, `eof`, `parse`); CapCase is the
+     reader's signal that a payload waits inside.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+  --> corpus/typecheck/match_unreachable.lu:14:9
+   |
+13 |         false => 1,
+   |         ----- this arm already matches those values
+14 |         _ => 2,
+   |         ^ unreachable arm
+   |
+   = note: delete the arm, or reorder the arms so the more specific pattern comes first.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+  --> corpus/typecheck/match_unreachable.lu:14:9
+   |
+13 |         false => 1,
+   |         ----- this arm already matches those values
+14 |         _ => 2,
+   |         ^ unreachable arm
+   |
+   = note: delete the arm, or reorder the arms so the more specific pattern comes first.
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:17:5
+   |
+17 |     ch.send(10)
+   |     ^^^^^^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:18:5
+   |
+18 |     ch.send(20)
+   |     ^^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:23:22
+   |
+23 |     for i in 1..=2 { ch.send(i) }
+   |                      ^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:27:9
+   |
+27 |         ch.send(3)
+   |         ^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:29:17
+   |
+29 |     if n == 1 { ch.send(4) }
+   |                 ^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:17:5
+   |
+17 |     ch.send(10)
+   |     ^^^^^^^^^^^ a failure here vanishes silently
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+     is visible.
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:18:5
+   |
+18 |     ch.send(20)
+   |     ^^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:23:22
+   |
+23 |     for i in 1..=2 { ch.send(i) }
+   |                      ^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:27:9
+   |
+27 |         ch.send(3)
+   |         ^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `() ! {cancelled, closed}` result is discarded, error row and all
+  --> corpus/typecheck/unit_context_discard.lu:29:17
+   |
+29 |     if n == 1 { ch.send(4) }
+   |                 ^^^^^^^^^^ the block's value is `()`, so a failure here vanishes silently
+   |
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/typecheck/unit_tail_value_discard.lu:20:5
+   |
+20 |     (mut xs).pop()
+   |     ^^^^^^^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+warning[W0601]: this `int ! {none}` result is discarded, error row and all
+  --> corpus/typecheck/unit_tail_value_discard.lu:20:5
+   |
+20 |     (mut xs).pop()
+   |     ^^^^^^^^^^^^^^ the block's value is `()`, so the value and its failure both vanish
+   |
+   = note: propagate it with `?`, handle it with `else`, or bind it away explicitly — `let _ = …` —
+     so the discard is visible.
+
+bench-gates: IR volume, kernel suite: 91.1% of naive (n=13) — ratchet 92.4%, contract target 50.0% (NOT MET, tracked)
+bench-gates: IR volume, corpus: 80.8% of naive (n=720) — reference 76.0% (report-only since s143), contract target 50.0% (NOT MET, tracked)
+bench-gates: ir-volume new path corpus/fs/copy_chunk_dev_full.lu = 1.000 (midend 1096 / naive 1096) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/fs/copy_chunk_failed_write.lu = 1.000 (midend 1470 / naive 1470) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/enum_union_copy.lu = 0.414 (midend 53 / naive 128) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/enum_union_take.lu = 0.408 (midend 51 / naive 125) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/list_reserve.lu = 0.969 (midend 185 / naive 191) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/list_reset.lu = 0.957 (midend 288 / naive 301) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/read_lend_frame.lu = 0.676 (midend 4147 / naive 6139) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/read_lend_value_semantics.lu = 0.969 (midend 187 / naive 193) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_copy_shares_str.lu = 0.980 (midend 50 / naive 51) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_call.lu = 0.925 (midend 247 / naive 267) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_charged.lu = 0.853 (midend 122 / naive 143) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_field.lu = 0.981 (midend 260 / naive 265) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_index.lu = 0.971 (midend 202 / naive 208) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_map.lu = 0.976 (midend 332 / naive 340) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_reset.lu = 0.902 (midend 175 / naive 194) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_scalar.lu = 0.945 (midend 256 / naive 271) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_str_push.lu = 0.929 (midend 157 / naive 169) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_struct.lu = 0.898 (midend 184 / naive 205) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_str_call_index_store.lu = 0.874 (midend 188 / naive 215) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/os/arg0.lu = 0.970 (midend 160 / naive 165) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/os/args_bytes.lu = 0.853 (midend 29 / naive 34) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/rows/row_member_handled.lu = 1.178 (midend 311 / naive 264) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/rows/row_union_payloads.lu = 0.857 (midend 288 / naive 336) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/typecheck/enum_union_three.lu = 0.639 (midend 321 / naive 502) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/typecheck/enum_union_tree.lu = 1.066 (midend 1513 / naive 1419) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/typecheck/enum_union_two.lu = 0.744 (midend 145 / naive 195) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume per-file table: 694 recorded, 720 measured, 26 new, 0 unmeasured, 0 improved, 0 regressed
+bench-gates: baseline list_alloc         executes malloc, free
+bench-gates: baseline b3_churn           executes malloc, free
+bench-gates: witness alias_daxpy        pair-scopes=2 (floor 2)
+bench-gates: witness alias_daxpy        wolf=2 (floor 1)
+bench-gates: witness a2_stencil1d       align16=6 (floor 1)
+bench-gates: witness a2_stencil1d       pair-scopes=2 (floor 2)
+bench-gates: witness a2_stencil1d       wolf=2 (floor 1)
+bench-gates: witness a5_hoist_call      wolf=0 (floor 0)
+bench-gates: witness aos_dot            wolf=0 (floor 0)
+bench-gates: witness c2_ecs_sweep       wolf=0 (floor 0)
+bench-gates: witness e1_sum_reduce      wolf=1 (floor 1)
+bench-gates: witness e2_checksum        wolf=0 (floor 0)
+bench-gates: note: e3_index_arith: naive C vectorized 0 loop(s), recorded floor is 1 — this host's clang differs from the one that recorded it; the floor is report-only
+bench-gates: witness e3_index_arith     wolf=0 (floor 0)
+bench-gates: startup syscalls wolf 47 (45 before the first write), C 35 (33); the runtime's own: 12
+bench-gates: startup wall (report-only): wolf median 194.8 us, C 155.4 us, ratio 1.25 over 50 interleaved starts
+bench-gates: deterministic bench gates green

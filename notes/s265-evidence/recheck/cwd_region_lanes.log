@@ -1,0 +1,3 @@
+efe4fdd6 Trace the start-up row's hellos in an empty environment
+test a_cwd_asked_in_a_region_keeps_nothing_a_turn ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s

@@ -1,0 +1,21 @@
+=== copy_write_lanes at 6480a27b corpus: snapshots and registries for the read-lend entries 01:40:33 load=3.54/2.62/2.45 busy: cpu4=100% cpu5=3% cpu6=3% cpu7=2% cpu12=0% cpu13=1% cpu14=0% cpu15=0% 
+lupin 0.1.56 (wolf-interp, reference interpreter at pin 294d626)
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+exit=0
+=== copy_write_lanes at 53b95d3a Record the bisection, yew's three cells and the first gauntlet 02:03:09 load=2.24/2.40/3.75 busy: cpu4=1% cpu5=0% cpu6=0% cpu7=0% cpu12=0% cpu13=1% cpu14=1% cpu15=0% 
+lupin 0.1.56 (wolf-interp, reference interpreter at pin 294d626)
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+thread 'a_failed_copy_write_puts_the_source_back_on_every_lane' (36) panicked at crates/wolf_driver/tests/copy_write_lanes.rs:221:5:
+lupin 0.1.56 (28547b4)'s answer on fs/copy_chunk_failed_write.lu: ("unsupported", ""), want the clause's or a pre-mirror pin ([("0.1.55", "e642f26", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n"), ("0.1.56", "28547b4", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n")])
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... FAILED
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+error: test failed, to rerun pass `-p wolf_driver --test copy_write_lanes`
+exit=101
+1.3G	/home/mfwolffe/lanes/s265/wolf-trunk/target
+  57G
+Sun Oct 25 02:03:11 AM UTC 2026
+attr2 exit=101
