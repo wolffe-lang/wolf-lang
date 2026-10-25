@@ -194,7 +194,8 @@ fn an_else_fallback_range_names_the_fallback_and_says_to_parenthesise() {
     );
     assert!(stderr.contains(&format!("= note: {NOTE}")), "{stderr}");
     assert!(stderr.contains("0 + 2.."), "{stderr}");
-    let lo = src.find("0 + 2..").unwrap();
+    // The header prose spells the fallback too; the code is the last.
+    let lo = src.rfind("0 + 2..").unwrap();
     for lane in ["--checked", "--native", "--release"] {
         let Some(rec) = record(&entry, lane, None) else {
             continue;
