@@ -20,13 +20,15 @@
 //! standard handle null (the parent's handle set to null for the spawn,
 //! under a lock, and put back). The programs write their report to a
 //! file, so a run with 2 closed is read too. On linux they also run
-//! under `taskset -c 0-3` (wolf-lang#570).
+//! under `taskset` on four of the allocation (wolf-lang#570; `test_cpus`,
+//! #925).
 //!
 //! The `use std.…` programs build against `fixtures/stdfd_std/`, a
 //! stand-in for the bundled std's `std.signal` and `std.net` cut to the
 //! shape the fault lives in (wolf-lang's CI has no wolf-std).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -128,32 +130,19 @@ fn build(entry: &Path, dir: &Path, tier: Tier) -> Option<PathBuf> {
     Some(exe)
 }
 
-/// The cpu sets the binaries run on: all cores, and on linux four
-/// (`taskset -c 0-3`, wolf-lang#570) — never skipped there.
-fn cpu_sets() -> Vec<Option<&'static str>> {
+/// The cpu sets the binaries run on: all cores, and on linux four of the
+/// allocation (wolf-lang#570, `test_cpus`) — never skipped there.
+fn cpu_sets(test: &str) -> Vec<Option<test_cpus::Pin>> {
     if cfg!(target_os = "linux") {
-        let ok = Command::new("taskset")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        assert!(
-            ok,
-            "`taskset` (util-linux) is part of this gate's linux host: the programs must run \
-             on four cpus as well as all cores, never skip them"
-        );
-        vec![None, Some("0-3")]
+        vec![None, Some(test_cpus::pin_required(4, test))]
     } else {
         vec![None]
     }
 }
 
-fn command(exe: &Path, set: Option<&str>) -> Command {
+fn command(exe: &Path, set: Option<&test_cpus::Pin>) -> Command {
     match set {
-        Some(cpus) => {
-            let mut c = Command::new("taskset");
-            c.args(["-c", cpus]).arg(exe);
-            c
-        }
+        Some(pin) => pin.command(exe),
         None => Command::new(exe),
     }
 }
@@ -246,11 +235,11 @@ impl Run {
 }
 
 /// `exe` run with `k` closed, reporting to a file of its own.
-fn run(exe: &Path, set: Option<&str>, k: i32, dir: &Path) -> Run {
+fn run(exe: &Path, set: Option<&test_cpus::Pin>, k: i32, dir: &Path) -> Run {
     let name = format!(
         "{}-{}-closed{k}.txt",
         exe.file_stem().unwrap().to_string_lossy(),
-        set.map_or("all".to_string(), |s| format!("cpus{s}"))
+        set.map_or("all".to_string(), |p| format!("cpus{}", p.list))
     );
     let report_path = dir.join(name);
     let _ = std::fs::remove_file(&report_path);
@@ -260,7 +249,7 @@ fn run(exe: &Path, set: Option<&str>, k: i32, dir: &Path) -> Run {
     let what = format!(
         "{} on {}, descriptor {k} closed",
         exe.display(),
-        set.map_or("all cores".to_string(), |s| format!("cpus {s}"))
+        set.map_or("all cores".to_string(), test_cpus::Pin::label)
     );
     assert!(
         out.status.success(),
@@ -302,7 +291,8 @@ fn every_run(test: &str, names: &[&str], check: impl Fn(&str, &Run, &Run, i32)) 
             .iter()
             .filter_map(|n| build(&fixture(&format!("{n}.lu")), &dir, tier).map(|e| (*n, e)))
             .collect();
-        for set in cpu_sets() {
+        for set in cpu_sets(test) {
+            let set = set.as_ref();
             for k in 0..3 {
                 let b = run(&base, set, k, &dir);
                 assert_standard_rows(&b, k);
@@ -327,12 +317,14 @@ fn bu26s_probe_finds_a_closed_standard_descriptor_closed() {
         let Some(exe) = build(&fixture("fd1s.lu"), &dir, tier) else {
             continue;
         };
-        for set in cpu_sets() {
+        for set in cpu_sets("bu26s_probe_finds_a_closed_standard_descriptor_closed") {
+            let set = set.as_ref();
             for k in 0..3 {
                 let mut cmd = command(&exe, set);
                 cmd.arg("unused");
                 let out = run_closed(cmd, k);
-                let what = format!("fd1s {tier:?} on {set:?}, descriptor {k} closed");
+                let on = set.map_or("all cores".to_string(), test_cpus::Pin::label);
+                let what = format!("fd1s {tier:?} on {on}, descriptor {k} closed");
                 assert!(out.status.success(), "{what}: exit {:?}", out.status);
                 if k == 2 {
                     continue;
