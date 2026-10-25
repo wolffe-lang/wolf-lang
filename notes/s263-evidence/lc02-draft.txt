@@ -65,6 +65,22 @@ The orchestrator assigns the pool host, CPU block and container before launch.
   of capability. The accepted subset avoids them via raw pointers and the
   existing explicitly single-threaded assembly storage convention.
 
+Rebased acceptance repeat
+Compiler48172ee2bdcb653dc08ee9340b8a4983211554bc includes trunk6480a27b
+(read-lend elision) and the isolated no-root test fix. At this source head:
+24 str/List/fs tests with WOLF_STD set,12 read-lend planner tests,5 native
+variadic tests,19 LLVM tests,10 source ABI tests, fmt and strict workspace
+all-target clippy pass. Full muzzle acceptance repeats at
+run-20261025T013253Z:50 cases/counts on each tier,10/10 families per tier,
+identity/error checks and count-only mutant all pass. Both complete
+archives again prove8 guarded XMM saves and no unguarded vector state.
+Compiler SHA256 c178ad3a79d7473138d20059d1df2ed1b77f00d108f3b28f1fd96f4d40a369bf.
+The native/release archive digests and all output digests are IDENTICAL to
+the prior banked acceptance. Evidence: rebased-focus.log and
+muzzle-rebased-acceptance.log, with muzzle-rebased-*.objdump.
+This remains object inspection, not SSE-disabled execution. Full gauntlet
+at the final rebased/evidence head remains pending the detached rerun.
+
 1. Goal and non-goals
 Take the tested bare %d %s %c %x %% formatter from s263 to a maintained,
 freestanding first formatted-output layer, and add va_list consumers and

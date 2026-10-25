@@ -1,0 +1,45 @@
+DRIVER=/work/target/debug/wolf WOLF_STD=unset
+error[E0301]: `to_float` is not a builtin method of `str`
+ --> /work/target/tmp/s166_str_home/s166_str_home.lu:2:19
+  |
+2 |     let x = "3.5".to_float() else 0.0
+  |                   ^^^^^^^^ a `str` method outside the builtins comes from `std.str`
+  |
+  = note: no standard library is configured, so `std.str` cannot answer this call
+    ([type.method.root]). Point wolf at a wolf-std checkout with `--std-root <dir>`, the
+    `WOLF_STD` environment variable, or a `std` path dependency in `wolf.pkg`.
+
+{"commit":"unknown","diagnostics":[{"code":"E0301","severity":"error","span":[38,46]}],"file":"/work/target/tmp/s166_str_home/s166_str_home.lu","impl":"wolfgang","impl_version":"0.2.35+dev.unknown","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+DRIVER=/work/target/debug/wolf WOLF_STD=set
+error[E0403]: `str` has no method named `to_float`
+ --> /work/target/tmp/s166_str_home/s166_str_home.lu:2:19
+  |
+2 |     let x = "3.5".to_float() else 0.0
+  |                   ^^^^^^^^ unknown method
+  |
+  = note: neither the builtin methods of `str` nor a `pub fn to_float` of `std.str` taking it
+    first answer this call ([type.method.resolve]).
+
+{"commit":"unknown","diagnostics":[{"code":"E0403","severity":"error","span":[38,46]}],"file":"/work/target/tmp/s166_str_home/s166_str_home.lu","impl":"wolfgang","impl_version":"0.2.35+dev.unknown","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0403)","warnings":[]}
+DRIVER=/work/controls/wolf/unpacked/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf WOLF_STD=unset
+error[E0403]: `str` has no method named `to_float`
+ --> /work/target/tmp/s166_str_home/s166_str_home.lu:2:19
+  |
+2 |     let x = "3.5".to_float() else 0.0
+  |                   ^^^^^^^^ unknown method
+  |
+  = note: neither the builtin methods of `str` nor a `pub fn to_float` of `std.str` taking it
+    first answer this call ([type.method.resolve]).
+
+{"commit":"cf0c13d","diagnostics":[{"code":"E0403","severity":"error","span":[38,46]}],"file":"/work/target/tmp/s166_str_home/s166_str_home.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0403)","warnings":[]}
+DRIVER=/work/controls/wolf/unpacked/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf WOLF_STD=set
+error[E0403]: `str` has no method named `to_float`
+ --> /work/target/tmp/s166_str_home/s166_str_home.lu:2:19
+  |
+2 |     let x = "3.5".to_float() else 0.0
+  |                   ^^^^^^^^ unknown method
+  |
+  = note: neither the builtin methods of `str` nor a `pub fn to_float` of `std.str` taking it
+    first answer this call ([type.method.resolve]).
+
+{"commit":"cf0c13d","diagnostics":[{"code":"E0403","severity":"error","span":[38,46]}],"file":"/work/target/tmp/s166_str_home/s166_str_home.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0403)","warnings":[]}

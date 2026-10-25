@@ -1,0 +1,153 @@
+REBASED HEAD=48172ee2bdcb653dc08ee9340b8a4983211554bc
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.61s
+     Running tests/str_list_fs_native.rs (target/debug/deps/str_list_fs_native-d8dec5e2e18a16a5)
+
+running 24 tests
+test a_missing_str_method_with_a_configured_home_is_e0403 ... ok
+test a_str_method_outside_the_set_comes_from_std_str ... ok
+test fs_error_rows_carry_their_tags ... ok
+test a_closed_handle_is_io_at_zero_length_on_both_lanes ... ok
+test a_bare_variant_renders_qualified_natively ... ok
+test interpolation_materializes_in_value_position ... ok
+test fs_fstat_agrees_across_lanes ... ok
+test fs_roundtrip_and_rows_agree ... ok
+test os_exe_agrees_across_lanes ... ok
+test os_cpus_agrees_across_lanes ... ok
+test list_oob_is_the_bounds_trap_on_both_lanes ... ok
+test interpolation_of_composites_agrees_across_lanes ... ok
+test the_lowerers_trap_kind_table_is_the_runtimes ... ok
+test lists_grow_read_pop_and_iterate ... ok
+test the_runtime_symbol_table_covers_the_s40_families ... ok
+test str_equality_agrees_across_the_inline_threshold ... ok
+test str_ordering_and_equality_agree ... ok
+test str_from_utf8_validates_identically_on_both_lanes ... ok
+test str_lists_hold_pairs ... ok
+test to_int_row_escapes_main_on_both_lanes ... ok
+test the_str_method_set_agrees ... ok
+test to_int_agrees_across_lanes_including_overflow ... ok
+test the_s90_fs_surface_agrees_across_lanes ... ok
+test the_s90_rows_carry_the_same_tags_on_both_lanes ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.16s
+     Running unittests src/lib.rs (target/debug/deps/wolf_backend-d684d63a20433f0e)
+
+running 12 tests
+test read_lend::tests::keeps_a_snapshot_used_again_after_the_call ... ok
+test read_lend::tests::counts_uses_on_branch_edges ... ok
+test read_lend::tests::keeps_a_snapshot_across_an_intervening_write ... ok
+test read_lend::tests::keeps_a_snapshot_across_an_opaque_call ... ok
+test read_lend::tests::does_not_lend_into_a_call_with_a_mut_argument ... ok
+test read_lend::tests::does_not_change_take_or_external_calls ... ok
+test read_lend::tests::keeps_small_register_arguments ... ok
+test read_lend::tests::keeps_reordered_fields ... ok
+test read_lend::tests::keeps_a_snapshot_when_fields_span_a_write ... ok
+test read_lend::tests::keeps_a_snapshot_without_exclusive_provenance ... ok
+test read_lend::tests::lends_nested_aggregates_with_matching_layout ... ok
+test read_lend::tests::lends_the_exclusive_address_until_the_read_call_returns ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 36 filtered out; finished in 0.00s
+
+   Compiling smallvec v1.15.2
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-codegen v0.134.3
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.77s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-8738c71f05db415b)
+
+running 5 tests
+test freestanding_variadic_sse_saves_are_all_guarded_and_core_is_integer_only ... ok
+test native_snprintf_promoted_tail_spills_both_banks ... ok
+test native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes ... ok
+test c_calls_native_variadic_definitions_and_list_consumer ... ok
+test variadic_exports_are_called_through_public_entries_in_same_and_other_objects ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.34s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-5680ae967582beb8)
+
+running 19 tests
+test differing_call_tails_share_the_fixed_prototype ... ok
+test freestanding_only_variadic_definitions_enable_abi_sse_saves ... ok
+test each_started_cursor_has_an_explicit_matching_end ... ok
+test definitions_have_ellipsis_noinline_and_psabi_cursor_paths ... ok
+test variadic_definition_refuses_other_targets_by_name ... ok
+test variadic_call_refuses_other_targets_by_name ... ok
+test variadic_guard::tests::archive_sections_do_not_share_literal_pool_addresses ... ok
+test variadic_guard::tests::function_boundaries_reset_provenance_and_empty_input_fails ... ok
+test variadic_guard::tests::bypass_reentry_and_missing_guard_are_rejected ... ok
+test variadic_guard::tests::literal_and_copied_incoming_al_are_proven ... ok
+test variadic_guard::tests::reachable_or_targeted_bad_bytes_are_never_trimmed ... ok
+test variadic_guard::tests::unknown_and_clobbered_aliases_are_rejected ... ok
+test variadic_guard::tests::vector_state_without_register_operands_cannot_hide ... ok
+test variadic_guard::tests::unreachable_max_integer_literal_pools_are_trimmed ... ok
+test ordinary_va_list_consumer_is_target_gated_without_a_prologue ... ok
+test freestanding_sse_is_confined_to_the_al_guarded_save_block ... ok
+test ordinary_consumer_accepts_a_c_created_list_and_advances_it ... ok
+test c_calls_variadic_definitions_across_both_register_banks_and_stack ... ok
+test wolf_calls_c_with_promoted_float_fixed_sse_and_different_tails ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+   Compiling wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running tests/variadic_abi.rs (target/debug/deps/variadic_abi-7abc8185b8327f40)
+
+running 10 tests
+test variadic_guard::tests::archive_sections_do_not_share_literal_pool_addresses ... ok
+test variadic_guard::tests::function_boundaries_reset_provenance_and_empty_input_fails ... ok
+test variadic_guard::tests::bypass_reentry_and_missing_guard_are_rejected ... ok
+test variadic_guard::tests::literal_and_copied_incoming_al_are_proven ... ok
+test variadic_guard::tests::reachable_or_targeted_bad_bytes_are_never_trimmed ... ok
+test variadic_guard::tests::unreachable_max_integer_literal_pools_are_trimmed ... ok
+test variadic_guard::tests::unknown_and_clobbered_aliases_are_rejected ... ok
+test variadic_guard::tests::vector_state_without_register_operands_cannot_hide ... ok
+test real_none_target_links_c17_without_libc_or_runtime ... ok
+test source_variadics_both_directions_promotions_and_forwarding ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+    Checking wolf_backend v0.2.35 (/work/crates/wolf_backend)
+    Checking wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+    Checking wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.86s
+acceptance evidence: /work/muzzle/notes/s263/run-20261025T013253Z
+RUN version
+EXIT version=0
+RUN identity
+EXIT identity=0
+RUN build-native
+EXIT build-native=0
+RUN diff-native
+EXIT diff-native=0
+RUN errors-build-native
+EXIT errors-build-native=0
+RUN errors-run-native
+EXIT errors-run-native=0
+RUN build-release
+EXIT build-release=0
+RUN diff-release
+EXIT diff-release=0
+RUN errors-build-release
+EXIT errors-build-release=0
+RUN errors-run-release
+EXIT errors-run-release=0
+RUN count-plant
+EXIT count-plant=0
+notes/s263-evidence/muzzle-rebased-native.objdump: 8 guarded XMM saves; no unguarded vector state
+total guarded XMM saves: 8; objdump proof, not QEMU fault execution
+notes/s263-evidence/muzzle-rebased-release.objdump: 8 guarded XMM saves; no unguarded vector state
+total guarded XMM saves: 8; objdump proof, not QEMU fault execution

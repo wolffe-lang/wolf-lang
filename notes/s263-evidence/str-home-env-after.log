@@ -1,0 +1,42 @@
+   Compiling wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running tests/str_list_fs_native.rs (target/debug/deps/str_list_fs_native-d8dec5e2e18a16a5)
+
+running 3 tests
+test a_missing_str_method_with_a_configured_home_is_e0403 ... ok
+test a_str_method_outside_the_set_comes_from_std_str ... ok
+test the_str_method_set_agrees ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.08s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/str_list_fs_native.rs (target/debug/deps/str_list_fs_native-d8dec5e2e18a16a5)
+
+running 24 tests
+test a_str_method_outside_the_set_comes_from_std_str ... ok
+test a_missing_str_method_with_a_configured_home_is_e0403 ... ok
+test fs_error_rows_carry_their_tags ... ok
+test a_closed_handle_is_io_at_zero_length_on_both_lanes ... ok
+test a_bare_variant_renders_qualified_natively ... ok
+test interpolation_materializes_in_value_position ... ok
+test fs_fstat_agrees_across_lanes ... ok
+test fs_roundtrip_and_rows_agree ... ok
+test os_cpus_agrees_across_lanes ... ok
+test list_oob_is_the_bounds_trap_on_both_lanes ... ok
+test os_exe_agrees_across_lanes ... ok
+test interpolation_of_composites_agrees_across_lanes ... ok
+test the_lowerers_trap_kind_table_is_the_runtimes ... ok
+test the_runtime_symbol_table_covers_the_s40_families ... ok
+test str_ordering_and_equality_agree ... ok
+test str_lists_hold_pairs ... ok
+test str_from_utf8_validates_identically_on_both_lanes ... ok
+test lists_grow_read_pop_and_iterate ... ok
+test str_equality_agrees_across_the_inline_threshold ... ok
+test to_int_agrees_across_lanes_including_overflow ... ok
+test to_int_row_escapes_main_on_both_lanes ... ok
+test the_str_method_set_agrees ... ok
+test the_s90_fs_surface_agrees_across_lanes ... ok
+test the_s90_rows_carry_the_same_tags_on_both_lanes ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+

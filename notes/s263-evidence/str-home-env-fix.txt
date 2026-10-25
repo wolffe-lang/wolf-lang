@@ -1,0 +1,49 @@
+Final-gauntlet correction after a4c40933
+The gauntlet exited1 in xtask's test step: one of23 str_list_fs_native tests
+failed. Earlier fmt,clippy and strict rt-none passed. Full failed log and
+exit marker are gauntlet-a4c40933-failed.{log,exit}; no result was discarded.
+
+The witness calls "3.5".to_float(). Its contract says NO standard library
+is configured, but it inherited the gauntlet launcher's WOLF_STD pointing
+to the published std tree. With a configured std.str missing to_float,
+E0403 is the correct existing [type.method.resolve] diagnostic. Without a
+configured home, E0301 is the existing [type.method.root] diagnostic.
+The new VaList/raw builtin names do not intercept this spelling.
+
+str-home-env-before.log proves candidate unset→E0301 / set→E0403.
+Published wolf0.2.35 also gives E0403 with that root, independently proving
+the configured-home behavior predates s263. Its unset case also gives
+E0403 because the published archive has a bundled sibling std directory.
+This is NOT a compiler semantic regression or a changed diagnostic policy.
+
+Fix48172ee2 retains all original E0301 expectations, and explicitly removes
+WOLF_STD from the witness's conform-run and build subprocesses. A new
+self-contained std.str fixture lacking to_float tests E0403 via BOTH the
+checked protocol record and the build CLI, and rejects a spurious no-root
+note. No global environment mutation or external std checkout is needed.
+str-home-env-after.log: three filtered method tests green without WOLF_STD;
+all24 tests green with the gauntlet's real WOLF_STD. Rebased-focused repeat
+and final detached gauntlet cover the integrated source afterward.
+
+Rebase: s263 replayed cleanly on6480a27bc5e6c5ea79737d0ed00e7ae9fe69092c,
+including s264's read-lend elision. Historical source/CI hashes in the prior
+evidence remain historical; they are not represented as rebased-head runs.
+The final gauntlet uses the unchanged launcher and exact new head. Old
+pid/log/marker files are moved to a4c40933-named paths before relaunch, so
+the new gauntlet-final.exit cannot be confused with the preserved old1.
+
+Rebased acceptance repeat
+Compiler48172ee2bdcb653dc08ee9340b8a4983211554bc includes trunk6480a27b
+(read-lend elision) and the isolated no-root test fix. At this source head:
+24 str/List/fs tests with WOLF_STD set,12 read-lend planner tests,5 native
+variadic tests,19 LLVM tests,10 source ABI tests, fmt and strict workspace
+all-target clippy pass. Full muzzle acceptance repeats at
+run-20261025T013253Z:50 cases/counts on each tier,10/10 families per tier,
+identity/error checks and count-only mutant all pass. Both complete
+archives again prove8 guarded XMM saves and no unguarded vector state.
+Compiler SHA256 c178ad3a79d7473138d20059d1df2ed1b77f00d108f3b28f1fd96f4d40a369bf.
+The native/release archive digests and all output digests are IDENTICAL to
+the prior banked acceptance. Evidence: rebased-focus.log and
+muzzle-rebased-acceptance.log, with muzzle-rebased-*.objdump.
+This remains object inspection, not SSE-disabled execution. Full gauntlet
+at the final rebased/evidence head remains pending the detached rerun.
