@@ -114,7 +114,7 @@ def expect(name, got, tier, jobs):
 
 
 # --- T1 the tiers by event ---------------------------------------------------
-say(EVERY == ["plan-test", "lint-test", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
+say(EVERY == ["plan-test", "lint-test", "variadic-abi", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
     "T1 the workflow's jobs between plan and tier: %s" % " ".join(EVERY))
 expect("T1 a push to trunk", plan(event="push"), "full", MERGE)
 expect("T1 the nightly", plan(event="schedule"), "release", EVERY)
@@ -293,6 +293,11 @@ say("    needs: tier\n" in n and "    if: ${{ failure() && github.event_name == 
     "T4 a red nightly, and only a red nightly, runs ci/nightly-red.sh with issues: write")
 runs_on = {j: re.findall(r"^    runs-on: (.*)$", blocks[j], re.M) for j in PR_JOBS}
 say(all(v == ["ubuntu-latest"] for v in runs_on.values()), "T4 every pull-request job runs on ubuntu (%s)" % runs_on)
+
+expect("variadic plants run only their selected job", plan(event="workflow_dispatch", jobs="variadic-abi"), "partial", ["variadic-abi"])
+expect("lane evidence remains a PR-class input", plan(["notes/s263-evidence/reproducer.sh"], **pr), "pr", PR_JOBS)
+say("variadic-abi" not in PR_JOBS and "variadic-abi" in plan(event="push")["jobs"],
+    "the focused variadic job is full/release and explicit partial dispatch, not a second PR gauntlet")
 
 # --- T7 the change read from git ----------------------------------------------------
 def git(repo, *args):

@@ -326,6 +326,38 @@ jobs:
           name: bench-smoke
           path: bench-results/
 
+  # Fast selectable ABI gate for the planted prologue/AL/inliner faults.
+  # The workspace gauntlet also executes these tests; this job lets a
+  # partial dispatch prove the gate red without running unrelated lanes.
+  variadic-abi:
+    name: C variadics (linux x86-64 and freestanding)
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'variadic-abi')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_INCREMENTAL: "0"
+      WOLF_VERIFY_EACH_PASS: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: variadic-abi
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
+      - name: C17 oracle and object disassembler
+        run: sudo apt-get update && sudo apt-get install -y clang lld binutils
+      - name: the variadic prologue cannot be inlined
+        run: cargo test -p wolf_wir --test midend_passes -- --nocapture
+      - name: native save areas and vector-register count
+        run: cargo test -p wolf_codegen_clif --test s263_variadic -- --nocapture
+      - name: release ABI and guarded freestanding SSE saves
+        run: cargo test -p wolf_codegen_llvm --test s263_variadic -- --nocapture
+      - name: source promotions and C17 nostdlib acceptance
+        run: cargo test -p wolf_driver --test variadic_abi -- --nocapture
+      - name: shared cursor and trampoline layout
+        run: cargo test -p wolf_backend abi::variadic -- --nocapture
+
   native-macos:
     # s59: the native tier's second platform; s127 lit the RELEASE tier
     # on it too. The same gauntlet, on the host the compiler came home
@@ -519,6 +551,7 @@ jobs:
       - plan
       - plan-test
       - lint-test
+      - variadic-abi
       - native-macos
       - fuzz-smoke
       - build-test

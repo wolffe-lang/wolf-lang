@@ -42,10 +42,17 @@ succeeded and every other job was skipped.
 | run | tier | jobs selected by the planner |
 |---|---|---|
 | pull request with PR-class paths and no full-class path or tier label | `tier pr` | `plan-test`, `lint-test`, `fuzz-smoke` |
-| pull request with `full-matrix`, push to `trunk`, dispatch with `tier=full` or with no jobs/tier, or pull request with an unclassified/unreadable path (including no paths) | `tier full` | `plan-test`, `lint-test`, `fuzz-smoke`, `build-test`, `freebsd-check` (all selectable jobs except `native-macos`) |
-| nightly, dispatch with `tier=release`, or pull request with `release-matrix` | `tier release` | `plan-test`, `lint-test`, `native-macos`, `fuzz-smoke`, `build-test`, `freebsd-check` (every selectable job) |
+| pull request with `full-matrix`, push to `trunk`, dispatch with `tier=full` or with no jobs/tier, or pull request with an unclassified/unreadable path (including no paths) | `tier full` | `plan-test`, `lint-test`, `variadic-abi`, `fuzz-smoke`, `build-test`, `freebsd-check` (all selectable jobs except `native-macos`) |
+| nightly, dispatch with `tier=release`, or pull request with `release-matrix` | `tier release` | `plan-test`, `lint-test`, `variadic-abi`, `native-macos`, `fuzz-smoke`, `build-test`, `freebsd-check` (every selectable job) |
 | prose-only pull request, or planner's label no-op cases | `tier noop` | none |
 | dispatch naming dependency-closed jobs | `tier partial` | only the named jobs |
+
+`variadic-abi` runs the x86-64 Linux and freestanding C-varargs witnesses,
+including the prologue inliner barrier, both emitters, source promotions,
+and guarded-SSE disassembly. It is independently selectable with
+`-f jobs=variadic-abi` for a planted break. The PR gauntlet already runs
+these tests through the workspace, so the focused job is not duplicated
+on every PR push. Lane evidence under `notes/` is PR-class, not prose.
 
 `plan`, `tier` and `nightly-red` are workflow jobs but are not selectable; `tier` is the verdict job and `nightly-red` runs after it. The three `native-macos` shards are in `tier release`, not `tier full`.
 
