@@ -1,0 +1,42 @@
+error[E0201]: expected a parameter
+ --> corpus/membrane/variadic_declarations.lu:6:32
+  |
+6 | extern "c" fn printf(fmt: *u8, ...) -> i32
+  |                                ^^
+  |
+
+error[E0201]: expected a parameter
+ --> corpus/membrane/variadic_declarations.lu:8:23
+  |
+8 | export fn sum(n: i32, ...) -> i64 {
+  |                       ^^
+  |
+
+error[E0822]: `...` belongs after the last named parameter of an `extern "c" fn` or `export fn`
+ --> corpus/membrane/variadic_position.lu:6:23
+  |
+6 | export fn sum(n: i32, ..., last: i32) -> i64 {
+  |                       ^^^
+  |
+  = note: Move `...` after the last named parameter, with no type, mode or trailing comma.
+
+error[E0201]: expected a parameter
+ --> corpus/membrane/variadic_position.lu:6:23
+  |
+6 | export fn sum(n: i32, ..., last: i32) -> i64 {
+  |                       ^^
+  |
+
+{"file": "corpus/membrane/variadic_declarations.lu", "record": {"commit": "unknown", "diagnostics": [], "file": "corpus/membrane/variadic_declarations.lu", "impl": "wolfgang", "impl_version": "0.2.35+dev.unknown", "phase_reached": "parse", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "pass", "warnings": []}, "sample": "candidate"}
+{"file": "corpus/membrane/variadic_declarations.lu", "record": {"commit": "cf0c13d", "diagnostics": [{"code": "E0201", "severity": "error", "span": [187, 189]}, {"code": "E0201", "severity": "error", "span": [222, 224]}], "file": "corpus/membrane/variadic_declarations.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "parse", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "fail(E0201)", "warnings": []}, "sample": "control"}
+{"file": "corpus/membrane/variadic_declarations.lu", "record": {"commit": "28547b4", "diagnostics": [{"code": "E0201", "severity": "error", "span": [187, 189]}], "file": "corpus/membrane/variadic_declarations.lu", "impl": "lupin", "impl_version": "0.1.56", "phase_reached": "parse", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "fail(E0201)"}, "sample": "lupin"}
+{"file": "corpus/membrane/variadic_position.lu", "record": {"commit": "unknown", "diagnostics": [{"code": "E0822", "severity": "error", "span": [166, 169]}], "file": "corpus/membrane/variadic_position.lu", "impl": "wolfgang", "impl_version": "0.2.35+dev.unknown", "phase_reached": "parse", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "fail(E0822)", "warnings": []}, "sample": "candidate"}
+{"file": "corpus/membrane/variadic_position.lu", "record": {"commit": "cf0c13d", "diagnostics": [{"code": "E0201", "severity": "error", "span": [166, 168]}], "file": "corpus/membrane/variadic_position.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "parse", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "fail(E0201)", "warnings": []}, "sample": "control"}
+{"file": "corpus/membrane/variadic_position.lu", "record": {"commit": "28547b4", "diagnostics": [{"code": "E0201", "severity": "error", "span": [166, 168]}], "file": "corpus/membrane/variadic_position.lu", "impl": "lupin", "impl_version": "0.1.56", "phase_reached": "parse", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "fail(E0201)"}, "sample": "lupin"}
+{"file": "corpus/conc/proc_link_root_death.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/conc/proc_link_root_death.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": null, "stdout_sha256": null, "verdict": "exit(121)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}
+{"file": "corpus/memory/region_copy_shares_str.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/memory/region_copy_shares_str.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": "28\nbuilt in pass, 0 uses\n", "stdout_sha256": "6a72ff5f227babbf18145ad703b9dcda1f50c9313d93938ff6781de1d483adf2", "verdict": "exit(0)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}
+{"file": "corpus/memory/region_outer_write_field.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/memory/region_outer_write_field.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": "t9 1 9 x1 2 7\n", "stdout_sha256": "c4f2e4d428dd4750d2e899ad7c916572e01c1ac9a38db5a73cdc7efb1a1de2ab", "verdict": "exit(0)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}
+{"file": "corpus/memory/region_outer_write_map.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/memory/region_outer_write_map.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": "40 v7 v39 true\n", "stdout_sha256": "1b8daafa9c028226d2229c8ba5ba3000a86507286d394842f0989cd2eb978b3e", "verdict": "exit(0)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}
+{"file": "corpus/memory/region_outer_write_str_push.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/memory/region_outer_write_str_push.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": "100 turn 0 turn 99 42 true\n", "stdout_sha256": "01706788c278ac753591841c097f2571f8c6bd3bddc93d423198b6f87bf33b21", "verdict": "exit(0)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}
+{"file": "corpus/memory/region_outer_write_struct.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/memory/region_outer_write_struct.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": "50 r0 r49 3 49 98 147\n", "stdout_sha256": "aef13e7134c47d8428c2c29403714846361213b4798d1ef6c30aa758cf15daef", "verdict": "exit(0)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}
+{"file": "corpus/memory/region_str_call_index_store.lu", "record": {"commit": "cf0c13d", "diagnostics": [], "file": "corpus/memory/region_str_call_index_store.lu", "impl": "wolfgang", "impl_version": "0.2.35", "phase_reached": "run", "protocol": 1, "seeded": false, "stdout_inline": "[piece 7 3-7]\n", "stdout_sha256": "7dd192ef02bd15ea73bb2e222293adc1e7ac9365022a7fa65e4bd811ea817761", "verdict": "exit(0)", "warnings": []}, "sample": "published-wolf-checked-reference-gap-control"}

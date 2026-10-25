@@ -1,0 +1,192 @@
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	﻿2026-10-25T00:24:07.6032340Z ##[group]Run cargo test -p wolf_wir --test midend_passes -- --nocapture
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6032650Z ^[[36;1mcargo test -p wolf_wir --test midend_passes -- --nocapture^[[0m
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6032893Z shell: sh -e {0}
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033005Z env:
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033118Z   CARGO_TERM_COLOR: always
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033251Z   PROPTEST_CASES: 256
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033371Z   CARGO_INCREMENTAL: 0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033498Z   WOLF_VERIFY_EACH_PASS: 1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033633Z   CARGO_HOME: /github/home/.cargo
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033772Z   CACHE_ON_FAILURE: false
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6033899Z ##[endgroup]
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:07.6866039Z ^[[1m^[[92m    Updating^[[0m crates.io index
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.1992326Z ^[[1m^[[92m Downloading^[[0m crates ...
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3097506Z ^[[1m^[[92m  Downloaded^[[0m arrayref v0.3.9
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3213103Z ^[[1m^[[92m  Downloaded^[[0m bitflags v2.13.1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3253895Z ^[[1m^[[92m  Downloaded^[[0m arrayvec v0.7.8
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3333772Z ^[[1m^[[92m  Downloaded^[[0m errno v0.3.14
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3355566Z ^[[1m^[[92m  Downloaded^[[0m cpufeatures v0.3.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3453291Z ^[[1m^[[92m  Downloaded^[[0m cfg-if v1.0.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3688520Z ^[[1m^[[92m  Downloaded^[[0m crossbeam-deque v0.8.7
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3701787Z ^[[1m^[[92m  Downloaded^[[0m fastrand v2.5.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3717349Z ^[[1m^[[92m  Downloaded^[[0m either v1.17.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3769937Z ^[[1m^[[92m  Downloaded^[[0m constant_time_eq v0.4.2
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3788248Z ^[[1m^[[92m  Downloaded^[[0m find-msvc-tools v0.1.10
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3802565Z ^[[1m^[[92m  Downloaded^[[0m shlex v2.0.1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3813318Z ^[[1m^[[92m  Downloaded^[[0m tempfile v3.27.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3835167Z ^[[1m^[[92m  Downloaded^[[0m console v0.16.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3849677Z ^[[1m^[[92m  Downloaded^[[0m crossbeam-epoch v0.9.20
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3870129Z ^[[1m^[[92m  Downloaded^[[0m once_cell v1.21.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3893378Z ^[[1m^[[92m  Downloaded^[[0m unicode-ident v1.0.24
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3919792Z ^[[1m^[[92m  Downloaded^[[0m cc v1.4.2
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3945494Z ^[[1m^[[92m  Downloaded^[[0m crossbeam-utils v0.8.22
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.3969726Z ^[[1m^[[92m  Downloaded^[[0m rayon-core v1.13.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4002945Z ^[[1m^[[92m  Downloaded^[[0m getrandom v0.4.3
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4047931Z ^[[1m^[[92m  Downloaded^[[0m similar v2.7.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4087595Z ^[[1m^[[92m  Downloaded^[[0m insta v1.48.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4181809Z ^[[1m^[[92m  Downloaded^[[0m rayon v1.12.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4267242Z ^[[1m^[[92m  Downloaded^[[0m blake3 v1.8.6
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4333917Z ^[[1m^[[92m  Downloaded^[[0m rustix v1.1.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4578947Z ^[[1m^[[92m  Downloaded^[[0m libc v0.2.189
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.4962747Z ^[[1m^[[92m  Downloaded^[[0m linux-raw-sys v0.12.1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.6575897Z ^[[1m^[[92m   Compiling^[[0m crossbeam-utils v0.8.22
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.6576201Z ^[[1m^[[92m   Compiling^[[0m crossbeam-epoch v0.9.20
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.6576400Z ^[[1m^[[92m   Compiling^[[0m libc v0.2.189
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.6576720Z ^[[1m^[[92m   Compiling^[[0m shlex v2.0.1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.7391322Z ^[[1m^[[92m   Compiling^[[0m crossbeam-deque v0.8.7
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.7638418Z ^[[1m^[[92m   Compiling^[[0m find-msvc-tools v0.1.10
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.8330715Z ^[[1m^[[92m   Compiling^[[0m wolf_span v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_span)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.8431907Z ^[[1m^[[92m   Compiling^[[0m cfg-if v1.0.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.8988184Z ^[[1m^[[92m   Compiling^[[0m cc v1.4.2
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:08.9989490Z ^[[1m^[[92m   Compiling^[[0m rayon-core v1.13.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.1156173Z ^[[1m^[[92m   Compiling^[[0m wolf_diag v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_diag)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.3924618Z ^[[1m^[[92m   Compiling^[[0m unicode-ident v1.0.24
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.4353830Z ^[[1m^[[92m   Compiling^[[0m wolf_lex v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_lex)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.7392034Z ^[[1m^[[92m   Compiling^[[0m wolf_ast v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_ast)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.8158148Z ^[[1m^[[92m   Compiling^[[0m blake3 v1.8.6
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.8499318Z ^[[1m^[[92m   Compiling^[[0m arrayref v0.3.9
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:09.8784122Z ^[[1m^[[92m   Compiling^[[0m rustix v1.1.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.0243357Z ^[[1m^[[92m   Compiling^[[0m arrayvec v0.7.8
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.0408065Z ^[[1m^[[92m   Compiling^[[0m cpufeatures v0.3.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.0625047Z ^[[1m^[[92m   Compiling^[[0m getrandom v0.4.3
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.1093547Z ^[[1m^[[92m   Compiling^[[0m either v1.17.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.1399546Z ^[[1m^[[92m   Compiling^[[0m constant_time_eq v0.4.2
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.1858721Z ^[[1m^[[92m   Compiling^[[0m rayon v1.12.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.2132904Z ^[[1m^[[92m   Compiling^[[0m wolf_parse v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_parse)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.3094246Z ^[[1m^[[92m   Compiling^[[0m bitflags v2.13.1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.3954460Z ^[[1m^[[92m   Compiling^[[0m linux-raw-sys v0.12.1
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:10.9918716Z ^[[1m^[[92m   Compiling^[[0m once_cell v1.21.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:11.0958551Z ^[[1m^[[92m   Compiling^[[0m fastrand v2.5.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:11.2009869Z ^[[1m^[[92m   Compiling^[[0m console v0.16.4
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:11.4795021Z ^[[1m^[[92m   Compiling^[[0m similar v2.7.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:11.5816048Z ^[[1m^[[92m   Compiling^[[0m tempfile v3.27.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:11.7884055Z ^[[1m^[[92m   Compiling^[[0m insta v1.48.0
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:12.1488071Z ^[[1m^[[92m   Compiling^[[0m wolf_sema v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_sema)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:14.4869108Z ^[[1m^[[92m   Compiling^[[0m wolf_mem v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_mem)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:17.1216246Z ^[[1m^[[92m   Compiling^[[0m wolf_wir v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_wir)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8696204Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 15.20s
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8949457Z ^[[1m^[[92m     Running^[[0m tests/midend_passes.rs (target/debug/deps/midend_passes-40b7afa0fa263e98)
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8966103Z 
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8966480Z running 45 tests
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8973729Z test coalesce_never_crosses_a_call ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8987337Z test hdrprom_refuses_a_variant_address_on_the_chain ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8988087Z test hdrprom_promotes_the_push_header ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.8993005Z test hdrprom_refuses_an_unproven_call ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9008940Z test inline_keeps_a_call_whose_token_formals_share_a_region ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9227287Z test coalesce_fuses_adjacent_allocs ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9228166Z test inline_token_callee_rebinds_region ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9228683Z test inline_scalar_callee ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9237315Z test licm_hoists_frozen_load ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9238202Z test licm_refuses_the_license_for_an_external_callee ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9238665Z test licm_refuses_the_license_on_a_shared_root ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9240286Z test licm_licenses_a_load_past_a_disjoint_writing_callee ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9247702Z test licm_refuses_the_license_without_the_theorem ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9248906Z test loopcse_refuses_a_loop_that_loads ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9260381Z test loopcse_refuses_differing_entry_args ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9260807Z test loopcse_merges_identical_sequential_loops ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9261337Z test loopcse_refuses_versioned_alternatives ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9263563Z test loopcse_refuses_a_differing_body ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9263851Z test memopt_dse_respects_escape ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9264181Z test memopt_store_to_load_forwarding ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9298337Z test pipeline_preserves_entry_facts ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9299197Z test rangeopt_affine_relation_proves_offset_indices ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9304025Z test rangeopt_band_carries_the_operand_bound ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9311044Z test rangeopt_affine_refuses_an_unproven_wrap ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9320571Z test rangeopt_keeps_a_bounds_test_over_an_unrelated_bound ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9327349Z test rangeopt_keeps_a_branch_on_the_top_half_of_a_logical_shift ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9334925Z test rangeopt_never_spends_a_user_wrap_as_a_relation ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9336028Z test rangeopt_refuses_monotonicity_from_a_wrapping_counter ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9337224Z test rangeopt_affine_wrap_admitted_when_bounded ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9342818Z test rangeopt_relation_proves_the_unsigned_bounds_test ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9351522Z test rangeopt_trip_scaled_accumulator_needs_no_guard ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9351991Z test rangeopt_spends_a_proven_check_as_a_relation ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9353714Z test rangeopt_counter_eliminates_accumulator_stays ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9360036Z test rangeopt_still_decides_a_shift_past_its_unsigned_maximum ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9367697Z test rangeopt_versioning_skips_loops_with_calls ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9368636Z test rangeopt_wrapping_counter_under_a_guard_is_bounded ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9371755Z test rangeopt_versioning_backstop ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9373734Z test rangeopt_versions_a_reduction_against_an_opaque_bound ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9378735Z test simplify_branch_fold_and_trap ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9384778Z 
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9385131Z thread 'variadic_entry_prologue_is_an_inlining_barrier' (5651) panicked at crates/wolf_wir/tests/midend_passes.rs:36:50:
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9386148Z pipeline green: VerifyError { class: BlockArgArity, func: "main", msg: "b0: `jmp b1(%0, %1)`: b1 expects 1 argument(s), 2 passed", dump: "fn @main() -> i64 {\nb0:\n  %0 = iconst.i32 1\n  %1 = iconst.i64 42\n  jmp b1(%0, %1)\nb1(%2: i32):\n  %3: ptr = va.start\n  %4: mem.r1 = region.foreign 1\n  %5: i64, %6: mem.r1 = va.arg %3, %4\n  %7: mem.r1 = va.end %3, %6\n  jmp b2\nb2:\n  ret %5\n}\n" }
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9387213Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9387823Z test sink_rejects_unbounded_and_escaping ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9388234Z test simplify_rules_gvn_fold ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9388493Z test sink_promotes_small_region_in_loop ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9388908Z test variadic_entry_prologue_is_an_inlining_barrier ... FAILED
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9395503Z test witness_dead_store_into_freed_region ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9395748Z test witness_read_param_load_cse_across_opaque_call ... ok
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9395978Z 
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9396049Z failures:
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9396147Z 
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9396220Z failures:
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9396426Z     variadic_entry_prologue_is_an_inlining_barrier
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9396739Z 
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9396939Z test result: FAILED. 44 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9397134Z 
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9407510Z ^[[1m^[[91merror^[[0m: test failed, to rerun pass `-p wolf_wir --test midend_passes`
+C variadics (linux x86-64 and freestanding)	the variadic prologue cannot be inlined	2026-10-25T00:24:22.9501843Z ##[error]Process completed with exit code 101.
+tier partial	every chosen job succeeded, every other was skipped	﻿2026-10-25T00:24:37.0245816Z ##[group]Run python3 ci/tiers.py verdict
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0246438Z ^[[36;1mpython3 ci/tiers.py verdict^[[0m
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0502368Z shell: /usr/bin/bash -e {0}
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0502956Z env:
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0503396Z   CARGO_TERM_COLOR: always
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0503921Z   PROPTEST_CASES: 256
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0507157Z   NEEDS: {
+tier partial	every chosen job succeeded, every other was skipped	  "plan": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "success",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {
+tier partial	every chosen job succeeded, every other was skipped	      "tier": "partial",
+tier partial	every chosen job succeeded, every other was skipped	      "jobs": "[\"variadic-abi\"]"
+tier partial	every chosen job succeeded, every other was skipped	    }
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "plan-test": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "lint-test": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "variadic-abi": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "failure",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "native-macos": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "fuzz-smoke": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "build-test": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "freebsd-check": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  }
+tier partial	every chosen job succeeded, every other was skipped	}
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0509790Z ##[endgroup]
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0898622Z tier partial: 1 of 7 job(s) chosen
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0899667Z   plan-test          skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0900285Z   lint-test          skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0901228Z   variadic-abi       failure   WANTED success
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0901872Z   native-macos       skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0902447Z   fuzz-smoke         skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0902997Z   build-test         skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0903588Z   freebsd-check      skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:24:37.0954979Z ##[error]Process completed with exit code 1.

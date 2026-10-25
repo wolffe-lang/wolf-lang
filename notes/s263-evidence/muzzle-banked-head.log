@@ -1,0 +1,53 @@
+acceptance evidence: /work/muzzle/notes/s263/run-20261025T004844Z
+RUN version
+EXIT version=0
+RUN identity
+EXIT identity=0
+RUN build-native
+EXIT build-native=0
+RUN diff-native
+EXIT diff-native=0
+RUN errors-build-native
+EXIT errors-build-native=0
+RUN errors-run-native
+EXIT errors-run-native=0
+RUN build-release
+EXIT build-release=0
+RUN diff-release
+EXIT diff-release=0
+RUN errors-build-release
+EXIT errors-build-release=0
+RUN errors-run-release
+EXIT errors-run-release=0
+RUN count-plant
+EXIT count-plant=0
+error: let chains are only allowed in Rust 2024 or later
+   --> /work/probes/../crates/wolf_backend/tests/support/variadic_guard.rs:285:12
+    |
+285 |         if let Some((address, name)) = line.split_once(" <")
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: let chains are only allowed in Rust 2024 or later
+   --> /work/probes/../crates/wolf_backend/tests/support/variadic_guard.rs:287:16
+    |
+287 |             && let Some(name) = name.strip_suffix(">:")
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `e`
+ --> /work/probes/check_guard.rs:7:66
+  |
+7 |         let count = variadic_guard::check(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
+  |                                                                  ^         ------------- you might have meant to use string interpolation in this string literal
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+help: string interpolation only works in `format!` invocations
+  |
+7 |         let count = variadic_guard::check(&text).unwrap_or_else(|e| panic!(format!("{path}: {e}")));
+  |                                                                            ++++++++             +
+help: if this is intentional, prefix it with an underscore
+  |
+7 |         let count = variadic_guard::check(&text).unwrap_or_else(|_e| panic!("{path}: {e}"));
+  |                                                                  +
+
+error: aborting due to 2 previous errors; 1 warning emitted
+

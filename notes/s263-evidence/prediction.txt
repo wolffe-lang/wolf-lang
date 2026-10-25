@@ -15,3 +15,14 @@ than interpreting variadic Wolf definitions (B).
 
 Report .md output is prohibited by the lane wrapper. The final five-section
 report will use the PR-body fallback, with evidence in notes/s263-evidence/.
+
+Measured outcome at closeout
+The clause occupies 121 lines (prediction approximately100).
+The first native backend witness failed at object symbol scope before ABI
+execution, not at AL: clif-variadic-first.log. The first LLVM consumers
+failed a test fixture's illegal aggregate load; the scalar/call witnesses
+already passed. The variadic inliner did need its explicit barrier, proven
+by CI plant40146475827. Muzzle did not pass first try, but the blockers were
+compiler pointer type-argument resolution and asm-roster builtin identity,
+not signed formatting. Once compilation succeeded, all50 cases passed on
+both tiers. The complete failed attempts are preserved on muzzle/s263.

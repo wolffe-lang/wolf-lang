@@ -1,0 +1,37 @@
+s263 banked acceptance (supersedes acceptance.txt's dirty checkpoint)
+Recorded 2026-10-25T01:09Z. Muzzle implementation bbc1d4e5c99e108f913b6b4103a414c4be1a3390.
+Compiler implementation d2a6a6e83e8f5de69d2d30c9892fc36e95300c23.
+Later compiler edits affect only proof tests/evidence, not emitted binaries.
+Full command/output record: run-20261025T004844Z/acceptance.log.
+Every acceptance subcommand exited0, including the test expecting the
+count-only mutant differential to fail on each tier. Fifty cases/counts
+match glibc on both actual none-target archives;10/10 differential families
+per tier,5/5 exact-version controls,20 exports and zero external imports.
+The source stamp is explicit; version remains wolf 0.2.35+dev.unknown.
+
+Compiler SHA256 ac79ccdaa2b1b82af158411ea495219d103e12e05264bb83f48d8dfbd3dbd25f
+Corpus SHA256 edb20b7e6d4cd4bd42eaa0fc07e56b967c4b809e407036e9fdbaea327dd4b0fa
+Output SHA256 1e086d7e0c5a346283786a08f3b9b7ec5b3e708e3210988eab1b6dff1273c280
+Native archive SHA256 52bbbd063dc2adea914fd5cd1fe1ffe5d7798db6b5832939a76d1803399f5f5b
+Release archive SHA256 84c0d739222f85521dbf6b64fcdaab0cecfb24e78623fbfa3eacb611f6bb72b9
+Implementation-final.patch SHA256 e36e23b6f5547ac5e99916e0d243406a33540d0c30c31778f361bc241f042f20
+The final patch is base0ae06014..implementation bbc1d4e5, excluding notes.
+
+Container localhost/s263-toolchain:final-1.97.1 image
+ed3720d72f16470f3115635102af8ca01e3bac48b13d02d5bab9ac4438c637c6,
+image-owned Rust1.97.1 with none target; hasu blockB6-11 and12g limit.
+Whole-archive objdump proof:8 guarded XMM stores per tier, no unguarded
+vector state. Unreachable trailing integer pools are admitted only after
+RET/UD2 and with no incoming control edge; malformed executable bytes fail.
+The first standalone proof-driver compile omitted --edition=2024; corrected.
+The strict parser then rejected integer-pool data; bounded proof added and
+negative fixtures tested before accepting the real archives. No QEMU or
+SSE-disabled execution is claimed. See the compiler's muzzle-archive-guard
+log and native/release objdump files for the full proof inputs and result.
+
+This is an UNMERGED acceptance branch. Pin remains released wolf0.2.34;
+the loud exact-version development override is not a released pin. lc02 must
+pin a released compiler carrying the clause before merging. Bare %d %s %c
+%x %% only; no full printf/stdio claim. Single-threaded/nonreentrant scratch;
+EINTR, short-write and count-overflow injections are still lc02 work.
+Full lc02 draft is in wolf-lang notes/s263-evidence/lc02-draft.txt.

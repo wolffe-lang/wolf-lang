@@ -1,0 +1,32 @@
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.46s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-d22e5c66e2c0c081)
+
+running 9 tests
+
+thread 'ordinary_consumer_accepts_a_c_created_list_and_advances_it' (55) panicked at crates/wolf_codegen_llvm/tests/s263_variadic.rs:13:32:
+valid emitter input: VerifyError { class: Type, func: "consume_copy", msg: "b0: `%2 = load.{i32, i32, ptr, ptr} %0, %1`: load result must be a scalar or a union", dump: "export fn @consume_copy(ptr, mem.r0) -> i64 {\nb0(%0: ptr, %1: mem.r0):\n  %2 = load.{i32, i32, ptr, ptr} %0, %1\n  %3 = iconst.i64 24\n  %4: ptr, %5: mem.r1 = stack.alloc %3\n  %6 = store.{i32, i32, ptr, ptr} %2, %4, %5\n  %7: i64, %8: mem.r1 = va.arg %4, %6\n  %9: mem.r1 = va.end %4, %8\n  ret %7\n}\n" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'ordinary_va_list_consumer_is_target_gated_without_a_prologue' (56) panicked at crates/wolf_codegen_llvm/tests/s263_variadic.rs:13:32:
+valid emitter input: VerifyError { class: Type, func: "consume_copy", msg: "b0: `%2 = load.{i32, i32, ptr, ptr} %0, %1`: load result must be a scalar or a union", dump: "export fn @consume_copy(ptr, mem.r0) -> i64 {\nb0(%0: ptr, %1: mem.r0):\n  %2 = load.{i32, i32, ptr, ptr} %0, %1\n  %3 = iconst.i64 24\n  %4: ptr, %5: mem.r1 = stack.alloc %3\n  %6 = store.{i32, i32, ptr, ptr} %2, %4, %5\n  %7: i64, %8: mem.r1 = va.arg %4, %6\n  %9: mem.r1 = va.end %4, %8\n  ret %7\n}\n" }
+test ordinary_consumer_accepts_a_c_created_list_and_advances_it ... FAILED
+test ordinary_va_list_consumer_is_target_gated_without_a_prologue ... FAILED
+test differing_call_tails_share_the_fixed_prototype ... ok
+test definitions_have_ellipsis_noinline_and_psabi_cursor_paths ... ok
+test each_started_cursor_has_an_explicit_matching_end ... ok
+test variadic_definition_refuses_other_targets_by_name ... ok
+test variadic_call_refuses_other_targets_by_name ... ok
+test wolf_calls_c_with_promoted_float_fixed_sse_and_different_tails ... ok
+test c_calls_variadic_definitions_across_both_register_banks_and_stack ... ok
+
+failures:
+
+failures:
+    ordinary_consumer_accepts_a_c_created_list_and_advances_it
+    ordinary_va_list_consumer_is_target_gated_without_a_prologue
+
+test result: FAILED. 7 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p wolf_codegen_llvm --test s263_variadic`

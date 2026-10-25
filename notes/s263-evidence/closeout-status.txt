@@ -1,0 +1,46 @@
+s263 closeout status before final gauntlet launch
+Implementation d2a6a6e8; final proof-helper refinement37869336.
+Muzzle acceptance branch s263 head d110e867c2b4ed5e1a494ab167043d402756fb46;
+implementation bbc1d4e5; remains unmerged with the old release pin.
+The required five-section report is the wolf-lang PR body, not a .md file.
+
+Done: clause/anchors; parser/resolver/diagnostics; layout/type identity and
+prelude; WIR/promotions/effect tokens/inliner; native+LLVM; source C17
+hosted and real freestanding integration; all three red CI plants plus
+green focused control; every published-control delta named; muzzle50-case
+byte/count acceptance; whole-archive guarded-SSE proof; full lc02 draft.
+The final tracked head only adds test proof/evidence over the banked compiler.
+
+Not predeclared done: final full cargo xtask ci; PR tier pr; labelled tier
+full. The final gauntlet is detached per contract with paths:
+/home/mfwolffe/lanes/s263/gauntlet-final.pid
+/home/mfwolffe/lanes/s263/gauntlet-final.log
+/home/mfwolffe/lanes/s263/gauntlet-final.exit
+Its marker is the sole exit status, not tail or a pipeline. The orchestrator
+owns this watch, the full-matrix label, CI completion, and any merge.
+
+Rulings R-s263-1..9: free builtin VaList; silent promotions; named checked
+refusal; ordinary consumers allowed (only start requires variadic frame);
+C decayed list parameter is *VaList; verified interpreter source/vendored
+identity distinction; bounded inherited-affinity shim; real none support
+with guarded vector exception; incoming-AL copies allowed only through
+proved register moves. No other ABI target gained variadics; none floating
+Wolf values remain forbidden and ordinary none functions remain no-SSE.
+
+Issue actions proposed, NOT performed:
+- After merge acceptance, close wolf-lang#515 against this implementation.
+- File the inherited-affinity issue from taskset-issue.txt (WOLF_TEST_CPUS).
+- Mirror syntax/prelude/anchors/named refusals in wolf-interp; keep #280's
+  vendored-spec identity distinction. Triage six existing region gaps and
+  the overprecise proc_link_root_death nonzero comparison before duplicates.
+- Keep known wolf-lang#631 flake open; no duplicate or threshold weakening.
+The two intermediate failed gauntlets and isolated rerun remain banked;
+the final image fixes the missing none target, not nested-engine absence.
+
+Cleanup only AFTER the orchestrator banks final evidence:
+- hasu /home/mfwolffe/lanes/s263/target, .cargo-home, controls and probes.
+- Mac /Users/mfwolffe/lanes/s263/target, inputs and notes/s263-evidence/working.patch.
+- Remove registered nested plant and muzzle worktrees with git worktree
+  remove before removing /Users/mfwolffe/lanes/s263; preserve plant branch
+  heads and logs until the gate evidence is accepted. Never remove host
+  model/serving/user state or a live job's checkout.

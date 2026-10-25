@@ -1,0 +1,209 @@
+lc02 — muzzle's first formatted-output layer
+FULL CONTRACT DRAFT for the orchestrator; not an approved lane or a promise of
+full stdio. Prepared from s263 item 5 and muzzle's actual first-layer design.
+
+Class: long. Track 10 (muzzle). Base: muzzle origin/trunk
+0ae060141bc750dfc59e71158de48757feea9916 plus the s263 acceptance branch, which
+is handed over unmerged. Acceptance/evidence branch head is
+d110e867c2b4ed5e1a494ab167043d402756fb46. Compiler base: the released/pinned successor carrying
+s263, once one exists. Host: Linux x86-64 only; build native and release on
+x86_64-unknown-none. Never use a hosted object as a freestanding substitute.
+The orchestrator assigns the pool host, CPU block and container before launch.
+
+0. Status and launch prerequisites
+- s263 supplies VaList's 24-byte SysV record (u32 offsets 0/4, pointers 8/16),
+  unsafe va_start(), va_arg[T](mut ap), va_copy(ap), va_end(mut ap), and
+  C default argument promotions. A C va_list parameter is *VaList, not a
+  VaList value. Nonvariadic consumers may copy and consume a live list.
+- A definition has at most one syntactic va_start. Every start/copy is ended
+  before its backing invocation returns; no cursor/storage escapes.
+- R-s263-8 A is now confirmed: the clause admits x86_64-unknown-none;
+  ordinary Wolf float values remain forbidden, and variadic C-entry vector
+  saves are guarded by incoming %al. The parent reports native/release
+  nostdlib compiler witnesses and object inspection (24 guarded XMM saves,
+  none elsewhere). No QEMU/SSE-fault harness ran: object proof is the stated
+  alternative, not an emulated no-SSE claim.
+- First muzzle attempt (2026-10-24T22:55:33Z) uses the real none target and
+  fails E0812 compiling va_arg[*u8] for %s. Parent fixed generic pointer
+  type resolution and its native/release source fixtures. Second attempt
+  (2026-10-24T22:57:52Z) advances to E1306: wolf.pkg's assembly roster
+  incorrectly treats va_start/va_arg/va_end as external assembly symbols.
+  Parent fixed builtin identity in that checker; no fake assembly stubs
+  were added. Both failures are preserved in muzzle notes/s263/run-*.
+- Real freestanding acceptance is GREEN at compiler source head
+  d2a6a6e83e8f5de69d2d30c9892fc36e95300c23 and muzzle implementation head
+  bbc1d4e5c99e108f913b6b4103a414c4be1a3390:
+  notes/s263/run-20261025T004844Z. Native and release each pass all 50
+  primary printf cases and independent return counts, byte-identical to
+  glibc2.39; all 10 differential families pass, 20 required archive exports
+  are defined with zero external imports, and subset/EBADF tests exit0.
+  Five exact-version controls pass. An isolated return-count +1 plant is
+  rejected by the differential (exit1) on both tiers; original source is
+  unchanged. No short-write/EINTR/count-overflow runtime injection yet.
+- Tested compiler path /work/target/debug/wolf, version
+  wolf 0.2.35+dev.unknown (wolfgang), binary SHA256
+  ac79ccdaa2b1b82af158411ea495219d103e12e05264bb83f48d8dfbd3dbd25f.
+  This is a banked source-head result, NOT a released/pinned compiler.
+  Later s263 changes refine only test disassembly and bank evidence.
+  Corpus SHA256 edb20b7e6d4cd4bd42eaa0fc07e56b967c4b809e407036e9fdbaea327dd4b0fa;
+  identical output SHA256 on glibc/native/release is
+  1e086d7e0c5a346283786a08f3b9b7ec5b3e708e3210988eab1b6dff1273c280.
+- Actual complete muzzle archives also pass the shared objdump proof:
+  eight guarded XMM saves on each tier, no unguarded vector state.
+  Unreachable trailing Cranelift integer pools are excluded only after
+  RET/UD2 with no incoming direct target or indirect jump; executable
+  malformed bytes and unknown control flow still fail closed. This is
+  object inspection, not QEMU/SSE-disabled execution. Compiler evidence:
+  notes/s263-evidence/muzzle-archive-guard.log and muzzle-*.objdump.
+- The muzzle pin remains wolf 0.2.34. A loud development-only override may
+  prove the acceptance branch, but lc02's merge requires an actual released
+  archive and whole-archive digest pin, not a source-build version spoof.
+- Existing source has no FILE objects, no buffering, no locale, no TLS,
+  no atexit. C callbacks (#520), addressable module state (#597), raw string
+  pointers (#604), and historical module-var forwarding (#598) must be
+  remeasured before relying on them. Their issue labels are not evidence
+  of capability. The accepted subset avoids them via raw pointers and the
+  existing explicitly single-threaded assembly storage convention.
+
+1. Goal and non-goals
+Take the tested bare %d %s %c %x %% formatter from s263 to a maintained,
+freestanding first formatted-output layer, and add va_list consumers and
+bounded buffer output using one shared Wolf formatter. The standard is the
+contract; glibc is a black-box comparison, not source or policy authority.
+This is not a full libc printf claim and not the FILE/stream lane.
+
+In scope: printf, vprintf, snprintf, vsnprintf for exactly bare %d %s %c %x %%
+initially; explicit documentation of the supported conversion grammar;
+character/byte correctness, return counts, bounded-buffer semantics, error
+paths, existing first-layer regressions and native/release parity.
+Out of scope: FILE, fopen/fclose/fread/fwrite/fprintf, stream locking/buffering,
+scanf, floats, locale/wide characters, flags/width/precision/length modifiers,
+%n, thread safety, signal safety, arbitrary callbacks, shared-library ABI,
+other architectures/ABIs, checked/lupin execution and PAX port claims.
+An expansion beyond this scope requires an orchestrator ruling and tests;
+never advertise an unsupported conversion as ordinary printf functionality.
+
+2. Inputs (read before editing)
+- s263 contract and final evidence, compiler [abi.c.variadic], [abi.c.export],
+  [abi.target.none.*], and source/IR consumer fixtures on both tiers.
+- muzzle README, docs/LEDGER.md, docs/SOURCES.md, wolf-toolchain.toml,
+  tools/build, tools/difftest, tests/stale-compiler, src/sys and crt0.S,
+  the s263 fifty-case corpus and its command/output/compiler digests.
+- Public C17 7.16 and 7.21.6.1/3/5/8/10/12 (fprintf grammar, printf,
+  snprintf, vfprintf, vprintf, vsnprintf) and POSIX printf/write contracts;
+  SysV AMD64 psABI 3.5.7 and its C va_list array/parameter rule.
+- Current libc track index and rulings; re-derive available capabilities.
+Clean room: no libc/compiler/stdarg/printf source or implementation headers.
+Use org-owned code, standards/man-pages and clang/glibc black-box execution.
+Record every consulted source in docs/SOURCES.md.
+
+3. Items (tests accompany implementation)
+1) Reproduce s263 acceptance untouched before changing it. Record exact
+   compiler version/head/archive digest, object symbols, native/release
+   commands and true exits. Confirm x86_64-unknown-none, no libwolf_rt.a,
+   no unresolved external, no dynamic interpreter, C17 -nostdlib -static.
+   Recheck all fifty primary cases and all prior first-layer cases.
+2) Pin a released compiler carrying the accepted freestanding clause using
+   tools/fetch-toolchain and the whole release archive. Preserve the strict
+   default build identity check and stale-output deletion. Remove the
+   acceptance-only version override before merge (or seek a ruling to keep
+   it behind an explicit test-only interface); prove wrong/missing/stale
+   compiler refusals and correct-pin controls on both compiling tiers.
+3) Factor the formatter into an explicit sink-state record, not a C callback:
+   an output-fd sink and a bounded-memory sink. Keep all parsing/conversion
+   logic Wolf. No new asm formatting or C formatting shim. Keep allocation
+   and runtime-free linking. Ensure INT_MIN widening, unsigned hex, %c's
+   unsigned-char conversion (including NUL), byte-oriented %s, and %%.
+4) Add vprintf(fmt: *u8, ap: *VaList), copying the incoming live record,
+   consuming/ending the copy. C is not promised cursor preservation as a
+   standard API property, but test independence internally. printf owns one
+   va_start/end and delegates. Add C -> Wolf va_list tests (C's own builtin
+   start/copy/end compiled by clang; never inspect implementation headers),
+   Wolf -> consumer forwarding, repeated copies, register-to-stack boundary,
+   zero variadic arguments, and nested/repeated calls within live lifetimes.
+5) Add snprintf and vsnprintf with the standard bounded destination model:
+   size 0 writes nothing and permits a null destination; positive size
+   reserves the final NUL, emits at most size-1 bytes, and returns the full
+   would-have-written count excluding NUL. Truncation is success; embedded
+   NUL from %c counts as data. Disallow overlapping arguments/destination
+   as the C standard does; no test relies on undefined overlap. Check count
+   overflow without allocating gigantic strings. Ends must run on errors.
+6) Harden output errors and record the subset refusal policy. Test a closed
+   fd, /dev/full, forced EINTR and partial writes with lane-owned fault
+   injection or an independently tested syscall shim. Distinguish an error
+   before output from a prefix already emitted. Do not compare buffering
+   timing to hosted glibc; compare required returns/errno and final bytes.
+   Check zero progress cannot loop forever. Keep error state and formatting
+   state separate; no corrupting the trap hook's scratch storage.
+7) Grow the corpus: retain all s263 fifty cases and add at least fifty
+   independently expected buffer/va_list cases, with an explicit inventory
+   by conversion, boundary, promotion and error path. Every test records
+   full output bytes, return count and true exit. Check canary bytes before
+   and after bounded destinations (sizes 0,1,exact,one-short,large), NUL
+   termination, count at truncation, stack spills of each supported type,
+   and repeated calls. Use byte comparison, not line comparison or hashes
+   alone; hash the corpus and outputs additionally for evidence.
+8) CI: native and release Ubuntu x86-64 builds, all old/new differential
+   cases, pin/refusal tests, symbol/no-runtime gates. No silent skip when
+   compiler/header/clang is absent; no empty suite green. Local container
+   gate first; run-id once after push and hand back at final head per lane
+   rules. The orchestrator owns any later CI watch/label/merge.
+9) Update README, LEDGER and SOURCES to name exact supported conversions,
+   API/target limits, single-threaded/nonreentrant status, errno policy,
+   bounded-output semantics and the next FILE lane boundary. No blanket
+   C17/POSIX stdio conformance claim. Remove obsolete blockers only after
+   a witness proves them resolved. No hosting/deployment claims.
+
+4. Plants and independent acceptance
+- Flip one numeric digit or skip the sixth unnamed GP argument: differential
+  must fail on both compiling tiers and identify the first differing case.
+- Corrupt the return count without changing bytes: independent count gate red.
+- Write one byte at destination[size] or omit the terminating NUL: canary/NUL
+  gate red. Preserve the planted evidence and restore the fix before handoff.
+- Replace the expected compiler with a stale driver, and retain an old
+  archive before refusal: identity gate red, old build directory absent.
+- Remove the new cases or make discovery empty: inventory/zero-case gate red.
+Record exact planted commits/commands/exits; a gate never seen red is unproven.
+Do not plant in shared trunk; use lane-owned plant branches granted in brief.
+
+5. Rulings to recommend, never decide
+R-lc02-1: Keep this bounded printf-family slice distinct from full FILE stdio
+(recommended); or enlarge the lane only after callback/TLS/state blockers are
+resolved and a new test budget/scope is approved.
+R-lc02-2: Unsupported conversions return -1/EINVAL after any emitted prefix
+(recommended for this explicitly documented subset), rather than silently
+printing unknown syntax. This is not full standard printf compatibility.
+R-lc02-3: Retain the explicit single-threaded first cut until the TLS/stream
+lane (recommended); do not infer reentrancy from passing ordinary tests.
+R-s263-8 A has been confirmed: true freestanding SysV support, ordinary
+float prohibition retained, guarded vector saves in variadic entry only.
+Verify its final clause and implementation at the released pin; a hosted
+Linux compile is never acceptance for muzzle's real target.
+
+6. Execution, commits and handoff
+Work in a lane-owned branch/worktree. No third-party sources, host packages,
+shared configuration edits, or builds on the Mac. Use the assigned container,
+CPU block and memory ceiling; record commands and true statuses without pipes
+masking errors. Namespace temporary files and evidence. Commit related chunks
+with terse imperative subjects and no attribution trailers. The orchestrator
+sets push/PR permissions; no merge or label by the lane. No waits on CI.
+
+Before first edit, predict: first failing case (byte/count/ABI), number of new
+cases, whether the memory sink needs any compiler change, and which blocker
+actually remains. Measure after. A compiler defect is reduced and reported;
+never work around an ABI failure with C or assembly varargs traversal.
+
+7. Done-when
+- Actual released/pinned compiler; correct freestanding target both tiers.
+- s263 50 retained plus >=50 new independent cases; every build/run succeeds;
+  all byte/count/canary gates and legacy cases green; no skips/empty discovery.
+- No undefined archive imports, runtime library, dynamic interpreter, C/asm
+  formatter; C17 -nostdlib static callers prove every advertised API.
+- Planted failures observed and retained, then restored green at final head.
+- README/LEDGER/SOURCES match the tested subset and error semantics.
+- Final note names branch, commits, upstream issues, corpus/output/compiler
+  digests, exact commands/exits, native/release counts, CI run id and remaining
+  limitations; PR footprint is declared from actual paths (module unless
+  cross-cutting compiler/workflow changes require otherwise).
+- Orchestrator audits and owns CI completion and merge. Full stdio remains
+  explicitly future work, not silently marked delivered.

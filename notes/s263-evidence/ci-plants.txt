@@ -1,0 +1,24 @@
+Focused workflow CI proof (all witness execution inside job container)
+Good source head d2a6a6e83e8f5de69d2d30c9892fc36e95300c23.
+Control run 40147262879: C variadics job GREEN, tier partial GREEN.
+This is a focused control, NOT the final full/PR merge gate.
+
+s263-plant-save-area / 038834f1: reserve frame_bytes-16 instead of -8.
+Run40146472135 RED: native frame-size objdump assertion and incoming/cross-
+object C execution fail (2 passed,3 failed). plant-save-area-ci.log retained.
+
+s263-plant-al / c5b8c11d: write EAX=0 instead of the vector argument count.
+Run40146473898 RED: snprintf and outgoing AL/stack/callshape witnesses fail
+(3 passed,2 failed). plant-al-ci.log retained.
+
+s263-plant-inline / bbb56797: remove the variadic inliner exclusion.
+Run40146475827 RED: prologue-inlining barrier witness fails,44 other midend
+rows pass. plant-inline-ci.log retained.
+
+All plant branches derive from the good head and remain separate from s263.
+No plant PRs, merge, labels, continue-on-error, or claimed green plant steps.
+The final 37869336 proof-helper change adds bounded integer-literal-pool
+handling and negatives: reachable malformed bytes, direct/cross-function
+entry into pool, indirect jumps, unknown flow, reachable vector operations.
+Eight standalone proof tests,19 LLVM ABI tests,10 driver ABI tests and
+strict clippy passed afterward; see archive-proof-regression.log.

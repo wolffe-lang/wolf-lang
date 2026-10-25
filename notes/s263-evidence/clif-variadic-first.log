@@ -1,0 +1,37 @@
+   Compiling smallvec v1.15.2
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-codegen v0.134.3
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.96s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-913b2caf2cd8bc6c)
+
+running 3 tests
+
+thread 'native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes' (155) panicked at /work/.cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/object-0.39.1/src/write/mod.rs:665:9:
+assertion failed: self.symbol(symbol_id).scope != SymbolScope::Unknown
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes ... FAILED
+
+thread 'c_calls_native_variadic_definitions_and_list_consumer' (154) panicked at /work/.cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/object-0.39.1/src/write/mod.rs:665:9:
+assertion failed: self.symbol(symbol_id).scope != SymbolScope::Unknown
+test c_calls_native_variadic_definitions_and_list_consumer ... FAILED
+
+thread 'variadic_exports_are_called_through_public_entries_in_same_and_other_objects' (156) panicked at /work/.cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/object-0.39.1/src/write/mod.rs:665:9:
+assertion failed: self.symbol(symbol_id).scope != SymbolScope::Unknown
+test variadic_exports_are_called_through_public_entries_in_same_and_other_objects ... FAILED
+
+failures:
+
+failures:
+    c_calls_native_variadic_definitions_and_list_consumer
+    native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes
+    variadic_exports_are_called_through_public_entries_in_same_and_other_objects
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p wolf_codegen_clif --test s263_variadic`

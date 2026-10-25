@@ -1,0 +1,31 @@
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.37s
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 1 test
+test variadic_arg_accepts_pointer_type_brackets ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.00s
+
+   Compiling wolf_mem v0.2.35 (/work/crates/wolf_mem)
+   Compiling wolf_query v0.2.35 (/work/crates/wolf_query)
+   Compiling wolf_doc v0.2.35 (/work/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.35 (/work/crates/wolf_lsp)
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.09s
+     Running tests/variadic_abi.rs (target/debug/deps/variadic_abi-c0aa2e6e992e12fa)
+
+running 2 tests
+PASS real none target native: C17 -nostdlib, no libc/runtime, 24 guarded XMM saves only (objdump proof)
+PASS real none target release: C17 -nostdlib, no libc/runtime, 24 guarded XMM saves only (objdump proof)
+test real_none_target_links_c17_without_libc_or_runtime ... ok
+PASS source variadic ABI native: all promotions, both banks, C list copy and nested forwarding
+PASS source variadic ABI release: all promotions, both banks, C list copy and nested forwarding
+test source_variadics_both_directions_promotions_and_forwarding ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+

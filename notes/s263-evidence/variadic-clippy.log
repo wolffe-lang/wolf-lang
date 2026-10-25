@@ -1,0 +1,44 @@
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+   Compiling wolf_mem v0.2.35 (/work/crates/wolf_mem)
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.70s
+     Running tests/midend_passes.rs (target/debug/deps/midend_passes-377dfee46515b87a)
+
+running 1 test
+test variadic_entry_prologue_is_an_inlining_barrier ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.76s
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 8 tests
+test variadic_list_is_not_generic ... ok
+test variadic_list_layout_is_the_c_record_not_a_pointer ... ok
+test variadic_arg_accepts_pointer_type_brackets ... ok
+test variadic_list_builtins_allow_nonvariadic_consumers ... ok
+test variadic_start_in_nested_frame_is_rejected ... ok
+test variadic_tail_rejects_non_c_values ... ok
+test variadic_call_checks_fixed_prefix_and_accepts_tail ... ok
+test variadic_arg_requires_promoted_type ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 53 filtered out; finished in 0.00s
+
+    Checking wolf_diag v0.2.35 (/work/crates/wolf_diag)
+    Checking wolf_lex v0.2.35 (/work/crates/wolf_lex)
+    Checking wolf_cimport v0.2.35 (/work/crates/wolf_cimport)
+    Checking wolf_parse v0.2.35 (/work/crates/wolf_parse)
+    Checking wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Checking wolf_fmt v0.2.35 (/work/crates/wolf_fmt)
+    Checking wolf_pkg v0.2.35 (/work/crates/wolf_pkg)
+    Checking wolf_mem v0.2.35 (/work/crates/wolf_mem)
+    Checking wolf_query v0.2.35 (/work/crates/wolf_query)
+    Checking wolf_lsp v0.2.35 (/work/crates/wolf_lsp)
+    Checking wolf_doc v0.2.35 (/work/crates/wolf_doc)
+    Checking wolf_wir v0.2.35 (/work/crates/wolf_wir)
+    Checking wolf_backend v0.2.35 (/work/crates/wolf_backend)
+    Checking wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+    Checking wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 16.25s

@@ -1,0 +1,170 @@
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	﻿2026-10-25T00:24:58.0056393Z ##[group]Run cargo test -p wolf_codegen_clif --test s263_variadic -- --nocapture
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0057023Z ^[[36;1mcargo test -p wolf_codegen_clif --test s263_variadic -- --nocapture^[[0m
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0057487Z shell: sh -e {0}
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0057691Z env:
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0057885Z   CARGO_TERM_COLOR: always
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0058131Z   PROPTEST_CASES: 256
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0058353Z   CARGO_INCREMENTAL: 0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0058860Z   WOLF_VERIFY_EACH_PASS: 1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0059176Z   CARGO_HOME: /github/home/.cargo
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0059442Z   CACHE_ON_FAILURE: false
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.0059666Z ##[endgroup]
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1184793Z ^[[1m^[[92m Downloading^[[0m crates ...
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1428594Z ^[[1m^[[92m  Downloaded^[[0m anyhow v1.0.104
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1491377Z ^[[1m^[[92m  Downloaded^[[0m cranelift-entity v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1510714Z ^[[1m^[[92m  Downloaded^[[0m cranelift-bforest v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1526958Z ^[[1m^[[92m  Downloaded^[[0m fnv v1.0.7
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1537199Z ^[[1m^[[92m  Downloaded^[[0m hashbrown v0.16.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1644510Z ^[[1m^[[92m  Downloaded^[[0m serde_core v1.0.229
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1682569Z ^[[1m^[[92m  Downloaded^[[0m allocator-api2 v0.2.21
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1730358Z ^[[1m^[[92m  Downloaded^[[0m cranelift-codegen-shared v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1748034Z ^[[1m^[[92m  Downloaded^[[0m cranelift-bitset v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1763944Z ^[[1m^[[92m  Downloaded^[[0m stable_deref_trait v1.2.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1774688Z ^[[1m^[[92m  Downloaded^[[0m cranelift-object v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1789278Z ^[[1m^[[92m  Downloaded^[[0m arbitrary v1.4.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1847616Z ^[[1m^[[92m  Downloaded^[[0m cranelift-control v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1858043Z ^[[1m^[[92m  Downloaded^[[0m bumpalo v3.20.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1887115Z ^[[1m^[[92m  Downloaded^[[0m target-lexicon v0.13.5
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1905139Z ^[[1m^[[92m  Downloaded^[[0m cranelift-isle v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.1970556Z ^[[1m^[[92m  Downloaded^[[0m gimli v0.33.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2054122Z ^[[1m^[[92m  Downloaded^[[0m equivalent v1.0.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2066232Z ^[[1m^[[92m  Downloaded^[[0m serde v1.0.229
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2105346Z ^[[1m^[[92m  Downloaded^[[0m crc32fast v1.5.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2127695Z ^[[1m^[[92m  Downloaded^[[0m cranelift-frontend v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2148323Z ^[[1m^[[92m  Downloaded^[[0m libm v0.2.16
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2277566Z ^[[1m^[[92m  Downloaded^[[0m smallvec v1.15.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2294179Z ^[[1m^[[92m  Downloaded^[[0m heck v0.5.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2309463Z ^[[1m^[[92m  Downloaded^[[0m hashbrown v0.17.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2368469Z ^[[1m^[[92m  Downloaded^[[0m cranelift-codegen-meta v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2409629Z ^[[1m^[[92m  Downloaded^[[0m cranelift-module v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2424232Z ^[[1m^[[92m  Downloaded^[[0m cranelift-srcgen v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2433778Z ^[[1m^[[92m  Downloaded^[[0m log v0.4.33
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2462373Z ^[[1m^[[92m  Downloaded^[[0m memchr v2.8.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2526126Z ^[[1m^[[92m  Downloaded^[[0m cranelift-assembler-x64 v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2547028Z ^[[1m^[[92m  Downloaded^[[0m rustc-hash v2.1.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2562787Z ^[[1m^[[92m  Downloaded^[[0m foldhash v0.2.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2577022Z ^[[1m^[[92m  Downloaded^[[0m indexmap v2.14.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2624559Z ^[[1m^[[92m  Downloaded^[[0m regalloc2 v0.15.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2676965Z ^[[1m^[[92m  Downloaded^[[0m cranelift-assembler-x64-meta v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.2721378Z ^[[1m^[[92m  Downloaded^[[0m cranelift-codegen v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.3063031Z ^[[1m^[[92m  Downloaded^[[0m object v0.39.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.3192472Z ^[[1m^[[92m  Downloaded^[[0m wasmtime-internal-core v47.0.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.3422690Z ^[[1m^[[92m   Compiling^[[0m foldhash v0.2.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.3423633Z ^[[1m^[[92m   Compiling^[[0m cranelift-srcgen v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.3424496Z ^[[1m^[[92m   Compiling^[[0m libm v0.2.16
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.3436496Z ^[[1m^[[92m   Compiling^[[0m wasmtime-internal-core v47.0.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.4288833Z ^[[1m^[[92m   Compiling^[[0m hashbrown v0.17.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.4506055Z ^[[1m^[[92m   Compiling^[[0m equivalent v1.0.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.4758012Z ^[[1m^[[92m   Compiling^[[0m cranelift-assembler-x64-meta v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.5711052Z ^[[1m^[[92m   Compiling^[[0m cranelift-isle v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.7231717Z ^[[1m^[[92m   Compiling^[[0m cranelift-codegen-shared v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.7567730Z ^[[1m^[[92m   Compiling^[[0m heck v0.5.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:58.9608818Z ^[[1m^[[92m   Compiling^[[0m indexmap v2.14.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:24:59.9319002Z ^[[1m^[[92m   Compiling^[[0m cranelift-codegen-meta v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:00.1700425Z ^[[1m^[[92m   Compiling^[[0m cranelift-bitset v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:00.2819056Z ^[[1m^[[92m   Compiling^[[0m hashbrown v0.16.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:00.7376541Z ^[[1m^[[92m   Compiling^[[0m cranelift-assembler-x64 v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:00.8186353Z ^[[1m^[[92m   Compiling^[[0m target-lexicon v0.13.5
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:00.8805020Z ^[[1m^[[92m   Compiling^[[0m allocator-api2 v0.2.21
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.1611437Z ^[[1m^[[92m   Compiling^[[0m fnv v1.0.7
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.1796579Z ^[[1m^[[92m   Compiling^[[0m bumpalo v3.20.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.1928051Z ^[[1m^[[92m   Compiling^[[0m gimli v0.33.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.5921383Z ^[[1m^[[92m   Compiling^[[0m cranelift-entity v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.7040648Z ^[[1m^[[92m   Compiling^[[0m rustc-hash v2.1.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.7586149Z ^[[1m^[[92m   Compiling^[[0m log v0.4.33
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.7870530Z ^[[1m^[[92m   Compiling^[[0m arbitrary v1.4.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:01.8794176Z ^[[1m^[[92m   Compiling^[[0m smallvec v1.15.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:02.0399954Z ^[[1m^[[92m   Compiling^[[0m regalloc2 v0.15.2
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:02.6516814Z ^[[1m^[[92m   Compiling^[[0m cranelift-control v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:02.6988055Z ^[[1m^[[92m   Compiling^[[0m cranelift-bforest v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:02.8246104Z ^[[1m^[[92m   Compiling^[[0m cranelift-codegen v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:04.3628212Z ^[[1m^[[92m   Compiling^[[0m crc32fast v1.5.0
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:04.4977022Z ^[[1m^[[92m   Compiling^[[0m anyhow v1.0.104
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:04.7205627Z ^[[1m^[[92m   Compiling^[[0m object v0.39.1
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:05.2391431Z ^[[1m^[[92m   Compiling^[[0m memchr v2.8.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:05.2894033Z ^[[1m^[[92m   Compiling^[[0m wolf_backend v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_backend)
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:06.3264818Z ^[[1m^[[92m   Compiling^[[0m wolf_rt v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_rt)
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:20.4262646Z ^[[1m^[[92m   Compiling^[[0m cranelift-module v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:20.4263607Z ^[[1m^[[92m   Compiling^[[0m cranelift-frontend v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:20.5917518Z ^[[1m^[[92m   Compiling^[[0m cranelift-object v0.134.3
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:20.8381918Z ^[[1m^[[92m   Compiling^[[0m wolf_codegen_clif v0.2.35 (/__w/wolf-lang/wolf-lang/crates/wolf_codegen_clif)
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3068121Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 28.22s
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3118041Z ^[[1m^[[92m     Running^[[0m tests/s263_variadic.rs (target/debug/deps/s263_variadic-8738c71f05db415b)
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3133577Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3134093Z running 5 tests
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3219676Z test freestanding_variadic_sse_saves_are_all_guarded_and_core_is_integer_only ... ok
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3795874Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3797270Z thread 'native_snprintf_promoted_tail_spills_both_banks' (6318) panicked at crates/wolf_codegen_clif/tests/s263_variadic.rs:349:5:
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3808889Z ABI witness Some(1): 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3809867Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.3810769Z test native_snprintf_promoted_tail_spills_both_banks ... FAILED
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.4097556Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.4099383Z thread 'native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes' (6317) panicked at crates/wolf_codegen_clif/tests/s263_variadic.rs:349:5:
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.4100689Z ABI witness Some(1): 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.4101408Z test native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes ... FAILED
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.4369618Z test c_calls_native_variadic_definitions_and_list_consumer ... ok
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5022188Z test variadic_exports_are_called_through_public_entries_in_same_and_other_objects ... ok
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5023390Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5023571Z failures:
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5023816Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5024007Z failures:
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5024556Z     native_outgoing_shims_keep_all_banks_stack_and_callsite_shapes
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5025220Z     native_snprintf_promoted_tail_spills_both_banks
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5025648Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5026199Z test result: FAILED. 3 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5026914Z 
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5027991Z ^[[1m^[[91merror^[[0m: test failed, to rerun pass `-p wolf_codegen_clif --test s263_variadic`
+C variadics (linux x86-64 and freestanding)	native save areas and vector-register count	2026-10-25T00:25:26.5112196Z ##[error]Process completed with exit code 101.
+tier partial	every chosen job succeeded, every other was skipped	﻿2026-10-25T00:25:38.4215932Z ##[group]Run python3 ci/tiers.py verdict
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4216347Z ^[[36;1mpython3 ci/tiers.py verdict^[[0m
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4435049Z shell: /usr/bin/bash -e {0}
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4435363Z env:
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4435569Z   CARGO_TERM_COLOR: always
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4435821Z   PROPTEST_CASES: 256
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4437246Z   NEEDS: {
+tier partial	every chosen job succeeded, every other was skipped	  "plan": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "success",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {
+tier partial	every chosen job succeeded, every other was skipped	      "tier": "partial",
+tier partial	every chosen job succeeded, every other was skipped	      "jobs": "[\"variadic-abi\"]"
+tier partial	every chosen job succeeded, every other was skipped	    }
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "plan-test": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "lint-test": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "variadic-abi": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "failure",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "native-macos": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "fuzz-smoke": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "build-test": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  },
+tier partial	every chosen job succeeded, every other was skipped	  "freebsd-check": {
+tier partial	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier partial	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier partial	every chosen job succeeded, every other was skipped	  }
+tier partial	every chosen job succeeded, every other was skipped	}
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4438546Z ##[endgroup]
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4742597Z tier partial: 1 of 7 job(s) chosen
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4743222Z   plan-test          skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4743651Z   lint-test          skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4743927Z   variadic-abi       failure   WANTED success
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4744219Z   native-macos       skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4744470Z   fuzz-smoke         skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4744727Z   build-test         skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4744992Z   freebsd-check      skipped   ok
+tier partial	every chosen job succeeded, every other was skipped	2026-10-25T00:25:38.4784826Z ##[error]Process completed with exit code 1.

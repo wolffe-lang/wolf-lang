@@ -1,0 +1,24 @@
+Intermediate head 5b469e78439e7d3bcbbc79535491edc35e4257ed.
+Known-flaky gate: wolf-lang#631 (already open; no duplicate issue).
+No ten-pair measurement was performed, per orchestrator correction.
+
+Full gauntlet, same test, native then release:
+copy_int: VmHWM 2364 kB at 20000 turns, 2336 kB at 40000
+copy_int: VmHWM 2312 kB at 20000 turns, 2392 kB at 40000
+Release delta 80 KiB = 20 4-KiB pages = 4.096 bytes/turn, rounded to 4
+in the diagnostic. This failed the strict <4 bytes/turn bound.
+
+Single isolated rerun of the SAME test at the SAME head (the test itself
+executes both native and release variants):
+cargo test -p wolf_driver --test region_copyout_lanes a_loop_keeping_a_scalar_is_flat -- --nocapture
+copy_int: VmHWM 2288 kB at 20000 turns, 2352 kB at 40000
+copy_int: VmHWM 2280 kB at 20000 turns, 2324 kB at 40000
+test a_loop_keeping_a_scalar_is_flat ... ok
+Exit 0; 1 passed, 0 failed. No gate threshold changed.
+
+The lane_exit undefined/duplicate-symbol panics were should-panic passes,
+not failures. exec_lanes remained green with the neutral shim.
+The core and reserved live witnesses each skipped because the outer
+container has no nested engine: 2 explicitly counted skips, not passes.
+The full skip-line index is gauntlet-frontend-5b469e78-skips.txt.
+The final gauntlet must rerun this row at the final implementation head.

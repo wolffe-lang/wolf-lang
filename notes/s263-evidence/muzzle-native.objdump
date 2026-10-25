@@ -1,0 +1,3435 @@
+In archive muzzle/build/native/libmuzzle.a:
+
+muzzle.asm-sys.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <__muzzle_syscall6>:
+   0:	mov    %rdi,%rax
+   3:	mov    %rsi,%rdi
+   6:	mov    %rdx,%rsi
+   9:	mov    %rcx,%rdx
+   c:	mov    %r8,%r10
+   f:	mov    %r9,%r8
+  12:	mov    0x8(%rsp),%r9
+  17:	syscall
+  19:	ret
+
+muzzle.heap.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_Wheap.round_up$ba9562410d073eb0>:
+       0:	push   %rbp
+       1:	mov    %rsp,%rbp
+       4:	sub    $0x10,%rsp
+       8:	mov    %rdi,(%rsp)
+       c:	mov    %rsi,0x8(%rsp)
+      11:	add    %rsi,%rdi
+      14:	setb   %al
+      17:	test   %al,%al
+      19:	jne    83 <_Wheap.round_up$ba9562410d073eb0+0x83>
+      1f:	mov    %rdi,%rax
+      22:	sub    $0x1,%rax
+      26:	setb   %cl
+      29:	test   %cl,%cl
+      2b:	jne    83 <_Wheap.round_up$ba9562410d073eb0+0x83>
+      31:	test   %rsi,%rsi
+      34:	je     5c <_Wheap.round_up$ba9562410d073eb0+0x5c>
+      3a:	xor    %rdx,%rdx
+      3d:	div    %rsi
+      40:	mul    %rsi
+      43:	seto   %cl
+      46:	test   %cl,%cl
+      48:	jne    83 <_Wheap.round_up$ba9562410d073eb0+0x83>
+      4e:	add    $0x10,%rsp
+      52:	mov    %rbp,%rsp
+      55:	pop    %rbp
+      56:	ret
+      57:	jmp    83 <_Wheap.round_up$ba9562410d073eb0+0x83>
+      5c:	mov    $0x2,%edi
+      61:	mov    0x0(%rip),%rsi        # 68 <_Wheap.round_up$ba9562410d073eb0+0x68>
+      68:	mov    $0xe,%edx
+      6d:	mov    $0x3a,%ecx
+      72:	mov    $0x5,%r8d
+      78:	mov    0x0(%rip),%rax        # 7f <_Wheap.round_up$ba9562410d073eb0+0x7f>
+      7f:	call   *%rax
+      81:	ud2
+      83:	mov    $0x1,%edi
+      88:	mov    0x0(%rip),%rsi        # 8f <_Wheap.round_up$ba9562410d073eb0+0x8f>
+      8f:	mov    $0xe,%edx
+      94:	mov    $0x3a,%ecx
+      99:	mov    $0x5,%r8d
+      9f:	mov    0x0(%rip),%rax        # a6 <_Wheap.round_up$ba9562410d073eb0+0xa6>
+      a6:	call   *%rax
+      a8:	ud2
+      aa:	add    %al,(%rax)
+      ac:	add    %al,(%rax)
+	...
+
+00000000000000b0 <_Wheap.class_of$4dc25e5517893788>:
+      b0:	push   %rbp
+      b1:	mov    %rsp,%rbp
+      b4:	sub    $0x20,%rsp
+      b8:	mov    %rdi,(%rsp)
+      bc:	xor    %rax,%rax
+      bf:	mov    %rax,%rsi
+      c2:	movq   $0x0,0x8(%rsp)
+      cb:	mov    $0x10,%eax
+      d0:	movq   $0x10,0x10(%rsp)
+      d9:	cmp    %rdi,%rax
+      dc:	jb     ee <_Wheap.class_of$4dc25e5517893788+0x3e>
+      e2:	mov    %rsi,%rax
+      e5:	add    $0x20,%rsp
+      e9:	mov    %rbp,%rsp
+      ec:	pop    %rbp
+      ed:	ret
+      ee:	mulq   0x83(%rip)        # 178 <_Wheap.class_of$4dc25e5517893788+0xc8>
+      f5:	mov    %rax,%rcx
+      f8:	seto   %al
+      fb:	test   %al,%al
+      fd:	jne    151 <_Wheap.class_of$4dc25e5517893788+0xa1>
+     103:	mov    %rcx,0x10(%rsp)
+     108:	mov    %rsi,%rax
+     10b:	add    $0x1,%rax
+     10f:	seto   %dl
+     112:	test   %dl,%dl
+     114:	jne    12a <_Wheap.class_of$4dc25e5517893788+0x7a>
+     11a:	mov    %rax,0x8(%rsp)
+     11f:	mov    %rax,%rsi
+     122:	mov    %rcx,%rax
+     125:	jmp    d9 <_Wheap.class_of$4dc25e5517893788+0x29>
+     12a:	mov    $0x1,%edi
+     12f:	mov    0x0(%rip),%rsi        # 136 <_Wheap.class_of$4dc25e5517893788+0x86>
+     136:	mov    $0xe,%edx
+     13b:	mov    $0x42,%ecx
+     140:	mov    $0x9,%r8d
+     146:	mov    0x0(%rip),%rax        # 14d <_Wheap.class_of$4dc25e5517893788+0x9d>
+     14d:	call   *%rax
+     14f:	ud2
+     151:	mov    $0x1,%edi
+     156:	mov    0x0(%rip),%rsi        # 15d <_Wheap.class_of$4dc25e5517893788+0xad>
+     15d:	mov    $0xe,%edx
+     162:	mov    $0x41,%ecx
+     167:	mov    $0x9,%r8d
+     16d:	mov    0x0(%rip),%rax        # 174 <_Wheap.class_of$4dc25e5517893788+0xc4>
+     174:	call   *%rax
+     176:	ud2
+     178:	add    (%rax),%al
+     17a:	add    %al,(%rax)
+     17c:	add    %al,(%rax)
+	...
+
+0000000000000180 <_Wheap.class_size$4b39c170953d49b8>:
+     180:	push   %rbp
+     181:	mov    %rsp,%rbp
+     184:	sub    $0x20,%rsp
+     188:	mov    %rdi,(%rsp)
+     18c:	mov    $0x10,%eax
+     191:	movq   $0x10,0x8(%rsp)
+     19a:	xor    %rsi,%rsi
+     19d:	movq   $0x0,0x10(%rsp)
+     1a6:	cmp    %rdi,%rsi
+     1a9:	jl     1b8 <_Wheap.class_size$4b39c170953d49b8+0x38>
+     1af:	add    $0x20,%rsp
+     1b3:	mov    %rbp,%rsp
+     1b6:	pop    %rbp
+     1b7:	ret
+     1b8:	mulq   0x81(%rip)        # 240 <_Wheap.class_size$4b39c170953d49b8+0xc0>
+     1bf:	seto   %cl
+     1c2:	test   %cl,%cl
+     1c4:	jne    215 <_Wheap.class_size$4b39c170953d49b8+0x95>
+     1ca:	mov    %rax,%rcx
+     1cd:	mov    %rcx,0x8(%rsp)
+     1d2:	add    $0x1,%rsi
+     1d6:	seto   %al
+     1d9:	test   %al,%al
+     1db:	jne    1ee <_Wheap.class_size$4b39c170953d49b8+0x6e>
+     1e1:	mov    %rsi,0x10(%rsp)
+     1e6:	mov    %rcx,%rax
+     1e9:	jmp    1a6 <_Wheap.class_size$4b39c170953d49b8+0x26>
+     1ee:	mov    $0x1,%edi
+     1f3:	mov    0x0(%rip),%rsi        # 1fa <_Wheap.class_size$4b39c170953d49b8+0x7a>
+     1fa:	mov    $0xe,%edx
+     1ff:	mov    $0x4c,%ecx
+     204:	mov    $0x9,%r8d
+     20a:	mov    0x0(%rip),%rax        # 211 <_Wheap.class_size$4b39c170953d49b8+0x91>
+     211:	call   *%rax
+     213:	ud2
+     215:	mov    $0x1,%edi
+     21a:	mov    0x0(%rip),%rsi        # 221 <_Wheap.class_size$4b39c170953d49b8+0xa1>
+     221:	mov    $0xe,%edx
+     226:	mov    $0x4b,%ecx
+     22b:	mov    $0x9,%r8d
+     231:	mov    0x0(%rip),%rax        # 238 <_Wheap.class_size$4b39c170953d49b8+0xb8>
+     238:	call   *%rax
+     23a:	ud2
+     23c:	add    %al,(%rax)
+     23e:	add    %al,(%rax)
+     240:	add    (%rax),%al
+     242:	add    %al,(%rax)
+     244:	add    %al,(%rax)
+	...
+
+0000000000000248 <_Wheap.map$0296765545c47c24>:
+     248:	push   %rbp
+     249:	mov    %rsp,%rbp
+     24c:	sub    $0x30,%rsp
+     250:	mov    %rbx,0x20(%rsp)
+     255:	mov    %r12,0x28(%rsp)
+     25a:	mov    %rdi,0x10(%rsp)
+     25f:	mov    $0x9,%eax
+     264:	mov    %rax,%rsi
+     267:	xor    %rbx,%rbx
+     26a:	cmp    0xcf(%rip),%rdi        # 340 <_Wheap.map$0296765545c47c24+0xf8>
+     271:	mov    %rdi,%rdx
+     274:	ja     2f0 <_Wheap.map$0296765545c47c24+0xa8>
+     27a:	mov    $0x3,%ecx
+     27f:	mov    $0x22,%r8d
+     285:	mov    $0xffffffffffffffff,%r9
+     28c:	mov    %rbx,(%rsp)
+     290:	mov    0x0(%rip),%rax        # 297 <_Wheap.map$0296765545c47c24+0x4f>
+     297:	mov    %rsi,%rdi
+     29a:	mov    %rbx,%rsi
+     29d:	call   *%rax
+     29f:	mov    %rax,0x18(%rsp)
+     2a4:	mov    %rax,%r12
+     2a7:	mov    0x0(%rip),%rcx        # 2ae <_Wheap.map$0296765545c47c24+0x66>
+     2ae:	mov    %r12,%rdi
+     2b1:	call   *%rcx
+     2b3:	test   %al,%al
+     2b5:	jne    2da <_Wheap.map$0296765545c47c24+0x92>
+     2bb:	mov    %r12,%rax
+     2be:	test   %rax,%rax
+     2c1:	jl     317 <_Wheap.map$0296765545c47c24+0xcf>
+     2c7:	mov    0x20(%rsp),%rbx
+     2cc:	mov    0x28(%rsp),%r12
+     2d1:	add    $0x30,%rsp
+     2d5:	mov    %rbp,%rsp
+     2d8:	pop    %rbp
+     2d9:	ret
+     2da:	mov    %rbx,%rax
+     2dd:	mov    0x20(%rsp),%rbx
+     2e2:	mov    0x28(%rsp),%r12
+     2e7:	add    $0x30,%rsp
+     2eb:	mov    %rbp,%rsp
+     2ee:	pop    %rbp
+     2ef:	ret
+     2f0:	mov    $0x1,%edi
+     2f5:	mov    0x0(%rip),%rsi        # 2fc <_Wheap.map$0296765545c47c24+0xb4>
+     2fc:	mov    $0xe,%edx
+     301:	mov    $0x53,%ecx
+     306:	mov    $0x5,%r8d
+     30c:	mov    0x0(%rip),%rax        # 313 <_Wheap.map$0296765545c47c24+0xcb>
+     313:	call   *%rax
+     315:	ud2
+     317:	mov    $0x1,%edi
+     31c:	mov    0x0(%rip),%rsi        # 323 <_Wheap.map$0296765545c47c24+0xdb>
+     323:	mov    $0xe,%edx
+     328:	mov    $0x57,%ecx
+     32d:	mov    $0x5,%r8d
+     333:	mov    0x0(%rip),%rax        # 33a <_Wheap.map$0296765545c47c24+0xf2>
+     33a:	call   *%rax
+     33c:	ud2
+     33e:	add    %al,(%rax)
+     340:	(bad)
+     341:	(bad)
+     342:	(bad)
+     343:	(bad)
+     344:	(bad)
+     345:	(bad)
+     346:	(bad)
+     347:	.byte 0x7f
+
+0000000000000348 <_Wheap.carve$760fa29f7ec179bf>:
+     348:	push   %rbp
+     349:	mov    %rsp,%rbp
+     34c:	sub    $0xe0,%rsp
+     353:	mov    %rbx,0xb0(%rsp)
+     35b:	mov    %r12,0xb8(%rsp)
+     363:	mov    %r13,0xc0(%rsp)
+     36b:	mov    %r14,0xc8(%rsp)
+     373:	mov    %r15,0xd0(%rsp)
+     37b:	mov    %rdi,0x10(%rsp)
+     380:	mov    %rdi,0x70(%rsp)
+     385:	xor    %rax,%rax
+     388:	mov    %rax,0x80(%rsp)
+     390:	movq   $0x0,0x18(%rsp)
+     399:	movq   $0x0,0x20(%rsp)
+     3a2:	movq   $0x0,0x28(%rsp)
+     3ab:	movq   $0x0,0x68(%rsp)
+     3b4:	mov    0x0(%rip),%rcx        # 3bb <_Wheap.carve$760fa29f7ec179bf+0x73>
+     3bb:	mov    (%rcx),%r15
+     3be:	mov    %rcx,0xa0(%rsp)
+     3c6:	mov    %r15,0x18(%rsp)
+     3cb:	mov    0x0(%rip),%rcx        # 3d2 <_Wheap.carve$760fa29f7ec179bf+0x8a>
+     3d2:	mov    (%rcx),%rax
+     3d5:	mov    %rcx,0x98(%rsp)
+     3dd:	mov    %rax,0x20(%rsp)
+     3e2:	mov    0x0(%rip),%rcx        # 3e9 <_Wheap.carve$760fa29f7ec179bf+0xa1>
+     3e9:	mov    (%rcx),%r14
+     3ec:	mov    %rcx,0x90(%rsp)
+     3f4:	mov    %r14,0x28(%rsp)
+     3f9:	test   %r14,%r14
+     3fc:	jne    457 <_Wheap.carve$760fa29f7ec179bf+0x10f>
+     402:	mov    $0xc,%edi
+     407:	mov    0x80(%rsp),%r12
+     40f:	mov    %r12,(%rsp)
+     413:	mov    0x0(%rip),%r10        # 41a <_Wheap.carve$760fa29f7ec179bf+0xd2>
+     41a:	mov    %r12,%rcx
+     41d:	mov    %r12,%rdx
+     420:	mov    %r12,%rsi
+     423:	mov    %r12,%r8
+     426:	mov    %r12,%r9
+     429:	call   *%r10
+     42c:	test   %rax,%rax
+     42f:	mov    %rax,%rdi
+     432:	jl     6e3 <_Wheap.carve$760fa29f7ec179bf+0x39b>
+     438:	mov    $0x10,%esi
+     43d:	call   442 <_Wheap.carve$760fa29f7ec179bf+0xfa>
+     442:	mov    %rax,0x28(%rsp)
+     447:	mov    %rax,0x18(%rsp)
+     44c:	mov    %rax,0x20(%rsp)
+     451:	mov    %rax,%r14
+     454:	mov    %rax,%r15
+     457:	mov    $0x1,%r9d
+     45d:	mov    %r9,0x88(%rsp)
+     465:	movb   $0x1,0x30(%rsp)
+     46a:	movb   $0x1,0x40(%rsp)
+     46f:	mov    %rax,%r10
+     472:	sub    %r15,%r10
+     475:	mov    %rax,%rbx
+     478:	setb   %cl
+     47b:	test   %cl,%cl
+     47d:	jne    81d <_Wheap.carve$760fa29f7ec179bf+0x4d5>
+     483:	mov    0x70(%rsp),%rcx
+     488:	cmp    %rcx,%r10
+     48b:	jb     4a3 <_Wheap.carve$760fa29f7ec179bf+0x15b>
+     491:	mov    0x88(%rsp),%r12
+     499:	mov    %rcx,0x70(%rsp)
+     49e:	jmp    645 <_Wheap.carve$760fa29f7ec179bf+0x2fd>
+     4a3:	mov    $0x40000,%edi
+     4a8:	cmp    $0x40000,%rcx
+     4af:	mov    %rcx,0x70(%rsp)
+     4b4:	jbe    4bf <_Wheap.carve$760fa29f7ec179bf+0x177>
+     4ba:	mov    0x70(%rsp),%rdi
+     4bf:	mov    $0x1000,%esi
+     4c4:	mov    %rsi,0x78(%rsp)
+     4c9:	call   4ce <_Wheap.carve$760fa29f7ec179bf+0x186>
+     4ce:	mov    %rax,%r13
+     4d1:	mov    %r13,0x38(%rsp)
+     4d6:	xor    %r12d,%r12d
+     4d9:	movb   $0x0,0x40(%rsp)
+     4de:	movb   $0x0,0x30(%rsp)
+     4e3:	mov    %rbx,%rax
+     4e6:	cmp    %r14,%rax
+     4e9:	je     4f7 <_Wheap.carve$760fa29f7ec179bf+0x1af>
+     4ef:	mov    %r12,%rax
+     4f2:	jmp    5d9 <_Wheap.carve$760fa29f7ec179bf+0x291>
+     4f7:	mov    0x70(%rsp),%rcx
+     4fc:	mov    %r15,%rdi
+     4ff:	add    %rcx,%rdi
+     502:	setb   %al
+     505:	test   %al,%al
+     507:	jne    7f6 <_Wheap.carve$760fa29f7ec179bf+0x4ae>
+     50d:	mov    0x78(%rsp),%rsi
+     512:	call   517 <_Wheap.carve$760fa29f7ec179bf+0x1cf>
+     517:	mov    %rax,0x48(%rsp)
+     51c:	mov    %rax,%rcx
+     51f:	sub    %rbx,%rcx
+     522:	setb   %dl
+     525:	test   %dl,%dl
+     527:	jne    7cf <_Wheap.carve$760fa29f7ec179bf+0x487>
+     52d:	cmp    %r13,%rcx
+     530:	jae    547 <_Wheap.carve$760fa29f7ec179bf+0x1ff>
+     536:	mov    %rbx,%rax
+     539:	add    %r13,%rax
+     53c:	setb   %cl
+     53f:	test   %cl,%cl
+     541:	jne    7a8 <_Wheap.carve$760fa29f7ec179bf+0x460>
+     547:	mov    %rax,0x50(%rsp)
+     54c:	mov    $0xc,%edi
+     551:	cmp    0x2f0(%rip),%rax        # 848 <_Wheap.carve$760fa29f7ec179bf+0x500>
+     558:	mov    %rax,0x78(%rsp)
+     55d:	ja     70b <_Wheap.carve$760fa29f7ec179bf+0x3c3>
+     563:	mov    0x80(%rsp),%rax
+     56b:	mov    %rax,(%rsp)
+     56f:	mov    0x0(%rip),%rax        # 576 <_Wheap.carve$760fa29f7ec179bf+0x22e>
+     576:	mov    0x80(%rsp),%rcx
+     57e:	mov    0x80(%rsp),%rdx
+     586:	mov    0x78(%rsp),%rsi
+     58b:	mov    0x80(%rsp),%r8
+     593:	mov    0x80(%rsp),%r9
+     59b:	call   *%rax
+     59d:	mov    %rax,0x58(%rsp)
+     5a2:	mov    %rax,0x28(%rsp)
+     5a7:	mov    %rax,0x20(%rsp)
+     5ac:	test   %rax,%rax
+     5af:	jl     732 <_Wheap.carve$760fa29f7ec179bf+0x3ea>
+     5b5:	mov    0x78(%rsp),%rcx
+     5ba:	cmp    %rcx,%rax
+     5bd:	je     5cb <_Wheap.carve$760fa29f7ec179bf+0x283>
+     5c3:	mov    %r12,%rax
+     5c6:	jmp    5d9 <_Wheap.carve$760fa29f7ec179bf+0x291>
+     5cb:	mov    %rax,%r14
+     5ce:	mov    %rax,%rbx
+     5d1:	mov    0x88(%rsp),%rax
+     5d9:	test   %al,%al
+     5db:	je     5e9 <_Wheap.carve$760fa29f7ec179bf+0x2a1>
+     5e1:	mov    %r12,%rsi
+     5e4:	jmp    5f1 <_Wheap.carve$760fa29f7ec179bf+0x2a9>
+     5e9:	mov    0x88(%rsp),%rsi
+     5f1:	test   %sil,%sil
+     5f4:	jne    607 <_Wheap.carve$760fa29f7ec179bf+0x2bf>
+     5fa:	mov    0x88(%rsp),%r12
+     602:	jmp    645 <_Wheap.carve$760fa29f7ec179bf+0x2fd>
+     607:	mov    %r13,%rdi
+     60a:	call   60f <_Wheap.carve$760fa29f7ec179bf+0x2c7>
+     60f:	mov    %rax,0x60(%rsp)
+     614:	mov    %rax,0x18(%rsp)
+     619:	test   %rax,%rax
+     61c:	je     645 <_Wheap.carve$760fa29f7ec179bf+0x2fd>
+     622:	mov    %rax,%rbx
+     625:	add    %r13,%rbx
+     628:	setb   %sil
+     62c:	test   %sil,%sil
+     62f:	jne    759 <_Wheap.carve$760fa29f7ec179bf+0x411>
+     635:	mov    %rbx,0x20(%rsp)
+     63a:	mov    0x88(%rsp),%r12
+     642:	mov    %rax,%r15
+     645:	mov    %r15,0x68(%rsp)
+     64a:	test   %r12b,%r12b
+     64d:	jne    660 <_Wheap.carve$760fa29f7ec179bf+0x318>
+     653:	mov    0xa0(%rsp),%rcx
+     65b:	jmp    68e <_Wheap.carve$760fa29f7ec179bf+0x346>
+     660:	mov    0x70(%rsp),%rcx
+     665:	mov    %r15,%rax
+     668:	add    %rcx,%rax
+     66b:	setb   %cl
+     66e:	test   %cl,%cl
+     670:	jne    781 <_Wheap.carve$760fa29f7ec179bf+0x439>
+     676:	mov    %rax,0x18(%rsp)
+     67b:	mov    %r15,0x80(%rsp)
+     683:	mov    %rax,%r15
+     686:	mov    0xa0(%rsp),%rcx
+     68e:	mov    %r15,(%rcx)
+     691:	mov    0x98(%rsp),%rcx
+     699:	mov    %rbx,(%rcx)
+     69c:	mov    0x90(%rsp),%rcx
+     6a4:	mov    %r14,(%rcx)
+     6a7:	mov    0x80(%rsp),%rax
+     6af:	mov    0xb0(%rsp),%rbx
+     6b7:	mov    0xb8(%rsp),%r12
+     6bf:	mov    0xc0(%rsp),%r13
+     6c7:	mov    0xc8(%rsp),%r14
+     6cf:	mov    0xd0(%rsp),%r15
+     6d7:	add    $0xe0,%rsp
+     6de:	mov    %rbp,%rsp
+     6e1:	pop    %rbp
+     6e2:	ret
+     6e3:	mov    $0x1,%edi
+     6e8:	mov    0x0(%rip),%rsi        # 6ef <_Wheap.carve$760fa29f7ec179bf+0x3a7>
+     6ef:	mov    $0xe,%edx
+     6f4:	mov    $0x72,%ecx
+     6f9:	mov    $0x9,%r8d
+     6ff:	mov    0x0(%rip),%r9        # 706 <_Wheap.carve$760fa29f7ec179bf+0x3be>
+     706:	call   *%r9
+     709:	ud2
+     70b:	mov    $0x1,%edi
+     710:	mov    0x0(%rip),%rsi        # 717 <_Wheap.carve$760fa29f7ec179bf+0x3cf>
+     717:	mov    $0xe,%edx
+     71c:	mov    $0x7d,%ecx
+     721:	mov    $0xd,%r8d
+     727:	mov    0x0(%rip),%rax        # 72e <_Wheap.carve$760fa29f7ec179bf+0x3e6>
+     72e:	call   *%rax
+     730:	ud2
+     732:	mov    $0x1,%edi
+     737:	mov    0x0(%rip),%rsi        # 73e <_Wheap.carve$760fa29f7ec179bf+0x3f6>
+     73e:	mov    $0xe,%edx
+     743:	mov    $0x7d,%ecx
+     748:	mov    $0xd,%r8d
+     74e:	mov    0x0(%rip),%rax        # 755 <_Wheap.carve$760fa29f7ec179bf+0x40d>
+     755:	call   *%rax
+     757:	ud2
+     759:	mov    $0x1,%edi
+     75e:	mov    0x0(%rip),%rsi        # 765 <_Wheap.carve$760fa29f7ec179bf+0x41d>
+     765:	mov    $0xe,%edx
+     76a:	mov    $0x8a,%ecx
+     76f:	mov    $0x11,%r8d
+     775:	mov    0x0(%rip),%r9        # 77c <_Wheap.carve$760fa29f7ec179bf+0x434>
+     77c:	call   *%r9
+     77f:	ud2
+     781:	mov    $0x1,%edi
+     786:	mov    0x0(%rip),%rsi        # 78d <_Wheap.carve$760fa29f7ec179bf+0x445>
+     78d:	mov    $0xe,%edx
+     792:	mov    $0x91,%ecx
+     797:	mov    $0x9,%r8d
+     79d:	mov    0x0(%rip),%rax        # 7a4 <_Wheap.carve$760fa29f7ec179bf+0x45c>
+     7a4:	call   *%rax
+     7a6:	ud2
+     7a8:	mov    $0x1,%edi
+     7ad:	mov    0x0(%rip),%rsi        # 7b4 <_Wheap.carve$760fa29f7ec179bf+0x46c>
+     7b4:	mov    $0xe,%edx
+     7b9:	mov    $0x7c,%ecx
+     7be:	mov    $0x30,%r8d
+     7c4:	mov    0x0(%rip),%rax        # 7cb <_Wheap.carve$760fa29f7ec179bf+0x483>
+     7cb:	call   *%rax
+     7cd:	ud2
+     7cf:	mov    $0x1,%edi
+     7d4:	mov    0x0(%rip),%rsi        # 7db <_Wheap.carve$760fa29f7ec179bf+0x493>
+     7db:	mov    $0xe,%edx
+     7e0:	mov    $0x7c,%ecx
+     7e5:	mov    $0xd,%r8d
+     7eb:	mov    0x0(%rip),%rax        # 7f2 <_Wheap.carve$760fa29f7ec179bf+0x4aa>
+     7f2:	call   *%rax
+     7f4:	ud2
+     7f6:	mov    $0x1,%edi
+     7fb:	mov    0x0(%rip),%rsi        # 802 <_Wheap.carve$760fa29f7ec179bf+0x4ba>
+     802:	mov    $0xe,%edx
+     807:	mov    $0x7b,%ecx
+     80c:	mov    $0xd,%r8d
+     812:	mov    0x0(%rip),%rax        # 819 <_Wheap.carve$760fa29f7ec179bf+0x4d1>
+     819:	call   *%rax
+     81b:	ud2
+     81d:	mov    $0x1,%edi
+     822:	mov    0x0(%rip),%rsi        # 829 <_Wheap.carve$760fa29f7ec179bf+0x4e1>
+     829:	mov    $0xe,%edx
+     82e:	mov    $0x77,%ecx
+     833:	mov    $0x5,%r8d
+     839:	mov    0x0(%rip),%rax        # 840 <_Wheap.carve$760fa29f7ec179bf+0x4f8>
+     840:	call   *%rax
+     842:	ud2
+     844:	add    %al,(%rax)
+     846:	add    %al,(%rax)
+     848:	(bad)
+     849:	(bad)
+     84a:	(bad)
+     84b:	(bad)
+     84c:	(bad)
+     84d:	(bad)
+     84e:	(bad)
+     84f:	.byte 0x7f
+
+0000000000000850 <_Wheap.fail$f26460488cb5d9e3>:
+     850:	push   %rbp
+     851:	mov    %rsp,%rbp
+     854:	mov    $0xc,%edi
+     859:	mov    0x0(%rip),%rsi        # 860 <_Wheap.fail$f26460488cb5d9e3+0x10>
+     860:	call   *%rsi
+     862:	xor    %rax,%rax
+     865:	mov    %rbp,%rsp
+     868:	pop    %rbp
+     869:	ret
+     86a:	add    %al,(%rax)
+     86c:	add    %al,(%rax)
+	...
+
+0000000000000870 <_Wheap.usable$c24efee80cc3e0a3>:
+     870:	push   %rbp
+     871:	mov    %rsp,%rbp
+     874:	sub    $0x10,%rsp
+     878:	mov    %rdi,(%rsp)
+     87c:	sub    $0x10,%rdi
+     880:	setb   %al
+     883:	test   %al,%al
+     885:	jne    93b <_Wheap.usable$c24efee80cc3e0a3+0xcb>
+     88b:	mov    %rdi,0x8(%rsp)
+     890:	mov    %rdi,%rdx
+     893:	imul   $0x0,0xcd(%rip),%rcx        # 968 <_Wheap.usable$c24efee80cc3e0a3+0xf8>
+     89b:	mov    %rdx,%rax
+     89e:	mov    (%rax,%rcx,1),%rdi
+     8a2:	cmp    0xc7(%rip),%rdi        # 970 <_Wheap.usable$c24efee80cc3e0a3+0x100>
+     8a9:	je     8c6 <_Wheap.usable$c24efee80cc3e0a3+0x56>
+     8af:	cmp    0xc2(%rip),%rdi        # 978 <_Wheap.usable$c24efee80cc3e0a3+0x108>
+     8b6:	ja     8ed <_Wheap.usable$c24efee80cc3e0a3+0x7d>
+     8bc:	call   8c1 <_Wheap.usable$c24efee80cc3e0a3+0x51>
+     8c1:	jmp    8e4 <_Wheap.usable$c24efee80cc3e0a3+0x74>
+     8c6:	imul   $0x1,0x9a(%rip),%rax        # 968 <_Wheap.usable$c24efee80cc3e0a3+0xf8>
+     8ce:	mov    %rdx,%rdi
+     8d1:	mov    (%rdi,%rax,1),%rax
+     8d5:	sub    $0x10,%rax
+     8d9:	setb   %cl
+     8dc:	test   %cl,%cl
+     8de:	jne    914 <_Wheap.usable$c24efee80cc3e0a3+0xa4>
+     8e4:	add    $0x10,%rsp
+     8e8:	mov    %rbp,%rsp
+     8eb:	pop    %rbp
+     8ec:	ret
+     8ed:	mov    $0x1,%edi
+     8f2:	mov    0x0(%rip),%rsi        # 8f9 <_Wheap.usable$c24efee80cc3e0a3+0x89>
+     8f9:	mov    $0xe,%edx
+     8fe:	mov    $0xad,%ecx
+     903:	mov    $0xd,%r8d
+     909:	mov    0x0(%rip),%rax        # 910 <_Wheap.usable$c24efee80cc3e0a3+0xa0>
+     910:	call   *%rax
+     912:	ud2
+     914:	mov    $0x1,%edi
+     919:	mov    0x0(%rip),%rsi        # 920 <_Wheap.usable$c24efee80cc3e0a3+0xb0>
+     920:	mov    $0xe,%edx
+     925:	mov    $0xab,%ecx
+     92a:	mov    $0xd,%r8d
+     930:	mov    0x0(%rip),%rax        # 937 <_Wheap.usable$c24efee80cc3e0a3+0xc7>
+     937:	call   *%rax
+     939:	ud2
+     93b:	mov    $0x1,%edi
+     940:	mov    0x0(%rip),%rsi        # 947 <_Wheap.usable$c24efee80cc3e0a3+0xd7>
+     947:	mov    $0xe,%edx
+     94c:	mov    $0xa9,%ecx
+     951:	mov    $0x9,%r8d
+     957:	mov    0x0(%rip),%rax        # 95e <_Wheap.usable$c24efee80cc3e0a3+0xee>
+     95e:	call   *%rax
+     960:	ud2
+     962:	add    %al,(%rax)
+     964:	add    %al,(%rax)
+     966:	add    %al,(%rax)
+     968:	or     %al,(%rax)
+     96a:	add    %al,(%rax)
+     96c:	add    %al,(%rax)
+     96e:	add    %al,(%rax)
+     970:	(bad)
+     971:	(bad)
+     972:	(bad)
+     973:	incl   (%rax)
+     975:	add    %al,(%rax)
+     977:	add    %bh,%bh
+     979:	(bad)
+     97a:	(bad)
+     97b:	(bad)
+     97c:	(bad)
+     97d:	(bad)
+     97e:	(bad)
+     97f:	.byte 0x7f
+
+0000000000000980 <malloc>:
+     980:	push   %rbp
+     981:	mov    %rsp,%rbp
+     984:	sub    $0x40,%rsp
+     988:	mov    %rbx,0x30(%rsp)
+     98d:	mov    %r12,0x38(%rsp)
+     992:	mov    %rdi,(%rsp)
+     996:	cmp    0x27b(%rip),%rdi        # c18 <malloc+0x298>
+     99d:	ja     b37 <malloc+0x1b7>
+     9a3:	cmp    $0x10000,%rdi
+     9aa:	jbe    a49 <malloc+0xc9>
+     9b0:	add    $0x10,%rdi
+     9b4:	setb   %sil
+     9b8:	test   %sil,%sil
+     9bb:	jne    b76 <malloc+0x1f6>
+     9c1:	mov    $0x1000,%esi
+     9c6:	call   9cb <malloc+0x4b>
+     9cb:	mov    %rax,0x28(%rsp)
+     9d0:	mov    %rax,%rbx
+     9d3:	mov    %rbx,%rdi
+     9d6:	call   9db <malloc+0x5b>
+     9db:	mov    %rax,0x18(%rsp)
+     9e0:	test   %rax,%rax
+     9e3:	je     a31 <malloc+0xb1>
+     9e9:	mov    %rax,0x20(%rsp)
+     9ee:	mov    $0xffffffff,%r9d
+     9f4:	imul   $0x0,0x224(%rip),%r10        # c20 <malloc+0x2a0>
+     9fc:	mov    %r9,(%rax,%r10,1)
+     a00:	imul   $0x1,0x218(%rip),%r10        # c20 <malloc+0x2a0>
+     a08:	mov    %rbx,%rcx
+     a0b:	mov    %rcx,(%rax,%r10,1)
+     a0f:	add    $0x10,%rax
+     a13:	setb   %cl
+     a16:	test   %cl,%cl
+     a18:	jne    b4f <malloc+0x1cf>
+     a1e:	mov    0x30(%rsp),%rbx
+     a23:	mov    0x38(%rsp),%r12
+     a28:	add    $0x40,%rsp
+     a2c:	mov    %rbp,%rsp
+     a2f:	pop    %rbp
+     a30:	ret
+     a31:	call   a36 <malloc+0xb6>
+     a36:	mov    0x30(%rsp),%rbx
+     a3b:	mov    0x38(%rsp),%r12
+     a40:	add    $0x40,%rsp
+     a44:	mov    %rbp,%rsp
+     a47:	pop    %rbp
+     a48:	ret
+     a49:	call   a4e <malloc+0xce>
+     a4e:	mov    %rax,0x8(%rsp)
+     a53:	mov    0x0(%rip),%rcx        # a5a <malloc+0xda>
+     a5a:	imul   $0x8,%rax,%rdx
+     a5e:	mov    %rax,%rbx
+     a61:	mov    (%rcx,%rdx,1),%rax
+     a65:	mov    %rax,0x10(%rsp)
+     a6a:	test   %rax,%rax
+     a6d:	jne    b14 <malloc+0x194>
+     a73:	mov    $0x10,%edi
+     a78:	mov    %rdi,%r12
+     a7b:	mov    %rbx,%rdi
+     a7e:	call   a83 <malloc+0x103>
+     a83:	mov    %r12,%rdi
+     a86:	add    %rax,%rdi
+     a89:	setb   %al
+     a8c:	test   %al,%al
+     a8e:	jne    beb <malloc+0x26b>
+     a94:	call   a99 <malloc+0x119>
+     a99:	mov    %rax,0x18(%rsp)
+     a9e:	test   %rax,%rax
+     aa1:	je     afc <malloc+0x17c>
+     aa7:	mov    %rax,0x20(%rsp)
+     aac:	mov    %rbx,%rcx
+     aaf:	test   %rcx,%rcx
+     ab2:	jl     b9d <malloc+0x21d>
+     ab8:	imul   $0x0,0x160(%rip),%rdx        # c20 <malloc+0x2a0>
+     ac0:	mov    %rcx,(%rax,%rdx,1)
+     ac4:	movabs $0x6c6169292355706d,%rcx
+     ace:	imul   $0x1,0x14a(%rip),%rdx        # c20 <malloc+0x2a0>
+     ad6:	mov    %rcx,(%rax,%rdx,1)
+     ada:	add    $0x10,%rax
+     ade:	setb   %cl
+     ae1:	test   %cl,%cl
+     ae3:	jne    bc4 <malloc+0x244>
+     ae9:	mov    0x30(%rsp),%rbx
+     aee:	mov    0x38(%rsp),%r12
+     af3:	add    $0x40,%rsp
+     af7:	mov    %rbp,%rsp
+     afa:	pop    %rbp
+     afb:	ret
+     afc:	call   b01 <malloc+0x181>
+     b01:	mov    0x30(%rsp),%rbx
+     b06:	mov    0x38(%rsp),%r12
+     b0b:	add    $0x40,%rsp
+     b0f:	mov    %rbp,%rsp
+     b12:	pop    %rbp
+     b13:	ret
+     b14:	imul   $0x0,0x104(%rip),%rsi        # c20 <malloc+0x2a0>
+     b1c:	mov    (%rax,%rsi,1),%rsi
+     b20:	mov    %rsi,(%rcx,%rdx,1)
+     b24:	mov    0x30(%rsp),%rbx
+     b29:	mov    0x38(%rsp),%r12
+     b2e:	add    $0x40,%rsp
+     b32:	mov    %rbp,%rsp
+     b35:	pop    %rbp
+     b36:	ret
+     b37:	call   b3c <malloc+0x1bc>
+     b3c:	mov    0x30(%rsp),%rbx
+     b41:	mov    0x38(%rsp),%r12
+     b46:	add    $0x40,%rsp
+     b4a:	mov    %rbp,%rsp
+     b4d:	pop    %rbp
+     b4e:	ret
+     b4f:	mov    $0x1,%edi
+     b54:	mov    0x0(%rip),%rsi        # b5b <malloc+0x1db>
+     b5b:	mov    $0xe,%edx
+     b60:	mov    $0xd9,%ecx
+     b65:	mov    $0x9,%r8d
+     b6b:	mov    0x0(%rip),%rax        # b72 <malloc+0x1f2>
+     b72:	call   *%rax
+     b74:	ud2
+     b76:	mov    $0x1,%edi
+     b7b:	mov    0x0(%rip),%rsi        # b82 <malloc+0x202>
+     b82:	mov    $0xe,%edx
+     b87:	mov    $0xcf,%ecx
+     b8c:	mov    $0x5,%r8d
+     b92:	mov    0x0(%rip),%rax        # b99 <malloc+0x219>
+     b99:	call   *%rax
+     b9b:	ud2
+     b9d:	mov    $0x1,%edi
+     ba2:	mov    0x0(%rip),%rsi        # ba9 <malloc+0x229>
+     ba9:	mov    $0xe,%edx
+     bae:	mov    $0xca,%ecx
+     bb3:	mov    $0xd,%r8d
+     bb9:	mov    0x0(%rip),%rax        # bc0 <malloc+0x240>
+     bc0:	call   *%rax
+     bc2:	ud2
+     bc4:	mov    $0x1,%edi
+     bc9:	mov    0x0(%rip),%rsi        # bd0 <malloc+0x250>
+     bd0:	mov    $0xe,%edx
+     bd5:	mov    $0xcc,%ecx
+     bda:	mov    $0xd,%r8d
+     be0:	mov    0x0(%rip),%rax        # be7 <malloc+0x267>
+     be7:	call   *%rax
+     be9:	ud2
+     beb:	mov    $0x1,%edi
+     bf0:	mov    0x0(%rip),%rsi        # bf7 <malloc+0x277>
+     bf7:	mov    $0xe,%edx
+     bfc:	mov    $0xc3,%ecx
+     c01:	mov    $0x9,%r8d
+     c07:	mov    0x0(%rip),%rax        # c0e <malloc+0x28e>
+     c0e:	call   *%rax
+     c10:	ud2
+	...
+     c1a:	add    %al,(%rax)
+     c1c:	add    %al,0x0(%rax)
+     c1f:	add    %cl,(%rax)
+     c21:	add    %al,(%rax)
+     c23:	add    %al,(%rax)
+     c25:	add    %al,(%rax)
+	...
+
+0000000000000c28 <free>:
+     c28:	push   %rbp
+     c29:	mov    %rsp,%rbp
+     c2c:	sub    $0x40,%rsp
+     c30:	mov    %rdi,0x10(%rsp)
+     c35:	xor    %r9,%r9
+     c38:	test   %rdi,%rdi
+     c3b:	je     cfd <free+0xd5>
+     c41:	mov    %rdi,%rsi
+     c44:	sub    $0x10,%rsi
+     c48:	setb   %al
+     c4b:	test   %al,%al
+     c4d:	jne    d7c <free+0x154>
+     c53:	mov    %rsi,0x18(%rsp)
+     c58:	mov    %rsi,0x20(%rsp)
+     c5d:	imul   $0x0,0x143(%rip),%rax        # da8 <free+0x180>
+     c65:	mov    (%rsi,%rax,1),%rcx
+     c69:	cmp    0x140(%rip),%rcx        # db0 <free+0x188>
+     c70:	je     cb0 <free+0x88>
+     c76:	mov    (%rsi,%rax,1),%rax
+     c7a:	mov    %rax,0x30(%rsp)
+     c7f:	cmp    0x132(%rip),%rax        # db8 <free+0x190>
+     c86:	ja     d06 <free+0xde>
+     c8c:	mov    0x0(%rip),%rcx        # c93 <free+0x6b>
+     c93:	imul   $0x8,%rax,%rax
+     c97:	mov    (%rcx,%rax,1),%rdx
+     c9b:	imul   $0x0,0x105(%rip),%rsi        # da8 <free+0x180>
+     ca3:	mov    %rdx,(%rdi,%rsi,1)
+     ca7:	mov    %rdi,(%rcx,%rax,1)
+     cab:	jmp    cf4 <free+0xcc>
+     cb0:	mov    $0xb,%edi
+     cb5:	cmp    0xfc(%rip),%rsi        # db8 <free+0x190>
+     cbc:	ja     d2d <free+0x105>
+     cc2:	imul   $0x1,0xde(%rip),%rax        # da8 <free+0x180>
+     cca:	mov    (%rsi,%rax,1),%rdx
+     cce:	cmp    0xe3(%rip),%rdx        # db8 <free+0x190>
+     cd5:	ja     d54 <free+0x12c>
+     cdb:	mov    %r9,(%rsp)
+     cdf:	mov    0x0(%rip),%r10        # ce6 <free+0xbe>
+     ce6:	mov    %r9,%rcx
+     ce9:	mov    %r9,%r8
+     cec:	call   *%r10
+     cef:	mov    %rax,0x28(%rsp)
+     cf4:	add    $0x40,%rsp
+     cf8:	mov    %rbp,%rsp
+     cfb:	pop    %rbp
+     cfc:	ret
+     cfd:	add    $0x40,%rsp
+     d01:	mov    %rbp,%rsp
+     d04:	pop    %rbp
+     d05:	ret
+     d06:	mov    $0x1,%edi
+     d0b:	mov    0x0(%rip),%rsi        # d12 <free+0xea>
+     d12:	mov    $0xe,%edx
+     d17:	mov    $0xea,%ecx
+     d1c:	mov    $0xd,%r8d
+     d22:	mov    0x0(%rip),%rax        # d29 <free+0x101>
+     d29:	call   *%rax
+     d2b:	ud2
+     d2d:	mov    $0x1,%edi
+     d32:	mov    0x0(%rip),%rsi        # d39 <free+0x111>
+     d39:	mov    $0xe,%edx
+     d3e:	mov    $0xe8,%ecx
+     d43:	mov    $0xd,%r8d
+     d49:	mov    0x0(%rip),%rax        # d50 <free+0x128>
+     d50:	call   *%rax
+     d52:	ud2
+     d54:	mov    $0x1,%edi
+     d59:	mov    0x0(%rip),%rsi        # d60 <free+0x138>
+     d60:	mov    $0xe,%edx
+     d65:	mov    $0xe8,%ecx
+     d6a:	mov    $0xd,%r8d
+     d70:	mov    0x0(%rip),%r9        # d77 <free+0x14f>
+     d77:	call   *%r9
+     d7a:	ud2
+     d7c:	mov    $0x1,%edi
+     d81:	mov    0x0(%rip),%rsi        # d88 <free+0x160>
+     d88:	mov    $0xe,%edx
+     d8d:	mov    $0xe5,%ecx
+     d92:	mov    $0x9,%r8d
+     d98:	mov    0x0(%rip),%r9        # d9f <free+0x177>
+     d9f:	call   *%r9
+     da2:	ud2
+     da4:	add    %al,(%rax)
+     da6:	add    %al,(%rax)
+     da8:	or     %al,(%rax)
+     daa:	add    %al,(%rax)
+     dac:	add    %al,(%rax)
+     dae:	add    %al,(%rax)
+     db0:	(bad)
+     db1:	(bad)
+     db2:	(bad)
+     db3:	incl   (%rax)
+     db5:	add    %al,(%rax)
+     db7:	add    %bh,%bh
+     db9:	(bad)
+     dba:	(bad)
+     dbb:	(bad)
+     dbc:	(bad)
+     dbd:	(bad)
+     dbe:	(bad)
+     dbf:	.byte 0x7f
+
+0000000000000dc0 <calloc>:
+     dc0:	push   %rbp
+     dc1:	mov    %rsp,%rbp
+     dc4:	sub    $0x50,%rsp
+     dc8:	mov    %rbx,0x30(%rsp)
+     dcd:	mov    %r12,0x38(%rsp)
+     dd2:	mov    %r13,0x40(%rsp)
+     dd7:	mov    %rdi,(%rsp)
+     ddb:	mov    %rsi,0x8(%rsp)
+     de0:	xor    %ebx,%ebx
+     de2:	test   %rdi,%rdi
+     de5:	jne    df3 <calloc+0x33>
+     deb:	mov    %rbx,%rax
+     dee:	jmp    e12 <calloc+0x52>
+     df3:	movabs $0x400000000000,%rax
+     dfd:	test   %rdi,%rdi
+     e00:	je     ed9 <calloc+0x119>
+     e06:	xor    %rdx,%rdx
+     e09:	div    %rdi
+     e0c:	cmp    %rax,%rsi
+     e0f:	seta   %al
+     e12:	test   %al,%al
+     e14:	jne    e95 <calloc+0xd5>
+     e1a:	mov    %rdi,%rax
+     e1d:	mul    %rsi
+     e20:	seto   %cl
+     e23:	test   %cl,%cl
+     e25:	jne    eb2 <calloc+0xf2>
+     e2b:	mov    %rax,0x10(%rsp)
+     e30:	mov    %rax,%r13
+     e33:	mov    %r13,%rdi
+     e36:	call   e3b <calloc+0x7b>
+     e3b:	mov    %rax,%r12
+     e3e:	mov    %r12,0x18(%rsp)
+     e43:	mov    $0x1,%ecx
+     e48:	test   %r12,%r12
+     e4b:	jne    e54 <calloc+0x94>
+     e51:	mov    %rbx,%rcx
+     e54:	test   %cl,%cl
+     e56:	jne    e64 <calloc+0xa4>
+     e5c:	mov    %r12,%rax
+     e5f:	jmp    e7d <calloc+0xbd>
+     e64:	xor    %esi,%esi
+     e66:	mov    0x0(%rip),%rcx        # e6d <calloc+0xad>
+     e6d:	mov    %r13,%rdx
+     e70:	mov    %r12,%rdi
+     e73:	call   *%rcx
+     e75:	mov    %rax,0x20(%rsp)
+     e7a:	mov    %r12,%rax
+     e7d:	mov    0x30(%rsp),%rbx
+     e82:	mov    0x38(%rsp),%r12
+     e87:	mov    0x40(%rsp),%r13
+     e8c:	add    $0x50,%rsp
+     e90:	mov    %rbp,%rsp
+     e93:	pop    %rbp
+     e94:	ret
+     e95:	call   e9a <calloc+0xda>
+     e9a:	mov    0x30(%rsp),%rbx
+     e9f:	mov    0x38(%rsp),%r12
+     ea4:	mov    0x40(%rsp),%r13
+     ea9:	add    $0x50,%rsp
+     ead:	mov    %rbp,%rsp
+     eb0:	pop    %rbp
+     eb1:	ret
+     eb2:	mov    $0x1,%edi
+     eb7:	mov    0x0(%rip),%rsi        # ebe <calloc+0xfe>
+     ebe:	mov    $0xe,%edx
+     ec3:	mov    $0xf7,%ecx
+     ec8:	mov    $0x5,%r8d
+     ece:	mov    0x0(%rip),%rax        # ed5 <calloc+0x115>
+     ed5:	call   *%rax
+     ed7:	ud2
+     ed9:	mov    $0x2,%edi
+     ede:	mov    0x0(%rip),%rsi        # ee5 <calloc+0x125>
+     ee5:	mov    $0xe,%edx
+     eea:	mov    $0xf4,%ecx
+     eef:	mov    $0x5,%r8d
+     ef5:	mov    0x0(%rip),%rax        # efc <calloc+0x13c>
+     efc:	call   *%rax
+     efe:	ud2
+
+0000000000000f00 <realloc>:
+     f00:	push   %rbp
+     f01:	mov    %rsp,%rbp
+     f04:	sub    $0x50,%rsp
+     f08:	mov    %rbx,0x30(%rsp)
+     f0d:	mov    %r12,0x38(%rsp)
+     f12:	mov    %r13,0x40(%rsp)
+     f17:	mov    %rdi,%r12
+     f1a:	mov    %rdi,(%rsp)
+     f1e:	mov    %rsi,0x8(%rsp)
+     f23:	xor    %rax,%rax
+     f26:	mov    %rax,%r13
+     f29:	mov    %r12,%rax
+     f2c:	test   %rax,%rdi
+     f2f:	je     1009 <realloc+0x109>
+     f35:	test   %rsi,%rsi
+     f38:	mov    %rsi,%rbx
+     f3b:	je     fe6 <realloc+0xe6>
+     f41:	mov    %r12,%rdi
+     f44:	call   f49 <realloc+0x49>
+     f49:	mov    %rax,0x10(%rsp)
+     f4e:	mov    %rbx,%rsi
+     f51:	cmp    %rax,%rsi
+     f54:	mov    %rax,%r13
+     f57:	jbe    fcb <realloc+0xcb>
+     f5d:	mov    %rbx,%rdi
+     f60:	call   f65 <realloc+0x65>
+     f65:	mov    %rax,0x18(%rsp)
+     f6a:	test   %rax,%rax
+     f6d:	mov    %rax,%rbx
+     f70:	je     fb0 <realloc+0xb0>
+     f76:	mov    0x0(%rip),%rcx        # f7d <realloc+0x7d>
+     f7d:	mov    %r13,%rdx
+     f80:	mov    %r12,%rsi
+     f83:	mov    %rbx,%rdi
+     f86:	call   *%rcx
+     f88:	mov    %rax,0x20(%rsp)
+     f8d:	mov    %r12,%rdi
+     f90:	call   f95 <realloc+0x95>
+     f95:	mov    %rbx,%rax
+     f98:	mov    0x30(%rsp),%rbx
+     f9d:	mov    0x38(%rsp),%r12
+     fa2:	mov    0x40(%rsp),%r13
+     fa7:	add    $0x50,%rsp
+     fab:	mov    %rbp,%rsp
+     fae:	pop    %rbp
+     faf:	ret
+     fb0:	mov    %rbx,%rax
+     fb3:	mov    0x30(%rsp),%rbx
+     fb8:	mov    0x38(%rsp),%r12
+     fbd:	mov    0x40(%rsp),%r13
+     fc2:	add    $0x50,%rsp
+     fc6:	mov    %rbp,%rsp
+     fc9:	pop    %rbp
+     fca:	ret
+     fcb:	mov    %r12,%rax
+     fce:	mov    0x30(%rsp),%rbx
+     fd3:	mov    0x38(%rsp),%r12
+     fd8:	mov    0x40(%rsp),%r13
+     fdd:	add    $0x50,%rsp
+     fe1:	mov    %rbp,%rsp
+     fe4:	pop    %rbp
+     fe5:	ret
+     fe6:	mov    %r12,%rdi
+     fe9:	call   fee <realloc+0xee>
+     fee:	mov    %r13,%rax
+     ff1:	mov    0x30(%rsp),%rbx
+     ff6:	mov    0x38(%rsp),%r12
+     ffb:	mov    0x40(%rsp),%r13
+    1000:	add    $0x50,%rsp
+    1004:	mov    %rbp,%rsp
+    1007:	pop    %rbp
+    1008:	ret
+    1009:	mov    %rsi,%rdi
+    100c:	call   1011 <realloc+0x111>
+    1011:	mov    0x30(%rsp),%rbx
+    1016:	mov    0x38(%rsp),%r12
+    101b:	mov    0x40(%rsp),%r13
+    1020:	add    $0x50,%rsp
+    1024:	mov    %rbp,%rsp
+    1027:	pop    %rbp
+    1028:	ret
+
+0000000000001029 <_Wheap.linked$a6fd06f8ad725932>:
+    1029:	push   %rbp
+    102a:	mov    %rsp,%rbp
+    102d:	mov    $0x1,%eax
+    1032:	mov    %rbp,%rsp
+    1035:	pop    %rbp
+    1036:	ret
+
+muzzle.process.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <exit>:
+   0:	push   %rbp
+   1:	mov    %rsp,%rbp
+   4:	sub    $0x10,%rsp
+   8:	mov    %edi,(%rsp)
+   b:	mov    0x0(%rip),%rsi        # 12 <exit+0x12>
+  12:	call   *%rsi
+  14:	add    $0x10,%rsp
+  18:	mov    %rbp,%rsp
+  1b:	pop    %rbp
+  1c:	ret
+
+000000000000001d <_Exit>:
+  1d:	push   %rbp
+  1e:	mov    %rsp,%rbp
+  21:	sub    $0x10,%rsp
+  25:	mov    %edi,(%rsp)
+  28:	mov    0x0(%rip),%rsi        # 2f <_Exit+0x12>
+  2f:	call   *%rsi
+  31:	add    $0x10,%rsp
+  35:	mov    %rbp,%rsp
+  38:	pop    %rbp
+  39:	ret
+
+000000000000003a <_exit>:
+  3a:	push   %rbp
+  3b:	mov    %rsp,%rbp
+  3e:	sub    $0x10,%rsp
+  42:	mov    %edi,(%rsp)
+  45:	mov    0x0(%rip),%rsi        # 4c <_exit+0x12>
+  4c:	call   *%rsi
+  4e:	add    $0x10,%rsp
+  52:	mov    %rbp,%rsp
+  55:	pop    %rbp
+  56:	ret
+
+0000000000000057 <write>:
+  57:	push   %rbp
+  58:	mov    %rsp,%rbp
+  5b:	sub    $0x30,%rsp
+  5f:	mov    %edi,0x10(%rsp)
+  63:	mov    %rdi,%rax
+  66:	mov    %rsi,0x18(%rsp)
+  6b:	mov    %rdx,0x20(%rsp)
+  70:	xor    %r9,%r9
+  73:	movq   $0x0,0x28(%rsp)
+  7c:	mov    %rsi,0x28(%rsp)
+  81:	mov    %rsi,%rcx
+  84:	mov    $0x1,%edi
+  89:	movslq %eax,%rsi
+  8c:	mov    %r9,(%rsp)
+  90:	mov    0x0(%rip),%rax        # 97 <write+0x40>
+  97:	mov    %rcx,%r10
+  9a:	mov    %rdx,%rcx
+  9d:	mov    %r10,%rdx
+  a0:	mov    %r9,%r8
+  a3:	call   *%rax
+  a5:	mov    0x0(%rip),%rcx        # ac <write+0x55>
+  ac:	mov    %rax,%rdi
+  af:	call   *%rcx
+  b1:	add    $0x30,%rsp
+  b5:	mov    %rbp,%rsp
+  b8:	pop    %rbp
+  b9:	ret
+
+00000000000000ba <_Wprocess.linked$886fe7af0235e1bd>:
+  ba:	push   %rbp
+  bb:	mov    %rsp,%rbp
+  be:	mov    $0x1,%eax
+  c3:	mov    %rbp,%rsp
+  c6:	pop    %rbp
+  c7:	ret
+
+muzzle.root.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_Wreach$5fa59f32f7063d40>:
+   0:	push   %rbp
+   1:	mov    %rsp,%rbp
+   4:	sub    $0x10,%rsp
+   8:	mov    %rbx,(%rsp)
+   c:	mov    0x0(%rip),%rax        # 13 <_Wreach$5fa59f32f7063d40+0x13>
+  13:	call   *%rax
+  15:	mov    %rsi,%rcx
+  18:	xor    %ecx,%ecx
+  1a:	mov    %rcx,%rbx
+  1d:	test   %al,%al
+  1f:	jne    2d <_Wreach$5fa59f32f7063d40+0x2d>
+  25:	mov    %rbx,%rax
+  28:	jmp    36 <_Wreach$5fa59f32f7063d40+0x36>
+  2d:	mov    0x0(%rip),%rax        # 34 <_Wreach$5fa59f32f7063d40+0x34>
+  34:	call   *%rax
+  36:	test   %al,%al
+  38:	jne    46 <_Wreach$5fa59f32f7063d40+0x46>
+  3e:	mov    %rbx,%rax
+  41:	jmp    4f <_Wreach$5fa59f32f7063d40+0x4f>
+  46:	mov    0x0(%rip),%rax        # 4d <_Wreach$5fa59f32f7063d40+0x4d>
+  4d:	call   *%rax
+  4f:	test   %al,%al
+  51:	jne    5f <_Wreach$5fa59f32f7063d40+0x5f>
+  57:	mov    %rbx,%rax
+  5a:	jmp    68 <_Wreach$5fa59f32f7063d40+0x68>
+  5f:	mov    0x0(%rip),%rax        # 66 <_Wreach$5fa59f32f7063d40+0x66>
+  66:	call   *%rax
+  68:	test   %al,%al
+  6a:	jne    78 <_Wreach$5fa59f32f7063d40+0x78>
+  70:	mov    %rbx,%rax
+  73:	jmp    81 <_Wreach$5fa59f32f7063d40+0x81>
+  78:	mov    0x0(%rip),%rax        # 7f <_Wreach$5fa59f32f7063d40+0x7f>
+  7f:	call   *%rax
+  81:	mov    (%rsp),%rbx
+  85:	add    $0x10,%rsp
+  89:	mov    %rbp,%rsp
+  8c:	pop    %rbp
+  8d:	ret
+
+muzzle.stdio.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_Wstdio.put$721117c6fbd8d4b1>:
+   0:	push   %rbp
+   1:	mov    %rsp,%rbp
+   4:	sub    $0x60,%rsp
+   8:	mov    %rbx,0x40(%rsp)
+   d:	mov    %r12,0x48(%rsp)
+  12:	mov    %r13,0x50(%rsp)
+  17:	mov    %r14,0x58(%rsp)
+  1c:	mov    %rdi,0x10(%rsp)
+  21:	mov    %rsi,0x18(%rsp)
+  26:	xor    %r14,%r14
+  29:	movq   $0x0,0x20(%rsp)
+  32:	mov    %r14,%rbx
+  35:	cmp    %rsi,%rbx
+  38:	jb     6e <_Wstdio.put$721117c6fbd8d4b1+0x6e>
+  3e:	cmp    0x1eb(%rip),%rsi        # 230 <_Wstdio.put$721117c6fbd8d4b1+0x230>
+  45:	mov    %rsi,%rcx
+  48:	ja     167 <_Wstdio.put$721117c6fbd8d4b1+0x167>
+  4e:	mov    %rcx,%rax
+  51:	mov    0x40(%rsp),%rbx
+  56:	mov    0x48(%rsp),%r12
+  5b:	mov    0x50(%rsp),%r13
+  60:	mov    0x58(%rsp),%r14
+  65:	add    $0x60,%rsp
+  69:	mov    %rbp,%rsp
+  6c:	pop    %rbp
+  6d:	ret
+  6e:	mov    %rsi,%rcx
+  71:	mov    %rdi,%r12
+  74:	mov    %r12,%rdx
+  77:	add    %rbx,%rdx
+  7a:	setb   %al
+  7d:	test   %al,%al
+  7f:	jne    203 <_Wstdio.put$721117c6fbd8d4b1+0x203>
+  85:	mov    %rdx,0x28(%rsp)
+  8a:	mov    $0x1,%esi
+  8f:	mov    %rcx,%r13
+  92:	sub    %rbx,%rcx
+  95:	setb   %dil
+  99:	test   %dil,%dil
+  9c:	jne    1dc <_Wstdio.put$721117c6fbd8d4b1+0x1dc>
+  a2:	mov    %r14,(%rsp)
+  a6:	mov    0x0(%rip),%r10        # ad <_Wstdio.put$721117c6fbd8d4b1+0xad>
+  ad:	mov    %r14,%r8
+  b0:	mov    %r14,%r9
+  b3:	mov    %rsi,%rdi
+  b6:	call   *%r10
+  b9:	mov    %rax,0x30(%rsp)
+  be:	cmp    $0xfffffffffffffffc,%rax
+  c2:	je     15c <_Wstdio.put$721117c6fbd8d4b1+0x15c>
+  c8:	test   %rax,%rax
+  cb:	jl     133 <_Wstdio.put$721117c6fbd8d4b1+0x133>
+  d1:	test   %rax,%rax
+  d4:	je     101 <_Wstdio.put$721117c6fbd8d4b1+0x101>
+  da:	test   %rax,%rax
+  dd:	jl     18e <_Wstdio.put$721117c6fbd8d4b1+0x18e>
+  e3:	add    %rax,%rbx
+  e6:	setb   %al
+  e9:	test   %al,%al
+  eb:	jne    1b5 <_Wstdio.put$721117c6fbd8d4b1+0x1b5>
+  f1:	mov    %rbx,0x20(%rsp)
+  f6:	mov    %r13,%rsi
+  f9:	mov    %r12,%rdi
+  fc:	jmp    35 <_Wstdio.put$721117c6fbd8d4b1+0x35>
+ 101:	mov    $0x5,%edi
+ 106:	mov    0x0(%rip),%rax        # 10d <_Wstdio.put$721117c6fbd8d4b1+0x10d>
+ 10d:	call   *%rax
+ 10f:	mov    $0xffffffffffffffff,%rax
+ 116:	mov    0x40(%rsp),%rbx
+ 11b:	mov    0x48(%rsp),%r12
+ 120:	mov    0x50(%rsp),%r13
+ 125:	mov    0x58(%rsp),%r14
+ 12a:	add    $0x60,%rsp
+ 12e:	mov    %rbp,%rsp
+ 131:	pop    %rbp
+ 132:	ret
+ 133:	mov    %rax,%rdi
+ 136:	mov    0x0(%rip),%rax        # 13d <_Wstdio.put$721117c6fbd8d4b1+0x13d>
+ 13d:	call   *%rax
+ 13f:	mov    0x40(%rsp),%rbx
+ 144:	mov    0x48(%rsp),%r12
+ 149:	mov    0x50(%rsp),%r13
+ 14e:	mov    0x58(%rsp),%r14
+ 153:	add    $0x60,%rsp
+ 157:	mov    %rbp,%rsp
+ 15a:	pop    %rbp
+ 15b:	ret
+ 15c:	mov    %r13,%rsi
+ 15f:	mov    %r12,%rdi
+ 162:	jmp    35 <_Wstdio.put$721117c6fbd8d4b1+0x35>
+ 167:	mov    $0x1,%edi
+ 16c:	mov    0x0(%rip),%rsi        # 173 <_Wstdio.put$721117c6fbd8d4b1+0x173>
+ 173:	mov    $0x10,%edx
+ 178:	mov    $0x21,%ecx
+ 17d:	mov    $0x5,%r8d
+ 183:	mov    0x0(%rip),%rax        # 18a <_Wstdio.put$721117c6fbd8d4b1+0x18a>
+ 18a:	call   *%rax
+ 18c:	ud2
+ 18e:	mov    $0x1,%edi
+ 193:	mov    0x0(%rip),%rsi        # 19a <_Wstdio.put$721117c6fbd8d4b1+0x19a>
+ 19a:	mov    $0x10,%edx
+ 19f:	mov    $0x1e,%ecx
+ 1a4:	mov    $0xd,%r8d
+ 1aa:	mov    0x0(%rip),%rax        # 1b1 <_Wstdio.put$721117c6fbd8d4b1+0x1b1>
+ 1b1:	call   *%rax
+ 1b3:	ud2
+ 1b5:	mov    $0x1,%edi
+ 1ba:	mov    0x0(%rip),%rsi        # 1c1 <_Wstdio.put$721117c6fbd8d4b1+0x1c1>
+ 1c1:	mov    $0x10,%edx
+ 1c6:	mov    $0x1e,%ecx
+ 1cb:	mov    $0xd,%r8d
+ 1d1:	mov    0x0(%rip),%rax        # 1d8 <_Wstdio.put$721117c6fbd8d4b1+0x1d8>
+ 1d8:	call   *%rax
+ 1da:	ud2
+ 1dc:	mov    $0x1,%edi
+ 1e1:	mov    0x0(%rip),%rsi        # 1e8 <_Wstdio.put$721117c6fbd8d4b1+0x1e8>
+ 1e8:	mov    $0x10,%edx
+ 1ed:	mov    $0x12,%ecx
+ 1f2:	mov    $0xd,%r8d
+ 1f8:	mov    0x0(%rip),%rax        # 1ff <_Wstdio.put$721117c6fbd8d4b1+0x1ff>
+ 1ff:	call   *%rax
+ 201:	ud2
+ 203:	mov    $0x1,%edi
+ 208:	mov    0x0(%rip),%rsi        # 20f <_Wstdio.put$721117c6fbd8d4b1+0x20f>
+ 20f:	mov    $0x10,%edx
+ 214:	mov    $0x11,%ecx
+ 219:	mov    $0xd,%r8d
+ 21f:	mov    0x0(%rip),%rax        # 226 <_Wstdio.put$721117c6fbd8d4b1+0x226>
+ 226:	call   *%rax
+ 228:	ud2
+ 22a:	add    %al,(%rax)
+ 22c:	add    %al,(%rax)
+ 22e:	add    %al,(%rax)
+ 230:	(bad)
+ 231:	(bad)
+ 232:	(bad)
+ 233:	(bad)
+ 234:	(bad)
+ 235:	(bad)
+ 236:	(bad)
+ 237:	.byte 0x7f
+
+0000000000000238 <_Wstdio.character$0573471dd34dd042>:
+ 238:	push   %rbp
+ 239:	mov    %rsp,%rbp
+ 23c:	sub    $0x10,%rsp
+ 240:	mov    %dil,(%rsp)
+ 244:	mov    %rdi,%r9
+ 247:	mov    0x0(%rip),%rdi        # 24e <_Wstdio.character$0573471dd34dd042+0x16>
+ 24e:	imul   $0x0,0x1a(%rip),%rsi        # 270 <_Wstdio.character$0573471dd34dd042+0x38>
+ 256:	mov    %r9b,(%rdi,%rsi,1)
+ 25a:	mov    $0x1,%esi
+ 25f:	call   264 <_Wstdio.character$0573471dd34dd042+0x2c>
+ 264:	add    $0x10,%rsp
+ 268:	mov    %rbp,%rsp
+ 26b:	pop    %rbp
+ 26c:	ret
+ 26d:	add    %al,(%rax)
+ 26f:	add    %al,(%rcx)
+ 271:	add    %al,(%rax)
+ 273:	add    %al,(%rax)
+ 275:	add    %al,(%rax)
+	...
+
+0000000000000278 <_Wstdio.number$5b168686a1f75c55>:
+ 278:	push   %rbp
+ 279:	mov    %rsp,%rbp
+ 27c:	sub    $0x50,%rsp
+ 280:	mov    %rbx,0x40(%rsp)
+ 285:	mov    %rdi,(%rsp)
+ 289:	mov    %rdi,0x18(%rsp)
+ 28e:	mov    %rsi,0x8(%rsp)
+ 293:	mov    %dl,0x10(%rsp)
+ 297:	mov    %rdx,%r11
+ 29a:	mov    $0xf,%ecx
+ 29f:	movq   $0xf,0x20(%rsp)
+ 2a8:	test   %rsi,%rsi
+ 2ab:	je     76c <_Wstdio.number$5b168686a1f75c55+0x4f4>
+ 2b1:	xor    %rdx,%rdx
+ 2b4:	mov    %rdi,%rax
+ 2b7:	div    %rsi
+ 2ba:	mov    %rdi,%rbx
+ 2bd:	mov    %rdx,0x28(%rsp)
+ 2c2:	mov    0x0(%rip),%r8        # 2c9 <_Wstdio.number$5b168686a1f75c55+0x51>
+ 2c9:	cmp    $0xa,%rdx
+ 2cd:	jb     30f <_Wstdio.number$5b168686a1f75c55+0x97>
+ 2d3:	cmp    $0xff,%rdx
+ 2da:	ja     4d2 <_Wstdio.number$5b168686a1f75c55+0x25a>
+ 2e0:	movzbq 0x4b0(%rip),%rax        # 798 <_Wstdio.number$5b168686a1f75c55+0x520>
+ 2e8:	movzbq %dl,%rdx
+ 2ec:	add    %rdx,%rax
+ 2ef:	mov    %rax,%rdx
+ 2f2:	shr    $0x3f,%rdx
+ 2f6:	cmp    $0xff,%rax
+ 2fc:	setg   %dil
+ 300:	or     %edi,%edx
+ 302:	test   %dl,%dl
+ 304:	jne    4f9 <_Wstdio.number$5b168686a1f75c55+0x281>
+ 30a:	jmp    349 <_Wstdio.number$5b168686a1f75c55+0xd1>
+ 30f:	cmp    $0xff,%rdx
+ 316:	ja     521 <_Wstdio.number$5b168686a1f75c55+0x2a9>
+ 31c:	movzbq 0x47c(%rip),%r9        # 7a0 <_Wstdio.number$5b168686a1f75c55+0x528>
+ 324:	movzbq %dl,%r10
+ 328:	lea    (%r9,%r10,1),%rax
+ 32c:	mov    %rax,%rdi
+ 32f:	shr    $0x3f,%rdi
+ 333:	cmp    $0xff,%rax
+ 339:	setg   %r9b
+ 33d:	or     %r9d,%edi
+ 340:	test   %dil,%dil
+ 343:	jne    745 <_Wstdio.number$5b168686a1f75c55+0x4cd>
+ 349:	imul   $0xf,0x457(%rip),%rdx        # 7a8 <_Wstdio.number$5b168686a1f75c55+0x530>
+ 351:	mov    %al,(%r8,%rdx,1)
+ 355:	test   %rsi,%rsi
+ 358:	je     71e <_Wstdio.number$5b168686a1f75c55+0x4a6>
+ 35e:	xor    %rdx,%rdx
+ 361:	mov    %rbx,%rax
+ 364:	div    %rsi
+ 367:	mov    %rax,0x18(%rsp)
+ 36c:	mov    %rax,%rbx
+ 36f:	test   %rax,%rax
+ 372:	mov    %rax,%rbx
+ 375:	ja     3fd <_Wstdio.number$5b168686a1f75c55+0x185>
+ 37b:	mov    %r11,%rdi
+ 37e:	test   %dil,%dil
+ 381:	je     3a4 <_Wstdio.number$5b168686a1f75c55+0x12c>
+ 387:	sub    $0x1,%rcx
+ 38b:	seto   %al
+ 38e:	test   %al,%al
+ 390:	jne    5e5 <_Wstdio.number$5b168686a1f75c55+0x36d>
+ 396:	mov    %rcx,0x20(%rsp)
+ 39b:	imul   $0x1,%rcx,%rax
+ 39f:	movb   $0x2d,(%r8,%rax,1)
+ 3a4:	test   %rcx,%rcx
+ 3a7:	jl     549 <_Wstdio.number$5b168686a1f75c55+0x2d1>
+ 3ad:	mov    %r8,%rax
+ 3b0:	add    %rcx,%rax
+ 3b3:	setb   %dl
+ 3b6:	test   %dl,%dl
+ 3b8:	jne    5be <_Wstdio.number$5b168686a1f75c55+0x346>
+ 3be:	sub    %r8,%rax
+ 3c1:	imul   $0x1,%rax,%rax
+ 3c5:	lea    (%r8,%rax,1),%rdi
+ 3c9:	mov    %rdi,0x30(%rsp)
+ 3ce:	mov    $0x10,%esi
+ 3d3:	sub    %rcx,%rsi
+ 3d6:	seto   %al
+ 3d9:	test   %al,%al
+ 3db:	jne    597 <_Wstdio.number$5b168686a1f75c55+0x31f>
+ 3e1:	test   %rsi,%rsi
+ 3e4:	jl     570 <_Wstdio.number$5b168686a1f75c55+0x2f8>
+ 3ea:	call   3ef <_Wstdio.number$5b168686a1f75c55+0x177>
+ 3ef:	mov    0x40(%rsp),%rbx
+ 3f4:	add    $0x50,%rsp
+ 3f8:	mov    %rbp,%rsp
+ 3fb:	pop    %rbp
+ 3fc:	ret
+ 3fd:	mov    %r11,%rdi
+ 400:	sub    $0x1,%rcx
+ 404:	seto   %al
+ 407:	test   %al,%al
+ 409:	jne    6f7 <_Wstdio.number$5b168686a1f75c55+0x47f>
+ 40f:	mov    %rcx,0x20(%rsp)
+ 414:	test   %rsi,%rsi
+ 417:	je     6d0 <_Wstdio.number$5b168686a1f75c55+0x458>
+ 41d:	xor    %rdx,%rdx
+ 420:	mov    %rbx,%rax
+ 423:	div    %rsi
+ 426:	mov    %rdx,0x28(%rsp)
+ 42b:	cmp    $0xa,%rdx
+ 42f:	jb     472 <_Wstdio.number$5b168686a1f75c55+0x1fa>
+ 435:	cmp    $0xff,%rdx
+ 43c:	ja     60c <_Wstdio.number$5b168686a1f75c55+0x394>
+ 442:	movzbq 0x34e(%rip),%rax        # 798 <_Wstdio.number$5b168686a1f75c55+0x520>
+ 44a:	movzbq %dl,%rdx
+ 44e:	add    %rdx,%rax
+ 451:	mov    %rax,%rdx
+ 454:	shr    $0x3f,%rdx
+ 458:	cmp    $0xff,%rax
+ 45e:	setg   %r9b
+ 462:	or     %r9d,%edx
+ 465:	test   %dl,%dl
+ 467:	jne    633 <_Wstdio.number$5b168686a1f75c55+0x3bb>
+ 46d:	jmp    4ab <_Wstdio.number$5b168686a1f75c55+0x233>
+ 472:	cmp    $0xff,%rdx
+ 479:	ja     65a <_Wstdio.number$5b168686a1f75c55+0x3e2>
+ 47f:	movzbq 0x319(%rip),%r9        # 7a0 <_Wstdio.number$5b168686a1f75c55+0x528>
+ 487:	movzbq %dl,%r10
+ 48b:	lea    (%r9,%r10,1),%rax
+ 48f:	mov    %rax,%rdx
+ 492:	shr    $0x3f,%rdx
+ 496:	cmp    $0xff,%rax
+ 49c:	setg   %r9b
+ 4a0:	or     %r9d,%edx
+ 4a3:	test   %dl,%dl
+ 4a5:	jne    6a9 <_Wstdio.number$5b168686a1f75c55+0x431>
+ 4ab:	imul   $0x1,%rcx,%r9
+ 4af:	mov    %al,(%r8,%r9,1)
+ 4b3:	test   %rsi,%rsi
+ 4b6:	je     682 <_Wstdio.number$5b168686a1f75c55+0x40a>
+ 4bc:	xor    %rdx,%rdx
+ 4bf:	mov    %rbx,%rax
+ 4c2:	div    %rsi
+ 4c5:	mov    %rax,0x18(%rsp)
+ 4ca:	mov    %rdi,%r11
+ 4cd:	jmp    36f <_Wstdio.number$5b168686a1f75c55+0xf7>
+ 4d2:	mov    $0x1,%edi
+ 4d7:	mov    0x0(%rip),%rsi        # 4de <_Wstdio.number$5b168686a1f75c55+0x266>
+ 4de:	mov    $0x10,%edx
+ 4e3:	mov    $0x33,%ecx
+ 4e8:	mov    $0x51,%r8d
+ 4ee:	mov    0x0(%rip),%rax        # 4f5 <_Wstdio.number$5b168686a1f75c55+0x27d>
+ 4f5:	call   *%rax
+ 4f7:	ud2
+ 4f9:	mov    $0x1,%edi
+ 4fe:	mov    0x0(%rip),%rsi        # 505 <_Wstdio.number$5b168686a1f75c55+0x28d>
+ 505:	mov    $0x10,%edx
+ 50a:	mov    $0x33,%ecx
+ 50f:	mov    $0x51,%r8d
+ 515:	mov    0x0(%rip),%r9        # 51c <_Wstdio.number$5b168686a1f75c55+0x2a4>
+ 51c:	call   *%r9
+ 51f:	ud2
+ 521:	mov    $0x1,%edi
+ 526:	mov    0x0(%rip),%rsi        # 52d <_Wstdio.number$5b168686a1f75c55+0x2b5>
+ 52d:	mov    $0x10,%edx
+ 532:	mov    $0x33,%ecx
+ 537:	mov    $0x37,%r8d
+ 53d:	mov    0x0(%rip),%r9        # 544 <_Wstdio.number$5b168686a1f75c55+0x2cc>
+ 544:	call   *%r9
+ 547:	ud2
+ 549:	mov    $0x1,%edi
+ 54e:	mov    0x0(%rip),%rsi        # 555 <_Wstdio.number$5b168686a1f75c55+0x2dd>
+ 555:	mov    $0x10,%edx
+ 55a:	mov    $0x3f,%ecx
+ 55f:	mov    $0x9,%r8d
+ 565:	mov    0x0(%rip),%rax        # 56c <_Wstdio.number$5b168686a1f75c55+0x2f4>
+ 56c:	call   *%rax
+ 56e:	ud2
+ 570:	mov    $0x1,%edi
+ 575:	mov    0x0(%rip),%rsi        # 57c <_Wstdio.number$5b168686a1f75c55+0x304>
+ 57c:	mov    $0x10,%edx
+ 581:	mov    $0x40,%ecx
+ 586:	mov    $0x9,%r8d
+ 58c:	mov    0x0(%rip),%rax        # 593 <_Wstdio.number$5b168686a1f75c55+0x31b>
+ 593:	call   *%rax
+ 595:	ud2
+ 597:	mov    $0x1,%edi
+ 59c:	mov    0x0(%rip),%rsi        # 5a3 <_Wstdio.number$5b168686a1f75c55+0x32b>
+ 5a3:	mov    $0x10,%edx
+ 5a8:	mov    $0x40,%ecx
+ 5ad:	mov    $0x9,%r8d
+ 5b3:	mov    0x0(%rip),%rax        # 5ba <_Wstdio.number$5b168686a1f75c55+0x342>
+ 5ba:	call   *%rax
+ 5bc:	ud2
+ 5be:	mov    $0x1,%edi
+ 5c3:	mov    0x0(%rip),%rsi        # 5ca <_Wstdio.number$5b168686a1f75c55+0x352>
+ 5ca:	mov    $0x10,%edx
+ 5cf:	mov    $0x3f,%ecx
+ 5d4:	mov    $0x9,%r8d
+ 5da:	mov    0x0(%rip),%rax        # 5e1 <_Wstdio.number$5b168686a1f75c55+0x369>
+ 5e1:	call   *%rax
+ 5e3:	ud2
+ 5e5:	mov    $0x1,%edi
+ 5ea:	mov    0x0(%rip),%rsi        # 5f1 <_Wstdio.number$5b168686a1f75c55+0x379>
+ 5f1:	mov    $0x10,%edx
+ 5f6:	mov    $0x3c,%ecx
+ 5fb:	mov    $0xd,%r8d
+ 601:	mov    0x0(%rip),%rax        # 608 <_Wstdio.number$5b168686a1f75c55+0x390>
+ 608:	call   *%rax
+ 60a:	ud2
+ 60c:	mov    $0x1,%edi
+ 611:	mov    0x0(%rip),%rsi        # 618 <_Wstdio.number$5b168686a1f75c55+0x3a0>
+ 618:	mov    $0x10,%edx
+ 61d:	mov    $0x38,%ecx
+ 622:	mov    $0x55,%r8d
+ 628:	mov    0x0(%rip),%rax        # 62f <_Wstdio.number$5b168686a1f75c55+0x3b7>
+ 62f:	call   *%rax
+ 631:	ud2
+ 633:	mov    $0x1,%edi
+ 638:	mov    0x0(%rip),%rsi        # 63f <_Wstdio.number$5b168686a1f75c55+0x3c7>
+ 63f:	mov    $0x10,%edx
+ 644:	mov    $0x38,%ecx
+ 649:	mov    $0x55,%r8d
+ 64f:	mov    0x0(%rip),%rax        # 656 <_Wstdio.number$5b168686a1f75c55+0x3de>
+ 656:	call   *%rax
+ 658:	ud2
+ 65a:	mov    $0x1,%edi
+ 65f:	mov    0x0(%rip),%rsi        # 666 <_Wstdio.number$5b168686a1f75c55+0x3ee>
+ 666:	mov    $0x10,%edx
+ 66b:	mov    $0x38,%ecx
+ 670:	mov    $0x3b,%r8d
+ 676:	mov    0x0(%rip),%r9        # 67d <_Wstdio.number$5b168686a1f75c55+0x405>
+ 67d:	call   *%r9
+ 680:	ud2
+ 682:	mov    $0x2,%edi
+ 687:	mov    0x0(%rip),%rsi        # 68e <_Wstdio.number$5b168686a1f75c55+0x416>
+ 68e:	mov    $0x10,%edx
+ 693:	mov    $0x39,%ecx
+ 698:	mov    $0xd,%r8d
+ 69e:	mov    0x0(%rip),%rax        # 6a5 <_Wstdio.number$5b168686a1f75c55+0x42d>
+ 6a5:	call   *%rax
+ 6a7:	ud2
+ 6a9:	mov    $0x1,%edi
+ 6ae:	mov    0x0(%rip),%rsi        # 6b5 <_Wstdio.number$5b168686a1f75c55+0x43d>
+ 6b5:	mov    $0x10,%edx
+ 6ba:	mov    $0x38,%ecx
+ 6bf:	mov    $0x3b,%r8d
+ 6c5:	mov    0x0(%rip),%rax        # 6cc <_Wstdio.number$5b168686a1f75c55+0x454>
+ 6cc:	call   *%rax
+ 6ce:	ud2
+ 6d0:	mov    $0x2,%edi
+ 6d5:	mov    0x0(%rip),%rsi        # 6dc <_Wstdio.number$5b168686a1f75c55+0x464>
+ 6dc:	mov    $0x10,%edx
+ 6e1:	mov    $0x37,%ecx
+ 6e6:	mov    $0xd,%r8d
+ 6ec:	mov    0x0(%rip),%rax        # 6f3 <_Wstdio.number$5b168686a1f75c55+0x47b>
+ 6f3:	call   *%rax
+ 6f5:	ud2
+ 6f7:	mov    $0x1,%edi
+ 6fc:	mov    0x0(%rip),%rsi        # 703 <_Wstdio.number$5b168686a1f75c55+0x48b>
+ 703:	mov    $0x10,%edx
+ 708:	mov    $0x36,%ecx
+ 70d:	mov    $0xd,%r8d
+ 713:	mov    0x0(%rip),%rax        # 71a <_Wstdio.number$5b168686a1f75c55+0x4a2>
+ 71a:	call   *%rax
+ 71c:	ud2
+ 71e:	mov    $0x2,%edi
+ 723:	mov    0x0(%rip),%rsi        # 72a <_Wstdio.number$5b168686a1f75c55+0x4b2>
+ 72a:	mov    $0x10,%edx
+ 72f:	mov    $0x34,%ecx
+ 734:	mov    $0x9,%r8d
+ 73a:	mov    0x0(%rip),%rax        # 741 <_Wstdio.number$5b168686a1f75c55+0x4c9>
+ 741:	call   *%rax
+ 743:	ud2
+ 745:	mov    $0x1,%edi
+ 74a:	mov    0x0(%rip),%rsi        # 751 <_Wstdio.number$5b168686a1f75c55+0x4d9>
+ 751:	mov    $0x10,%edx
+ 756:	mov    $0x33,%ecx
+ 75b:	mov    $0x37,%r8d
+ 761:	mov    0x0(%rip),%rax        # 768 <_Wstdio.number$5b168686a1f75c55+0x4f0>
+ 768:	call   *%rax
+ 76a:	ud2
+ 76c:	mov    $0x2,%edi
+ 771:	mov    0x0(%rip),%rsi        # 778 <_Wstdio.number$5b168686a1f75c55+0x500>
+ 778:	mov    $0x10,%edx
+ 77d:	mov    $0x32,%ecx
+ 782:	mov    $0x9,%r8d
+ 788:	mov    0x0(%rip),%rax        # 78f <_Wstdio.number$5b168686a1f75c55+0x517>
+ 78f:	call   *%rax
+ 791:	ud2
+ 793:	add    %al,(%rax)
+ 795:	add    %al,(%rax)
+ 797:	add    %dl,0x0(%rdi)
+ 79a:	add    %al,(%rax)
+ 79c:	add    %al,(%rax)
+ 79e:	add    %al,(%rax)
+ 7a0:	xor    %al,(%rax)
+ 7a2:	add    %al,(%rax)
+ 7a4:	add    %al,(%rax)
+ 7a6:	add    %al,(%rax)
+ 7a8:	add    %eax,(%rax)
+ 7aa:	add    %al,(%rax)
+ 7ac:	add    %al,(%rax)
+	...
+
+00000000000007b0 <_Wstdio.format$35c8d9fc02aa00b6>:
+ 7b0:	push   %rbp
+ 7b1:	mov    %rsp,%rbp
+ 7b4:	sub    $0xb0,%rsp
+ 7bb:	mov    %rbx,0x80(%rsp)
+ 7c3:	mov    %r12,0x88(%rsp)
+ 7cb:	mov    %r13,0x90(%rsp)
+ 7d3:	mov    %r14,0x98(%rsp)
+ 7db:	mov    %r15,0xa0(%rsp)
+ 7e3:	mov    %rdi,(%rsp)
+ 7e7:	xor    %r12,%r12
+ 7ea:	movq   $0x0,0x8(%rsp)
+ 7f3:	movq   $0x0,0x10(%rsp)
+ 7fc:	movq   $0x0,0x18(%rsp)
+ 805:	movq   $0x0,0x48(%rsp)
+ 80e:	mov    %r12,%rax
+ 811:	mov    %r12,%r13
+ 814:	mov    %r13,0x20(%rsp)
+ 819:	imul   $0x1,%r13,%rcx
+ 81d:	mov    %rdi,%rbx
+ 820:	movzbq (%rbx,%rcx,1),%rcx
+ 825:	test   %cl,%cl
+ 827:	jne    86d <_Wstdio.format$35c8d9fc02aa00b6+0xbd>
+ 82d:	movslq %eax,%rcx
+ 830:	cmp    %rax,%rcx
+ 833:	jne    cbd <_Wstdio.format$35c8d9fc02aa00b6+0x50d>
+ 839:	mov    0x80(%rsp),%rbx
+ 841:	mov    0x88(%rsp),%r12
+ 849:	mov    0x90(%rsp),%r13
+ 851:	mov    0x98(%rsp),%r14
+ 859:	mov    0xa0(%rsp),%r15
+ 861:	add    $0xb0,%rsp
+ 868:	mov    %rbp,%rsp
+ 86b:	pop    %rbp
+ 86c:	ret
+ 86d:	mov    %rax,0x70(%rsp)
+ 872:	mov    $0x25,%edi
+ 877:	rex cmp $0x25,%cl
+ 87b:	jne    b67 <_Wstdio.format$35c8d9fc02aa00b6+0x3b7>
+ 881:	add    $0x1,%r13
+ 885:	seto   %al
+ 888:	test   %al,%al
+ 88a:	jne    da8 <_Wstdio.format$35c8d9fc02aa00b6+0x5f8>
+ 890:	mov    %r13,0x8(%rsp)
+ 895:	imul   $0x1,%r13,%rax
+ 899:	movzbq (%rbx,%rax,1),%rax
+ 89e:	mov    %al,0x28(%rsp)
+ 8a2:	cmp    $0x25,%al
+ 8a4:	je     b3e <_Wstdio.format$35c8d9fc02aa00b6+0x38e>
+ 8aa:	cmp    $0x64,%al
+ 8ac:	je     a92 <_Wstdio.format$35c8d9fc02aa00b6+0x2e2>
+ 8b2:	cmp    $0x78,%al
+ 8b4:	je     a21 <_Wstdio.format$35c8d9fc02aa00b6+0x271>
+ 8ba:	cmp    $0x63,%al
+ 8bc:	je     9b9 <_Wstdio.format$35c8d9fc02aa00b6+0x209>
+ 8c2:	cmp    $0x73,%al
+ 8c4:	je     911 <_Wstdio.format$35c8d9fc02aa00b6+0x161>
+ 8ca:	mov    $0x16,%edi
+ 8cf:	mov    0x0(%rip),%rax        # 8d6 <_Wstdio.format$35c8d9fc02aa00b6+0x126>
+ 8d6:	call   *%rax
+ 8d8:	mov    $0xffffffff,%eax
+ 8dd:	mov    0x80(%rsp),%rbx
+ 8e5:	mov    0x88(%rsp),%r12
+ 8ed:	mov    0x90(%rsp),%r13
+ 8f5:	mov    0x98(%rsp),%r14
+ 8fd:	mov    0xa0(%rsp),%r15
+ 905:	add    $0xb0,%rsp
+ 90c:	mov    %rbp,%rsp
+ 90f:	pop    %rbp
+ 910:	ret
+ 911:	mov    %rsi,%r14
+ 914:	mov    (%r14),%eax
+ 917:	mov    0x4(%r14),%ecx
+ 91b:	cmp    $0x28,%eax
+ 91e:	setbe  %dl
+ 921:	cmp    $0xb0,%ecx
+ 927:	setbe  %cl
+ 92a:	test   %dl,%cl
+ 92c:	jne    94b <_Wstdio.format$35c8d9fc02aa00b6+0x19b>
+ 932:	mov    0x8(%r14),%rax
+ 936:	lea    0x7(%rax),%r8
+ 93a:	and    $0xfffffffffffffff8,%r8
+ 93e:	lea    0x8(%r8),%rax
+ 942:	mov    %rax,0x8(%r14)
+ 946:	jmp    968 <_Wstdio.format$35c8d9fc02aa00b6+0x1b8>
+ 94b:	mov    0x10(%r14),%rcx
+ 94f:	mov    %eax,%edx
+ 951:	lea    0x68(%rsp),%r8
+ 956:	mov    (%rcx,%rdx,1),%rcx
+ 95a:	mov    %rcx,0x68(%rsp)
+ 95f:	add    $0x8,%eax
+ 965:	mov    %eax,(%r14)
+ 968:	mov    (%r8),%rdi
+ 96b:	mov    %rdi,0x40(%rsp)
+ 970:	mov    %r12,%rsi
+ 973:	cmp    0x51e(%rip),%rsi        # e98 <_Wstdio.format$35c8d9fc02aa00b6+0x6e8>
+ 97a:	ja     ce4 <_Wstdio.format$35c8d9fc02aa00b6+0x534>
+ 980:	imul   $0x1,%rsi,%rax
+ 984:	movzbq (%rdi,%rax,1),%rax
+ 989:	test   %al,%al
+ 98b:	jne    9a0 <_Wstdio.format$35c8d9fc02aa00b6+0x1f0>
+ 991:	call   996 <_Wstdio.format$35c8d9fc02aa00b6+0x1e6>
+ 996:	mov    %rax,0x18(%rsp)
+ 99b:	jmp    b4b <_Wstdio.format$35c8d9fc02aa00b6+0x39b>
+ 9a0:	add    $0x1,%rsi
+ 9a4:	setb   %al
+ 9a7:	test   %al,%al
+ 9a9:	jne    d0b <_Wstdio.format$35c8d9fc02aa00b6+0x55b>
+ 9af:	mov    %rsi,0x48(%rsp)
+ 9b4:	jmp    973 <_Wstdio.format$35c8d9fc02aa00b6+0x1c3>
+ 9b9:	mov    %rsi,%r14
+ 9bc:	mov    (%r14),%esi
+ 9bf:	mov    0x4(%r14),%edi
+ 9c3:	cmp    $0x28,%esi
+ 9c6:	setbe  %r8b
+ 9ca:	cmp    $0xb0,%edi
+ 9d0:	setbe  %dil
+ 9d4:	test   %r8b,%dil
+ 9d7:	jne    9f6 <_Wstdio.format$35c8d9fc02aa00b6+0x246>
+ 9dd:	mov    0x8(%r14),%r9
+ 9e1:	lea    0x7(%r9),%rax
+ 9e5:	and    $0xfffffffffffffff8,%rax
+ 9e9:	lea    0x8(%rax),%r9
+ 9ed:	mov    %r9,0x8(%r14)
+ 9f1:	jmp    a10 <_Wstdio.format$35c8d9fc02aa00b6+0x260>
+ 9f6:	mov    0x10(%r14),%r11
+ 9fa:	mov    %esi,%ecx
+ 9fc:	lea    0x60(%rsp),%rax
+ a01:	mov    (%r11,%rcx,1),%r11
+ a05:	mov    %r11,0x60(%rsp)
+ a0a:	lea    0x8(%rsi),%ecx
+ a0d:	mov    %ecx,(%r14)
+ a10:	mov    (%rax),%edi
+ a12:	call   a17 <_Wstdio.format$35c8d9fc02aa00b6+0x267>
+ a17:	mov    %rax,0x18(%rsp)
+ a1c:	jmp    b4b <_Wstdio.format$35c8d9fc02aa00b6+0x39b>
+ a21:	mov    %rsi,%r14
+ a24:	mov    (%r14),%eax
+ a27:	mov    0x4(%r14),%ecx
+ a2b:	cmp    $0x28,%eax
+ a2e:	setbe  %dl
+ a31:	cmp    $0xb0,%ecx
+ a37:	setbe  %cl
+ a3a:	test   %dl,%cl
+ a3c:	jne    a5b <_Wstdio.format$35c8d9fc02aa00b6+0x2ab>
+ a42:	mov    0x8(%r14),%rax
+ a46:	lea    0x7(%rax),%rcx
+ a4a:	and    $0xfffffffffffffff8,%rcx
+ a4e:	lea    0x8(%rcx),%rax
+ a52:	mov    %rax,0x8(%r14)
+ a56:	jmp    a78 <_Wstdio.format$35c8d9fc02aa00b6+0x2c8>
+ a5b:	mov    0x10(%r14),%rdx
+ a5f:	mov    %eax,%esi
+ a61:	lea    0x58(%rsp),%rcx
+ a66:	mov    (%rdx,%rsi,1),%rdx
+ a6a:	mov    %rdx,0x58(%rsp)
+ a6f:	add    $0x8,%eax
+ a75:	mov    %eax,(%r14)
+ a78:	mov    (%rcx),%eax
+ a7a:	mov    %eax,%edi
+ a7c:	mov    $0x10,%esi
+ a81:	xor    %edx,%edx
+ a83:	call   a88 <_Wstdio.format$35c8d9fc02aa00b6+0x2d8>
+ a88:	mov    %rax,0x18(%rsp)
+ a8d:	jmp    b4b <_Wstdio.format$35c8d9fc02aa00b6+0x39b>
+ a92:	mov    %rsi,%r14
+ a95:	mov    (%r14),%eax
+ a98:	mov    0x4(%r14),%ecx
+ a9c:	cmp    $0x28,%eax
+ a9f:	setbe  %dl
+ aa2:	cmp    $0xb0,%ecx
+ aa8:	setbe  %cl
+ aab:	test   %dl,%cl
+ aad:	jne    acc <_Wstdio.format$35c8d9fc02aa00b6+0x31c>
+ ab3:	mov    0x8(%r14),%rax
+ ab7:	lea    0x7(%rax),%rcx
+ abb:	and    $0xfffffffffffffff8,%rcx
+ abf:	lea    0x8(%rcx),%rax
+ ac3:	mov    %rax,0x8(%r14)
+ ac7:	jmp    ae9 <_Wstdio.format$35c8d9fc02aa00b6+0x339>
+ acc:	mov    0x10(%r14),%rdx
+ ad0:	mov    %eax,%esi
+ ad2:	lea    0x50(%rsp),%rcx
+ ad7:	mov    (%rdx,%rsi,1),%rdx
+ adb:	mov    %rdx,0x50(%rsp)
+ ae0:	add    $0x8,%eax
+ ae6:	mov    %eax,(%r14)
+ ae9:	mov    (%rcx),%eax
+ aeb:	movslq %eax,%rax
+ aee:	mov    %rax,0x30(%rsp)
+ af3:	mov    %rax,%rdx
+ af6:	shr    $0x3f,%rdx
+ afa:	test   %rax,%rax
+ afd:	jl     b0b <_Wstdio.format$35c8d9fc02aa00b6+0x35b>
+ b03:	mov    %rax,%rdi
+ b06:	jmp    b1c <_Wstdio.format$35c8d9fc02aa00b6+0x36c>
+ b0b:	mov    %r12,%rdi
+ b0e:	sub    %rax,%rdi
+ b11:	seto   %al
+ b14:	test   %al,%al
+ b16:	jne    d5a <_Wstdio.format$35c8d9fc02aa00b6+0x5aa>
+ b1c:	mov    %rdi,0x38(%rsp)
+ b21:	test   %rdi,%rdi
+ b24:	jl     d33 <_Wstdio.format$35c8d9fc02aa00b6+0x583>
+ b2a:	mov    $0xa,%esi
+ b2f:	call   b34 <_Wstdio.format$35c8d9fc02aa00b6+0x384>
+ b34:	mov    %rax,0x18(%rsp)
+ b39:	jmp    b4b <_Wstdio.format$35c8d9fc02aa00b6+0x39b>
+ b3e:	mov    %rsi,%r14
+ b41:	call   b46 <_Wstdio.format$35c8d9fc02aa00b6+0x396>
+ b46:	mov    %rax,0x18(%rsp)
+ b4b:	add    $0x1,%r13
+ b4f:	seto   %cl
+ b52:	test   %cl,%cl
+ b54:	jne    d81 <_Wstdio.format$35c8d9fc02aa00b6+0x5d1>
+ b5a:	mov    %r13,0x8(%rsp)
+ b5f:	mov    %r13,%r15
+ b62:	jmp    bdb <_Wstdio.format$35c8d9fc02aa00b6+0x42b>
+ b67:	mov    %rsi,%r14
+ b6a:	mov    %r13,%r15
+ b6d:	imul   $0x1,%r15,%rsi
+ b71:	movzbq (%rbx,%rsi,1),%rdi
+ b76:	xor    %esi,%esi
+ b78:	test   %dil,%dil
+ b7b:	je     b89 <_Wstdio.format$35c8d9fc02aa00b6+0x3d9>
+ b81:	cmp    $0x25,%dil
+ b85:	setne  %sil
+ b89:	test   %sil,%sil
+ b8c:	jne    c9a <_Wstdio.format$35c8d9fc02aa00b6+0x4ea>
+ b92:	test   %r13,%r13
+ b95:	jl     dcf <_Wstdio.format$35c8d9fc02aa00b6+0x61f>
+ b9b:	mov    %rbx,%rax
+ b9e:	add    %r13,%rax
+ ba1:	setb   %cl
+ ba4:	test   %cl,%cl
+ ba6:	jne    e49 <_Wstdio.format$35c8d9fc02aa00b6+0x699>
+ bac:	sub    %rbx,%rax
+ baf:	imul   $0x1,%rax,%rax
+ bb3:	lea    (%rbx,%rax,1),%rdi
+ bb7:	mov    %r15,%rsi
+ bba:	sub    %r13,%rsi
+ bbd:	seto   %al
+ bc0:	test   %al,%al
+ bc2:	jne    e49 <_Wstdio.format$35c8d9fc02aa00b6+0x699>
+ bc8:	test   %rsi,%rsi
+ bcb:	jl     dfb <_Wstdio.format$35c8d9fc02aa00b6+0x64b>
+ bd1:	call   bd6 <_Wstdio.format$35c8d9fc02aa00b6+0x426>
+ bd6:	mov    %rax,0x18(%rsp)
+ bdb:	test   %rax,%rax
+ bde:	jl     c61 <_Wstdio.format$35c8d9fc02aa00b6+0x4b1>
+ be4:	mov    0x70(%rsp),%rcx
+ be9:	add    %rax,%rcx
+ bec:	seto   %al
+ bef:	test   %al,%al
+ bf1:	jne    e22 <_Wstdio.format$35c8d9fc02aa00b6+0x672>
+ bf7:	mov    %rcx,0x10(%rsp)
+ bfc:	cmp    $0x7fffffff,%rcx
+ c03:	jg     c1a <_Wstdio.format$35c8d9fc02aa00b6+0x46a>
+ c09:	mov    %rcx,%rax
+ c0c:	mov    %r14,%rsi
+ c0f:	mov    %rbx,%rdi
+ c12:	mov    %r15,%r13
+ c15:	jmp    814 <_Wstdio.format$35c8d9fc02aa00b6+0x64>
+ c1a:	mov    $0x4b,%edi
+ c1f:	mov    0x0(%rip),%rax        # c26 <_Wstdio.format$35c8d9fc02aa00b6+0x476>
+ c26:	call   *%rax
+ c28:	mov    $0xffffffff,%eax
+ c2d:	mov    0x80(%rsp),%rbx
+ c35:	mov    0x88(%rsp),%r12
+ c3d:	mov    0x90(%rsp),%r13
+ c45:	mov    0x98(%rsp),%r14
+ c4d:	mov    0xa0(%rsp),%r15
+ c55:	add    $0xb0,%rsp
+ c5c:	mov    %rbp,%rsp
+ c5f:	pop    %rbp
+ c60:	ret
+ c61:	mov    $0xffffffff,%eax
+ c66:	mov    0x80(%rsp),%rbx
+ c6e:	mov    0x88(%rsp),%r12
+ c76:	mov    0x90(%rsp),%r13
+ c7e:	mov    0x98(%rsp),%r14
+ c86:	mov    0xa0(%rsp),%r15
+ c8e:	add    $0xb0,%rsp
+ c95:	mov    %rbp,%rsp
+ c98:	pop    %rbp
+ c99:	ret
+ c9a:	mov    0x70(%rsp),%rcx
+ c9f:	add    $0x1,%r15
+ ca3:	seto   %al
+ ca6:	test   %al,%al
+ ca8:	jne    e70 <_Wstdio.format$35c8d9fc02aa00b6+0x6c0>
+ cae:	mov    %r15,0x8(%rsp)
+ cb3:	mov    %rcx,0x70(%rsp)
+ cb8:	jmp    b6d <_Wstdio.format$35c8d9fc02aa00b6+0x3bd>
+ cbd:	mov    $0x1,%edi
+ cc2:	mov    0x0(%rip),%rsi        # cc9 <_Wstdio.format$35c8d9fc02aa00b6+0x519>
+ cc9:	mov    $0x10,%edx
+ cce:	mov    $0x7c,%ecx
+ cd3:	mov    $0x5,%r8d
+ cd9:	mov    0x0(%rip),%rax        # ce0 <_Wstdio.format$35c8d9fc02aa00b6+0x530>
+ ce0:	call   *%rax
+ ce2:	ud2
+ ce4:	mov    $0x1,%edi
+ ce9:	mov    0x0(%rip),%rsi        # cf0 <_Wstdio.format$35c8d9fc02aa00b6+0x540>
+ cf0:	mov    $0x10,%edx
+ cf5:	mov    $0x66,%ecx
+ cfa:	mov    $0x15,%r8d
+ d00:	mov    0x0(%rip),%rax        # d07 <_Wstdio.format$35c8d9fc02aa00b6+0x557>
+ d07:	call   *%rax
+ d09:	ud2
+ d0b:	mov    $0x1,%edi
+ d10:	mov    0x0(%rip),%rsi        # d17 <_Wstdio.format$35c8d9fc02aa00b6+0x567>
+ d17:	mov    $0x10,%edx
+ d1c:	mov    $0x67,%ecx
+ d21:	mov    $0x19,%r8d
+ d27:	mov    0x0(%rip),%r9        # d2e <_Wstdio.format$35c8d9fc02aa00b6+0x57e>
+ d2e:	call   *%r9
+ d31:	ud2
+ d33:	mov    $0x1,%edi
+ d38:	mov    0x0(%rip),%rsi        # d3f <_Wstdio.format$35c8d9fc02aa00b6+0x58f>
+ d3f:	mov    $0x10,%edx
+ d44:	mov    $0x5c,%ecx
+ d49:	mov    $0x15,%r8d
+ d4f:	mov    0x0(%rip),%rax        # d56 <_Wstdio.format$35c8d9fc02aa00b6+0x5a6>
+ d56:	call   *%rax
+ d58:	ud2
+ d5a:	mov    $0x1,%edi
+ d5f:	mov    0x0(%rip),%rsi        # d66 <_Wstdio.format$35c8d9fc02aa00b6+0x5b6>
+ d66:	mov    $0x10,%edx
+ d6b:	mov    $0x5b,%ecx
+ d70:	mov    $0x30,%r8d
+ d76:	mov    0x0(%rip),%rax        # d7d <_Wstdio.format$35c8d9fc02aa00b6+0x5cd>
+ d7d:	call   *%rax
+ d7f:	ud2
+ d81:	mov    $0x1,%edi
+ d86:	mov    0x0(%rip),%rsi        # d8d <_Wstdio.format$35c8d9fc02aa00b6+0x5dd>
+ d8d:	mov    $0x10,%edx
+ d92:	mov    $0x70,%ecx
+ d97:	mov    $0x11,%r8d
+ d9d:	mov    0x0(%rip),%rax        # da4 <_Wstdio.format$35c8d9fc02aa00b6+0x5f4>
+ da4:	call   *%rax
+ da6:	ud2
+ da8:	mov    $0x1,%edi
+ dad:	mov    0x0(%rip),%rsi        # db4 <_Wstdio.format$35c8d9fc02aa00b6+0x604>
+ db4:	mov    $0x10,%edx
+ db9:	mov    $0x54,%ecx
+ dbe:	mov    $0x11,%r8d
+ dc4:	mov    0x0(%rip),%rax        # dcb <_Wstdio.format$35c8d9fc02aa00b6+0x61b>
+ dcb:	call   *%rax
+ dcd:	ud2
+ dcf:	mov    $0x1,%edi
+ dd4:	mov    0x0(%rip),%rsi        # ddb <_Wstdio.format$35c8d9fc02aa00b6+0x62b>
+ ddb:	mov    $0x10,%edx
+ de0:	mov    $0x52,%ecx
+ de5:	mov    $0x11,%r8d
+ deb:	mov    0x0(%rip),%rax        # df2 <_Wstdio.format$35c8d9fc02aa00b6+0x642>
+ df2:	call   *%rax
+ df4:	ud2
+ df6:	jmp    e49 <_Wstdio.format$35c8d9fc02aa00b6+0x699>
+ dfb:	mov    $0x1,%edi
+ e00:	mov    0x0(%rip),%rsi        # e07 <_Wstdio.format$35c8d9fc02aa00b6+0x657>
+ e07:	mov    $0x10,%edx
+ e0c:	mov    $0x52,%ecx
+ e11:	mov    $0x11,%r8d
+ e17:	mov    0x0(%rip),%rax        # e1e <_Wstdio.format$35c8d9fc02aa00b6+0x66e>
+ e1e:	call   *%rax
+ e20:	ud2
+ e22:	mov    $0x1,%edi
+ e27:	mov    0x0(%rip),%rsi        # e2e <_Wstdio.format$35c8d9fc02aa00b6+0x67e>
+ e2e:	mov    $0x10,%edx
+ e33:	mov    $0x75,%ecx
+ e38:	mov    $0xd,%r8d
+ e3e:	mov    0x0(%rip),%rax        # e45 <_Wstdio.format$35c8d9fc02aa00b6+0x695>
+ e45:	call   *%rax
+ e47:	ud2
+ e49:	mov    $0x1,%edi
+ e4e:	mov    0x0(%rip),%rsi        # e55 <_Wstdio.format$35c8d9fc02aa00b6+0x6a5>
+ e55:	mov    $0x10,%edx
+ e5a:	mov    $0x52,%ecx
+ e5f:	mov    $0x11,%r8d
+ e65:	mov    0x0(%rip),%rax        # e6c <_Wstdio.format$35c8d9fc02aa00b6+0x6bc>
+ e6c:	call   *%rax
+ e6e:	ud2
+ e70:	mov    $0x1,%edi
+ e75:	mov    0x0(%rip),%rsi        # e7c <_Wstdio.format$35c8d9fc02aa00b6+0x6cc>
+ e7c:	mov    $0x10,%edx
+ e81:	mov    $0x50,%ecx
+ e86:	mov    $0x15,%r8d
+ e8c:	mov    0x0(%rip),%rax        # e93 <_Wstdio.format$35c8d9fc02aa00b6+0x6e3>
+ e93:	call   *%rax
+ e95:	ud2
+ e97:	add    %bh,%bh
+ e99:	(bad)
+ e9a:	(bad)
+ e9b:	(bad)
+ e9c:	(bad)
+ e9d:	(bad)
+ e9e:	(bad)
+ e9f:	.byte 0x7f
+
+0000000000000ea0 <_W.va.core.43>:
+ ea0:	push   %rbp
+ ea1:	mov    %rsp,%rbp
+ ea4:	sub    $0x70,%rsp
+ ea8:	mov    %rbx,0x50(%rsp)
+ ead:	mov    %r12,0x58(%rsp)
+ eb2:	mov    %r13,0x60(%rsp)
+ eb7:	mov    %r14,0x68(%rsp)
+ ebc:	mov    %rdi,(%rsp)
+ ec0:	mov    (%rsi),%eax
+ ec2:	imul   $0x4,0xb6(%rip),%rcx        # f80 <_W.va.core.43+0xe0>
+ eca:	mov    (%rsi,%rcx,1),%ecx
+ ecd:	imul   $0x8,0xab(%rip),%rdx        # f80 <_W.va.core.43+0xe0>
+ ed5:	mov    (%rsi,%rdx,1),%rdx
+ ed9:	imul   $0x10,0x9f(%rip),%r8        # f80 <_W.va.core.43+0xe0>
+ ee1:	mov    (%rsi,%r8,1),%rsi
+ ee5:	lea    0x10(%rsp),%rbx
+ eea:	mov    %eax,0x10(%rsp)
+ eee:	imul   $0x4,0x8a(%rip),%r12        # f80 <_W.va.core.43+0xe0>
+ ef6:	mov    %ecx,(%rbx,%r12,1)
+ efa:	imul   $0x8,0x7e(%rip),%r13        # f80 <_W.va.core.43+0xe0>
+ f02:	mov    %rdx,(%rbx,%r13,1)
+ f06:	imul   $0x10,0x72(%rip),%r14        # f80 <_W.va.core.43+0xe0>
+ f0e:	mov    %rsi,(%rbx,%r14,1)
+ f12:	mov    %rbx,%rsi
+ f15:	call   f1a <_W.va.core.43+0x7a>
+ f1a:	mov    %eax,0x8(%rsp)
+ f1e:	mov    0x10(%rsp),%r8d
+ f23:	mov    (%rbx,%r12,1),%edi
+ f27:	mov    (%rbx,%r13,1),%rdx
+ f2b:	mov    (%rbx,%r14,1),%rcx
+ f2f:	lea    0x30(%rsp),%rsi
+ f34:	mov    %r8d,0x30(%rsp)
+ f39:	imul   $0x4,0x3f(%rip),%r8        # f80 <_W.va.core.43+0xe0>
+ f41:	mov    %edi,(%rsi,%r8,1)
+ f45:	imul   $0x8,0x33(%rip),%rdi        # f80 <_W.va.core.43+0xe0>
+ f4d:	mov    %rdx,(%rsi,%rdi,1)
+ f51:	imul   $0x10,0x27(%rip),%rdx        # f80 <_W.va.core.43+0xe0>
+ f59:	mov    %rcx,(%rsi,%rdx,1)
+ f5d:	mov    0x50(%rsp),%rbx
+ f62:	mov    0x58(%rsp),%r12
+ f67:	mov    0x60(%rsp),%r13
+ f6c:	mov    0x68(%rsp),%r14
+ f71:	add    $0x70,%rsp
+ f75:	mov    %rbp,%rsp
+ f78:	pop    %rbp
+ f79:	ret
+ f7a:	add    %al,(%rax)
+ f7c:	add    %al,(%rax)
+ f7e:	add    %al,(%rax)
+ f80:	add    %eax,(%rax)
+ f82:	add    %al,(%rax)
+ f84:	add    %al,(%rax)
+	...
+
+0000000000000f88 <_Wstdio.linked$a530c42e1e89bd1d>:
+ f88:	push   %rbp
+ f89:	mov    %rsp,%rbp
+ f8c:	mov    $0x1,%eax
+ f91:	mov    %rbp,%rsp
+ f94:	pop    %rbp
+ f95:	ret
+
+Disassembly of section .text.wolf.va.4:
+
+0000000000000000 <printf>:
+   0:	push   %rbp
+   1:	mov    %rsp,%rbp
+   4:	sub    $0xd0,%rsp
+   b:	mov    %rdi,0x20(%rsp)
+  13:	mov    %rsi,0x28(%rsp)
+  1b:	mov    %rdx,0x30(%rsp)
+  23:	mov    %rcx,0x38(%rsp)
+  2b:	mov    %r8,0x40(%rsp)
+  33:	mov    %r9,0x48(%rsp)
+  3b:	test   %al,%al
+  3d:	je     87 <printf+0x87>
+  3f:	movdqu %xmm0,0x50(%rsp)
+  48:	movdqu %xmm1,0x60(%rsp)
+  51:	movdqu %xmm2,0x70(%rsp)
+  5a:	movdqu %xmm3,0x80(%rsp)
+  63:	movdqu %xmm4,0x90(%rsp)
+  6c:	movdqu %xmm5,0xa0(%rsp)
+  75:	movdqu %xmm6,0xb0(%rsp)
+  7e:	movdqu %xmm7,0xc0(%rsp)
+  87:	movl   $0x8,0x0(%rsp)
+  92:	movl   $0x30,0x4(%rsp)
+  9d:	lea    0xe0(%rsp),%rax
+  a5:	mov    %rax,0x8(%rsp)
+  ad:	lea    0x20(%rsp),%rax
+  b5:	mov    %rax,0x10(%rsp)
+  bd:	lea    0x0(%rsp),%rsi
+  c5:	call   ca <printf+0xca>
+  ca:	add    $0xd0,%rsp
+  d1:	pop    %rbp
+  d2:	ret
+
+muzzle.string.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <memcpy>:
+   0:	push   %rbp
+   1:	mov    %rsp,%rbp
+   4:	sub    $0x20,%rsp
+   8:	mov    %rdi,(%rsp)
+   c:	mov    %rsi,0x8(%rsp)
+  11:	mov    %rdx,0x10(%rsp)
+  16:	xor    %rax,%rax
+  19:	movq   $0x0,0x18(%rsp)
+  22:	cmp    %rdx,%rax
+  25:	jb     37 <memcpy+0x37>
+  2b:	mov    %rdi,%rax
+  2e:	add    $0x20,%rsp
+  32:	mov    %rbp,%rsp
+  35:	pop    %rbp
+  36:	ret
+  37:	cmp    0xb2(%rip),%rax        # f0 <memcpy+0xf0>
+  3e:	ja     7b <memcpy+0x7b>
+  44:	cmp    0xa5(%rip),%rax        # f0 <memcpy+0xf0>
+  4b:	ja     a2 <memcpy+0xa2>
+  51:	imul   $0x1,%rax,%rcx
+  55:	movzbq (%rsi,%rcx,1),%rcx
+  5a:	imul   $0x1,%rax,%r8
+  5e:	mov    %cl,(%rdi,%r8,1)
+  62:	add    $0x1,%rax
+  66:	setb   %cl
+  69:	test   %cl,%cl
+  6b:	jne    c9 <memcpy+0xc9>
+  71:	mov    %rax,0x18(%rsp)
+  76:	jmp    22 <memcpy+0x22>
+  7b:	mov    $0x1,%edi
+  80:	mov    0x0(%rip),%rsi        # 87 <memcpy+0x87>
+  87:	mov    $0x12,%edx
+  8c:	mov    $0x10,%ecx
+  91:	mov    $0xd,%r8d
+  97:	mov    0x0(%rip),%rax        # 9e <memcpy+0x9e>
+  9e:	call   *%rax
+  a0:	ud2
+  a2:	mov    $0x1,%edi
+  a7:	mov    0x0(%rip),%rsi        # ae <memcpy+0xae>
+  ae:	mov    $0x12,%edx
+  b3:	mov    $0x10,%ecx
+  b8:	mov    $0xd,%r8d
+  be:	mov    0x0(%rip),%rax        # c5 <memcpy+0xc5>
+  c5:	call   *%rax
+  c7:	ud2
+  c9:	mov    $0x1,%edi
+  ce:	mov    0x0(%rip),%rsi        # d5 <memcpy+0xd5>
+  d5:	mov    $0x12,%edx
+  da:	mov    $0x11,%ecx
+  df:	mov    $0xd,%r8d
+  e5:	mov    0x0(%rip),%rax        # ec <memcpy+0xec>
+  ec:	call   *%rax
+  ee:	ud2
+  f0:	(bad)
+  f1:	(bad)
+  f2:	(bad)
+  f3:	(bad)
+  f4:	(bad)
+  f5:	(bad)
+  f6:	(bad)
+  f7:	.byte 0x7f
+
+00000000000000f8 <memmove>:
+  f8:	push   %rbp
+  f9:	mov    %rsp,%rbp
+  fc:	sub    $0x20,%rsp
+ 100:	mov    %rdi,(%rsp)
+ 104:	mov    %rsi,0x8(%rsp)
+ 109:	mov    %rdx,0x10(%rsp)
+ 10e:	mov    %rdx,0x18(%rsp)
+ 113:	cmp    %rsi,%rdi
+ 116:	jb     174 <memmove+0x7c>
+ 11c:	test   %rdx,%rdx
+ 11f:	ja     12d <memmove+0x35>
+ 125:	mov    %rdi,%rax
+ 128:	jmp    18f <memmove+0x97>
+ 12d:	sub    $0x1,%rdx
+ 131:	setb   %cl
+ 134:	test   %cl,%cl
+ 136:	jne    232 <memmove+0x13a>
+ 13c:	mov    %rdx,0x18(%rsp)
+ 141:	cmp    0x188(%rip),%rdx        # 2d0 <memmove+0x1d8>
+ 148:	ja     1e2 <memmove+0xea>
+ 14e:	cmp    0x17b(%rip),%rdx        # 2d0 <memmove+0x1d8>
+ 155:	ja     20a <memmove+0x112>
+ 15b:	imul   $0x1,%rdx,%r11
+ 15f:	movzbq (%rsi,%r11,1),%r11
+ 164:	imul   $0x1,%rdx,%rax
+ 168:	mov    %r11b,(%rdi,%rax,1)
+ 16c:	mov    %rdi,%r8
+ 16f:	jmp    11c <memmove+0x24>
+ 174:	mov    %rdi,%r8
+ 177:	xor    %rax,%rax
+ 17a:	movq   $0x0,0x18(%rsp)
+ 183:	cmp    %rdx,%rax
+ 186:	jb     198 <memmove+0xa0>
+ 18c:	mov    %r8,%rax
+ 18f:	add    $0x20,%rsp
+ 193:	mov    %rbp,%rsp
+ 196:	pop    %rbp
+ 197:	ret
+ 198:	cmp    0x131(%rip),%rax        # 2d0 <memmove+0x1d8>
+ 19f:	ja     259 <memmove+0x161>
+ 1a5:	cmp    0x124(%rip),%rax        # 2d0 <memmove+0x1d8>
+ 1ac:	ja     280 <memmove+0x188>
+ 1b2:	imul   $0x1,%rax,%rcx
+ 1b6:	movzbq (%rsi,%rcx,1),%rcx
+ 1bb:	imul   $0x1,%rax,%rdi
+ 1bf:	mov    %r8,%r9
+ 1c2:	mov    %cl,(%r9,%rdi,1)
+ 1c6:	add    $0x1,%rax
+ 1ca:	setb   %cl
+ 1cd:	test   %cl,%cl
+ 1cf:	jne    2a7 <memmove+0x1af>
+ 1d5:	mov    %rax,0x18(%rsp)
+ 1da:	mov    %r9,%r8
+ 1dd:	jmp    183 <memmove+0x8b>
+ 1e2:	mov    $0x1,%edi
+ 1e7:	mov    0x0(%rip),%rsi        # 1ee <memmove+0xf6>
+ 1ee:	mov    $0x12,%edx
+ 1f3:	mov    $0x26,%ecx
+ 1f8:	mov    $0x11,%r8d
+ 1fe:	mov    0x0(%rip),%r9        # 205 <memmove+0x10d>
+ 205:	call   *%r9
+ 208:	ud2
+ 20a:	mov    $0x1,%edi
+ 20f:	mov    0x0(%rip),%rsi        # 216 <memmove+0x11e>
+ 216:	mov    $0x12,%edx
+ 21b:	mov    $0x26,%ecx
+ 220:	mov    $0x11,%r8d
+ 226:	mov    0x0(%rip),%r9        # 22d <memmove+0x135>
+ 22d:	call   *%r9
+ 230:	ud2
+ 232:	mov    $0x1,%edi
+ 237:	mov    0x0(%rip),%rsi        # 23e <memmove+0x146>
+ 23e:	mov    $0x12,%edx
+ 243:	mov    $0x25,%ecx
+ 248:	mov    $0x11,%r8d
+ 24e:	mov    0x0(%rip),%rax        # 255 <memmove+0x15d>
+ 255:	call   *%rax
+ 257:	ud2
+ 259:	mov    $0x1,%edi
+ 25e:	mov    0x0(%rip),%rsi        # 265 <memmove+0x16d>
+ 265:	mov    $0x12,%edx
+ 26a:	mov    $0x1f,%ecx
+ 26f:	mov    $0x11,%r8d
+ 275:	mov    0x0(%rip),%rax        # 27c <memmove+0x184>
+ 27c:	call   *%rax
+ 27e:	ud2
+ 280:	mov    $0x1,%edi
+ 285:	mov    0x0(%rip),%rsi        # 28c <memmove+0x194>
+ 28c:	mov    $0x12,%edx
+ 291:	mov    $0x1f,%ecx
+ 296:	mov    $0x11,%r8d
+ 29c:	mov    0x0(%rip),%rax        # 2a3 <memmove+0x1ab>
+ 2a3:	call   *%rax
+ 2a5:	ud2
+ 2a7:	mov    $0x1,%edi
+ 2ac:	mov    0x0(%rip),%rsi        # 2b3 <memmove+0x1bb>
+ 2b3:	mov    $0x12,%edx
+ 2b8:	mov    $0x20,%ecx
+ 2bd:	mov    $0x11,%r8d
+ 2c3:	mov    0x0(%rip),%rax        # 2ca <memmove+0x1d2>
+ 2ca:	call   *%rax
+ 2cc:	ud2
+ 2ce:	add    %al,(%rax)
+ 2d0:	(bad)
+ 2d1:	(bad)
+ 2d2:	(bad)
+ 2d3:	(bad)
+ 2d4:	(bad)
+ 2d5:	(bad)
+ 2d6:	(bad)
+ 2d7:	.byte 0x7f
+
+00000000000002d8 <memset>:
+ 2d8:	push   %rbp
+ 2d9:	mov    %rsp,%rbp
+ 2dc:	sub    $0x30,%rsp
+ 2e0:	mov    %rdi,(%rsp)
+ 2e4:	mov    %rdi,%rcx
+ 2e7:	mov    %esi,0x8(%rsp)
+ 2eb:	mov    %rdx,0x10(%rsp)
+ 2f0:	mov    %sil,0x18(%rsp)
+ 2f5:	xor    %rax,%rax
+ 2f8:	movq   $0x0,0x20(%rsp)
+ 301:	cmp    %rdx,%rax
+ 304:	jb     316 <memset+0x3e>
+ 30a:	mov    %rcx,%rax
+ 30d:	add    $0x30,%rsp
+ 311:	mov    %rbp,%rsp
+ 314:	pop    %rbp
+ 315:	ret
+ 316:	cmp    0x7b(%rip),%rax        # 398 <memset+0xc0>
+ 31d:	ja     346 <memset+0x6e>
+ 323:	imul   $0x1,%rax,%rdi
+ 327:	mov    %sil,(%rcx,%rdi,1)
+ 32b:	add    $0x1,%rax
+ 32f:	setb   %dil
+ 333:	test   %dil,%dil
+ 336:	jne    36d <memset+0x95>
+ 33c:	mov    %rax,0x20(%rsp)
+ 341:	jmp    301 <memset+0x29>
+ 346:	mov    $0x1,%edi
+ 34b:	mov    0x0(%rip),%rsi        # 352 <memset+0x7a>
+ 352:	mov    $0x12,%edx
+ 357:	mov    $0x34,%ecx
+ 35c:	mov    $0xd,%r8d
+ 362:	mov    0x0(%rip),%rax        # 369 <memset+0x91>
+ 369:	call   *%rax
+ 36b:	ud2
+ 36d:	mov    $0x1,%edi
+ 372:	mov    0x0(%rip),%rsi        # 379 <memset+0xa1>
+ 379:	mov    $0x12,%edx
+ 37e:	mov    $0x35,%ecx
+ 383:	mov    $0xd,%r8d
+ 389:	mov    0x0(%rip),%rax        # 390 <memset+0xb8>
+ 390:	call   *%rax
+ 392:	ud2
+ 394:	add    %al,(%rax)
+ 396:	add    %al,(%rax)
+ 398:	(bad)
+ 399:	(bad)
+ 39a:	(bad)
+ 39b:	(bad)
+ 39c:	(bad)
+ 39d:	(bad)
+ 39e:	(bad)
+ 39f:	.byte 0x7f
+
+00000000000003a0 <memcmp>:
+ 3a0:	push   %rbp
+ 3a1:	mov    %rsp,%rbp
+ 3a4:	sub    $0x30,%rsp
+ 3a8:	mov    %rdi,(%rsp)
+ 3ac:	mov    %rsi,0x8(%rsp)
+ 3b1:	mov    %rdx,0x10(%rsp)
+ 3b6:	xor    %rax,%rax
+ 3b9:	movq   $0x0,0x18(%rsp)
+ 3c2:	cmp    %rdx,%rax
+ 3c5:	jb     3d6 <memcmp+0x36>
+ 3cb:	xor    %eax,%eax
+ 3cd:	add    $0x30,%rsp
+ 3d1:	mov    %rbp,%rsp
+ 3d4:	pop    %rbp
+ 3d5:	ret
+ 3d6:	cmp    0x12b(%rip),%rax        # 508 <memcmp+0x168>
+ 3dd:	ja     469 <memcmp+0xc9>
+ 3e3:	imul   $0x1,%rax,%rcx
+ 3e7:	movzbq (%rdi,%rcx,1),%rcx
+ 3ec:	mov    %cl,0x20(%rsp)
+ 3f0:	cmp    0x111(%rip),%rax        # 508 <memcmp+0x168>
+ 3f7:	ja     490 <memcmp+0xf0>
+ 3fd:	imul   $0x1,%rax,%r8
+ 401:	movzbq (%rsi,%r8,1),%r8
+ 406:	mov    %r8b,0x28(%rsp)
+ 40b:	cmp    %r8b,%cl
+ 40e:	jne    42f <memcmp+0x8f>
+ 414:	add    $0x1,%rax
+ 418:	setb   %r8b
+ 41c:	test   %r8b,%r8b
+ 41f:	jne    4b7 <memcmp+0x117>
+ 425:	mov    %rax,0x18(%rsp)
+ 42a:	jmp    3c2 <memcmp+0x22>
+ 42f:	movzbl %cl,%r9d
+ 433:	movzbl %r8b,%r10d
+ 437:	movslq %r9d,%rax
+ 43a:	movslq %r10d,%r9
+ 43d:	sub    %r9,%rax
+ 440:	cmp    $0xffffffff80000000,%rax
+ 446:	setl   %r8b
+ 44a:	cmp    $0x7fffffff,%rax
+ 450:	setg   %r11b
+ 454:	or     %r11d,%r8d
+ 457:	test   %r8b,%r8b
+ 45a:	jne    4df <memcmp+0x13f>
+ 460:	add    $0x30,%rsp
+ 464:	mov    %rbp,%rsp
+ 467:	pop    %rbp
+ 468:	ret
+ 469:	mov    $0x1,%edi
+ 46e:	mov    0x0(%rip),%rsi        # 475 <memcmp+0xd5>
+ 475:	mov    $0x12,%edx
+ 47a:	mov    $0x41,%ecx
+ 47f:	mov    $0xd,%r8d
+ 485:	mov    0x0(%rip),%rax        # 48c <memcmp+0xec>
+ 48c:	call   *%rax
+ 48e:	ud2
+ 490:	mov    $0x1,%edi
+ 495:	mov    0x0(%rip),%rsi        # 49c <memcmp+0xfc>
+ 49c:	mov    $0x12,%edx
+ 4a1:	mov    $0x42,%ecx
+ 4a6:	mov    $0xd,%r8d
+ 4ac:	mov    0x0(%rip),%rax        # 4b3 <memcmp+0x113>
+ 4b3:	call   *%rax
+ 4b5:	ud2
+ 4b7:	mov    $0x1,%edi
+ 4bc:	mov    0x0(%rip),%rsi        # 4c3 <memcmp+0x123>
+ 4c3:	mov    $0x12,%edx
+ 4c8:	mov    $0x46,%ecx
+ 4cd:	mov    $0xd,%r8d
+ 4d3:	mov    0x0(%rip),%r9        # 4da <memcmp+0x13a>
+ 4da:	call   *%r9
+ 4dd:	ud2
+ 4df:	mov    $0x1,%edi
+ 4e4:	mov    0x0(%rip),%rsi        # 4eb <memcmp+0x14b>
+ 4eb:	mov    $0x12,%edx
+ 4f0:	mov    $0x44,%ecx
+ 4f5:	mov    $0x11,%r8d
+ 4fb:	mov    0x0(%rip),%rax        # 502 <memcmp+0x162>
+ 502:	call   *%rax
+ 504:	ud2
+ 506:	add    %al,(%rax)
+ 508:	(bad)
+ 509:	(bad)
+ 50a:	(bad)
+ 50b:	(bad)
+ 50c:	(bad)
+ 50d:	(bad)
+ 50e:	(bad)
+ 50f:	.byte 0x7f
+
+0000000000000510 <strlen>:
+ 510:	push   %rbp
+ 511:	mov    %rsp,%rbp
+ 514:	sub    $0x10,%rsp
+ 518:	mov    %rdi,(%rsp)
+ 51c:	xor    %rax,%rax
+ 51f:	movq   $0x0,0x8(%rsp)
+ 528:	cmp    0x89(%rip),%rax        # 5b8 <strlen+0xa8>
+ 52f:	ja     568 <strlen+0x58>
+ 535:	imul   $0x1,%rax,%rcx
+ 539:	movzbq (%rdi,%rcx,1),%rcx
+ 53e:	test   %cl,%cl
+ 540:	jne    54f <strlen+0x3f>
+ 546:	add    $0x10,%rsp
+ 54a:	mov    %rbp,%rsp
+ 54d:	pop    %rbp
+ 54e:	ret
+ 54f:	add    $0x1,%rax
+ 553:	setb   %cl
+ 556:	test   %cl,%cl
+ 558:	jne    58f <strlen+0x7f>
+ 55e:	mov    %rax,0x8(%rsp)
+ 563:	jmp    528 <strlen+0x18>
+ 568:	mov    $0x1,%edi
+ 56d:	mov    0x0(%rip),%rsi        # 574 <strlen+0x64>
+ 574:	mov    $0x12,%edx
+ 579:	mov    $0x51,%ecx
+ 57e:	mov    $0x9,%r8d
+ 584:	mov    0x0(%rip),%rax        # 58b <strlen+0x7b>
+ 58b:	call   *%rax
+ 58d:	ud2
+ 58f:	mov    $0x1,%edi
+ 594:	mov    0x0(%rip),%rsi        # 59b <strlen+0x8b>
+ 59b:	mov    $0x12,%edx
+ 5a0:	mov    $0x52,%ecx
+ 5a5:	mov    $0xd,%r8d
+ 5ab:	mov    0x0(%rip),%rax        # 5b2 <strlen+0xa2>
+ 5b2:	call   *%rax
+ 5b4:	ud2
+ 5b6:	add    %al,(%rax)
+ 5b8:	(bad)
+ 5b9:	(bad)
+ 5ba:	(bad)
+ 5bb:	(bad)
+ 5bc:	(bad)
+ 5bd:	(bad)
+ 5be:	(bad)
+ 5bf:	.byte 0x7f
+
+00000000000005c0 <strcmp>:
+ 5c0:	push   %rbp
+ 5c1:	mov    %rsp,%rbp
+ 5c4:	sub    $0x40,%rsp
+ 5c8:	mov    %rdi,(%rsp)
+ 5cc:	mov    %rsi,0x8(%rsp)
+ 5d1:	xor    %r10,%r10
+ 5d4:	movq   $0x0,0x10(%rsp)
+ 5dd:	xor    %eax,%eax
+ 5df:	movl   $0x0,0x18(%rsp)
+ 5e7:	mov    $0x1,%ecx
+ 5ec:	movb   $0x1,0x20(%rsp)
+ 5f1:	mov    %rcx,%rdx
+ 5f4:	test   %dl,%dl
+ 5f6:	jne    605 <strcmp+0x45>
+ 5fc:	add    $0x40,%rsp
+ 600:	mov    %rbp,%rsp
+ 603:	pop    %rbp
+ 604:	ret
+ 605:	cmp    0x14c(%rip),%r10        # 758 <strcmp+0x198>
+ 60c:	ja     6b6 <strcmp+0xf6>
+ 612:	imul   $0x1,%r10,%r8
+ 616:	movzbq (%rdi,%r8,1),%r8
+ 61b:	mov    %r8b,0x28(%rsp)
+ 620:	cmp    0x131(%rip),%r10        # 758 <strcmp+0x198>
+ 627:	ja     6de <strcmp+0x11e>
+ 62d:	imul   $0x1,%r10,%r11
+ 631:	movzbq (%rsi,%r11,1),%r11
+ 636:	mov    %r11b,0x30(%rsp)
+ 63b:	cmp    %r11b,%r8b
+ 63e:	je     64c <strcmp+0x8c>
+ 644:	mov    %rcx,%r9
+ 647:	jmp    653 <strcmp+0x93>
+ 64c:	test   %r8b,%r8b
+ 64f:	sete   %r9b
+ 653:	test   %r9b,%r9b
+ 656:	jne    677 <strcmp+0xb7>
+ 65c:	add    $0x1,%r10
+ 660:	setb   %r8b
+ 664:	test   %r8b,%r8b
+ 667:	jne    706 <strcmp+0x146>
+ 66d:	mov    %r10,0x10(%rsp)
+ 672:	jmp    5f4 <strcmp+0x34>
+ 677:	movzbl %r8b,%eax
+ 67b:	movzbl %r11b,%edx
+ 67f:	movslq %eax,%rax
+ 682:	movslq %edx,%rdx
+ 685:	sub    %rdx,%rax
+ 688:	cmp    $0xffffffff80000000,%rax
+ 68e:	setl   %dl
+ 691:	cmp    $0x7fffffff,%rax
+ 697:	setg   %r8b
+ 69b:	or     %r8d,%edx
+ 69e:	test   %dl,%dl
+ 6a0:	jne    72d <strcmp+0x16d>
+ 6a6:	mov    %eax,0x18(%rsp)
+ 6aa:	xor    %edx,%edx
+ 6ac:	movb   $0x0,0x20(%rsp)
+ 6b1:	jmp    5f4 <strcmp+0x34>
+ 6b6:	mov    $0x1,%edi
+ 6bb:	mov    0x0(%rip),%rsi        # 6c2 <strcmp+0x102>
+ 6c2:	mov    $0x12,%edx
+ 6c7:	mov    $0x61,%ecx
+ 6cc:	mov    $0xd,%r8d
+ 6d2:	mov    0x0(%rip),%r9        # 6d9 <strcmp+0x119>
+ 6d9:	call   *%r9
+ 6dc:	ud2
+ 6de:	mov    $0x1,%edi
+ 6e3:	mov    0x0(%rip),%rsi        # 6ea <strcmp+0x12a>
+ 6ea:	mov    $0x12,%edx
+ 6ef:	mov    $0x62,%ecx
+ 6f4:	mov    $0xd,%r8d
+ 6fa:	mov    0x0(%rip),%r9        # 701 <strcmp+0x141>
+ 701:	call   *%r9
+ 704:	ud2
+ 706:	mov    $0x1,%edi
+ 70b:	mov    0x0(%rip),%rsi        # 712 <strcmp+0x152>
+ 712:	mov    $0x12,%edx
+ 717:	mov    $0x67,%ecx
+ 71c:	mov    $0x11,%r8d
+ 722:	mov    0x0(%rip),%rax        # 729 <strcmp+0x169>
+ 729:	call   *%rax
+ 72b:	ud2
+ 72d:	mov    $0x1,%edi
+ 732:	mov    0x0(%rip),%rsi        # 739 <strcmp+0x179>
+ 739:	mov    $0x12,%edx
+ 73e:	mov    $0x64,%ecx
+ 743:	mov    $0x11,%r8d
+ 749:	mov    0x0(%rip),%rax        # 750 <strcmp+0x190>
+ 750:	call   *%rax
+ 752:	ud2
+ 754:	add    %al,(%rax)
+ 756:	add    %al,(%rax)
+ 758:	(bad)
+ 759:	(bad)
+ 75a:	(bad)
+ 75b:	(bad)
+ 75c:	(bad)
+ 75d:	(bad)
+ 75e:	(bad)
+ 75f:	.byte 0x7f
+
+0000000000000760 <strncmp>:
+ 760:	push   %rbp
+ 761:	mov    %rsp,%rbp
+ 764:	sub    $0x30,%rsp
+ 768:	mov    %rdi,(%rsp)
+ 76c:	mov    %rsi,0x8(%rsp)
+ 771:	mov    %rdx,0x10(%rsp)
+ 776:	xor    %rax,%rax
+ 779:	movq   $0x0,0x18(%rsp)
+ 782:	cmp    %rdx,%rax
+ 785:	jb     796 <strncmp+0x36>
+ 78b:	xor    %eax,%eax
+ 78d:	add    $0x30,%rsp
+ 791:	mov    %rbp,%rsp
+ 794:	pop    %rbp
+ 795:	ret
+ 796:	cmp    0x13b(%rip),%rax        # 8d8 <strncmp+0x178>
+ 79d:	ja     837 <strncmp+0xd7>
+ 7a3:	imul   $0x1,%rax,%rcx
+ 7a7:	movzbq (%rdi,%rcx,1),%rcx
+ 7ac:	mov    %cl,0x20(%rsp)
+ 7b0:	cmp    0x121(%rip),%rax        # 8d8 <strncmp+0x178>
+ 7b7:	ja     85e <strncmp+0xfe>
+ 7bd:	imul   $0x1,%rax,%r8
+ 7c1:	movzbq (%rsi,%r8,1),%r8
+ 7c6:	mov    %r8b,0x28(%rsp)
+ 7cb:	mov    $0x1,%r9d
+ 7d1:	cmp    %r8b,%cl
+ 7d4:	jne    7e0 <strncmp+0x80>
+ 7da:	test   %cl,%cl
+ 7dc:	sete   %r9b
+ 7e0:	test   %r9b,%r9b
+ 7e3:	jne    802 <strncmp+0xa2>
+ 7e9:	add    $0x1,%rax
+ 7ed:	setb   %cl
+ 7f0:	test   %cl,%cl
+ 7f2:	jne    886 <strncmp+0x126>
+ 7f8:	mov    %rax,0x18(%rsp)
+ 7fd:	jmp    782 <strncmp+0x22>
+ 802:	movzbl %cl,%eax
+ 805:	movzbl %r8b,%ecx
+ 809:	movslq %eax,%rax
+ 80c:	movslq %ecx,%rcx
+ 80f:	sub    %rcx,%rax
+ 812:	cmp    $0xffffffff80000000,%rax
+ 818:	setl   %cl
+ 81b:	cmp    $0x7fffffff,%rax
+ 821:	setg   %dl
+ 824:	or     %edx,%ecx
+ 826:	test   %cl,%cl
+ 828:	jne    8ad <strncmp+0x14d>
+ 82e:	add    $0x30,%rsp
+ 832:	mov    %rbp,%rsp
+ 835:	pop    %rbp
+ 836:	ret
+ 837:	mov    $0x1,%edi
+ 83c:	mov    0x0(%rip),%rsi        # 843 <strncmp+0xe3>
+ 843:	mov    $0x12,%edx
+ 848:	mov    $0x75,%ecx
+ 84d:	mov    $0xd,%r8d
+ 853:	mov    0x0(%rip),%rax        # 85a <strncmp+0xfa>
+ 85a:	call   *%rax
+ 85c:	ud2
+ 85e:	mov    $0x1,%edi
+ 863:	mov    0x0(%rip),%rsi        # 86a <strncmp+0x10a>
+ 86a:	mov    $0x12,%edx
+ 86f:	mov    $0x76,%ecx
+ 874:	mov    $0xd,%r8d
+ 87a:	mov    0x0(%rip),%r9        # 881 <strncmp+0x121>
+ 881:	call   *%r9
+ 884:	ud2
+ 886:	mov    $0x1,%edi
+ 88b:	mov    0x0(%rip),%rsi        # 892 <strncmp+0x132>
+ 892:	mov    $0x12,%edx
+ 897:	mov    $0x7a,%ecx
+ 89c:	mov    $0xd,%r8d
+ 8a2:	mov    0x0(%rip),%rax        # 8a9 <strncmp+0x149>
+ 8a9:	call   *%rax
+ 8ab:	ud2
+ 8ad:	mov    $0x1,%edi
+ 8b2:	mov    0x0(%rip),%rsi        # 8b9 <strncmp+0x159>
+ 8b9:	mov    $0x12,%edx
+ 8be:	mov    $0x78,%ecx
+ 8c3:	mov    $0x11,%r8d
+ 8c9:	mov    0x0(%rip),%rax        # 8d0 <strncmp+0x170>
+ 8d0:	call   *%rax
+ 8d2:	ud2
+ 8d4:	add    %al,(%rax)
+ 8d6:	add    %al,(%rax)
+ 8d8:	(bad)
+ 8d9:	(bad)
+ 8da:	(bad)
+ 8db:	(bad)
+ 8dc:	(bad)
+ 8dd:	(bad)
+ 8de:	(bad)
+ 8df:	.byte 0x7f
+
+00000000000008e0 <strchr>:
+ 8e0:	push   %rbp
+ 8e1:	mov    %rsp,%rbp
+ 8e4:	sub    $0x40,%rsp
+ 8e8:	mov    %rdi,(%rsp)
+ 8ec:	mov    %esi,0x8(%rsp)
+ 8f0:	mov    %sil,0x10(%rsp)
+ 8f5:	xor    %rax,%rax
+ 8f8:	movq   $0x0,0x18(%rsp)
+ 901:	xor    %ecx,%ecx
+ 903:	movb   $0x0,0x20(%rsp)
+ 908:	movb   $0x0,0x28(%rsp)
+ 90d:	movb   $0x0,0x28(%rsp)
+ 912:	mov    $0x1,%edx
+ 917:	movb   $0x1,0x28(%rsp)
+ 91c:	movb   $0x1,0x20(%rsp)
+ 921:	mov    %rax,%r8
+ 924:	mov    %rcx,%r9
+ 927:	mov    %rdx,%r10
+ 92a:	test   %r10b,%r10b
+ 92d:	jne    960 <strchr+0x80>
+ 933:	test   %r9b,%r9b
+ 936:	je     957 <strchr+0x77>
+ 93c:	mov    %rdi,%rax
+ 93f:	add    %r8,%rax
+ 942:	setb   %cl
+ 945:	test   %cl,%cl
+ 947:	jne    9bb <strchr+0xdb>
+ 94d:	sub    %rdi,%rax
+ 950:	imul   $0x1,%rax,%rax
+ 954:	add    %rdi,%rax
+ 957:	add    $0x40,%rsp
+ 95b:	mov    %rbp,%rsp
+ 95e:	pop    %rbp
+ 95f:	ret
+ 960:	cmp    0xd1(%rip),%r8        # a38 <strchr+0x158>
+ 967:	ja     9e2 <strchr+0x102>
+ 96d:	imul   $0x1,%r8,%r11
+ 971:	movzbq (%rdi,%r11,1),%r11
+ 976:	mov    %r11b,0x30(%rsp)
+ 97b:	cmp    %sil,%r11b
+ 97e:	je     9b0 <strchr+0xd0>
+ 984:	test   %r11b,%r11b
+ 987:	je     9a8 <strchr+0xc8>
+ 98d:	add    $0x1,%r8
+ 991:	setb   %r11b
+ 995:	test   %r11b,%r11b
+ 998:	jne    a0a <strchr+0x12a>
+ 99e:	mov    %r8,0x18(%rsp)
+ 9a3:	jmp    92a <strchr+0x4a>
+ 9a8:	mov    %rcx,%r10
+ 9ab:	jmp    92a <strchr+0x4a>
+ 9b0:	mov    %rdx,%r9
+ 9b3:	mov    %rcx,%r10
+ 9b6:	jmp    92a <strchr+0x4a>
+ 9bb:	mov    $0x1,%edi
+ 9c0:	mov    0x0(%rip),%rsi        # 9c7 <strchr+0xe7>
+ 9c7:	mov    $0x12,%edx
+ 9cc:	mov    $0x96,%ecx
+ 9d1:	mov    $0xd,%r8d
+ 9d7:	mov    0x0(%rip),%rax        # 9de <strchr+0xfe>
+ 9de:	call   *%rax
+ 9e0:	ud2
+ 9e2:	mov    $0x1,%edi
+ 9e7:	mov    0x0(%rip),%rsi        # 9ee <strchr+0x10e>
+ 9ee:	mov    $0x12,%edx
+ 9f3:	mov    $0x8b,%ecx
+ 9f8:	mov    $0xd,%r8d
+ 9fe:	mov    0x0(%rip),%r9        # a05 <strchr+0x125>
+ a05:	call   *%r9
+ a08:	ud2
+ a0a:	mov    $0x1,%edi
+ a0f:	mov    0x0(%rip),%rsi        # a16 <strchr+0x136>
+ a16:	mov    $0x12,%edx
+ a1b:	mov    $0x92,%ecx
+ a20:	mov    $0x11,%r8d
+ a26:	mov    0x0(%rip),%rax        # a2d <strchr+0x14d>
+ a2d:	call   *%rax
+ a2f:	ud2
+ a31:	add    %al,(%rax)
+ a33:	add    %al,(%rax)
+ a35:	add    %al,(%rax)
+ a37:	add    %bh,%bh
+ a39:	(bad)
+ a3a:	(bad)
+ a3b:	(bad)
+ a3c:	(bad)
+ a3d:	(bad)
+ a3e:	(bad)
+ a3f:	.byte 0x7f
+
+0000000000000a40 <strcpy>:
+ a40:	push   %rbp
+ a41:	mov    %rsp,%rbp
+ a44:	sub    $0x30,%rsp
+ a48:	mov    %rdi,(%rsp)
+ a4c:	mov    %rsi,0x8(%rsp)
+ a51:	xor    %r8,%r8
+ a54:	movq   $0x0,0x10(%rsp)
+ a5d:	mov    $0x1,%r10d
+ a63:	movb   $0x1,0x18(%rsp)
+ a68:	test   %r10b,%r10b
+ a6b:	jne    a7d <strcpy+0x3d>
+ a71:	mov    %rdi,%rax
+ a74:	add    $0x30,%rsp
+ a78:	mov    %rbp,%rsp
+ a7b:	pop    %rbp
+ a7c:	ret
+ a7d:	mov    %rdi,%rax
+ a80:	cmp    0xd1(%rip),%r8        # b58 <strcpy+0x118>
+ a87:	ja     adf <strcpy+0x9f>
+ a8d:	imul   $0x1,%r8,%rcx
+ a91:	movzbq (%rsi,%rcx,1),%rcx
+ a96:	mov    %cl,0x20(%rsp)
+ a9a:	cmp    0xb7(%rip),%r8        # b58 <strcpy+0x118>
+ aa1:	ja     b06 <strcpy+0xc6>
+ aa7:	imul   $0x1,%r8,%rdx
+ aab:	mov    %cl,(%rax,%rdx,1)
+ aae:	test   %cl,%cl
+ ab0:	je     acf <strcpy+0x8f>
+ ab6:	add    $0x1,%r8
+ aba:	setb   %cl
+ abd:	test   %cl,%cl
+ abf:	jne    b2d <strcpy+0xed>
+ ac5:	mov    %r8,0x10(%rsp)
+ aca:	jmp    ad7 <strcpy+0x97>
+ acf:	xor    %r10d,%r10d
+ ad2:	movb   $0x0,0x18(%rsp)
+ ad7:	mov    %rax,%rdi
+ ada:	jmp    a68 <strcpy+0x28>
+ adf:	mov    $0x1,%edi
+ ae4:	mov    0x0(%rip),%rsi        # aeb <strcpy+0xab>
+ aeb:	mov    $0x12,%edx
+ af0:	mov    $0xa4,%ecx
+ af5:	mov    $0xd,%r8d
+ afb:	mov    0x0(%rip),%rax        # b02 <strcpy+0xc2>
+ b02:	call   *%rax
+ b04:	ud2
+ b06:	mov    $0x1,%edi
+ b0b:	mov    0x0(%rip),%rsi        # b12 <strcpy+0xd2>
+ b12:	mov    $0x12,%edx
+ b17:	mov    $0xa5,%ecx
+ b1c:	mov    $0xd,%r8d
+ b22:	mov    0x0(%rip),%rax        # b29 <strcpy+0xe9>
+ b29:	call   *%rax
+ b2b:	ud2
+ b2d:	mov    $0x1,%edi
+ b32:	mov    0x0(%rip),%rsi        # b39 <strcpy+0xf9>
+ b39:	mov    $0x12,%edx
+ b3e:	mov    $0xa9,%ecx
+ b43:	mov    $0x11,%r8d
+ b49:	mov    0x0(%rip),%rax        # b50 <strcpy+0x110>
+ b50:	call   *%rax
+ b52:	ud2
+ b54:	add    %al,(%rax)
+ b56:	add    %al,(%rax)
+ b58:	(bad)
+ b59:	(bad)
+ b5a:	(bad)
+ b5b:	(bad)
+ b5c:	(bad)
+ b5d:	(bad)
+ b5e:	(bad)
+ b5f:	.byte 0x7f
+
+0000000000000b60 <_Wstring.linked$f9e0946bb70856c7>:
+ b60:	push   %rbp
+ b61:	mov    %rsp,%rbp
+ b64:	mov    $0x1,%eax
+ b69:	mov    %rbp,%rsp
+ b6c:	pop    %rbp
+ b6d:	ret
+
+muzzle.sys.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_Wsys.raw$8fe912533d43125f>:
+   0:	push   %rbp
+   1:	mov    %rsp,%rbp
+   4:	sub    $0x50,%rsp
+   8:	mov    0x10(%rbp),%r10
+   c:	mov    %rdi,0x10(%rsp)
+  11:	mov    %rsi,0x18(%rsp)
+  16:	mov    %rdx,0x20(%rsp)
+  1b:	mov    %rcx,0x28(%rsp)
+  20:	mov    %r8,0x30(%rsp)
+  25:	mov    %r9,0x38(%rsp)
+  2a:	mov    %r10,0x40(%rsp)
+  2f:	movq   $0x0,0x48(%rsp)
+  38:	mov    %r10,(%rsp)
+  3c:	mov    0x0(%rip),%rax        # 43 <_Wsys.raw$8fe912533d43125f+0x43>
+  43:	call   *%rax
+  45:	mov    %rax,0x48(%rsp)
+  4a:	add    $0x50,%rsp
+  4e:	mov    %rbp,%rsp
+  51:	pop    %rbp
+  52:	ret
+
+0000000000000053 <_Wsys.ret$9c444d62a9d422f8>:
+  53:	push   %rbp
+  54:	mov    %rsp,%rbp
+  57:	sub    $0x10,%rsp
+  5b:	mov    %rdi,(%rsp)
+  5f:	xor    %rax,%rax
+  62:	mov    %rax,%rcx
+  65:	xor    %esi,%esi
+  67:	test   %rdi,%rdi
+  6a:	jl     78 <_Wsys.ret$9c444d62a9d422f8+0x25>
+  70:	mov    %rdi,%rax
+  73:	jmp    86 <_Wsys.ret$9c444d62a9d422f8+0x33>
+  78:	cmp    $0xfffffffffffff000,%rdi
+  7f:	mov    %rdi,%rax
+  82:	setg   %sil
+  86:	test   %sil,%sil
+  89:	jne    98 <_Wsys.ret$9c444d62a9d422f8+0x45>
+  8f:	add    $0x10,%rsp
+  93:	mov    %rbp,%rsp
+  96:	pop    %rbp
+  97:	ret
+  98:	mov    %rcx,%rdi
+  9b:	sub    %rax,%rdi
+  9e:	seto   %al
+  a1:	test   %al,%al
+  a3:	jne    ed <_Wsys.ret$9c444d62a9d422f8+0x9a>
+  a9:	movslq %edi,%rax
+  ac:	cmp    %rdi,%rax
+  af:	jne    ca <_Wsys.ret$9c444d62a9d422f8+0x77>
+  b5:	call   ba <_Wsys.ret$9c444d62a9d422f8+0x67>
+  ba:	mov    $0xffffffffffffffff,%rax
+  c1:	add    $0x10,%rsp
+  c5:	mov    %rbp,%rsp
+  c8:	pop    %rbp
+  c9:	ret
+  ca:	mov    $0x1,%edi
+  cf:	mov    0x0(%rip),%rsi        # d6 <_Wsys.ret$9c444d62a9d422f8+0x83>
+  d6:	mov    $0xc,%edx
+  db:	mov    $0x3a,%ecx
+  e0:	mov    $0x9,%r8d
+  e6:	call   eb <_Wsys.ret$9c444d62a9d422f8+0x98>
+  eb:	ud2
+  ed:	mov    $0x1,%edi
+  f2:	mov    0x0(%rip),%rsi        # f9 <_Wsys.ret$9c444d62a9d422f8+0xa6>
+  f9:	mov    $0xc,%edx
+  fe:	mov    $0x3a,%ecx
+ 103:	mov    $0x9,%r8d
+ 109:	call   10e <_Wsys.ret$9c444d62a9d422f8+0xbb>
+ 10e:	ud2
+
+0000000000000110 <_Wsys.failed$5285dbf95d2b2025>:
+ 110:	push   %rbp
+ 111:	mov    %rsp,%rbp
+ 114:	sub    $0x10,%rsp
+ 118:	mov    %rdi,(%rsp)
+ 11c:	xor    %eax,%eax
+ 11e:	test   %rdi,%rdi
+ 121:	jge    131 <_Wsys.failed$5285dbf95d2b2025+0x21>
+ 127:	cmp    $0xfffffffffffff000,%rdi
+ 12e:	setg   %al
+ 131:	add    $0x10,%rsp
+ 135:	mov    %rbp,%rsp
+ 138:	pop    %rbp
+ 139:	ret
+ 13a:	add    %al,(%rax)
+ 13c:	add    %al,(%rax)
+	...
+
+0000000000000140 <_Wsys.set_errno$fdd67ef466649936>:
+ 140:	push   %rbp
+ 141:	mov    %rsp,%rbp
+ 144:	sub    $0x10,%rsp
+ 148:	mov    %edi,(%rsp)
+ 14b:	mov    0x0(%rip),%rsi        # 152 <_Wsys.set_errno$fdd67ef466649936+0x12>
+ 152:	imul   $0x0,0xe(%rip),%r8        # 168 <_Wsys.set_errno$fdd67ef466649936+0x28>
+ 15a:	mov    %edi,(%rsi,%r8,1)
+ 15e:	add    $0x10,%rsp
+ 162:	mov    %rbp,%rsp
+ 165:	pop    %rbp
+ 166:	ret
+ 167:	add    %al,(%rax,%rax,1)
+ 16a:	add    %al,(%rax)
+ 16c:	add    %al,(%rax)
+	...
+
+0000000000000170 <_Wsys.exit_group$fa2146110f7000b9>:
+ 170:	push   %rbp
+ 171:	mov    %rsp,%rbp
+ 174:	sub    $0x20,%rsp
+ 178:	mov    %edi,0x10(%rsp)
+ 17c:	mov    $0xe7,%r8d
+ 182:	movslq %edi,%rsi
+ 185:	xor    %r9,%r9
+ 188:	mov    %r9,(%rsp)
+ 18c:	mov    %r8,%rdi
+ 18f:	mov    %r9,%rcx
+ 192:	mov    %r9,%rdx
+ 195:	mov    %r9,%r8
+ 198:	call   19d <_Wsys.exit_group$fa2146110f7000b9+0x2d>
+ 19d:	mov    %rax,0x18(%rsp)
+ 1a2:	add    $0x20,%rsp
+ 1a6:	mov    %rbp,%rsp
+ 1a9:	pop    %rbp
+ 1aa:	ret
+
+00000000000001ab <__errno_location>:
+ 1ab:	push   %rbp
+ 1ac:	mov    %rsp,%rbp
+ 1af:	mov    0x0(%rip),%rax        # 1b6 <__errno_location+0xb>
+ 1b6:	mov    %rbp,%rsp
+ 1b9:	pop    %rbp
+ 1ba:	ret
+
+00000000000001bb <_Wsys.put$e99eda03d49b4d14>:
+ 1bb:	push   %rbp
+ 1bc:	mov    %rsp,%rbp
+ 1bf:	sub    $0x30,%rsp
+ 1c3:	mov    %rdi,0x10(%rsp)
+ 1c8:	mov    %rsi,0x18(%rsp)
+ 1cd:	mov    %rsi,%rcx
+ 1d0:	xor    %r9,%r9
+ 1d3:	movq   $0x0,0x20(%rsp)
+ 1dc:	mov    %rdi,0x20(%rsp)
+ 1e1:	mov    %rdi,%rdx
+ 1e4:	mov    $0x1,%edi
+ 1e9:	mov    $0x2,%esi
+ 1ee:	mov    %r9,(%rsp)
+ 1f2:	mov    %r9,%r8
+ 1f5:	call   1fa <_Wsys.put$e99eda03d49b4d14+0x3f>
+ 1fa:	mov    %rax,0x28(%rsp)
+ 1ff:	add    $0x30,%rsp
+ 203:	mov    %rbp,%rsp
+ 206:	pop    %rbp
+ 207:	ret
+
+0000000000000208 <_Wsys.put_text$80eb508206a47c19>:
+ 208:	push   %rbp
+ 209:	mov    %rsp,%rbp
+ 20c:	sub    $0x20,%rsp
+ 210:	mov    %rdi,(%rsp)
+ 214:	mov    %rdi,0x8(%rsp)
+ 219:	xor    %rsi,%rsi
+ 21c:	movq   $0x0,0x10(%rsp)
+ 225:	mov    %rdi,%rax
+ 228:	test   %rax,%rax
+ 22b:	mov    %rax,%r8
+ 22e:	jne    249 <_Wsys.put_text$80eb508206a47c19+0x41>
+ 234:	mov    0x0(%rip),%rdi        # 23b <_Wsys.put_text$80eb508206a47c19+0x33>
+ 23b:	call   240 <_Wsys.put_text$80eb508206a47c19+0x38>
+ 240:	add    $0x20,%rsp
+ 244:	mov    %rbp,%rsp
+ 247:	pop    %rbp
+ 248:	ret
+ 249:	mov    0x0(%rip),%rdi        # 250 <_Wsys.put_text$80eb508206a47c19+0x48>
+ 250:	mov    $0x100,%ecx
+ 255:	test   %rcx,%rcx
+ 258:	je     314 <_Wsys.put_text$80eb508206a47c19+0x10c>
+ 25e:	xor    %rdx,%rdx
+ 261:	mov    %r8,%rax
+ 264:	div    %rcx
+ 267:	cmp    $0xff,%rdx
+ 26e:	ja     2ab <_Wsys.put_text$80eb508206a47c19+0xa3>
+ 274:	imul   $0x1,%rsi,%rax
+ 278:	mov    %dl,(%rdi,%rax,1)
+ 27b:	test   %rcx,%rcx
+ 27e:	je     2f1 <_Wsys.put_text$80eb508206a47c19+0xe9>
+ 284:	xor    %rdx,%rdx
+ 287:	mov    %r8,%rax
+ 28a:	div    %rcx
+ 28d:	mov    %rax,0x8(%rsp)
+ 292:	add    $0x1,%rsi
+ 296:	seto   %cl
+ 299:	test   %cl,%cl
+ 29b:	jne    2ce <_Wsys.put_text$80eb508206a47c19+0xc6>
+ 2a1:	mov    %rsi,0x10(%rsp)
+ 2a6:	jmp    228 <_Wsys.put_text$80eb508206a47c19+0x20>
+ 2ab:	mov    $0x1,%edi
+ 2b0:	mov    0x0(%rip),%rsi        # 2b7 <_Wsys.put_text$80eb508206a47c19+0xaf>
+ 2b7:	mov    $0xc,%edx
+ 2bc:	mov    $0x6c,%ecx
+ 2c1:	mov    $0xd,%r8d
+ 2c7:	call   2cc <_Wsys.put_text$80eb508206a47c19+0xc4>
+ 2cc:	ud2
+ 2ce:	mov    $0x1,%edi
+ 2d3:	mov    0x0(%rip),%rsi        # 2da <_Wsys.put_text$80eb508206a47c19+0xd2>
+ 2da:	mov    $0xc,%edx
+ 2df:	mov    $0x6e,%ecx
+ 2e4:	mov    $0xd,%r8d
+ 2ea:	call   2ef <_Wsys.put_text$80eb508206a47c19+0xe7>
+ 2ef:	ud2
+ 2f1:	mov    $0x2,%edi
+ 2f6:	mov    0x0(%rip),%rsi        # 2fd <_Wsys.put_text$80eb508206a47c19+0xf5>
+ 2fd:	mov    $0xc,%edx
+ 302:	mov    $0x6d,%ecx
+ 307:	mov    $0xd,%r8d
+ 30d:	call   312 <_Wsys.put_text$80eb508206a47c19+0x10a>
+ 312:	ud2
+ 314:	mov    $0x2,%edi
+ 319:	mov    0x0(%rip),%rsi        # 320 <_Wsys.put_text$80eb508206a47c19+0x118>
+ 320:	mov    $0xc,%edx
+ 325:	mov    $0x6c,%ecx
+ 32a:	mov    $0xd,%r8d
+ 330:	call   335 <_Wsys.put_text$80eb508206a47c19+0x12d>
+ 335:	ud2
+	...
+
+0000000000000338 <_Wsys.put_number$096066c5668dc12f>:
+ 338:	push   %rbp
+ 339:	mov    %rsp,%rbp
+ 33c:	sub    $0x20,%rsp
+ 340:	mov    %rdi,(%rsp)
+ 344:	xor    %rax,%rax
+ 347:	test   %rdi,%rdi
+ 34a:	jl     358 <_Wsys.put_number$096066c5668dc12f+0x20>
+ 350:	mov    %rdi,%rax
+ 353:	jmp    366 <_Wsys.put_number$096066c5668dc12f+0x2e>
+ 358:	sub    %rdi,%rax
+ 35b:	seto   %cl
+ 35e:	test   %cl,%cl
+ 360:	jne    7b3 <_Wsys.put_number$096066c5668dc12f+0x47b>
+ 366:	mov    %rax,0x8(%rsp)
+ 36b:	mov    $0x1f,%ecx
+ 370:	movq   $0x1f,0x10(%rsp)
+ 379:	mov    0x0(%rip),%r9        # 380 <_Wsys.put_number$096066c5668dc12f+0x48>
+ 380:	mov    %r9,0x18(%rsp)
+ 385:	mov    $0xa,%esi
+ 38a:	test   %rsi,%rsi
+ 38d:	je     790 <_Wsys.put_number$096066c5668dc12f+0x458>
+ 393:	cmp    0x43e(%rip),%rax        # 7d8 <_Wsys.put_number$096066c5668dc12f+0x4a0>
+ 39a:	sete   %r8b
+ 39e:	mov    $0xffffffffffffffff,%rdx
+ 3a5:	cmp    $0xa,%rdx
+ 3a9:	sete   %dl
+ 3ac:	test   %r8b,%dl
+ 3af:	jne    76d <_Wsys.put_number$096066c5668dc12f+0x435>
+ 3b5:	cqto
+ 3b7:	mov    %rax,%r10
+ 3ba:	mov    $0xa,%r8d
+ 3c0:	idiv   %r8
+ 3c3:	cmp    $0xff,%rdx
+ 3ca:	ja     597 <_Wsys.put_number$096066c5668dc12f+0x25f>
+ 3d0:	movzbq 0x408(%rip),%rax        # 7e0 <_Wsys.put_number$096066c5668dc12f+0x4a8>
+ 3d8:	movzbq %dl,%rdx
+ 3dc:	add    %rdx,%rax
+ 3df:	mov    %rax,%rdx
+ 3e2:	shr    $0x3f,%rdx
+ 3e6:	cmp    $0xff,%rax
+ 3ec:	setg   %r8b
+ 3f0:	or     %r8d,%edx
+ 3f3:	test   %dl,%dl
+ 3f5:	jne    76d <_Wsys.put_number$096066c5668dc12f+0x435>
+ 3fb:	imul   $0x1f,0x3e5(%rip),%rdx        # 7e8 <_Wsys.put_number$096066c5668dc12f+0x4b0>
+ 403:	mov    %al,(%r9,%rdx,1)
+ 407:	test   %rsi,%rsi
+ 40a:	je     74a <_Wsys.put_number$096066c5668dc12f+0x412>
+ 410:	mov    %r10,%rax
+ 413:	cmp    0x3be(%rip),%rax        # 7d8 <_Wsys.put_number$096066c5668dc12f+0x4a0>
+ 41a:	sete   %dl
+ 41d:	mov    $0xffffffffffffffff,%r8
+ 424:	cmp    $0xa,%r8
+ 428:	sete   %r8b
+ 42c:	test   %dl,%r8b
+ 42f:	jne    727 <_Wsys.put_number$096066c5668dc12f+0x3ef>
+ 435:	cqto
+ 437:	mov    $0xa,%r8d
+ 43d:	idiv   %r8
+ 440:	mov    %rax,0x8(%rsp)
+ 445:	mov    %rax,%r10
+ 448:	test   %rax,%rax
+ 44b:	jg     4c6 <_Wsys.put_number$096066c5668dc12f+0x18e>
+ 451:	test   %rdi,%rdi
+ 454:	jge    477 <_Wsys.put_number$096066c5668dc12f+0x13f>
+ 45a:	sub    $0x1,%rcx
+ 45e:	seto   %al
+ 461:	test   %al,%al
+ 463:	jne    628 <_Wsys.put_number$096066c5668dc12f+0x2f0>
+ 469:	mov    %rcx,0x10(%rsp)
+ 46e:	imul   $0x1,%rcx,%rax
+ 472:	movb   $0x2d,(%r9,%rax,1)
+ 477:	test   %rcx,%rcx
+ 47a:	jl     5bf <_Wsys.put_number$096066c5668dc12f+0x287>
+ 480:	mov    %r9,%rsi
+ 483:	add    %rcx,%rsi
+ 486:	setb   %dil
+ 48a:	test   %dil,%dil
+ 48d:	jne    605 <_Wsys.put_number$096066c5668dc12f+0x2cd>
+ 493:	sub    %r9,%rsi
+ 496:	imul   $0x1,%rsi,%rsi
+ 49a:	lea    (%r9,%rsi,1),%rdi
+ 49e:	mov    %rdi,0x18(%rsp)
+ 4a3:	mov    $0x20,%esi
+ 4a8:	sub    %rcx,%rsi
+ 4ab:	seto   %r8b
+ 4af:	test   %r8b,%r8b
+ 4b2:	jne    5e2 <_Wsys.put_number$096066c5668dc12f+0x2aa>
+ 4b8:	call   4bd <_Wsys.put_number$096066c5668dc12f+0x185>
+ 4bd:	add    $0x20,%rsp
+ 4c1:	mov    %rbp,%rsp
+ 4c4:	pop    %rbp
+ 4c5:	ret
+ 4c6:	sub    $0x1,%rcx
+ 4ca:	seto   %dl
+ 4cd:	test   %dl,%dl
+ 4cf:	jne    704 <_Wsys.put_number$096066c5668dc12f+0x3cc>
+ 4d5:	mov    %rcx,0x10(%rsp)
+ 4da:	test   %rsi,%rsi
+ 4dd:	je     6e1 <_Wsys.put_number$096066c5668dc12f+0x3a9>
+ 4e3:	cmp    0x2ee(%rip),%rax        # 7d8 <_Wsys.put_number$096066c5668dc12f+0x4a0>
+ 4ea:	sete   %dl
+ 4ed:	mov    $0xffffffffffffffff,%r8
+ 4f4:	cmp    $0xa,%r8
+ 4f8:	sete   %r8b
+ 4fc:	test   %dl,%r8b
+ 4ff:	jne    6be <_Wsys.put_number$096066c5668dc12f+0x386>
+ 505:	cqto
+ 507:	mov    %rax,%r10
+ 50a:	mov    $0xa,%r8d
+ 510:	idiv   %r8
+ 513:	cmp    $0xff,%rdx
+ 51a:	ja     650 <_Wsys.put_number$096066c5668dc12f+0x318>
+ 520:	movzbq 0x2b8(%rip),%rax        # 7e0 <_Wsys.put_number$096066c5668dc12f+0x4a8>
+ 528:	movzbq %dl,%rdx
+ 52c:	add    %rdx,%rax
+ 52f:	mov    %rax,%rdx
+ 532:	shr    $0x3f,%rdx
+ 536:	cmp    $0xff,%rax
+ 53c:	setg   %r8b
+ 540:	or     %r8d,%edx
+ 543:	test   %dl,%dl
+ 545:	jne    6be <_Wsys.put_number$096066c5668dc12f+0x386>
+ 54b:	imul   $0x1,%rcx,%rdx
+ 54f:	mov    %al,(%r9,%rdx,1)
+ 553:	test   %rsi,%rsi
+ 556:	je     69b <_Wsys.put_number$096066c5668dc12f+0x363>
+ 55c:	mov    %r10,%rax
+ 55f:	cmp    0x272(%rip),%rax        # 7d8 <_Wsys.put_number$096066c5668dc12f+0x4a0>
+ 566:	sete   %al
+ 569:	mov    $0xffffffffffffffff,%rdx
+ 570:	cmp    $0xa,%rdx
+ 574:	sete   %dl
+ 577:	test   %al,%dl
+ 579:	jne    678 <_Wsys.put_number$096066c5668dc12f+0x340>
+ 57f:	mov    %r10,%rax
+ 582:	cqto
+ 584:	mov    $0xa,%r8d
+ 58a:	idiv   %r8
+ 58d:	mov    %rax,0x8(%rsp)
+ 592:	jmp    448 <_Wsys.put_number$096066c5668dc12f+0x110>
+ 597:	mov    $0x1,%edi
+ 59c:	mov    0x0(%rip),%rsi        # 5a3 <_Wsys.put_number$096066c5668dc12f+0x26b>
+ 5a3:	mov    $0xc,%edx
+ 5a8:	mov    $0x7a,%ecx
+ 5ad:	mov    $0x9,%r8d
+ 5b3:	call   5b8 <_Wsys.put_number$096066c5668dc12f+0x280>
+ 5b8:	ud2
+ 5ba:	jmp    76d <_Wsys.put_number$096066c5668dc12f+0x435>
+ 5bf:	mov    $0x1,%edi
+ 5c4:	mov    0x0(%rip),%rsi        # 5cb <_Wsys.put_number$096066c5668dc12f+0x293>
+ 5cb:	mov    $0xc,%edx
+ 5d0:	mov    $0x89,%ecx
+ 5d5:	mov    $0x9,%r8d
+ 5db:	call   5e0 <_Wsys.put_number$096066c5668dc12f+0x2a8>
+ 5e0:	ud2
+ 5e2:	mov    $0x1,%edi
+ 5e7:	mov    0x0(%rip),%rsi        # 5ee <_Wsys.put_number$096066c5668dc12f+0x2b6>
+ 5ee:	mov    $0xc,%edx
+ 5f3:	mov    $0x8b,%ecx
+ 5f8:	mov    $0x5,%r8d
+ 5fe:	call   603 <_Wsys.put_number$096066c5668dc12f+0x2cb>
+ 603:	ud2
+ 605:	mov    $0x1,%edi
+ 60a:	mov    0x0(%rip),%rsi        # 611 <_Wsys.put_number$096066c5668dc12f+0x2d9>
+ 611:	mov    $0xc,%edx
+ 616:	mov    $0x89,%ecx
+ 61b:	mov    $0x9,%r8d
+ 621:	call   626 <_Wsys.put_number$096066c5668dc12f+0x2ee>
+ 626:	ud2
+ 628:	mov    $0x1,%edi
+ 62d:	mov    0x0(%rip),%rsi        # 634 <_Wsys.put_number$096066c5668dc12f+0x2fc>
+ 634:	mov    $0xc,%edx
+ 639:	mov    $0x82,%ecx
+ 63e:	mov    $0xd,%r8d
+ 644:	call   649 <_Wsys.put_number$096066c5668dc12f+0x311>
+ 649:	ud2
+ 64b:	jmp    6be <_Wsys.put_number$096066c5668dc12f+0x386>
+ 650:	mov    $0x1,%edi
+ 655:	mov    0x0(%rip),%rsi        # 65c <_Wsys.put_number$096066c5668dc12f+0x324>
+ 65c:	mov    $0xc,%edx
+ 661:	mov    $0x7e,%ecx
+ 666:	mov    $0xd,%r8d
+ 66c:	call   671 <_Wsys.put_number$096066c5668dc12f+0x339>
+ 671:	ud2
+ 673:	jmp    6be <_Wsys.put_number$096066c5668dc12f+0x386>
+ 678:	mov    $0x1,%edi
+ 67d:	mov    0x0(%rip),%rsi        # 684 <_Wsys.put_number$096066c5668dc12f+0x34c>
+ 684:	mov    $0xc,%edx
+ 689:	mov    $0x7f,%ecx
+ 68e:	mov    $0xd,%r8d
+ 694:	call   699 <_Wsys.put_number$096066c5668dc12f+0x361>
+ 699:	ud2
+ 69b:	mov    $0x2,%edi
+ 6a0:	mov    0x0(%rip),%rsi        # 6a7 <_Wsys.put_number$096066c5668dc12f+0x36f>
+ 6a7:	mov    $0xc,%edx
+ 6ac:	mov    $0x7f,%ecx
+ 6b1:	mov    $0xd,%r8d
+ 6b7:	call   6bc <_Wsys.put_number$096066c5668dc12f+0x384>
+ 6bc:	ud2
+ 6be:	mov    $0x1,%edi
+ 6c3:	mov    0x0(%rip),%rsi        # 6ca <_Wsys.put_number$096066c5668dc12f+0x392>
+ 6ca:	mov    $0xc,%edx
+ 6cf:	mov    $0x7e,%ecx
+ 6d4:	mov    $0xd,%r8d
+ 6da:	call   6df <_Wsys.put_number$096066c5668dc12f+0x3a7>
+ 6df:	ud2
+ 6e1:	mov    $0x2,%edi
+ 6e6:	mov    0x0(%rip),%rsi        # 6ed <_Wsys.put_number$096066c5668dc12f+0x3b5>
+ 6ed:	mov    $0xc,%edx
+ 6f2:	mov    $0x7e,%ecx
+ 6f7:	mov    $0xd,%r8d
+ 6fd:	call   702 <_Wsys.put_number$096066c5668dc12f+0x3ca>
+ 702:	ud2
+ 704:	mov    $0x1,%edi
+ 709:	mov    0x0(%rip),%rsi        # 710 <_Wsys.put_number$096066c5668dc12f+0x3d8>
+ 710:	mov    $0xc,%edx
+ 715:	mov    $0x7d,%ecx
+ 71a:	mov    $0xd,%r8d
+ 720:	call   725 <_Wsys.put_number$096066c5668dc12f+0x3ed>
+ 725:	ud2
+ 727:	mov    $0x1,%edi
+ 72c:	mov    0x0(%rip),%rsi        # 733 <_Wsys.put_number$096066c5668dc12f+0x3fb>
+ 733:	mov    $0xc,%edx
+ 738:	mov    $0x7b,%ecx
+ 73d:	mov    $0x9,%r8d
+ 743:	call   748 <_Wsys.put_number$096066c5668dc12f+0x410>
+ 748:	ud2
+ 74a:	mov    $0x2,%edi
+ 74f:	mov    0x0(%rip),%rsi        # 756 <_Wsys.put_number$096066c5668dc12f+0x41e>
+ 756:	mov    $0xc,%edx
+ 75b:	mov    $0x7b,%ecx
+ 760:	mov    $0x9,%r8d
+ 766:	call   76b <_Wsys.put_number$096066c5668dc12f+0x433>
+ 76b:	ud2
+ 76d:	mov    $0x1,%edi
+ 772:	mov    0x0(%rip),%rsi        # 779 <_Wsys.put_number$096066c5668dc12f+0x441>
+ 779:	mov    $0xc,%edx
+ 77e:	mov    $0x7a,%ecx
+ 783:	mov    $0x9,%r8d
+ 789:	call   78e <_Wsys.put_number$096066c5668dc12f+0x456>
+ 78e:	ud2
+ 790:	mov    $0x2,%edi
+ 795:	mov    0x0(%rip),%rsi        # 79c <_Wsys.put_number$096066c5668dc12f+0x464>
+ 79c:	mov    $0xc,%edx
+ 7a1:	mov    $0x7a,%ecx
+ 7a6:	mov    $0x9,%r8d
+ 7ac:	call   7b1 <_Wsys.put_number$096066c5668dc12f+0x479>
+ 7b1:	ud2
+ 7b3:	mov    $0x1,%edi
+ 7b8:	mov    0x0(%rip),%rsi        # 7bf <_Wsys.put_number$096066c5668dc12f+0x487>
+ 7bf:	mov    $0xc,%edx
+ 7c4:	mov    $0x75,%ecx
+ 7c9:	mov    $0x18,%r8d
+ 7cf:	call   7d4 <_Wsys.put_number$096066c5668dc12f+0x49c>
+ 7d4:	ud2
+	...
+ 7de:	add    %al,0x30(%rax)
+ 7e4:	add    %al,(%rax)
+ 7e6:	add    %al,(%rax)
+ 7e8:	add    %eax,(%rax)
+ 7ea:	add    %al,(%rax)
+ 7ec:	add    %al,(%rax)
+	...
+
+00000000000007f0 <wolf_trap>:
+ 7f0:	push   %rbp
+ 7f1:	mov    %rsp,%rbp
+ 7f4:	sub    $0x50,%rsp
+ 7f8:	mov    %rbx,0x30(%rsp)
+ 7fd:	mov    %r12,0x38(%rsp)
+ 802:	mov    %r13,0x40(%rsp)
+ 807:	mov    %r15,0x48(%rsp)
+ 80c:	mov    %edi,(%rsp)
+ 80f:	mov    %rdi,%r12
+ 812:	mov    %rsi,0x8(%rsp)
+ 817:	mov    %rsi,%rbx
+ 81a:	mov    %rdx,0x10(%rsp)
+ 81f:	mov    %rdx,%r15
+ 822:	mov    %rcx,0x18(%rsp)
+ 827:	mov    %rcx,%r13
+ 82a:	mov    %r8,0x20(%rsp)
+ 82f:	movabs $0x203a656c7a7a756d,%rdi
+ 839:	call   83e <wolf_trap+0x4e>
+ 83e:	movabs $0x2070617274,%rdi
+ 848:	call   84d <wolf_trap+0x5d>
+ 84d:	mov    %r12,%rdi
+ 850:	movslq %edi,%rdi
+ 853:	call   858 <wolf_trap+0x68>
+ 858:	mov    %r15,%rdx
+ 85b:	test   %rdx,%rdx
+ 85e:	jle    88b <wolf_trap+0x9b>
+ 864:	mov    $0x20746120,%edi
+ 869:	call   86e <wolf_trap+0x7e>
+ 86e:	mov    %r15,%rsi
+ 871:	mov    %rbx,%rdi
+ 874:	call   879 <wolf_trap+0x89>
+ 879:	mov    $0x3a,%edi
+ 87e:	call   883 <wolf_trap+0x93>
+ 883:	mov    %r13,%rdi
+ 886:	call   88b <wolf_trap+0x9b>
+ 88b:	mov    $0xa,%edi
+ 890:	call   895 <wolf_trap+0xa5>
+ 895:	mov    $0x86,%edi
+ 89a:	call   89f <wolf_trap+0xaf>
+ 89f:	mov    0x30(%rsp),%rbx
+ 8a4:	mov    0x38(%rsp),%r12
+ 8a9:	mov    0x40(%rsp),%r13
+ 8ae:	mov    0x48(%rsp),%r15
+ 8b3:	add    $0x50,%rsp
+ 8b7:	mov    %rbp,%rsp
+ 8ba:	pop    %rbp
+ 8bb:	ret
+
+00000000000008bc <_Wsys.linked$8551e1507e023d61>:
+ 8bc:	push   %rbp
+ 8bd:	mov    %rsp,%rbp
+ 8c0:	mov    $0x1,%eax
+ 8c5:	mov    %rbp,%rsp
+ 8c8:	pop    %rbp
+ 8c9:	ret

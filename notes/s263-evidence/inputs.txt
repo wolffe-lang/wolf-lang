@@ -44,8 +44,8 @@ Image id: 27f79ef8e9503fd01143d252d66bcc5b5d502a0f8d74e3625dd8a92e9468b57b.
 Container compiler/linker: Ubuntu clang 18.1.3. Host clang is 21.1.8.
 Every run holds hasu-B.lock, --memory 12g and taskset -c 6-11 INSIDE.
 CARGO_INCREMENTAL=0; CARGO_HOME and CARGO_TARGET_DIR are inside the lane.
-README read, current for this preparatory checkpoint; native execution of
-variadics is not claimed yet.
+Historical preparatory checkpoint: native execution had not been
+implemented at this point. The final acceptance below supersedes it.
 
 Intermediate gauntlet correction (after 4a2266f8):
 The first full run stopped at the test step, exit 1, because the Python
@@ -70,8 +70,16 @@ efa05c7609b9cff00daace5571f5c5c3d3f5aa99f773ad95393639f1b903f8a8.
 six tests, including native and release image.lu through the translated
 four-CPU lane. No compiler/runtime fix was made for this environment fault.
 
-Final acceptance still must install x86_64-unknown-none in an image-owned
-Rust 1.97.1 toolchain and select that toolchain in run-hasu.sh (its current
-RUSTC/RUSTDOC point to the read-only Nix toolchain, which lacks that target).
-No host package or configuration is to be changed. The upcoming rerun is
-still an intermediate frontend checkpoint, not final native acceptance.
+Final acceptance environment (supersedes the preparatory toolchain above):
+localhost/s263-toolchain:final-1.97.1 image id
+ed3720d72f16470f3115635102af8ca01e3bac48b13d02d5bab9ac4438c637c6.
+Image-owned Rust 1.97.1 commit 8bab26f4f68e0e26f0bb7960be334d5b520ea452,
+LLVM 22.1.6, rustfmt/clippy and x86_64-unknown-linux-gnu plus
+x86_64-unknown-none targets. run-hasu-final.sh uses no host/Nix sysroot.
+WOLF_RT_NONE_REQUIRE=1 cargo xtask rt-none passed, producing the real
+none-target runtime archive. No host packages/configuration changed.
+Native/release C17 interoperability, real-none muzzle acceptance, and
+complete muzzle archive objdump proofs passed at the banked implementation
+head d2a6a6e8; later source changes concern only the proof test helper.
+The final full gauntlet is launched at the final tracked head and handed
+to the orchestrator with pid/log/exit-marker; it is not predeclared green.

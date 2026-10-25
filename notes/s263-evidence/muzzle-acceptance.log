@@ -1,0 +1,273 @@
++ printf 'compiler_head=%s\ncompiler_path=%s\nexpected_version=%s\n' d2a6a6e83e8f5de69d2d30c9892fc36e95300c23 /work/target/debug/wolf 'wolf 0.2.35+dev.unknown (wolfgang)'
+compiler_head=d2a6a6e83e8f5de69d2d30c9892fc36e95300c23
+compiler_path=/work/target/debug/wolf
+expected_version=wolf 0.2.35+dev.unknown (wolfgang)
++ date -u +%Y-%m-%dT%H:%M:%SZ
+2026-10-25T00:48:44Z
++ sha256sum /work/target/debug/wolf /work/muzzle/tests/cases/printf.c /work/muzzle/src/stdio/stdio.lu
+ac79ccdaa2b1b82af158411ea495219d103e12e05264bb83f48d8dfbd3dbd25f  /work/target/debug/wolf
+edb20b7e6d4cd4bd42eaa0fc07e56b967c4b809e407036e9fdbaea327dd4b0fa  /work/muzzle/tests/cases/printf.c
+9ac9cde88ae4dc19aa0f439afd2fbe2817bf7c2f8c3480c81a2da6cb13c8fcbb  /work/muzzle/src/stdio/stdio.lu
++ run version /work/target/debug/wolf --version
++ local name=version
++ shift
++ echo 'RUN version'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/target/debug/wolf --version
+ /work/target/debug/wolf --version+ printf '\n'
+
++ set +e
++ /work/target/debug/wolf --version
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/version.log
+wolf 0.2.35+dev.unknown (wolfgang)
+paired with lupin 0.1.56 (reference interpreter), pin 294d626
++ echo 'EXIT version=0'
+EXIT version=0
++ echo 'EXIT version=0'
++ '[' 0 = 0 ']'
++ run identity /work/muzzle/tests/build-override
++ local name=identity
++ shift
++ echo 'RUN identity'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/muzzle/tests/build-override
+ /work/muzzle/tests/build-override+ printf '\n'
+
++ set +e
++ /work/muzzle/tests/build-override
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/identity.log
+PASS default-refuses exit=2 compiled=no
+PASS exact-override exit=91 compiled=yes
+PASS wrong-override exit=2 compiled=no
+PASS empty-override exit=2 compiled=no
+PASS missing-driver exit=2 compiled=no
+build-override: pass=5 fail=0
++ echo 'EXIT identity=0'
+EXIT identity=0
++ echo 'EXIT identity=0'
++ '[' 0 = 0 ']'
++ for tier in native release
++ run build-native /work/muzzle/tools/build native
++ local name=build-native
++ shift
++ echo 'RUN build-native'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/muzzle/tools/build native
+ /work/muzzle/tools/build native+ printf '\n'
+
++ set +e
++ /work/muzzle/tools/build native
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/build-native.log
+build: DEVELOPMENT OVERRIDE WOLF=/work/target/debug/wolf expected='wolf 0.2.35+dev.unknown (wolfgang)' (release pin='wolf 0.2.34 (wolfgang, pin 9da7bdc)')
+build: native: 7 objects, 20 exports defined, 21 internal references, 0 imports -> /work/muzzle/build/native/libmuzzle.a
++ echo 'EXIT build-native=0'
+EXIT build-native=0
++ echo 'EXIT build-native=0'
++ '[' 0 = 0 ']'
++ run diff-native /work/muzzle/tools/difftest native
++ local name=diff-native
++ shift
++ echo 'RUN diff-native'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/muzzle/tools/difftest native
+ /work/muzzle/tools/difftest native+ printf '\n'
+
++ set +e
++ /work/muzzle/tools/difftest native
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/diff-native.log
+difftest: tier=native glibc=glibc 2.39 Ubuntu clang version 18.1.3 (1ubuntu1)
+PASS errno exit=0 lines=10
+PASS exit exit=42 lines=1
+PASS exit_c17 exit=250 lines=1
+PASS exit_posix exit=3 lines=1
+PASS main_return exit=7 lines=1
+PASS malloc exit=0 lines=20
+PASS mem exit=0 lines=38
+PASS printf exit=0 lines=54
+PASS str exit=0 lines=29
+PASS write exit=0 lines=9
+difftest: tier=native pass=10 fail=0
++ echo 'EXIT diff-native=0'
+EXIT diff-native=0
++ echo 'EXIT diff-native=0'
++ '[' 0 = 0 ']'
++ grep -a -qx 'cases=50 failures=0' /work/muzzle/out/native/printf.muzzle.out
++ grep -a -qx 'cases=50 failures=0' /work/muzzle/out/native/printf.glibc.out
++ cp /work/muzzle/out/native/printf.muzzle.out /work/muzzle/notes/s263/run-20261025T004844Z/printf-native.muzzle.out
++ cp /work/muzzle/out/native/printf.glibc.out /work/muzzle/notes/s263/run-20261025T004844Z/printf-native.glibc.out
++ sha256sum /work/muzzle/out/native/printf.muzzle.out /work/muzzle/out/native/printf.glibc.out /work/muzzle/build/native/libmuzzle.a
+1e086d7e0c5a346283786a08f3b9b7ec5b3e708e3210988eab1b6dff1273c280  /work/muzzle/out/native/printf.muzzle.out
+1e086d7e0c5a346283786a08f3b9b7ec5b3e708e3210988eab1b6dff1273c280  /work/muzzle/out/native/printf.glibc.out
+52bbbd063dc2adea914fd5cd1fe1ffe5d7798db6b5832939a76d1803399f5f5b  /work/muzzle/build/native/libmuzzle.a
++ run errors-build-native clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/native/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/native/libmuzzle.a -o /work/muzzle/out/native/printf-errors
++ local name=errors-build-native
++ shift
++ echo 'RUN errors-build-native'
++ printf COMMAND
+COMMAND+ printf ' %q' clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/native/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/native/libmuzzle.a -o /work/muzzle/out/native/printf-errors
+ clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/native/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/native/libmuzzle.a -o /work/muzzle/out/native/printf-errors+ printf '\n'
+
++ set +e
++ clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/native/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/native/libmuzzle.a -o /work/muzzle/out/native/printf-errors
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/errors-build-native.log
++ echo 'EXIT errors-build-native=0'
+EXIT errors-build-native=0
++ echo 'EXIT errors-build-native=0'
++ '[' 0 = 0 ']'
++ run errors-run-native timeout 20 /work/muzzle/out/native/printf-errors
++ local name=errors-run-native
++ shift
++ echo 'RUN errors-run-native'
++ printf COMMAND
+COMMAND+ printf ' %q' timeout 20 /work/muzzle/out/native/printf-errors
+ timeout 20 /work/muzzle/out/native/printf-errors+ printf '\n'
+
++ set +e
++ timeout 20 /work/muzzle/out/native/printf-errors
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/errors-run-native.log
+ok
++ echo 'EXIT errors-run-native=0'
+EXIT errors-run-native=0
++ echo 'EXIT errors-run-native=0'
++ '[' 0 = 0 ']'
++ for tier in native release
++ run build-release /work/muzzle/tools/build release
++ local name=build-release
++ shift
++ echo 'RUN build-release'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/muzzle/tools/build release
+ /work/muzzle/tools/build release+ printf '\n'
+
++ set +e
++ /work/muzzle/tools/build release
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/build-release.log
+build: DEVELOPMENT OVERRIDE WOLF=/work/target/debug/wolf expected='wolf 0.2.35+dev.unknown (wolfgang)' (release pin='wolf 0.2.34 (wolfgang, pin 9da7bdc)')
+build: release: 5 objects, 20 exports defined, 8 internal references, 0 imports -> /work/muzzle/build/release/libmuzzle.a
++ echo 'EXIT build-release=0'
+EXIT build-release=0
++ echo 'EXIT build-release=0'
++ '[' 0 = 0 ']'
++ run diff-release /work/muzzle/tools/difftest release
++ local name=diff-release
++ shift
++ echo 'RUN diff-release'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/muzzle/tools/difftest release
+ /work/muzzle/tools/difftest release+ printf '\n'
+
++ set +e
++ /work/muzzle/tools/difftest release
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/diff-release.log
+difftest: tier=release glibc=glibc 2.39 Ubuntu clang version 18.1.3 (1ubuntu1)
+PASS errno exit=0 lines=10
+PASS exit exit=42 lines=1
+PASS exit_c17 exit=250 lines=1
+PASS exit_posix exit=3 lines=1
+PASS main_return exit=7 lines=1
+PASS malloc exit=0 lines=20
+PASS mem exit=0 lines=38
+PASS printf exit=0 lines=54
+PASS str exit=0 lines=29
+PASS write exit=0 lines=9
+difftest: tier=release pass=10 fail=0
++ echo 'EXIT diff-release=0'
+EXIT diff-release=0
++ echo 'EXIT diff-release=0'
++ '[' 0 = 0 ']'
++ grep -a -qx 'cases=50 failures=0' /work/muzzle/out/release/printf.muzzle.out
++ grep -a -qx 'cases=50 failures=0' /work/muzzle/out/release/printf.glibc.out
++ cp /work/muzzle/out/release/printf.muzzle.out /work/muzzle/notes/s263/run-20261025T004844Z/printf-release.muzzle.out
++ cp /work/muzzle/out/release/printf.glibc.out /work/muzzle/notes/s263/run-20261025T004844Z/printf-release.glibc.out
++ sha256sum /work/muzzle/out/release/printf.muzzle.out /work/muzzle/out/release/printf.glibc.out /work/muzzle/build/release/libmuzzle.a
+1e086d7e0c5a346283786a08f3b9b7ec5b3e708e3210988eab1b6dff1273c280  /work/muzzle/out/release/printf.muzzle.out
+1e086d7e0c5a346283786a08f3b9b7ec5b3e708e3210988eab1b6dff1273c280  /work/muzzle/out/release/printf.glibc.out
+84c0d739222f85521dbf6b64fcdaab0cecfb24e78623fbfa3eacb611f6bb72b9  /work/muzzle/build/release/libmuzzle.a
++ run errors-build-release clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/release/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/release/libmuzzle.a -o /work/muzzle/out/release/printf-errors
++ local name=errors-build-release
++ shift
++ echo 'RUN errors-build-release'
++ printf COMMAND
+COMMAND+ printf ' %q' clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/release/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/release/libmuzzle.a -o /work/muzzle/out/release/printf-errors
+ clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/release/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/release/libmuzzle.a -o /work/muzzle/out/release/printf-errors+ printf '\n'
+
++ set +e
++ clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector -nostdinc -isystem /work/muzzle/include -nostdlib -static /work/muzzle/build/release/crt0.o /work/muzzle/tests/printf-errors.c /work/muzzle/build/release/libmuzzle.a -o /work/muzzle/out/release/printf-errors
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/errors-build-release.log
++ echo 'EXIT errors-build-release=0'
+EXIT errors-build-release=0
++ echo 'EXIT errors-build-release=0'
++ '[' 0 = 0 ']'
++ run errors-run-release timeout 20 /work/muzzle/out/release/printf-errors
++ local name=errors-run-release
++ shift
++ echo 'RUN errors-run-release'
++ printf COMMAND
+COMMAND+ printf ' %q' timeout 20 /work/muzzle/out/release/printf-errors
+ timeout 20 /work/muzzle/out/release/printf-errors+ printf '\n'
+
++ set +e
++ timeout 20 /work/muzzle/out/release/printf-errors
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/errors-run-release.log
+ok
++ echo 'EXIT errors-run-release=0'
+EXIT errors-run-release=0
++ echo 'EXIT errors-run-release=0'
++ '[' 0 = 0 ']'
++ run count-plant /work/muzzle/tests/printf-count-plant
++ local name=count-plant
++ shift
++ echo 'RUN count-plant'
++ printf COMMAND
+COMMAND+ printf ' %q' /work/muzzle/tests/printf-count-plant
+ /work/muzzle/tests/printf-count-plant+ printf '\n'
+
++ set +e
++ /work/muzzle/tests/printf-count-plant
++ local rc=0
++ set -e
++ cat /work/muzzle/notes/s263/run-20261025T004844Z/count-plant.log
+build: DEVELOPMENT OVERRIDE WOLF=/work/target/debug/wolf expected='wolf 0.2.35+dev.unknown (wolfgang)' (release pin='wolf 0.2.34 (wolfgang, pin 9da7bdc)')
+build: native: 7 objects, 20 exports defined, 21 internal references, 0 imports -> /work/muzzle/out/printf-count-plant/build/native/libmuzzle.a
+difftest: tier=native glibc=glibc 2.39 Ubuntu clang version 18.1.3 (1ubuntu1)
+FAIL printf: exit glibc=0 muzzle=1
+FAIL printf: stdout differs
+Binary files printf (glibc) and printf (muzzle native) differ
+difftest: tier=native pass=0 fail=1
+PLANT differential-native exit=1 (expected 1)
+PASS count-only plant rejected on native; unchanged source remains outside scratch
+build: DEVELOPMENT OVERRIDE WOLF=/work/target/debug/wolf expected='wolf 0.2.35+dev.unknown (wolfgang)' (release pin='wolf 0.2.34 (wolfgang, pin 9da7bdc)')
+build: release: 5 objects, 20 exports defined, 8 internal references, 0 imports -> /work/muzzle/out/printf-count-plant/build/release/libmuzzle.a
+difftest: tier=release glibc=glibc 2.39 Ubuntu clang version 18.1.3 (1ubuntu1)
+FAIL printf: exit glibc=0 muzzle=1
+FAIL printf: stdout differs
+Binary files printf (glibc) and printf (muzzle release) differ
+difftest: tier=release pass=0 fail=1
+PLANT differential-release exit=1 (expected 1)
+PASS count-only plant rejected on release; unchanged source remains outside scratch
++ echo 'EXIT count-plant=0'
+EXIT count-plant=0
++ echo 'EXIT count-plant=0'
++ '[' 0 = 0 ']'
++ echo 'ACCEPTANCE PASS: fifty primary cases, counts, both tiers, legacy differential and error checks'
+ACCEPTANCE PASS: fifty primary cases, counts, both tiers, legacy differential and error checks

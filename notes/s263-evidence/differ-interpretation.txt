@@ -1,0 +1,87 @@
+s263 published-control comparison
+Measured implementation: d2a6a6e8; full commands: differ-controls.sh.
+Candidate Nix-built binary digest: candidate-nix-snapshot.sha256.
+This differs from the official-image compiler digest used for final muzzle
+acceptance, but both contain the same banked implementation. The later
+37869336 change affects only the test disassembly checker, not the compiler.
+
+All three differential invocations exited 1: named differences below, NOT
+zero-divergence claims. Inputs: 1223 files / 1161 entries. xtask applies the
+requested lane environment only to candidate A, so published compiler B
+is wrapped explicitly in env WOLF_NATIVE=1 or env WOLF_CHECKED=1.
+Checked results use conform-run --json --checked, never wolf run --checked.
+
+Published wolf 0.2.35, native: 7 differences; 23 unsupported (3 forward pins).
+Run coverage A=753 B=751 both=751. Every moved row:
+- conc/atomic_ub_uaf.lu: exit134 vs70, native undefined-behaviour probe.
+- fs/copy_chunk_failed_write.lu: exit0 vs1, inherited s260 fix.
+- membrane/variadic_position.lu: E0822 vsE0201, intended new diagnosis.
+- memory/unsafe_ub_uaf.lu: exit165 vs94, native undefined-behaviour probe.
+- memory/volatile_ub_uaf.lu: exit10 vs194, native undefined-behaviour probe.
+- os/arg0.lu: exit0 vsE0301, inherited s261 addition.
+- os/args_bytes.lu: exit0 vsE0301, inherited s261 addition.
+Published wolf checked: exactly the four non-UB differences above;
+28 unsupported (3 forward pins), A=748 B=746 both=746.
+
+The two s263 corpus entries also have explicit --phase=parse records in
+  differ-selected-records.jsonl:
+- membrane/variadic_declarations.lu: candidate pass; wolf0.2.35 and
+  lupin0.1.56 fail(E0201). The full run request has no main to execute and
+  counts it unsupported, so that aggregate alone would hide the new parse.
+- membrane/variadic_position.lu: candidate fail(E0822) span166..169;
+  both published controls fail(E0201) span166..168.
+The lowering ledger adds those two entries; no prior row changed.
+
+Lupin0.1.56 checked triage: 825 agreements, 251 completeness classifications,
+6 SOUNDNESS classifications, 104 unsupported (3 forward pins), 27 hard
+comparisons. Coverage A=748 B=935 both=718. Complete named completeness and
+hard rows are retained verbatim in differ-lupin-0156-checked.log. A class
+name is the comparator's classification, not a new s263 soundness claim.
+
+The six SOUNDNESS-classified rows are exit0 vs trap(region-fault):
+- memory/region_copy_shares_str.lu
+- memory/region_outer_write_field.lu
+- memory/region_outer_write_map.lu
+- memory/region_outer_write_str_push.lu
+- memory/region_outer_write_struct.lu
+- memory/region_str_call_index_store.lu
+Replayed ALL SIX with published wolf0.2.35 checked: also exit0. Those
+protocol records are banked alongside the parse records, proving the gap
+predates s263. No inference that the checked compiler is correct over the
+reference is needed; this lane does not resolve those pre-existing gaps.
+
+The other two hard verdict rows:
+- conc/proc_link_root_death.lu: exit121 vs1; the corpus contract permits an
+  implementation-specified nonzero code. Published wolf checked also121.
+  Exact nonzero comparison is overprecise for this row, not a new regression.
+- fs/copy_chunk_failed_write.lu: inherited s260 exit0 vs1.
+
+The remaining nineteen hard rows are compiler warnings vs no warnings:
+- lints/binder_capitalized.lu
+- lints/discarded_result.lu
+- lints/else_arithmetic.lu
+- lints/float_zero_minus.lu
+- lints/region_never_allocates.lu
+- lints/safety_comment_missing.lu
+- lints/shadow_prelude_local.lu
+- rows/unit_discard_fallible_body_stmt.lu
+- rows/unit_discard_if_value.lu
+- rows/unit_discard_raise_stmts.lu
+- rows/unit_discard_raise_unit_fn.lu
+- rows/unit_discard_return_operand.lu
+- rows/unit_discard_tail_if.lu
+- rows/unit_discard_tail_if_chain.lu
+- rows/unit_discard_tail_if_closure.lu
+- rows/unit_discard_tail_if_value_row.lu
+- rows/unit_discard_unit_main.lu
+- typecheck/unit_context_discard.lu
+- typecheck/unit_tail_value_discard.lu
+Exact warning codes/spans are in the raw log; no warning mismatch is hidden.
+
+Lupin's source is 28547b43; --version's 294d626 is its vendored wolf-lang
+spec, not the interpreter source. wolf-interp#280 tracks stale vendoring.
+A mirror follow-up must add the ten new anchors, ellipsis syntax, VaList
+prelude/type checks and named checked refusals. Do NOT ask the reference to
+execute native varargs. Also triage the six existing region gaps and the
+nonzero-exit comparison before filing duplicate issues. No issue was filed
+or closed by s263.

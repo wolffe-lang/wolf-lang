@@ -1,0 +1,17 @@
+
+running 8 tests
+test tests::archive_sections_do_not_share_literal_pool_addresses ... ok
+test tests::function_boundaries_reset_provenance_and_empty_input_fails ... ok
+test tests::literal_and_copied_incoming_al_are_proven ... ok
+test tests::bypass_reentry_and_missing_guard_are_rejected ... ok
+test tests::reachable_or_targeted_bad_bytes_are_never_trimmed ... ok
+test tests::vector_state_without_register_operands_cannot_hide ... ok
+test tests::unreachable_max_integer_literal_pools_are_trimmed ... ok
+test tests::unknown_and_clobbered_aliases_are_rejected ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+notes/s263-evidence/muzzle-native.objdump: 8 guarded XMM saves; no unguarded vector state
+total guarded XMM saves: 8; objdump proof, not QEMU fault execution
+notes/s263-evidence/muzzle-release.objdump: 8 guarded XMM saves; no unguarded vector state
+total guarded XMM saves: 8; objdump proof, not QEMU fault execution

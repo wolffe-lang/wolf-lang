@@ -1,0 +1,43 @@
+Lines containing SKIP: 42 (some parallel output is interleaved; embedded rt-none messages repeat SKIP).
+rt-none: SKIP — this toolchain has no x86_64-unknown-none target (error[E0463]: can't find crate for `core`); `rustup target add x86_64-unknown-none` builds libwolf_rt_none.a, and the freestanding allocation witnesses skip loudly without it
+SKIP: the clang drift witness runs on macOS/aarch64 hosts only
+SKIP: gdb not installed (required on the linux CI lane)
+SKIP: gdb not installed (required on the linux CI lane)
+SKIP: lldb not installed (required on the macOS CI lane)
+SKIP: lldb not installed (required on the macOS CI lane)
+SKIP: restore: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the rows did not run
+SKIP: tty: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: chain: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: subshell: no container engine ran docker.io/library/ubuntu:24.04 (["test a_fork_chain_and_the_wait_tables ... ok
+SKIP: main: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: storm: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: exec: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: fds: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: tasks: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: storm_limit: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: census: no container engine ran test the_busy_rule_and_the_pool ... ok
+SKIP: hub: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: mallocfork: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP: reactor: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+test the_readiness_set_is_the_childs_own ... okSKIP: loop: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "
+SKIP: hub_blocked: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the fork witnesses did not run
+SKIP freestanding_alloc: no x86_64-unknown-none target for this toolchain, so no libwolf_rt_none.a (rt-none: SKIP — this toolchain has no x86_64-unknown-none target (error[E0463]: can't find crate for `core`); `rustup target add x86_64-unknown-none` builds libwolf_rt_none.a, and the freestanding allocation witnesses skip loudly without it)
+SKIP freestanding_interrupt: no qemu-system-x86_64 on the PATH — the image row did not run (rows 1 and 2 did)
+SKIP freestanding_threads: no x86_64-unknown-none target for this toolchain, so no libwolf_rt_none.a (rt-none: SKIP — this toolchain has no x86_64-unknown-none target (error[E0463]: can't find crate for `core`); `rustup target add x86_64-unknown-none` builds libwolf_rt_none.a, and the freestanding allocation witnesses skip loudly without it)
+SKIP: fifo: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the rows did not run
+SKIP: test the_fifo_on_every_machine ... ok
+SKIP: nonblock: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the rows did not run
+SKIP: clip: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the rows did not run
+SKIP: all_root: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live group witnesses did not run on this box
+SKIP: pgid_session: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live group witnesses did not run on this box
+SKIP: job: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live group witnesses did not run on this box
+SKIP: all_user: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live group witnesses did not run on this box
+SKIP: pgid: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live group witnesses did not run on this box
+SKIP: owner: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the witness that sets ids and owners did not run on this box
+SKIP: drop: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the witness that sets ids and owners did not run on this box
+SKIP: refused: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the witness that sets ids and owners did not run on this box
+SKIP: stops: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live job-wait witnesses did not run on this box
+SKIP: idle: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live job-wait witnesses did not run on this box
+SKIP: interrupt: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live job-wait witnesses did not run on this box
+SKIP: core: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live witnesses did not run
+SKIP: reserved: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live witnesses did not run

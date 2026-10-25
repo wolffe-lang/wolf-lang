@@ -1,0 +1,612 @@
+diff --git a/README.md b/README.md
+index 8e356c6..32044f7 100644
+--- a/README.md
++++ b/README.md
+@@ -9,8 +9,11 @@ test for PAX.
+ 
+ **State: the first layer (lc01).** Raw syscalls, errno, the memory and
+ string core, the allocator and process exit, enough for a C program
+-built with `clang -nostdlib` to run against muzzle alone. There is no
+-`printf` yet: wolf has no varargs (wolf-lang#515).
++built with `clang -nostdlib` to run against muzzle alone. This acceptance
++branch adds the first `printf` slice (`%d %s %c %x %%`) using the
++compiler's new C variadic support. It requires an unreleased compiler build;
++the release pin is
++intentionally unchanged, so this branch is not ready to merge as-is.
+ 
+ ## What C gets
+ 
+@@ -18,6 +21,7 @@ built with `clang -nostdlib` to run against muzzle alone. There is no
+ |---|---|
+ | `<string.h>` | `memcpy` `memmove` `memset` `memcmp` `strlen` `strcmp` `strncmp` `strchr` `strcpy` |
+ | `<stdlib.h>` | `malloc` `free` `calloc` `realloc` `exit` `_Exit` |
++| `<stdio.h>` | `printf` (bare `%d %s %c %x %%` only) |
+ | `<unistd.h>` | `_exit` `write` |
+ | `<errno.h>` | `errno` (`(*__errno_location())`), the 34 base E* numbers |
+ | `<stddef.h>` | `size_t` `ptrdiff_t` `wchar_t` `max_align_t` `NULL` `offsetof` |
+@@ -52,6 +56,7 @@ clang -std=c17 -fno-builtin -fno-stack-protector \
+ | `src/sys/` | the kernel boundary: syscalls, the error convention, errno, the trap hook |
+ | `src/string/` | `<string.h>` |
+ | `src/heap/` | the allocator, over `brk` and `mmap` |
++| `src/stdio/` | the first, unbuffered `printf` slice |
+ | `src/process/` | `exit`, `_Exit`, `_exit`, `write` |
+ | `src/sys.S` | the one syscall routine and the static storage wolf cannot hold yet (ruling R2) |
+ | `src/crt0.S` | `_start` |
+@@ -95,3 +100,18 @@ itself stay under the GPL. The exception is modeled on the wolf Runtime
+ Library Exception and the GCC Runtime Library Exception. The wolf Training Data
+ Permission (see `LICENSE-TRAINING-DATA`) lets you train models on this
+ repository's text and ship excerpts of it in datasets under CC BY 4.0.
++
++### Development acceptance
++
++Before a variadic release is pinned, run in an x86-64 Linux
++container with `WOLF` naming the source-built driver,
++`WOLF_EXPECT_VERSION` its exact first `--version` line, and
++`S263_COMPILER_HEAD` its source head/stamp, then `tools/printf-acceptance`.
++The override is loud, explicit, and does not relax the default pin check.
++The runner retains each attempt under `notes/s263/run-<UTC timestamp>/`,
++including commands, true exits, driver/corpus/output SHA-256 digests,
++fifty primary calls and their independent byte counts, the legacy suite,
++muzzle-only invalid-format/closed-output checks, and an isolated count-only
++defect that the differential must reject on both tiers.
++Only `x86_64-unknown-none` is built. This branch cannot be merged until a
++released compiler is pinned and the normal release-based CI is green.
+diff --git a/docs/LEDGER.md b/docs/LEDGER.md
+index 0b42f56..17e3ac9 100644
+--- a/docs/LEDGER.md
++++ b/docs/LEDGER.md
+@@ -26,3 +26,29 @@ standard leaves the behaviour to the implementation.
+ | the package root calls a never-used `reach()` | a module reached only by C is not compiled without an import, and an import nothing uses is E0305 (wolf-lang#599) | #599 |
+ | the heap state is loaded and stored once per `carve` | wolf 0.2.24 forwards a module var's value across a call that writes it (wolf-lang#598) | #598 |
+ | the trap hook writes its fixed text from packed `u64` constants | a `str` literal's bytes cannot reach the kernel as a `*u8` (wolf-lang#604) | #604 |
++
++## printf acceptance slice (s263; not full stdio)
++
++Only bare `%d`, `%s`, `%c`, `%x` and `%%` are supported. `%d` reads
++promoted `int`, `%x` reads `unsigned int`, `%c` reads `int` then converts
++to unsigned char, and `%s` reads a pointer to a null-terminated byte
++string. There are no flags, widths, precisions, length modifiers, wide
++characters, floating conversions, FILE objects, or buffering. Unsupported
++conversions return -1 with EINVAL (22), possibly after writing a prefix;
++this is a subset boundary, not a claim of full C printf conformance.
++
++The formatter writes fd 1 directly, retries EINTR and short writes,
++returns -1 on a write error, and rejects a return count above INT_MAX
++with EOVERFLOW (75). Its 16-byte digit/character scratch buffer is
++process-wide, separate from the trap buffer: single-threaded only, not
++reentrant or async-signal-safe. A null `%s` is outside its precondition;
++no test relies on glibc's optional `(null)` spelling. The corpus uses a
++regular file for stdout. Additional muzzle-only tests cover invalid formats
++and EBADF; EINTR, short writes and count overflow are not dynamically
++exercised by this acceptance. The lc02 draft requires those tests.
++
++`tests/cases/printf.c` contains fifty primary calls plus count metadata.
++Every call checks a separately spelled expected byte count; differential
++comparison includes embedded NUL bytes, promotions, INT_MIN, UINT_MAX,
++and integer/pointer overflow from the GP save area onto the stack.
++The toolchain pin remains 0.2.34 until a released variadic compiler exists.
+diff --git a/docs/SOURCES.md b/docs/SOURCES.md
+index 2fbd5a5..0db5d2d 100644
+--- a/docs/SOURCES.md
++++ b/docs/SOURCES.md
+@@ -38,3 +38,19 @@ was read, so no glibc header under `/usr/include` was opened.
+ project and POSIX, and any allocator's design or code. The allocator
+ (power-of-two classes, a header word, per-class free lists, brk then
+ mmap) is muzzle's own.
++
++## s263: printf acceptance
++
++- Org-owned muzzle at `0ae060141bc750dfc59e71158de48757feea9916`:
++  build/differential scripts, raw syscall and raw-byte conventions.
++- Org-owned wolf-lang s263 `spec/04-abi.md` `[abi.c.variadic]`: builtin
++  `VaList`, promoted argument access, start/end lifetime, target limits.
++- C17 7.21.6.1 and 7.21.6.3 function/conversion contracts (the public
++  standard's interface, not any libc implementation); the hand-written
++  `stdio.h` declares only printf's standard synopsis.
++- Black-box host glibc printf via clang-compiled C17 calls; no compiler,
++  libc, stdarg or printf implementation source/header text consulted.
++
++No new assembler formatting logic: printf and all conversion logic are
++Wolf; `sys.S` only supplies the same kind of static scratch storage that
++muzzle's trap hook already uses.
+diff --git a/include/stdio.h b/include/stdio.h
+new file mode 100644
+index 0000000..55d0655
+--- /dev/null
++++ b/include/stdio.h
+@@ -0,0 +1,8 @@
++/* muzzle: C17 7.21.6.3 synopsis, restricted first printf slice.
++ * Only bare %d %s %c %x %% are implemented; no streams yet. */
++#ifndef _MUZZLE_STDIO_H
++#define _MUZZLE_STDIO_H
++
++int printf(const char * restrict format, ...);
++
++#endif
+diff --git a/src/muzzle.lu b/src/muzzle.lu
+index 8fbe7bf..50ea3ca 100644
+--- a/src/muzzle.lu
++++ b/src/muzzle.lu
+@@ -6,11 +6,12 @@ use sys
+ use string
+ use heap
+ use process
++use stdio
+ 
+ /// Reaches every module. A library's modules are called by C, never by
+ /// wolf, and wolf 0.2.24 compiles only the modules the root's code uses:
+ /// without an import a module's exports are missing from the object,
+ /// and an import nothing uses is E0305 (wolf-lang#599). Never called.
+ fn reach() -> bool {
+-    sys.linked() && string.linked() && heap.linked() && process.linked()
++    sys.linked() && string.linked() && heap.linked() && process.linked() && stdio.linked()
+ }
+diff --git a/src/stdio/stdio.lu b/src/stdio/stdio.lu
+new file mode 100644
+index 0000000..459d499
+--- /dev/null
++++ b/src/stdio/stdio.lu
+@@ -0,0 +1,142 @@
++//! The first printf slice: C17 7.21.6.3 and 7.21.6.1, only bare
++//! %d, %s, %c, %x and %%. No FILE, buffering, flags, width, precision
++//! or length modifiers. Arguments follow [abi.c.variadic].
++
++use sys
++
++// Separate from the trap hook's buffer. Like errno, this first slice
++// is single-threaded; no allocation or Wolf runtime is involved.
++extern "c" let __muzzle_printf_scratch: *u8
++
++fn put(p: *u8, n: uint) -> i64 {
++    var done: uint = 0
++    // # Safety: the formatter supplies n readable bytes; the syscall
++    // reads those bytes synchronously. Retry short writes and EINTR.
++    unsafe {
++        while done < n {
++            let at = p.addr() + done
++            let r = sys.raw(1, 1, at as wrapping[i64] as i64,
++                (n - done) as wrapping[i64] as i64, 0, 0, 0)
++            if r == -4 {
++                continue
++            }
++            if r < 0 {
++                return sys.ret(r)
++            }
++            if r == 0 {
++                sys.set_errno(5)
++                return -1
++            }
++            done += r as uint
++        }
++    }
++    n as i64
++}
++
++fn character(c: u8) -> i64 {
++    // # Safety: the single-threaded scratch object has 16 bytes.
++    unsafe {
++        __muzzle_printf_scratch[0] = c
++    }
++    put(__muzzle_printf_scratch, 1)
++}
++
++fn number(value: u64, base: u64, negative: bool) -> i64 {
++    var v = value
++    var at: int = 15
++    // # Safety: callers pass a u32 magnitude and base 10 or 16.
++    // At most 10 digits plus a sign fit in the 16-byte scratch object.
++    unsafe {
++        var digit = v % base
++        __muzzle_printf_scratch[at] = if digit < 10 { 48 + digit as u8 } else { 87 + digit as u8 }
++        v = v / base
++        while v > 0 {
++            at -= 1
++            digit = v % base
++            __muzzle_printf_scratch[at] = if digit < 10 { 48 + digit as u8 } else { 87 + digit as u8 }
++            v = v / base
++        }
++        if negative {
++            at -= 1
++            __muzzle_printf_scratch[at] = 45
++        }
++        let from = __muzzle_printf_scratch.with_addr(__muzzle_printf_scratch.addr() + at as uint)
++        put(from, (16 - at) as uint)
++    }
++}
++
++fn format(fmt: *u8, mut ap: VaList) -> i32 {
++    var at: int = 0
++    var count: i64 = 0
++    // # Safety: C supplies a null-terminated format, matching promoted
++    // arguments, and readable null-terminated strings for every %s.
++    // The live cursor never escapes the variadic invocation.
++    unsafe {
++        while fmt[at] != 0 {
++            var n: i64 = 0
++            if fmt[at] != 37 {
++                let start = at
++                while fmt[at] != 0 && fmt[at] != 37 {
++                    at += 1
++                }
++                n = put(fmt.with_addr(fmt.addr() + start as uint), (at - start) as uint)
++            } else {
++                at += 1
++                let spec = fmt[at]
++                if spec == 37 {
++                    n = character(37)
++                } else if spec == 100 {
++                    // Widen before negating, including INT_MIN.
++                    let v = va_arg[i32](mut ap) as i64
++                    let magnitude = if v < 0 { 0 - v } else { v }
++                    n = number(magnitude as u64, 10, v < 0)
++                } else if spec == 120 {
++                    let v = va_arg[u32](mut ap)
++                    n = number(v as u64, 16, false)
++                } else if spec == 99 {
++                    let v = va_arg[i32](mut ap)
++                    n = character(v as wrapping[u8] as u8)
++                } else if spec == 115 {
++                    let s = va_arg[*u8](mut ap)
++                    var len: uint = 0
++                    while s[len as int] != 0 {
++                        len += 1
++                    }
++                    n = put(s, len)
++                } else {
++                    // Outside this subset, refuse rather than pretending
++                    // to implement a C conversion or reading an argument.
++                    sys.set_errno(22)
++                    return -1
++                }
++                at += 1
++            }
++            if n < 0 {
++                return -1
++            }
++            count += n
++            if count > 2147483647 {
++                sys.set_errno(75)
++                return -1
++            }
++        }
++    }
++    count as i32
++}
++
++/// C17 7.21.6.3, restricted to the conversions documented above.
++export fn printf(fmt: *u8, ...) -> i32 {
++    // # Safety: printf's C preconditions; start/end bracket every path
++    // through format, including output errors and rejected conversions.
++    unsafe {
++        var ap = va_start()
++        let count = format(fmt, mut ap)
++        va_end(mut ap)
++        count
++    }
++}
++
++/// Keep this C-only module reachable (wolf-lang#599).
++pub fn linked() -> bool {
++    true
++}
+diff --git a/src/sys.S b/src/sys.S
+index 06ecf9a..d7cbf48 100644
+--- a/src/sys.S
++++ b/src/sys.S
+@@ -52,4 +52,11 @@ __muzzle_bins:
+ __muzzle_scratch:
+ 	.zero	32
+ 
++/* Single-threaded printf digit/character buffer, not the trap buffer. */
++	.globl	__muzzle_printf_scratch
++	.type	__muzzle_printf_scratch,@object
++	.size	__muzzle_printf_scratch, 16
++__muzzle_printf_scratch:
++	.zero	16
++
+ 	.section .note.GNU-stack,"",@progbits
+diff --git a/tests/build-override b/tests/build-override
+new file mode 100755
+index 0000000..a32736f
+--- /dev/null
++++ b/tests/build-override
+@@ -0,0 +1,46 @@
++#!/usr/bin/env bash
++# Acceptance-branch identity checks, without requiring a compiler install.
++# A fake driver reports one version and records any compile attempt. It
++# exits 91 at compile, so none of these cases executes clang or emits code.
++set -euo pipefail
++root=$(cd "$(dirname "$0")/.." && pwd)
++scratch="$root/out/build-override"
++rm -rf "$scratch"; mkdir -p "$scratch/tree/tools" "$scratch/tree/src"
++cp "$root/tools/build" "$scratch/tree/tools/build"
++cp "$root/wolf-toolchain.toml" "$scratch/tree/wolf-toolchain.toml"
++cat > "$scratch/driver" <<'DRIVER'
++#!/usr/bin/env bash
++if [ "${1:-}" = --version ]; then
++  echo 'wolf acceptance-test (not a release)'
++  exit 0
++fi
++printf '%s\n' "$*" > "${0%/*}/compiled"
++exit 91
++DRIVER
++chmod +x "$scratch/driver"
++run() {
++  local name=$1 expected=$2 compiled=$3; shift 3
++  rm -f "$scratch/compiled"
++  mkdir -p "$scratch/tree/build/native"
++  echo stale > "$scratch/tree/build/native/old"
++  set +e
++  env -u WOLF -u WOLF_EXPECT_VERSION "$@" "$scratch/tree/tools/build" native > "$scratch/$name.log" 2>&1
++  rc=$?
++  set -e
++  [ "$rc" = "$expected" ] || { cat "$scratch/$name.log"; echo "FAIL $name exit=$rc expected=$expected"; exit 1; }
++  [ ! -e "$scratch/tree/build/native/old" ] || { echo "FAIL $name stale output"; exit 1; }
++  if [ "$compiled" = yes ]; then
++    [ -f "$scratch/compiled" ]
++    grep -q 'DEVELOPMENT OVERRIDE' "$scratch/$name.log"
++  else
++    [ ! -f "$scratch/compiled" ]
++    [ ! -d "$scratch/tree/build/native" ]
++  fi
++  echo "PASS $name exit=$rc compiled=$compiled"
++}
++run default-refuses 2 no WOLF="$scratch/driver"
++run exact-override 91 yes WOLF="$scratch/driver" WOLF_EXPECT_VERSION='wolf acceptance-test (not a release)'
++run wrong-override 2 no WOLF="$scratch/driver" WOLF_EXPECT_VERSION='wolf acceptance-test'
++run empty-override 2 no WOLF="$scratch/driver" WOLF_EXPECT_VERSION=''
++run missing-driver 2 no WOLF_EXPECT_VERSION='wolf acceptance-test (not a release)'
++echo 'build-override: pass=5 fail=0'
+diff --git a/tests/cases/printf.c b/tests/cases/printf.c
+new file mode 100644
+index 0000000..9a0988c
+--- /dev/null
++++ b/tests/cases/printf.c
+@@ -0,0 +1,76 @@
++/* Fifty defined C17 printf-subset cases. No libc source or headers were
++ * read: stdio.h is consumed by clang, with muzzle's own synopsis in the
++ * freestanding column. Each primary call checks an independently spelled
++ * expected byte count; all output (including embedded NULs) is compared
++ * against black-box glibc by tools/difftest. Use printf for metadata too,
++ * so glibc's buffering cannot reorder it relative to a write helper. */
++#include <stdio.h>
++
++#define CASE(expected, ...) do { \
++    int n = printf(__VA_ARGS__); \
++    ++cases; \
++    if (n != (int)(sizeof(expected) - 1)) ++failures; \
++    if (printf("|case=%d ret=%d\n", cases, n) < 0) ++failures; \
++} while (0)
++
++int main(void) {
++    int cases = 0, failures = 0;
++    /* Literal and percent paths, including an empty result. */
++    CASE("", "%s", "");                                      /* 01 */
++    CASE("plain text", "plain text");                         /* 02 */
++    CASE("line one\nline two\n", "line one\nline two\n");       /* 03 */
++    CASE("%", "%%");                                         /* 04 */
++    CASE("%%%", "%%%%%%");                                   /* 05 */
++    CASE("before%after", "before%%after");                    /* 06 */
++    CASE("0", "%d", 0);                                      /* 07 */
++    CASE("1", "%d", 1);                                      /* 08 */
++    CASE("-1", "%d", -1);                                    /* 09 */
++    CASE("9 10 99 100", "%d %d %d %d", 9, 10, 99, 100);       /* 10 */
++    CASE("-9 -10 -99 -100", "%d %d %d %d", -9, -10, -99, -100); /* 11 */
++    CASE("2147483647", "%d", 2147483647);                     /* 12 */
++    CASE("-2147483648", "%d", (-2147483647 - 1));              /* 13 */
++    CASE("-128", "%d", (signed char)-128);                    /* 14 */
++    CASE("127", "%d", (signed char)127);                      /* 15 */
++    CASE("255", "%d", (unsigned char)255);                    /* 16 */
++    CASE("-32768", "%d", (short)-32768);                      /* 17 */
++    CASE("65535", "%d", (unsigned short)65535);               /* 18 */
++    CASE("0 1", "%d %d", (_Bool)0, (_Bool)1);                 /* 19 */
++    CASE("1234567890", "%d", 1234567890);                     /* 20 */
++    CASE("0", "%x", 0u);                                     /* 21 */
++    CASE("1", "%x", 1u);                                     /* 22 */
++    CASE("9 a f 10", "%x %x %x %x", 9u, 10u, 15u, 16u);     /* 23 */
++    CASE("ff 100", "%x %x", 255u, 256u);                      /* 24 */
++    CASE("7fffffff", "%x", 2147483647u);                      /* 25 */
++    CASE("80000000", "%x", 2147483648u);                      /* 26 */
++    CASE("ffffffff", "%x", 4294967295u);                      /* 27 */
++    CASE("deadbeef", "%x", 3735928559u);                      /* 28 */
++    CASE("a5a5a5a5", "%x", 2779096485u);                      /* 29 */
++    CASE("A", "%c", 'A');                                    /* 30 */
++    CASE("\0", "%c", 0);                                    /* 31 */
++    CASE("\xff", "%c", 255);                                /* 32 */
++    CASE("A", "%c", 321);                                    /* 33 */
++    CASE("\xff", "%c", -1);                                 /* 34 */
++    CASE("\n\t ", "%c%c%c", '\n', '\t', ' ');                /* 35 */
++    CASE("wolf", "%s", "wolf");                              /* 36 */
++    CASE("[a][b][]", "[%s][%s][%s]", "a", "b", "");          /* 37 */
++    CASE("literal %d %s %x", "%s", "literal %d %s %x");       /* 38 */
++    CASE("prefix", "%s", "prefix\0not printed");              /* 39 */
++    CASE("\xc3\xa9", "%s", "\xc3\xa9");                     /* 40 */
++    CASE("a\0b", "%s%c%s", "a", 0, "b");                     /* 41 */
++    CASE("-42/wolf/Z/feed/%", "%d/%s/%c/%x/%%", -42, "wolf", 'Z', 65261u); /* 42 */
++    CASE("1 2 3 4 5", "%d %d %d %d %d", 1, 2, 3, 4, 5);     /* 43: all remaining GP */
++    CASE("1 2 3 4 5 6", "%d %d %d %d %d %d", 1, 2, 3, 4, 5, 6); /* 44: first stack */
++    CASE("1 2 3 4 5 6 7 8 9 10 11 12", "%d %d %d %d %d %d %d %d %d %d %d %d",
++         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);             /* 45 */
++    CASE("a/b/c/d/e/f/g/h", "%s/%s/%s/%s/%s/%s/%s/%s",
++         "a", "b", "c", "d", "e", "f", "g", "h");         /* 46 */
++    CASE("0/1/a/f/10/ff/ffff/ffffffff", "%x/%x/%x/%x/%x/%x/%x/%x",
++         0u, 1u, 10u, 15u, 16u, 255u, 65535u, 4294967295u);  /* 47 */
++    CASE("ABCDEFGH", "%c%c%c%c%c%c%c%c", 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'); /* 48 */
++    CASE("-1:a:B:ff:5:tail:C:80000000:-2147483648", "%d:%s:%c:%x:%d:%s:%c:%x:%d",
++         -1, "a", 'B', 255u, 5, "tail", 'C', 2147483648u, (-2147483647 - 1)); /* 49 */
++    CASE("0123456789012345678901234567890123456789012345678901234567890123456789%end",
++         "%s%%%s", "0123456789012345678901234567890123456789012345678901234567890123456789", "end"); /* 50 */
++    printf("cases=%d failures=%d\n", cases, failures);
++    return cases != 50 || failures != 0;
++}
+diff --git a/tests/printf-count-plant b/tests/printf-count-plant
+new file mode 100755
+index 0000000..c3a11ce
+--- /dev/null
++++ b/tests/printf-count-plant
+@@ -0,0 +1,33 @@
++#!/usr/bin/env bash
++# Isolated negative control: correct output bytes but an off-by-one count.
++# Never edits the real source tree. Requires the same explicit compiler
++# identity as tools/printf-acceptance; artifacts stay under ignored out/.
++set -euo pipefail
++root=$(cd "$(dirname "$0")/.." && pwd)
++: "${WOLF:?explicit compiler path required}"
++: "${WOLF_EXPECT_VERSION:?exact compiler identity required}"
++scratch="$root/out/printf-count-plant"
++rm -rf "$scratch"; mkdir -p "$scratch"
++cp -R "$root/src" "$root/include" "$root/tools" "$root/tests" "$root/wolf-toolchain.toml" "$scratch/"
++rm -rf "$scratch/src/.lu-cache"
++python3 - "$scratch/src/stdio/stdio.lu" <<'PY'
++from pathlib import Path
++import sys
++p = Path(sys.argv[1])
++s = p.read_text()
++needle = '        count\n'
++assert s.count(needle) == 1
++p.write_text(s.replace(needle, '        count + 1\n'))
++PY
++for tier in native release; do
++  "$scratch/tools/build" "$tier"
++  set +e
++  "$scratch/tools/difftest" "$tier" "$scratch/tests/cases/printf.c"
++  rc=$?
++  set -e
++  echo "PLANT differential-$tier exit=$rc (expected 1)"
++  [ "$rc" = 1 ] || exit 1
++  grep -a -qx 'cases=50 failures=0' "$scratch/out/$tier/printf.glibc.out"
++  grep -a -qx 'cases=50 failures=50' "$scratch/out/$tier/printf.muzzle.out"
++  echo "PASS count-only plant rejected on $tier; unchanged source remains outside scratch"
++done
+diff --git a/tests/printf-errors.c b/tests/printf-errors.c
+new file mode 100644
+index 0000000..b5c54a5
+--- /dev/null
++++ b/tests/printf-errors.c
+@@ -0,0 +1,27 @@
++/* Muzzle-only subset/error checks, not glibc comparisons of unsupported
++ * syntax or buffered stream timing. syscall close is a test fixture only. */
++#include <errno.h>
++#include <stdio.h>
++
++static long close_stdout(void) {
++    long result;
++    __asm__ volatile ("syscall" : "=a"(result) : "a"(3L), "D"(1L)
++                      : "rcx", "r11", "memory");
++    return result;
++}
++
++int main(void) {
++    const char *unsupported = "%q";
++    const char *trailing = "%";
++    errno = 0;
++    if (printf(unsupported) != -1 || errno != EINVAL) return 1;
++    errno = 0;
++    if (printf(trailing) != -1 || errno != EINVAL) return 2;
++    if (printf("ok\n") != 3) return 3;
++    if (close_stdout() != 0) return 4;
++    errno = 0;
++    if (printf("%d", 42) != -1 || errno != EBADF) return 5;
++    /* An empty format performs no write, even on a closed descriptor. */
++    if (printf("%s", "") != 0) return 6;
++    return 0;
++}
+diff --git a/tests/stale-compiler b/tests/stale-compiler
+index 6710b36..ab559b5 100755
+--- a/tests/stale-compiler
++++ b/tests/stale-compiler
+@@ -71,7 +71,7 @@ EOF
+ stage_pin() { ln -s "$real" "$t/.wolf-bin/wolf-$ver-$host"; }
+ # build [VAR=value]: the copy's tools/build, with no WOLF unless given.
+ build() {
+-  env -u WOLF "$@" "$t/tools/build" "$tier" >"$t/build.out" 2>"$t/build.err"; rc=$?
++  env -u WOLF -u WOLF_EXPECT_VERSION "$@" "$t/tools/build" "$tier" >"$t/build.out" 2>"$t/build.err"; rc=$?
+ }
+ 
+ pass=0; fail=0
+diff --git a/tools/build b/tools/build
+index d18bebd..4ed4a68 100755
+--- a/tools/build
++++ b/tools/build
+@@ -33,6 +33,17 @@ if [ ! -x "$W" ]; then
+   echo "build: run tools/fetch-toolchain, or set WOLF to the pinned driver" >&2
+   exit 2
+ fi
++# s263 acceptance branch only: an unreleased compiler must be named
++# explicitly, and its complete first version line must match exactly.
++# The pin and the strict default remain unchanged. Remove at release pinning.
++if [ "${WOLF_EXPECT_VERSION+x}" = x ]; then
++  if [ -z "${WOLF:-}" ] || [ -z "$WOLF_EXPECT_VERSION" ]; then
++    echo "build: WOLF_EXPECT_VERSION requires explicit WOLF and a nonempty exact version line" >&2
++    exit 2
++  fi
++  echo "build: DEVELOPMENT OVERRIDE WOLF=$W expected='$WOLF_EXPECT_VERSION' (release pin='$line')" >&2
++  line=$WOLF_EXPECT_VERSION
++fi
+ found=$(says "$W")
+ if [ "$found" != "$line" ]; then
+   echo "build: found '$found' at $W; the pin wants '$line' (wolf-toolchain.toml)" >&2
+@@ -52,7 +63,7 @@ ar rcs "$out/libmuzzle.a" "${objs[@]}"
+ # runtime, no libc, no compiler-emitted import such as wolf-lang#522's
+ # memcpy from outside). Both checks fail loudly on an empty object set.
+ EXPORTS="memcpy memmove memset memcmp strlen strcmp strncmp strchr strcpy
+-malloc free calloc realloc exit _Exit _exit write __errno_location wolf_trap"
++malloc free calloc realloc exit _Exit _exit write printf __errno_location wolf_trap"
+ fail=0
+ [ ${#objs[@]} -ge 2 ] || { echo "build: $tier: expected wolf's objects and sys.S's, found ${#objs[@]}" >&2; exit 1; }
+ defined=$(nm --defined-only -g -j "${objs[@]}" | grep -v ':$' | grep -v '^$' | sort -u)
+diff --git a/tools/printf-acceptance b/tools/printf-acceptance
+new file mode 100755
+index 0000000..6f57aca
+--- /dev/null
++++ b/tools/printf-acceptance
+@@ -0,0 +1,49 @@
++#!/usr/bin/env bash
++# Run in the s263 lane-owned Linux x86-64 container, never on the Mac.
++# Explicit compiler identity and head are mandatory; no synthetic pin bump.
++# Each command, raw exit, and per-case output remain under notes/s263/run-UTC/.
++set -euo pipefail
++root=$(cd "$(dirname "$0")/.." && pwd)
++: "${WOLF:?explicit compiler path required}"
++: "${WOLF_EXPECT_VERSION:?exact compiler version line required}"
++: "${S263_COMPILER_HEAD:?compiler source head/stamp required}"
++[ "$(uname -sm)" = 'Linux x86_64' ] || { echo 'acceptance requires Linux x86-64' >&2; exit 2; }
++out="$root/notes/s263/run-$(date -u +%Y%m%dT%H%M%SZ)"
++mkdir "$out"
++echo "acceptance evidence: $out"
++exec 3>&1
++exec > "$out/acceptance.log" 2>&1
++set -x
++printf 'compiler_head=%s\ncompiler_path=%s\nexpected_version=%s\n' "$S263_COMPILER_HEAD" "$WOLF" "$WOLF_EXPECT_VERSION"
++date -u '+%Y-%m-%dT%H:%M:%SZ'
++sha256sum "$WOLF" "$root/tests/cases/printf.c" "$root/src/stdio/stdio.lu"
++run() {
++  local name=$1; shift
++  echo "RUN $name" >&3
++  printf 'COMMAND'; printf ' %q' "$@"; printf '\n'
++  set +e
++  "$@" > "$out/$name.log" 2>&1
++  local rc=$?
++  set -e
++  cat "$out/$name.log"
++  echo "EXIT $name=$rc"
++  echo "EXIT $name=$rc" >&3
++  [ "$rc" = 0 ] || exit "$rc"
++}
++run version "$WOLF" --version
++run identity "$root/tests/build-override"
++for tier in native release; do
++  run "build-$tier" "$root/tools/build" "$tier"
++  run "diff-$tier" "$root/tools/difftest" "$tier"
++  grep -a -qx 'cases=50 failures=0' "$root/out/$tier/printf.muzzle.out"
++  grep -a -qx 'cases=50 failures=0' "$root/out/$tier/printf.glibc.out"
++  cp "$root/out/$tier/printf.muzzle.out" "$out/printf-$tier.muzzle.out"
++  cp "$root/out/$tier/printf.glibc.out" "$out/printf-$tier.glibc.out"
++  sha256sum "$root/out/$tier/printf.muzzle.out" "$root/out/$tier/printf.glibc.out" "$root/build/$tier/libmuzzle.a"
++  run "errors-build-$tier" clang -std=c17 -O1 -Wall -Werror -Wno-format-security -fno-builtin -fno-stack-protector \
++    -nostdinc -isystem "$root/include" -nostdlib -static "$root/build/$tier/crt0.o" \
++    "$root/tests/printf-errors.c" "$root/build/$tier/libmuzzle.a" -o "$root/out/$tier/printf-errors"
++  run "errors-run-$tier" timeout 20 "$root/out/$tier/printf-errors"
++done
++run count-plant "$root/tests/printf-count-plant"
++echo 'ACCEPTANCE PASS: fifty primary cases, counts, both tiers, legacy differential and error checks'

@@ -1,0 +1,8 @@
+Published v0.2.35 source registry (cf0c13d38479f444b69bb8356ad5709d07eff323)
+The release archive did not bundle anchors.json; this is its tagged source file.
+SHA256 read 1: 47e5e3c8a7334183c275469872fd34e6e74e7847157ff5a4bb2e9b98edf93398
+SHA256 read 2: 47e5e3c8a7334183c275469872fd34e6e74e7847157ff5a4bb2e9b98edf93398
+Old keys: 693; current keys: 705
+Removed: []
+Added: ['abi.c.variadic', 'abi.c.variadic.arg', 'abi.c.variadic.builtins', 'abi.c.variadic.call', 'abi.c.variadic.checked', 'abi.c.variadic.list', 'abi.c.variadic.start', 'abi.c.variadic.syntax', 'abi.c.variadic.sysv', 'abi.c.variadic.targets', 'exec.checked.argv', 'os.env.argv']
+Changed destinations: []

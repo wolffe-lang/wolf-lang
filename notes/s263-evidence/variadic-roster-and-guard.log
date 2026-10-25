@@ -1,0 +1,69 @@
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.37s
+     Running tests/audit_surface.rs (target/debug/deps/audit_surface-5b186aa04ef6427c)
+
+running 1 test
+test variadic_builtins_are_not_assembly_symbols ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+   Compiling wolf_mem v0.2.35 (/work/crates/wolf_mem)
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.32s
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-1a5e291969ec7fbe)
+
+running 1 test
+test local_function_named_va_start_is_not_a_builtin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.00s
+
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.67s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-d22e5c66e2c0c081)
+
+running 16 tests
+test differing_call_tails_share_the_fixed_prototype ... ok
+test freestanding_only_variadic_definitions_enable_abi_sse_saves ... ok
+test definitions_have_ellipsis_noinline_and_psabi_cursor_paths ... ok
+test each_started_cursor_has_an_explicit_matching_end ... ok
+test variadic_definition_refuses_other_targets_by_name ... ok
+test variadic_call_refuses_other_targets_by_name ... ok
+test variadic_guard::tests::function_boundaries_reset_provenance_and_empty_input_fails ... ok
+test variadic_guard::tests::bypass_reentry_and_missing_guard_are_rejected ... ok
+test variadic_guard::tests::literal_and_copied_incoming_al_are_proven ... ok
+test variadic_guard::tests::vector_state_without_register_operands_cannot_hide ... ok
+test variadic_guard::tests::unknown_and_clobbered_aliases_are_rejected ... ok
+test ordinary_va_list_consumer_is_target_gated_without_a_prologue ... ok
+test freestanding_sse_is_confined_to_the_al_guarded_save_block ... ok
+test ordinary_consumer_accepts_a_c_created_list_and_advances_it ... ok
+test wolf_calls_c_with_promoted_float_fixed_sse_and_different_tails ... ok
+test c_calls_variadic_definitions_across_both_register_banks_and_stack ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+   Compiling wolf_query v0.2.35 (/work/crates/wolf_query)
+   Compiling wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.35 (/work/crates/wolf_codegen_llvm)
+   Compiling wolf_doc v0.2.35 (/work/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.35 (/work/crates/wolf_lsp)
+   Compiling wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.45s
+     Running tests/variadic_abi.rs (target/debug/deps/variadic_abi-c0aa2e6e992e12fa)
+
+running 7 tests
+test variadic_guard::tests::function_boundaries_reset_provenance_and_empty_input_fails ... ok
+test variadic_guard::tests::bypass_reentry_and_missing_guard_are_rejected ... ok
+test variadic_guard::tests::vector_state_without_register_operands_cannot_hide ... ok
+test variadic_guard::tests::literal_and_copied_incoming_al_are_proven ... ok
+test variadic_guard::tests::unknown_and_clobbered_aliases_are_rejected ... ok
+PASS real none target native: C17 -nostdlib, no libc/runtime, 24 guarded XMM saves only (objdump proof)
+PASS source variadic ABI native: all promotions, both banks, C list copy and nested forwarding
+PASS real none target release: C17 -nostdlib, no libc/runtime, 24 guarded XMM saves only (objdump proof)
+test real_none_target_links_c17_without_libc_or_runtime ... ok
+PASS source variadic ABI release: all promotions, both banks, C list copy and nested forwarding
+test source_variadics_both_directions_promotions_and_forwarding ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
