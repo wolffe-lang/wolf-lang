@@ -226,6 +226,11 @@ jobs:
       # `cargo test --workspace` builds, so a native tier that cannot
       # build here is a broken job, never a quiet skip.
       WOLF_TEST_NATIVE_REQUIRE: "1"
+      # s267 (wolf-lang#962, [abi.target.main]): the static entry's 24 argv
+      # rows (static_entry.rs) link the musl bundle's sysroot and a musl
+      # runtime built below, so a missing input here is a broken job,
+      # never a quiet skip.
+      WOLF_STATIC_ENTRY_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -261,6 +266,18 @@ jobs:
           s149 syscall counter's instrument, the one lobo's ws27 counted with;
           qemu boots kw10's interrupt witness)
         run: sudo apt-get update && sudo apt-get install -y gdb lld clang strace qemu-system-x86
+      - name: cache the musl link bundle (ligature#13)
+        uses: actions/cache@v4
+        with:
+          path: .link-bundle-cache
+          key: ld02-musl-link-bundle-6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1
+      - name: the static entry's musl inputs (s267, wolf-lang#962), the bundle's
+          sysroot by digest and a musl runtime from this checkout
+        run: |
+          ci/fetch-entry-bundle
+          cargo build --locked -p wolf_rt --target x86_64-unknown-linux-musl
+          echo "WOLF_STATIC_ENTRY_MUSL_RT=$PWD/target/x86_64-unknown-linux-musl/debug/libwolf_rt.a" >> "$GITHUB_ENV"
+          ld.lld --version; ld.bfd --version | head -1
       - name: the sibling lupin that PAIRING names, from its own release page
         env:
           GH_TOKEN: ${{ github.token }}
@@ -366,6 +383,54 @@ jobs:
         run: cargo test -p wolf_driver --test variadic_abi -- --nocapture
       - name: shared cursor and trampoline layout
         run: cargo test -p wolf_backend abi::variadic -- --nocapture
+
+  # s267 (wolf-lang#962, [abi.target.main]): the static entry's 24 argv
+  # rows alone (the gauntlet in lint-test runs them too), selectable for a
+  # planted break, against a musl runtime built by `cargo xtask dist-rt`,
+  # the link bundle's recipe; its digest is printed twice and the archive
+  # kept, so a bundle candidate built elsewhere is held to a runner's bytes.
+  static-entry:
+    name: static entry (cc + glibc; ld.lld and GNU ld + musl)
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'static-entry')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: "0"
+      WOLF_STATIC_ENTRY_REQUIRE: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: static-entry
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
+      - name: the musl target, LLD and the release tier's clang
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          sudo apt-get update && sudo apt-get install -y lld clang
+          ld.lld --version; ld.bfd --version | head -1; clang --version | head -1
+      - name: cache the musl link bundle (ligature#13)
+        uses: actions/cache@v4
+        with:
+          path: .link-bundle-cache
+          key: ld02-musl-link-bundle-6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1
+      - name: the bundle's musl sysroot, by digest
+        run: ci/fetch-entry-bundle
+      - name: the musl runtime by the bundle's recipe (cargo xtask dist-rt)
+        run: |
+          cargo xtask dist-rt --target x86_64-unknown-linux-musl
+          rt=$PWD/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+          sha256sum "$rt"; sha256sum "$rt"; stat -c '%s bytes' "$rt"
+          echo "WOLF_STATIC_ENTRY_MUSL_RT=$rt" >> "$GITHUB_ENV"
+      - name: the twenty-four cells
+        run: |
+          cargo build --locked -p wolf_rt
+          cargo test --locked -p wolf_driver --test static_entry -- --nocapture --test-threads=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: static-entry-musl-rt
+          path: target/dist/wolf-rt-*-x86_64-unknown-linux-musl.tar.gz
 
   native-macos:
     # s59: the native tier's second platform; s127 lit the RELEASE tier
@@ -561,6 +626,7 @@ jobs:
       - plan-test
       - lint-test
       - variadic-abi
+      - static-entry
       - native-macos
       - fuzz-smoke
       - build-test

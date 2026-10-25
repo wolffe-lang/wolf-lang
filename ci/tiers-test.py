@@ -114,7 +114,7 @@ def expect(name, got, tier, jobs):
 
 
 # --- T1 the tiers by event ---------------------------------------------------
-say(EVERY == ["plan-test", "lint-test", "variadic-abi", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
+say(EVERY == ["plan-test", "lint-test", "variadic-abi", "static-entry", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
     "T1 the workflow's jobs between plan and tier: %s" % " ".join(EVERY))
 expect("T1 a push to trunk", plan(event="push"), "full", MERGE)
 expect("T1 the nightly", plan(event="schedule"), "release", EVERY)
@@ -298,6 +298,9 @@ expect("variadic plants run only their selected job", plan(event="workflow_dispa
 expect("lane evidence remains a PR-class input", plan(["notes/s263-evidence/reproducer.sh"], **pr), "pr", PR_JOBS)
 say("variadic-abi" not in PR_JOBS and "variadic-abi" in plan(event="push")["jobs"],
     "the focused variadic job is full/release and explicit partial dispatch, not a second PR gauntlet")
+expect("static-entry plants run only their selected job", plan(event="workflow_dispatch", jobs="static-entry"), "partial", ["static-entry"])
+say("static-entry" not in PR_JOBS and "static-entry" in plan(event="push")["jobs"],
+    "the focused static-entry job (s267) is full/release and explicit partial dispatch; lint-test's gauntlet runs its rows on a PR")
 
 # --- T7 the change read from git ----------------------------------------------------
 def git(repo, *args):
