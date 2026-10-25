@@ -875,6 +875,9 @@ rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
 rows/ctor_arg_qualified/main.lu: lowers
 rows/defer_else_handles.lu: lowers
+rows/else_fallback_bound_slice.lu: lowers
+rows/else_fallback_paren_slice.lu: lowers
+rows/else_fallback_range_refused.lu: not mem-clean (pre-wir rungs own it)
 rows/else_own_failure.lu: lowers
 rows/else_return_tag.lu: lowers
 rows/else_tag_payload.lu: lowers
