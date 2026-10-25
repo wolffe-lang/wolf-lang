@@ -7,7 +7,7 @@
 //! - **linux**: inside a throwaway `--network none` container of its own,
 //!   NO init (the shell is process 1, so the programs are not), the test's
 //!   own directory at `/w` its working directory; each row again under
-//!   `taskset -c 0-3`, asked from inside (wolf-lang#570), where the place
+//!   `taskset` on four CPUs of the allocation, asked from inside (wolf-lang#570), where the place
 //!   has four cpus. `WOLF_FORK_ENGINE` names the engine (otherwise the
 //!   first of `docker` and `podman` that answers), `WOLF_FORK_IMAGE` the
 //!   image (default `docker.io/library/ubuntu:24.04`). Where no engine
@@ -38,6 +38,7 @@
 //! wolf-interp issue). Both run on the host: neither forks.
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -388,13 +389,19 @@ impl Live {
 }
 
 /// Each compiled machine's row for `entry`: its label and the command the
-/// place runs (the binary, or `taskset -c 0-3` and the binary).
+/// place runs (the binary, or `taskset` on four CPUs of the allocation and the binary).
 #[cfg(unix)]
 fn rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(String, String)> {
-    let four = live.four_cpus();
-    if !four && cfg!(target_os = "linux") {
-        eprintln!("SKIP: {test}: fewer than four cpus — the taskset -c 0-3 rows did not run");
-    }
+    // The pinned rows: four of the allocation (`test_cpus`, wolf-lang#925),
+    // asked of the place's own `taskset`.
+    let four = if live.four_cpus() {
+        test_cpus::subset(4, test)
+    } else {
+        if cfg!(target_os = "linux") {
+            eprintln!("SKIP: {test}: fewer than four cpus — the pinned rows did not run");
+        }
+        None
+    };
     let mut out = Vec::new();
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
@@ -403,10 +410,10 @@ fn rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(String, Strin
         };
         let name = exe.file_name().unwrap().to_string_lossy().to_string();
         out.push((tier.to_string(), live.at(&name)));
-        if four {
+        if let Some(list) = &four {
             out.push((
-                format!("{tier} taskset -c 0-3"),
-                format!("taskset -c 0-3 {}", live.at(&name)),
+                format!("{tier} taskset -c {list}"),
+                format!("taskset -c {list} {}", live.at(&name)),
             ));
         }
     }
