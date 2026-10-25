@@ -907,3 +907,11 @@ pub(crate) fn enter_runtime_thread() {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     stack::enter_thread();
 }
+
+/// The main thread's registration, before user `main` (s265,
+/// wolf-lang#918: the cheaper bounds query and a process-lifetime
+/// altstack; the same guard, handler and report).
+pub(crate) fn enter_main_thread() {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    stack::enter_main_thread();
+}

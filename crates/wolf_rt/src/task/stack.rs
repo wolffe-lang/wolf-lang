@@ -226,9 +226,10 @@ impl Drop for AltStack {
     }
 }
 
-/// Register a system-provided stack (main, fallback, signal or reactor
-/// thread). The pooled pthread path registers its own explicit guard.
-/// Reuse an existing altstack, notably a Rust thread's, without owning it.
+/// Register a system-provided stack (fallback, signal or reactor thread;
+/// the main thread is [`enter_main_thread`]). The pooled pthread path
+/// registers its own explicit guard. Reuse an existing altstack, notably
+/// a Rust thread's, without owning it.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn enter_thread() {
     if CURRENT_GUARD.with(|g| g.get().1 != 0) {
@@ -243,6 +244,34 @@ pub fn enter_thread() {
     };
     if !ptr.is_null() {
         OWN_ALT.with(|a| *a.borrow_mut() = Some(AltStack(ptr)));
+    }
+    register_guard(bounds.0, bounds.1);
+    install_overflow_handler();
+}
+
+/// s265 (wolf-lang#918): the main thread's registration, from the entry
+/// shim (`__wolf_rt_stack_start`) before user `main`. The same guard,
+/// altstack and handler as [`enter_thread`], paid for more cheaply:
+/// - linux: the bounds come from [`main_stack_bounds`] (one read of
+///   `/proc/self/maps` with no stdio, no scanf, no CPU-set query), not
+///   `pthread_getattr_np(3)`;
+/// - the altstack lives as long as the process: the main thread's end
+///   is the process's, so no thread-exit destructor is registered and
+///   nothing is unmapped on the way out.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub fn enter_main_thread() {
+    if CURRENT_GUARD.with(|g| g.get().1 != 0) {
+        return;
+    }
+    #[cfg(target_os = "linux")]
+    let bounds = main_stack_bounds().or_else(pthread_bounds);
+    #[cfg(not(target_os = "linux"))]
+    let bounds = pthread_bounds();
+    let Some(bounds) = bounds else {
+        return;
+    };
+    if ensure_altstack().is_none() {
+        return;
     }
     register_guard(bounds.0, bounds.1);
     install_overflow_handler();
@@ -321,6 +350,94 @@ fn ensure_altstack() -> Option<*mut libc::c_void> {
         }
         Some(ptr)
     }
+}
+
+/// s265 (wolf-lang#918): the main thread's guard on linux without
+/// `pthread_getattr_np(3)`. proc(5) documents `/proc/self/maps` as one
+/// line per mapping in address order, each starting `start-end ` in hex;
+/// getrlimit(2) documents `RLIMIT_STACK` as the most the main stack may
+/// grow. The stack is the mapping that holds this frame; it may grow down
+/// to `RLIMIT_STACK` below its top, never into the mapping beneath it;
+/// the guard is the page under that floor. These are the bounds
+/// glibc's `pthread_getattr_np` reports for the main thread, measured
+/// black-box on kasumi (s265 note, `stackprobe`) and held by the unit
+/// test `main_stack_bounds_match_pthread`; the cost it removes is that
+/// call's stdio and scanf over the same file, its `fstat` and its
+/// CPU-set query (`sched_getaffinity`). `None` when the file cannot be
+/// read or no mapping holds the frame: the caller falls back.
+#[cfg(target_os = "linux")]
+fn main_stack_bounds() -> Option<(usize, usize)> {
+    let marker = 0u8;
+    let here = std::hint::black_box(&raw const marker) as usize;
+    let (lo, hi, below) = mapping_holding(here)?;
+    // SAFETY: a plain query of this process's own limit.
+    let rlim = unsafe {
+        let mut r: libc::rlimit = std::mem::zeroed();
+        if libc::getrlimit(libc::RLIMIT_STACK, &mut r) != 0 {
+            return None;
+        }
+        r.rlim_cur
+    };
+    let pg = page();
+    let floor = if rlim == libc::RLIM_INFINITY {
+        below
+    } else {
+        // Page-aligned up: the stack never grows past the limit.
+        hi.saturating_sub(rlim as usize).next_multiple_of(pg).max(below)
+    };
+    let _ = lo;
+    Some((floor.saturating_sub(pg), floor))
+}
+
+/// `(start, end, previous end)` of the `/proc/self/maps` line whose
+/// range holds `addr`, read with plain `open`/`read` into a stack buffer
+/// and parsed as the lines arrive (a line may span two reads).
+#[cfg(target_os = "linux")]
+fn mapping_holding(addr: usize) -> Option<(usize, usize, usize)> {
+    // SAFETY: a fixed path, our own buffer, the descriptor closed below.
+    let fd = unsafe { libc::open(c"/proc/self/maps".as_ptr(), libc::O_RDONLY | libc::O_CLOEXEC) };
+    if fd < 0 {
+        return None;
+    }
+    let mut buf = [0u8; 4096];
+    // The line parser: field 0 the start, 1 the end, 2 the rest.
+    let (mut field, mut start, mut end, mut prev_end) = (0u8, 0usize, 0usize, 0usize);
+    let mut found = None;
+    'read: loop {
+        // SAFETY: `buf` is ours and `fd` is open.
+        let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast(), buf.len()) };
+        if n <= 0 {
+            break;
+        }
+        for &b in &buf[..n as usize] {
+            match (field, b) {
+                (_, b'\n') => {
+                    if field == 2 {
+                        if start <= addr && addr < end {
+                            found = Some((start, end, prev_end));
+                            break 'read;
+                        }
+                        prev_end = end;
+                    }
+                    (field, start, end) = (0, 0, 0);
+                }
+                (0, b'-') => field = 1,
+                (1, b' ') => field = 2,
+                (0 | 1, _) => {
+                    let Some(d) = (b as char).to_digit(16) else {
+                        field = 3; // not a mapping line: skip it
+                        continue;
+                    };
+                    let v = if field == 0 { &mut start } else { &mut end };
+                    *v = v.wrapping_mul(16).wrapping_add(d as usize);
+                }
+                _ => {}
+            }
+        }
+    }
+    // SAFETY: closing the descriptor opened above.
+    unsafe { libc::close(fd) };
+    found
 }
 
 // Read the instruction address from the kernel's saved context. No

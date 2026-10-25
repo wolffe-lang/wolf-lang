@@ -1000,7 +1000,7 @@ pub unsafe extern "C" fn __wolf_rt_region_freeze(_handle: *mut core::ffi::c_void
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_stack_start() {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    crate::task::enter_runtime_thread();
+    crate::task::enter_main_thread();
 }
 
 #[cfg(test)]
