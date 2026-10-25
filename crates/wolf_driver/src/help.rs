@@ -78,7 +78,7 @@ pub const COMMANDS: &[Cmd] = &[
             "[--verbose] [--checked] [--release] [--codegen-report]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
-            "[--error-limit=N] [--target x86_64-unknown-none] [--assembler PATH]",
+            "[--error-limit=N] [--target x86_64-unknown-none] [--assembler PATH] [--linker PATH]",
         ],
         about: "\
 The entry file's directory is the package (D32): every plain `.lu` file
@@ -95,6 +95,15 @@ Failure is final. Without either choice, assembly uses the existing
 CC/cc (hosted) or WOLF_CLANG/clang (freestanding) driver. This does not
 replace the linker or the release backend's clang IR compilation, and
 it does not enable hosted Windows assembly or foreign hosted targets.
+`--linker PATH` (or `--linker=PATH`) overrides nonempty `WOLF_LD`
+for native Linux ELF links. The selected tool receives the cc-shaped
+link line: `-o OUTPUT OBJECTS RUNTIME -lpthread -ldl -lm
+-Wl,--gc-sections` and trap aliases when needed. It is one executable
+path, not shell text or a raw ld command. Failure or malformed/foreign
+ELF output is final. Without either choice, the existing CC/cc, macOS
+and Windows link paths are unchanged. Explicit linkers do not enable
+hosted Windows, Mach-O or foreign targets, and are unused by object-only
+builds. Assembly and release clang IR compilation remain separate.
 For `wolf run`, put build flags before the entry file.
 
 `--target x86_64-unknown-none` (or `target: \"x86_64-unknown-none\"` in
@@ -112,7 +121,7 @@ hosted runtime, allocates, or uses a float is refused by name.",
             "[--verbose] [--checked] [--release] [--codegen-report]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
-            "[--error-limit=N] [--assembler PATH] [prog args…]",
+            "[--error-limit=N] [--assembler PATH] [--linker PATH] [prog args…]",
         ],
         about: "\
 Every `wolf build` flag applies. The executable lands in the package's
