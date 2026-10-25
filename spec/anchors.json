@@ -53,6 +53,7 @@
     "abi.native.unstable": "04-abi.md",
     "abi.target": "04-abi.md",
     "abi.target.entry": "04-abi.md",
+    "abi.target.main": "04-abi.md",
     "abi.target.none": "04-abi.md",
     "abi.target.none.alloc": "04-abi.md",
     "abi.target.none.ambient": "04-abi.md",
