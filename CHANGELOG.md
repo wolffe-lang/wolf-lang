@@ -2,16 +2,22 @@
 
 ## Unreleased
 
-s263 — C variadic surface and ABI planning (in progress, #515).
+s263 — C variadics in both directions (#515).
 
 - **Five prelude additions:** `VaList`, `va_start`, `va_arg`, `va_copy`,
   and `va_end`. Declarations shadowing these names may now warn (W0304).
-- A final ellipsis parses on C membrane declarations and definitions;
-  invalid positions, function-value uses, invalid starts and unsupported
-  targets have named diagnostics. The checked machine refuses variadic
-  calls in both directions. Native and release execution is still pending
-  in this preparatory checkpoint; the new clause is not yet a shipping
-  implementation claim.
+- Hand-declared C calls and exported variadic definitions work on Linux
+  x86-64 and `x86_64-unknown-none`, on native and release. Unnamed narrow
+  integers promote to `i32`, and `f32` promotes to `f64`; register overflow,
+  C-created lists, independent cursor copies and nested forwarding follow
+  the SysV ABI. C's decayed `va_list` parameter is spelled `*VaList`.
+- Other targets report E0826; the checked machine refuses both directions
+  by name. The header importer remains limited to its modelled call set.
+- Freestanding nonvariadic code remains SSE-free. Variadic entry saves are
+  guarded by incoming AL (or a proven unchanged register copy); a zero
+  vector count executes no SSE. The ordinary floating-value ban remains.
+- Formatting a malformed first item no longer repeats comments from the
+  already-emitted module header.
 
 
 s261 — the invocation name and byte-exact arguments (#899, #406).
