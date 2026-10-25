@@ -49,6 +49,113 @@ use std::sync::Mutex;
 use crate::list::push_str;
 use crate::str::{ambient_copy, view, write_pair, write_word};
 
+/// The invocation as the C entry received it (s267, wolf-lang#962,
+/// `[abi.target.main]`). The compiled program's entry shim is `int
+/// main(int argc, char **argv, char **envp)`, and its first call hands the
+/// three to [`crate::native::__wolf_rt_main_start`], which records them
+/// here before user `main` runs. The argv readers answer from this record
+/// on unix, so what a program sees no longer depends on whether the C
+/// library's start-up also hands its arguments to the runtime's own
+/// early-init code: a static musl link answered `argc=0` through the
+/// standard library's capture, which glibc fills and musl does not
+/// (ld02a's probe, black-box). Until the wolf entry runs (a wolf object
+/// linked under a foreign `main`; this crate's own tests) the record is
+/// empty and the readers keep the standard library's capture, as before.
+/// `envp` is recorded as handed and read by nothing yet: `env_vars` reads
+/// the live environment, which `env_set` and `env_unset` write.
+/// Windows records nothing: its readers keep the host's WTF-8 path.
+#[cfg(unix)]
+mod entry {
+    use std::ffi::{CStr, c_char};
+    use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
+
+    static SET: AtomicBool = AtomicBool::new(false);
+    static ARGC: AtomicUsize = AtomicUsize::new(0);
+    static ARGV: AtomicPtr<*const c_char> = AtomicPtr::new(std::ptr::null_mut());
+    static ENVP: AtomicPtr<*const c_char> = AtomicPtr::new(std::ptr::null_mut());
+
+    /// Record the C entry's arguments. A negative `argc` or a null `argv`
+    /// is an absent argv (`[os.env.argv]`: the list readers answer empty).
+    pub fn record(argc: i32, argv: *const *const c_char, envp: *const *const c_char) {
+        ARGC.store(usize::try_from(argc).unwrap_or(0), Ordering::Relaxed);
+        ARGV.store(argv.cast_mut(), Ordering::Relaxed);
+        ENVP.store(envp.cast_mut(), Ordering::Relaxed);
+        SET.store(true, Ordering::Release);
+    }
+
+    /// The recorded argv, argv[0] first, or `None` when no wolf entry ran.
+    pub fn argv() -> Option<Vec<&'static [u8]>> {
+        if !SET.load(Ordering::Acquire) {
+            return None;
+        }
+        let argv = ARGV.load(Ordering::Relaxed);
+        // SAFETY: the C entry's `argv` holds `argc` NUL-terminated strings
+        // that live, unmoved, until the program ends (ISO C 5.1.2.2.1);
+        // nothing in a wolf program writes them.
+        Some(unsafe { decode(ARGC.load(Ordering::Relaxed), argv) })
+    }
+
+    /// The C entry's `envp` as handed: null until the wolf entry runs.
+    #[allow(dead_code)]
+    pub fn envp() -> *const *const c_char {
+        if SET.load(Ordering::Acquire) {
+            ENVP.load(Ordering::Relaxed)
+        } else {
+            std::ptr::null()
+        }
+    }
+
+    /// `argc` entries of `argv`, stopping early at a null entry; nothing
+    /// for a null `argv`.
+    ///
+    /// # Safety
+    /// A non-null `argv` addresses `argc` pointers, each null or a
+    /// NUL-terminated string valid for `'a`.
+    pub unsafe fn decode<'a>(argc: usize, argv: *const *const c_char) -> Vec<&'a [u8]> {
+        let mut out = Vec::new();
+        if argv.is_null() {
+            return out;
+        }
+        for i in 0..argc {
+            // SAFETY: `i < argc`, per the contract.
+            let p = unsafe { *argv.add(i) };
+            if p.is_null() {
+                break;
+            }
+            // SAFETY: a non-null entry is a NUL-terminated string.
+            out.push(unsafe { CStr::from_ptr(p) }.to_bytes());
+        }
+        out
+    }
+}
+
+/// Record the C entry's `(argc, argv, envp)` for the argv readers (the
+/// entry shim's call, through [`crate::native::__wolf_rt_main_start`]).
+pub(crate) fn record_entry(
+    argc: i32,
+    argv: *const *const std::ffi::c_char,
+    envp: *const *const std::ffi::c_char,
+) {
+    #[cfg(unix)]
+    entry::record(argc, argv, envp);
+    #[cfg(not(unix))]
+    let _ = (argc, argv, envp);
+}
+
+/// The program's arguments, argv[0] first: the C entry's record when the
+/// wolf entry ran (unix), the standard library's capture otherwise.
+fn arguments() -> Vec<std::ffi::OsString> {
+    #[cfg(unix)]
+    if let Some(argv) = entry::argv() {
+        use std::os::unix::ffi::OsStrExt;
+        return argv
+            .into_iter()
+            .map(|a| std::ffi::OsStr::from_bytes(a).to_os_string())
+            .collect();
+    }
+    std::env::args_os().collect()
+}
+
 /// Decode an argument without Rust's `env::args` panic. The index is
 /// the OS argv index, including the program name at zero.
 fn argument_text(a: &std::ffi::OsStr, index: usize) -> &str {
@@ -67,7 +174,7 @@ fn argument_text(a: &std::ffi::OsStr, index: usize) -> &str {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_env_arg0(out: i64) {
-    let a = std::env::args_os().next().unwrap_or_default();
+    let a = arguments().into_iter().next().unwrap_or_default();
     let text = argument_text(&a, 0);
     let p = crate::str::region_copy(text.as_bytes());
     unsafe { write_pair(out, p as i64, text.len() as i64) };
@@ -77,7 +184,7 @@ pub unsafe extern "C" fn __wolf_rt_env_arg0(out: i64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_env_args() -> i64 {
     let hdr = crate::list::new_list(16);
-    for (index, a) in std::env::args_os().enumerate().skip(1) {
+    for (index, a) in arguments().iter().enumerate().skip(1) {
         push_str(hdr, argument_text(&a, index));
     }
     hdr as i64
@@ -89,7 +196,7 @@ pub extern "C" fn __wolf_rt_env_args() -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_env_args_bytes() -> i64 {
     let hdr = crate::list::new_list(8);
-    for a in std::env::args_os() {
+    for a in arguments() {
         let inner = crate::list::from_bytes(a.as_encoded_bytes()) as i64;
         crate::list::push_raw(hdr, (&raw const inner).cast());
     }
@@ -2824,5 +2931,39 @@ mod tests {
         assert_eq!(t.wait(h), Ok(0));
         assert_eq!(std::fs::read_to_string(&out).unwrap(), "word one|||over");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// s267 (#962): the entry record's decoder — `argc` entries with their
+    /// bytes verbatim (a non-UTF-8 argument and an empty one included), an
+    /// early null entry ends the list, a null `argv` or `argc` 0 is an
+    /// absent argv.
+    #[cfg(unix)]
+    #[test]
+    fn the_entry_record_decodes_argv_verbatim() {
+        use std::ffi::{CString, c_char};
+        let words: [&[u8]; 5] = [b"s267 name", b"--version", b"space word", b"", b"\xff\xfe"];
+        let owned: Vec<CString> = words.iter().map(|a| CString::new(*a).unwrap()).collect();
+        let mut ptrs: Vec<*const c_char> = owned.iter().map(|c| c.as_ptr()).collect();
+        ptrs.push(std::ptr::null());
+        // SAFETY: `ptrs` holds 5 live strings and a terminating null.
+        unsafe {
+            assert_eq!(entry::decode(5, ptrs.as_ptr()), words);
+            assert_eq!(entry::decode(2, ptrs.as_ptr()), words[..2].to_vec());
+            let early = [ptrs[0], std::ptr::null(), ptrs[1]];
+            assert_eq!(entry::decode(3, early.as_ptr()), words[..1].to_vec());
+            assert!(entry::decode(4, std::ptr::null()).is_empty());
+            assert!(entry::decode(0, ptrs.as_ptr()).is_empty());
+        }
+    }
+
+    /// s267 (#962): with no wolf entry (this test binary's `main` is
+    /// Rust's), nothing is recorded and the readers keep the standard
+    /// library's capture, exactly as before the record existed.
+    #[cfg(unix)]
+    #[test]
+    fn without_the_wolf_entry_the_readers_keep_the_standard_capture() {
+        assert!(entry::argv().is_none());
+        assert!(entry::envp().is_null());
+        assert_eq!(arguments(), std::env::args_os().collect::<Vec<_>>());
     }
 }
