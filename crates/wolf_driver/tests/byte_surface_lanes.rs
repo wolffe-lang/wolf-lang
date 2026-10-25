@@ -38,6 +38,7 @@
 //! every lupin is held to the ruled answers.
 
 mod lane_exit;
+mod test_cpus;
 
 use std::io::{Read as _, Seek as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -638,7 +639,7 @@ fn bytes_after_read_line_continue_where_it_stopped() {
 /// calls side by side, the even ones with the host's `ENOENT` (2), the odd
 /// ones before the host (0), and each reads its own number back 300 times.
 /// The native and release binaries count 0 sightings of another task's
-/// number, also under `taskset -c 0-3`, where the tasks really run at once
+/// number, also under `taskset` on four CPUs of the allocation, where the tasks really run at once
 /// (strict evidence, wolf-lang#571); lupin, whose machine is one per task,
 /// agrees. The checked machine runs the eight tasks one at a time and
 /// keeps the word with each task's frames (s226, `[exec.checked.task]`;
@@ -665,11 +666,11 @@ fn os_error_is_the_tasks_own() {
         };
         let tier = if release { "release" } else { "native" };
         runs.push((tier, Command::new(&exe)));
-        #[cfg(target_os = "linux")]
-        {
-            let mut pinned = Command::new("taskset");
-            pinned.arg("-c").arg("0-3").arg(&exe);
-            runs.push((tier, pinned));
+        // Four of the allocation (`test_cpus`, wolf-lang#925): the tasks
+        // really run at once, on the lane's own CPUs.
+        if let Some(pin) = test_cpus::pin(4, "os_error_is_the_tasks_own") {
+            eprintln!("os_error_tasks.lu {tier}: also under {}", pin.label());
+            runs.push((tier, pin.command(&exe)));
         }
     }
     for (tier, cmd) in runs {
