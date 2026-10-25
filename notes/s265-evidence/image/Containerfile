@@ -1,0 +1,13 @@
+# s265's container: ubuntu 24.04 by digest (the image CI's ubuntu legs
+# run), with the release tier's clang, the gauntlet's gdb/lld/strace/qemu,
+# perf for the counters, and the taskset shim for CPUs 4-7.
+FROM docker.io/library/ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      clang lld llvm gcc g++ libc6-dev make strace linux-tools-generic gdb qemu-system-x86 \
+      python3 git ca-certificates util-linux procps jq file binutils time xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+COPY taskset-shim.c sigclean.c /opt/s265/
+RUN mv /usr/bin/taskset /usr/bin/taskset.real \
+    && cc -static -std=c11 -O2 -Wall -Wextra -Werror /opt/s265/taskset-shim.c -o /usr/bin/taskset \
+    && cc -static -std=c11 -O2 -Wall -Wextra -Werror /opt/s265/sigclean.c -o /usr/local/bin/sigclean \
+    && ln -s "$(ls -d /usr/lib/linux-tools/*/perf | head -1)" /usr/local/bin/perf

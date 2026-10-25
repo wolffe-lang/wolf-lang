@@ -1,0 +1,22 @@
+#!/bin/bash
+# s265's container launcher on kasumi: CPUs 4-7 under the lane lock, a
+# foreign pid 1 (podman's init as container root; the command dropped to
+# the lane uid by setpriv), the gauntlet's pid and nproc limits, no core
+# files, no network unless S265_NET=1 (the one cargo fetch).
+set -euo pipefail
+lane="$HOME/lanes/s265"
+net=none; [ "${S265_NET:-0}" = 1 ] && net=pasta
+exec flock "$HOME/lanes/kasumi-cores-4-7.lock" podman run --rm --network "$net" \
+    --userns=keep-id --user 0:0 --init --pids-limit 16384 --ulimit nproc=32768:32768 \
+    --ulimit core=0 --memory 12g --cpuset-cpus 4-7 \
+    --security-opt seccomp=unconfined --cap-add PERFMON \
+    -v "$HOME/.rustup:/opt/s265-rustup:ro" -v "$lane:$lane" -w "${S265_WD:-$lane}" \
+    -e HOME="$lane/scratch/home" -e TMPDIR="$lane/scratch/tmp" -e XDG_CACHE_HOME="$lane/scratch/cache" \
+    -e RUSTUP_HOME=/opt/s265-rustup -e RUSTUP_TOOLCHAIN=1.97.1 \
+    -e PATH=/opt/s265-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin:/usr/local/bin:/usr/bin:/bin \
+    -e CARGO_HOME="$lane/cargo-home" -e CARGO_INCREMENTAL=0 -e CARGO_BUILD_JOBS=4 \
+    -e CARGO_TARGET_DIR="$lane/target" -e WOLF_CLANG=clang \
+    localhost/s265-ubuntu:latest \
+    setpriv --reuid="$(id -u)" --regid="$(id -g)" --clear-groups --bounding-set=-all \
+        --inh-caps=-all --ambient-caps=-all --no-new-privs \
+    taskset -c 4-7 sigclean bash -c 'ulimit -c 0; exec "$@"' bash "$@"
