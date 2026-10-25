@@ -1,0 +1,197 @@
+s267 job chain1 start=2026-10-25T11:22:10Z head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde pid=3437255
+s267 ctr-g waiting for the CPUs 12-15 lock (2026-10-25T11:22:10Z); job lint: bash /home/mfwolffe/lanes/s267/scripts/lint.sh
+lint head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde start=2026-10-25T11:22:10Z
+fmt=0
+clippy=0
+test a_unit_main_hands_mains_arguments_to_the_runtime_first ... ok
+test an_int_main_hands_mains_arguments_to_the_runtime_first ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test call_ind_runs_through_the_pointer ... ok
+test dyn_dispatch_runs_through_the_table ... ok
+test dynamic_checked_add_traps ... ok
+test eu_main_ok_and_err_paths ... ok
+test dynamic_div_zero_traps ... ok
+test eu_main_err_reports_tag_and_exits_one ... ok
+test mangled_symbol_characters_survive_object_emission ... ok
+test aliased_stencil_takes_the_slow_loop ... ok
+test exit_code_flows_through_shim ... ok
+test float_nan_compare_semantics ... ok
+test narrow_checked_vs_wrap ... ok
+test no_result_main_exits_zero ... ok
+test unsupported_entry_signature_names_surface_types ... ok
+test overflow_traps_with_identity ... ok
+test tree_transform_runs_to_zero ... ok
+test qmark_defer_runs_to_zero ... ok
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+shim-tests=0
+lint exit=0
+s267 ctr-u waiting for the CPUs 12-15 lock (2026-10-25T11:22:50Z); job rows: bash /home/mfwolffe/lanes/s267/scripts/rows.sh after2
+rows head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde host=694d7b1f21e3 start=2026-10-25T11:22:54Z
+SigBlk:	0000000000380000
+SigIgn:	0000000000000000
+NoNewPrivs:	1
+Cpus_allowed_list:	12-15
+pid 1: Uid:	0	0	0	0
+Ubuntu LLD 18.1.3 (compatible with GNU linkers)
+GNU ld (GNU Binutils for Ubuntu) 2.42
+Ubuntu clang version 18.1.3 (1ubuntu1)
+cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.39s
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+   --> crates/wolf_rt/src/fs_change.rs:275:40
+    |
+275 |                 ts.tv_sec = s as libc::time_t;
+    |                                        ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `wolf_rt` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.39s
+58d2f06d941688e8839aa4a52982bf58e2970170b8d61b760e620e9c3176a853  /home/mfwolffe/lanes/s267/target-u/x86_64-unknown-linux-musl/debug/libwolf_rt.a
+58d2f06d941688e8839aa4a52982bf58e2970170b8d61b760e620e9c3176a853  /home/mfwolffe/lanes/s267/target-u/x86_64-unknown-linux-musl/debug/libwolf_rt.a
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.36s
+     Running tests/static_entry.rs (/home/mfwolffe/lanes/s267/target-u/debug/deps/static_entry-3b6eb52b4a38620f)
+
+running 3 tests
+test linux::glibc_cells_answer_the_invocation ... cell native cc-glibc env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native cc-glibc env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native cc-glibc env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native cc-glibc env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release cc-glibc env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release cc-glibc env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release cc-glibc env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release cc-glibc env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry cc-glibc: 8 cells, 8 right, 0 wrong, 0 skipped
+ok
+test linux::musl_cells_linked_by_gnu_ld_answer_the_invocation ... static_entry: WOLF_STATIC_ENTRY_BFD=ld.bfd: GNU ld (GNU Binutils for Ubuntu) 2.42
+cell native gnu-ld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native gnu-ld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native gnu-ld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native gnu-ld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release gnu-ld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release gnu-ld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release gnu-ld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release gnu-ld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry gnu-ld-musl: 8 cells, 8 right, 0 wrong, 0 skipped
+ok
+test linux::musl_cells_linked_by_lld_answer_the_invocation ... static_entry: WOLF_STATIC_ENTRY_LLD=ld.lld: Ubuntu LLD 18.1.3 (compatible with GNU linkers)
+cell native lld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native lld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native lld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native lld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release lld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release lld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release lld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release lld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry lld-musl: 8 cells, 8 right, 0 wrong, 0 skipped
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.63s
+
+rows exit=0 end=2026-10-25T11:23:02Z
+rows exit=0
+s267 ctr-u waiting for the CPUs 12-15 lock (2026-10-25T11:23:02Z); job bundle: bash /home/mfwolffe/lanes/s267/scripts/bundle.sh
+bundle head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde start=2026-10-25T11:27:00Z
+tar (GNU tar) 1.35
+gzip 1.12
+dist-rt: RUSTFLAGS=-C target-feature=+crt-static -C relocation-model=static -C strip=symbols -C link-arg=-Wl,--build-id=none --remap-path-prefix=/home/mfwolffe/lanes/s267/wolf-lang=/wolf-lang --remap-path-prefix=/home/mfwolffe/lanes/s267/wolf-lang/target/dist-rt=/target --remap-path-prefix=/home/mfwolffe/lanes/s267/cargo-home=/cargo
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+     --> crates/wolf_mem/src/ubcheck.rs:16796:40
+      |
+16796 |                 ts.tv_sec = s as libc::time_t;
+      |                                        ^^^^^^
+      |
+      = note: `#[warn(deprecated)]` on by default
+
+warning: `wolf_mem` (lib) generated 1 warning
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+   --> crates/wolf_rt/src/fs_change.rs:275:40
+    |
+275 |                 ts.tv_sec = s as libc::time_t;
+    |                                        ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `wolf_rt` (lib) generated 1 warning
+    Finished `release` profile [optimized + debuginfo] target(s) in 2m 05s
+dist-rt: 2282 undefined symbol(s), none of open64, fstat64, stat64, lseek64
+dist-rt: target/dist/wolf-rt-0.2.35-x86_64-unknown-linux-musl.tar.gz
+dist-rt: libwolf_rt.a sha256 3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24 (46699408 bytes)
+dist-rt: wolf-rt-0.2.35-x86_64-unknown-linux-musl.tar.gz sha256 a6d0bfb0a2770543fc8ed09dcb125fd8b84606e4adaa44bdd7df2c12c0e253d5
+dist-rt: the release body's section is target/dist/wolf-rt-0.2.35-x86_64-unknown-linux-musl.notes.md
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /home/mfwolffe/lanes/s267/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /home/mfwolffe/lanes/s267/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+46699408 bytes
+recipe check: 6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1 (published 6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1)
+member sums read twice, equal
+cc 3161aea27abb8beeb669cc6499fa9dc162014b69eecc6fb0d169eed5def25b11 499760
+ld.lld 1217ca75f9df70439294844b2aba14895adc557e2514c6cdc76c4c6676a3757b 66247008
+libwolf_rt.a 3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24 46699408
+sysroot/crt1.o 51dba24287eb9b1e74f3c7cb8ea5464491d3a4ba54c016722f149179d08f90f6 5560
+sysroot/crti.o 5cbc84c78a23cdddda0db8cdcd5ec3b5a15b6b555510bd97e4c5a0334aca7b49 2816
+sysroot/crtn.o d884ee5f9120490b98bb43496f88983ee379a0d2ebf027574fcca7eae9aaa1e7 2760
+sysroot/libc.a 8e69a73c464a86fd8b278f3aa08ab2640b720157e92b45a2d34441c22248ddd4 10961970
+sysroot/libunwind.a 264296d61db52859cc7a8cd6a7a09fc62bde189aa3ea8867fb62ef5129b694bc 201794
+dd09895a13d3ea4056db73d3e974f025a732391c38044094ea6fc8ed69fb54cc  /home/mfwolffe/lanes/s267/bundle/ld02-musl-link-bundle.tar.gz
+dd09895a13d3ea4056db73d3e974f025a732391c38044094ea6fc8ed69fb54cc  /home/mfwolffe/lanes/s267/bundle/ld02-musl-link-bundle.tar.gz
+36813201 bytes
+a6d0bfb0a2770543fc8ed09dcb125fd8b84606e4adaa44bdd7df2c12c0e253d5  /home/mfwolffe/lanes/s267/bundle/wolf-rt-0.2.35-x86_64-unknown-linux-musl.tar.gz
+bundle end=2026-10-25T11:29:17Z
+bundle exit=0
+s267 ctr-u waiting for the CPUs 12-15 lock (2026-10-25T11:29:17Z); job rows-cand: bash /home/mfwolffe/lanes/s267/scripts/rows.sh candidate /home/mfwolffe/lanes/s267/bundle/stage/libwolf_rt.a
+rows head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde host=28e218614df6 start=2026-10-25T11:33:12Z
+SigBlk:	0000000000380000
+SigIgn:	0000000000000000
+NoNewPrivs:	1
+Cpus_allowed_list:	12-15
+pid 1: Uid:	0	0	0	0
+Ubuntu LLD 18.1.3 (compatible with GNU linkers)
+GNU ld (GNU Binutils for Ubuntu) 2.42
+Ubuntu clang version 18.1.3 (1ubuntu1)
+cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /home/mfwolffe/lanes/s267/bundle/stage/libwolf_rt.a
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /home/mfwolffe/lanes/s267/bundle/stage/libwolf_rt.a
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running tests/static_entry.rs (/home/mfwolffe/lanes/s267/target-u/debug/deps/static_entry-3b6eb52b4a38620f)
+
+running 3 tests
+test linux::glibc_cells_answer_the_invocation ... cell native cc-glibc env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native cc-glibc env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native cc-glibc env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native cc-glibc env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release cc-glibc env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release cc-glibc env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release cc-glibc env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release cc-glibc env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry cc-glibc: 8 cells, 8 right, 0 wrong, 0 skipped
+ok
+test linux::musl_cells_linked_by_gnu_ld_answer_the_invocation ... static_entry: WOLF_STATIC_ENTRY_BFD=ld.bfd: GNU ld (GNU Binutils for Ubuntu) 2.42
+cell native gnu-ld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native gnu-ld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native gnu-ld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native gnu-ld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release gnu-ld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release gnu-ld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release gnu-ld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release gnu-ld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry gnu-ld-musl: 8 cells, 8 right, 0 wrong, 0 skipped
+ok
+test linux::musl_cells_linked_by_lld_answer_the_invocation ... static_entry: WOLF_STATIC_ENTRY_LLD=ld.lld: Ubuntu LLD 18.1.3 (compatible with GNU linkers)
+cell native lld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native lld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native lld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native lld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release lld-musl env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release lld-musl env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release lld-musl env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release lld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry lld-musl: 8 cells, 8 right, 0 wrong, 0 skipped
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.36s
+
+rows exit=0 end=2026-10-25T11:33:15Z
+rows-candidate exit=0
+chain1 lint=0 rows=0 bundle=0 candidate-rows=0
+s267 job chain1 exit=0 end=2026-10-25T11:33:15Z

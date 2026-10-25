@@ -1,0 +1,38 @@
+#!/bin/bash
+# s267's gauntlet container (s266's and ld02b's shape, RULES §4): the
+# localhost/s267-gauntlet image (the host's toolchain through read-only
+# /usr/lib, /usr/share, /usr/include; the taskset shim moved to CPUs
+# 12-15), kasumi CPUs 12-15 under the shared lock, --pids-limit 16384 and
+# nproc 32768, no core files, a foreign pid 1 (podman's init as the userns
+# root, a subordinate uid) with the command dropped to the lane's uid by
+# setpriv, signals reset by s266-exec-clean. Never --pid=host. No network
+# unless S267_NET=1.
+set -euo pipefail
+lane="$HOME/lanes/s267"
+net=none; [ "${S267_NET:-0}" = 1 ] && net=pasta
+echo "s267 ctr-g waiting for the CPUs 12-15 lock ($(date -u +%FT%TZ)); job ${S267_JOB:-job}: $*"
+exec flock "$HOME/lanes/kasumi-cores-12-15.lock" podman run --rm --name "s267-${S267_JOB:-job}" --network "$net" \
+    --userns=keep-id --user 0:0 --init --pids-limit 16384 --ulimit nproc=32768:32768 --ulimit core=0 \
+    --memory 12g --cpuset-cpus 12-15 \
+    -v /usr/lib:/usr/lib:ro -v /usr/share:/usr/share:ro -v /usr/include:/usr/include:ro \
+    -v /var/lib/pacman:/var/lib/pacman:ro \
+    -v "$HOME/.rustup:/opt/s267-rustup:ro" -v "$lane:$lane" -w "${S267_WD:-$lane/wolf-lang}" \
+    -e HOME="$lane/scratch/home" -e TMPDIR="$lane/scratch/tmp" -e XDG_CACHE_HOME="$lane/scratch/cache" \
+    -e RUSTUP_HOME=/opt/s267-rustup -e RUSTUP_TOOLCHAIN=1.97.1 \
+    -e PATH=/opt/s267-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin:/usr/bin:/bin \
+    -e CARGO_HOME="$lane/cargo-home" -e CARGO_INCREMENTAL=0 -e CARGO_BUILD_JOBS=4 -e CARGO_NET_OFFLINE=true \
+    -e CARGO_TARGET_DIR="${S267_TARGET:-$lane/wolf-lang/target}" \
+    -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
+    -e S267_TASKSET_LOG="$lane/evidence/taskset-translations.log" \
+    -e LUPIN="$lane/toolchain/lupin/lupin-0.1.56-x86_64-unknown-linux-gnu/lupin" \
+    -e WOLF_PAIRING_REQUIRE_SIBLING=1 -e WOLF_SYSCALL_REQUIRE_STRACE=1 \
+    -e WOLF_INTERRUPT_REQUIRE_QEMU=1 -e WOLF_RT_NONE_REQUIRE=1 -e WOLF_TEST_NATIVE_REQUIRE=1 \
+    -e WOLF_DIST_STD_SRC="$lane/wolf-std" -e RUST_TEST_NOCAPTURE=1 \
+    -e WOLF_STATIC_ENTRY_SYSROOT="$lane/wolf-lang/target/static-entry-bundle/sysroot" \
+    -e WOLF_STATIC_ENTRY_MUSL_RT="$lane/target-u/x86_64-unknown-linux-musl/debug/libwolf_rt.a" \
+    -e WOLF_STATIC_ENTRY_REQUIRE=1 \
+    ${S267_ENV:+$S267_ENV} \
+    localhost/s267-gauntlet:latest \
+    setpriv --reuid="$(id -u)" --regid="$(id -g)" --clear-groups --bounding-set=-all \
+    --inh-caps=-all --ambient-caps=-all --no-new-privs \
+    taskset -c 12-15 s266-exec-clean bash -c 'ulimit -c 0; exec "$@"' bash "$@"

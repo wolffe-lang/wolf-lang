@@ -1,0 +1,86 @@
+1:== xtask ci: fmt
+2:== xtask ci: fmt-fixpoint
+4:== xtask ci: clippy
+130:== xtask ci: rt-none
+132:== xtask ci: test
+550:SKIP: the clang drift witness runs on macOS/aarch64 hosts only
+682:SKIP: real-clef assembler rows require WOLF_TEST_CLEF (ci/build-test-clef, pin 996a3ccd)
+685:SKIP: real-clef assembler rows require WOLF_TEST_CLEF (ci/build-test-clef, pin 996a3ccd)
+690:SKIP: real-clef assembler rows require WOLF_TEST_CLEF (ci/build-test-clef, pin 996a3ccd)
+1750:SKIP: lldb not installed (required on the macOS CI lane)
+1752:SKIP: lldb not installed (required on the macOS CI lane)
+2153:SKIP: restore: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: time=\"2026-10-25T11:49:23Z\" level=error msg=\"cannot find UID/GID for user mfwolffe: no subuid ranges found for user \\\"mfwolffe\\\" in /etc/subuid - check rootless mode in man pages.\""]) — the rows did not run
+2516:SKIP: storm: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2517:SKIP: tty: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2519:SKIP: main: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2521:SKIP: chain: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2523:SKIP: exec: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2525:SKIP: storm_limit: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2527:SKIP: subshell: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2530:SKIP: fds: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2534:SKIP: tasks: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2536:SKIP: census: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2538:SKIP: hub: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2539:SKIP: mallocfork: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2541:SKIP: loop: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2543:SKIP: hub_blocked: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2545:SKIP: reactor: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+2962:SKIP: lock: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+2964:SKIP: fifo: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+3059:SKIP: nonblock: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+3061:SKIP: clip: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+3274:SKIP: all_user: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+3276:SKIP: all_root: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+3278:SKIP: pgid_session: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+3280:SKIP: job: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+3365:SKIP: pgid: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+3791:SKIP: owner: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the witness that sets ids and owners did not run on this box
+3793:SKIP: drop: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the witness that sets ids and owners did not run on this box
+3795:SKIP: refused: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the witness that sets ids and owners did not run on this box
+4061:SKIP: stops: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live job-wait witnesses did not run on this box
+4063:SKIP: interrupt: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live job-wait witnesses did not run on this box
+4065:SKIP: idle: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live job-wait witnesses did not run on this box
+4666:SKIP: core: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+4668:SKIP: reserved: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+5118:SKIP: no release-profile wolf at /home/mfwolffe/lanes/s267/wolf-lang/crates/wolf_driver/../../target/release/wolf — a debug-profile green is not evidence about wolf-lang#431 (see the module header), so this witness does not run. `cargo xtask dist` produces it.
+5174:SKIP: exit_by: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+5177:SKIP: group_fault: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+5179:SKIP: core: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+5452:static_entry: WOLF_STATIC_ENTRY_BFD=ld.bfd: GNU ld (GNU Binutils) 2.47
+5453:static_entry: WOLF_STATIC_ENTRY_LLD=ld.lld: LLD 23.1.3 (compatible with GNU linkers)
+5467:static_entry lld-musl: 8 cells, 8 right, 0 wrong, 0 skipped
+5477:static_entry cc-glibc: 8 cells, 8 right, 0 wrong, 0 skipped
+5482:static_entry gnu-ld-musl: 8 cells, 8 right, 0 wrong, 0 skipped
+5880:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5882:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5883:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5884:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5885:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5886:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5887:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5888:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5889:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5890:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5891:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5892:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5893:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5894:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5895:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5896:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5897:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+5898:SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+9301:== xtask ci: fuzz-check
+9307:xtask ci: step `fuzz-check` failed
+--- tail
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+== xtask ci: fuzz-check
+error: no matching package named `libfuzzer-sys` found
+location searched: crates.io index
+required by package `wolf-fuzz v0.1.0 (/home/mfwolffe/lanes/s267/wolf-lang/fuzz)`
+note: offline mode (via `--offline`) can sometimes cause surprising resolution failures
+help: if this error is too confusing you may wish to retry without `--offline`
+xtask ci: step `fuzz-check` failed

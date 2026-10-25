@@ -1,0 +1,45 @@
+s267 job chain2 start=2026-10-25T11:42:00Z head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde pid=3585742
+chain2 after chain1 exit=0 start=2026-10-25T11:42:00Z
+s267 ctr-g waiting for the CPUs 12-15 lock (2026-10-25T11:42:00Z); job gauntlet: bash /home/mfwolffe/lanes/s267/scripts/gauntlet.sh
+s267 gauntlet head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde host=4551cb64cb80 start=2026-10-25T11:45:07Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+NoNewPrivs:	1
+Cpus_allowed_list:	12-15
+pids.max=16384
+nproc soft=32768 hard=32768
+pid 1 uid 0 (this command runs as 1000)
+-rw-r--r-- 2 mfwolffe mfwolffe 46613334 Oct 25 11:22 /home/mfwolffe/lanes/s267/target-u/x86_64-unknown-linux-musl/debug/libwolf_rt.a
+
+/home/mfwolffe/lanes/s267/wolf-lang/target/static-entry-bundle/sysroot:
+total 10924
+drwxr-xr-x 1 mfwolffe mfwolffe       70 Oct 25 11:01 .
+drwxr-xr-x 1 mfwolffe mfwolffe       54 Oct 25 11:01 ..
+-rw-r--r-- 1 mfwolffe mfwolffe     5560 Jan  1  1970 crt1.o
+-rw-r--r-- 1 mfwolffe mfwolffe     2816 Jan  1  1970 crti.o
+-rw-r--r-- 1 mfwolffe mfwolffe     2760 Jan  1  1970 crtn.o
+-rw-r--r-- 1 mfwolffe mfwolffe 10961970 Jan  1  1970 libc.a
+-rw-r--r-- 1 mfwolffe mfwolffe   201794 Jan  1  1970 libunwind.a
+s267 gauntlet exit=1 end=2026-10-25T11:56:58Z
+taskset requests: 180, translated: 0
+s267 ctr-g waiting for the CPUs 12-15 lock (2026-10-25T11:56:58Z); job differ: bash /home/mfwolffe/lanes/s267/scripts/differ.sh
+differ head=54124626e2dfc7e7581d0d8ca0635b03cdd63fde start=2026-10-25T12:01:03Z
+75475c5603415daa7406316bef98a1eef55bd35db6ea3009abb390b58930f27b  /home/mfwolffe/lanes/s267/wolf-lang/target/debug/wolf
+fda2e1b917d3ea29fb9f75b649c7ad4803fa25957eca65fbe7336c922d4751b8  /home/mfwolffe/lanes/s267/trunk-wolf/wolf
+wolf 0.2.35+dev.unknown (wolfgang)
+wolf 0.2.35+dev.unknown (wolfgang)
+differ checked exit=0
+differ: 1228 file(s), 0 divergence(s), 29 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 752, B executed 752, BOTH executed 752 of 1166 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ native exit=1
+{"class":"Verdict","detail":"Exit(32) vs Exit(70)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(155) vs Exit(51)","file":"corpus/memory/volatile_ub_uaf.lu"}
+differ: 1228 file(s), 3 divergence(s), 24 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 757, B executed 757, BOTH executed 757 of 1166 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ release exit=1
+{"class":"Verdict","detail":"Exit(232) vs Exit(45)","file":"corpus/memory/volatile_ub_uaf.lu"}
+differ: 1228 file(s), 1 divergence(s), 24 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 757, B executed 757, BOTH executed 757 of 1166 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ end=2026-10-25T12:07:38Z
+chain2 gauntlet=1 differ=0 end=2026-10-25T12:07:38Z
+s267 job chain2 exit=1 end=2026-10-25T12:07:38Z

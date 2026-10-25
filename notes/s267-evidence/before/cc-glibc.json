@@ -1,0 +1,66 @@
+[
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_args",
+    "stdout": "argc=3\\n[--version]\\n[space word]\\n[]\\n",
+    "tier": "native",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_arg0",
+    "stdout": "[s267 name]\\n",
+    "tier": "native",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_args_bytes",
+    "stdout": "argc=5\\n115\\n50\\n54\\n55\\n32\\n110\\n97\\n109\\n101\\nend\\n45\\n45\\n118\\n101\\n114\\n115\\n105\\n111\\n110\\nend\\n115\\n112\\n97\\n99\\n101\\n32\\n119\\n111\\n114\\n100\\nend\\nend\\n255\\n254\\nend\\n",
+    "tier": "native",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_vars",
+    "stdout": "count=3\\n[S267_A=1]\\n[S267_B=space word]\\n[S267_C=]\\n",
+    "tier": "native",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_args",
+    "stdout": "argc=3\\n[--version]\\n[space word]\\n[]\\n",
+    "tier": "release",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_arg0",
+    "stdout": "[s267 name]\\n",
+    "tier": "release",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_args_bytes",
+    "stdout": "argc=5\\n115\\n50\\n54\\n55\\n32\\n110\\n97\\n109\\n101\\nend\\n45\\n45\\n118\\n101\\n114\\n115\\n105\\n111\\n110\\nend\\n115\\n112\\n97\\n99\\n101\\n32\\n119\\n111\\n114\\n100\\nend\\nend\\n255\\n254\\nend\\n",
+    "tier": "release",
+    "verdict": "right"
+  },
+  {
+    "exit": 0,
+    "link": "cc-glibc",
+    "reader": "env_vars",
+    "stdout": "count=3\\n[S267_A=1]\\n[S267_B=space word]\\n[S267_C=]\\n",
+    "tier": "release",
+    "verdict": "right"
+  }
+]

@@ -1,0 +1,6 @@
+# s267's gauntlet image: s266's (the host's /usr/bin snapshot over
+# archlinux:base-devel, /usr/lib, /usr/share and /usr/include mounted
+# read-only at run time, s266-exec-clean) by id, with the taskset shim
+# moved to the lane's block, CPUs 12-15 (RULES §4, wolf-lang#925).
+FROM 5c461b7d4fd864cd636f08bcc6048961185c24474572543b8428115018a5c8ef
+COPY taskset-shim.sh /usr/bin/taskset

@@ -1,0 +1,7 @@
+1:== xtask ci: fmt
+2:== xtask ci: fmt-fixpoint
+1310:xtask ci: step `fmt-fixpoint` failed
+fmt-fixpoint: crates/wolf_fmt/tests/regressions/idem_trailing_tab_flips_blank.lu: wolf fmt -: No such file or directory (os error 2)
+fmt-fixpoint: crates/wolf_fmt/tests/regressions/idem_verbatim_line_drop.lu: wolf fmt -: No such file or directory (os error 2)
+fmt-fixpoint: 1306 of 1306 file(s) not a fixed point: `wolf fmt` must reach its layout in one pass ([gram.fmt.canon]) — reduce the construct the lines above name and fix the formatter, never the file
+xtask ci: step `fmt-fixpoint` failed

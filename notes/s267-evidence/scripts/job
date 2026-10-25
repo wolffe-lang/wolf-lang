@@ -1,0 +1,15 @@
+#!/bin/bash
+# s267: `job NAME CMD...` runs CMD and writes evidence/NAME.{pid,log,exit};
+# the exit file holds the command's own status (never a pipe's).
+set -u
+lane="$HOME/lanes/s267"
+name=$1; shift
+printf '%s\n' "$$" > "$lane/evidence/$name.pid"
+rm -f "$lane/evidence/$name.exit"
+exec > "$lane/evidence/$name.log" 2>&1 < /dev/null
+echo "s267 job $name start=$(date -u +%FT%TZ) head=$(git -C "$lane/wolf-lang" rev-parse HEAD) pid=$$"
+S267_JOB="$name" "$@"
+rc=$?
+printf '%s\n' "$rc" > "$lane/evidence/$name.exit"
+echo "s267 job $name exit=$rc end=$(date -u +%FT%TZ)"
+exit "$rc"

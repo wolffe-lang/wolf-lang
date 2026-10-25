@@ -1,0 +1,56 @@
+# wolf-lang run 40188739927 (workflow_dispatch -f jobs=static-entry, s267-plant-niladic-entry at b0f19c52), job static-entry 121155442191: red by name
+Ubuntu LLD 18.1.3 (compatible with GNU linkers)
+GNU ld (GNU Binutils for Ubuntu) 2.42
+Ubuntu clang version 18.1.3 (1ubuntu1)
+6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1  /home/runner/work/wolf-lang/wolf-lang/.link-bundle-cache/ld02-musl-link-bundle.tar.gz
+6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1  /home/runner/work/wolf-lang/wolf-lang/.link-bundle-cache/ld02-musl-link-bundle.tar.gz
+static-entry bundle: 8 members verified twice; sysroot /home/runner/work/wolf-lang/wolf-lang/target/static-entry-bundle/sysroot
+dist-rt: RUSTFLAGS=-C target-feature=+crt-static -C relocation-model=static -C strip=symbols -C link-arg=-Wl,--build-id=none --remap-path-prefix=/home/runner/work/wolf-lang/wolf-lang=/wolf-lang --remap-path-prefix=/home/runner/work/wolf-lang/wolf-lang/target/dist-rt=/target --remap-path-prefix=/home/runner/.cargo=/cargo
+dist-rt: 2282 undefined symbol(s), none of open64, fstat64, stat64, lseek64
+dist-rt: target/dist/wolf-rt-0.2.35-x86_64-unknown-linux-musl.tar.gz
+dist-rt: libwolf_rt.a sha256 3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24 (46699408 bytes)
+dist-rt: wolf-rt-0.2.35-x86_64-unknown-linux-musl.tar.gz sha256 249592cb4c733a7621c1b02a1765247c1ebdcc7c07d5799899b7d1fa6f1ea84f
+dist-rt: the release body's section is target/dist/wolf-rt-0.2.35-x86_64-unknown-linux-musl.notes.md
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /home/runner/work/wolf-lang/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /home/runner/work/wolf-lang/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+46699408 bytes
+cell native cc-glibc env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell native cc-glibc env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell native cc-glibc env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell native cc-glibc env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release cc-glibc env_args: right exit=Some(0) stdout="argc=3\n[--version]\n[space word]\n[]\n"
+cell release cc-glibc env_arg0: right exit=Some(0) stdout="[s267 name]\n"
+cell release cc-glibc env_args_bytes: right exit=Some(0) stdout="argc=5\n115\n50\n54\n55\n32\n110\n97\n109\n101\nend\n45\n45\n118\n101\n114\n115\n105\n111\n110\nend\n115\n112\n97\n99\n101\n32\n119\n111\n114\n100\nend\nend\n255\n254\nend\n"
+cell release cc-glibc env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry cc-glibc: 8 cells, 8 right, 0 wrong, 0 skipped
+test linux::glibc_cells_answer_the_invocation ... ok
+static_entry: WOLF_STATIC_ENTRY_BFD=ld.bfd: GNU ld (GNU Binutils for Ubuntu) 2.42
+cell native gnu-ld-musl env_args: WRONG exit=Some(0) stdout="argc=0\n"
+cell native gnu-ld-musl env_arg0: WRONG exit=Some(0) stdout="[]\n"
+cell native gnu-ld-musl env_args_bytes: WRONG exit=Some(0) stdout="argc=0\n"
+cell native gnu-ld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release gnu-ld-musl env_args: WRONG exit=Some(0) stdout="argc=0\n"
+cell release gnu-ld-musl env_arg0: WRONG exit=Some(0) stdout="[]\n"
+cell release gnu-ld-musl env_args_bytes: WRONG exit=Some(0) stdout="argc=0\n"
+cell release gnu-ld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry gnu-ld-musl: 8 cells, 2 right, 6 wrong, 0 skipped
+thread 'linux::musl_cells_linked_by_gnu_ld_answer_the_invocation' (7281) panicked at crates/wolf_driver/tests/static_entry.rs:389:9:
+test linux::musl_cells_linked_by_gnu_ld_answer_the_invocation ... FAILED
+static_entry: WOLF_STATIC_ENTRY_LLD=ld.lld: Ubuntu LLD 18.1.3 (compatible with GNU linkers)
+cell native lld-musl env_args: WRONG exit=Some(0) stdout="argc=0\n"
+cell native lld-musl env_arg0: WRONG exit=Some(0) stdout="[]\n"
+cell native lld-musl env_args_bytes: WRONG exit=Some(0) stdout="argc=0\n"
+cell native lld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+cell release lld-musl env_args: WRONG exit=Some(0) stdout="argc=0\n"
+cell release lld-musl env_arg0: WRONG exit=Some(0) stdout="[]\n"
+cell release lld-musl env_args_bytes: WRONG exit=Some(0) stdout="argc=0\n"
+cell release lld-musl env_vars: right exit=Some(0) stdout="count=3\n[S267_A=1]\n[S267_B=space word]\n[S267_C=]\n"
+static_entry lld-musl: 8 cells, 2 right, 6 wrong, 0 skipped
+thread 'linux::musl_cells_linked_by_lld_answer_the_invocation' (7299) panicked at crates/wolf_driver/tests/static_entry.rs:389:9:
+test linux::musl_cells_linked_by_lld_answer_the_invocation ... FAILED
+failures:
+failures:
+    linux::musl_cells_linked_by_gnu_ld_answer_the_invocation
+    linux::musl_cells_linked_by_lld_answer_the_invocation
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.71s
+##[error]Process completed with exit code 101.

@@ -1,0 +1,27 @@
+#!/bin/bash
+# s267's Ubuntu 24.04 container: localhost/px57-rust by image id
+# (rust 1.97.1 with the x86_64-unknown-linux-musl target, LLD 18.1.3,
+# GNU ld 2.42, clang 18.1.3 — CI's ubuntu-latest linkers), kasumi CPUs
+# 12-15 under the shared lock (RULES §4), a foreign pid 1 (podman's init
+# as the userns root, a subordinate uid) with the command dropped to the
+# lane's uid, --pids-limit 16384 and nproc 32768, no core files, no
+# network unless S267_NET=1 (the one cargo fetch). Never --pid=host.
+set -euo pipefail
+lane="$HOME/lanes/s267"
+net=none; [ "${S267_NET:-0}" = 1 ] && net=pasta
+img=e93022a6c0d0c12d00af80f639d637cc80332210eb38e170c9058736ebe32181
+echo "s267 ctr-u waiting for the CPUs 12-15 lock ($(date -u +%FT%TZ)); job ${S267_JOB:-job}: $*"
+exec flock "$HOME/lanes/kasumi-cores-12-15.lock" podman run --rm --name "s267-${S267_JOB:-job}" --network "$net" \
+    --userns=keep-id --user 0:0 --init --pids-limit 16384 --ulimit nproc=32768:32768 --ulimit core=0 \
+    --memory 12g --cpuset-cpus 12-15 \
+    -v "$lane:$lane" -w "${S267_WD:-$lane/wolf-lang}" \
+    -e HOME="$lane/scratch/home" -e TMPDIR="$lane/scratch/tmp" -e XDG_CACHE_HOME="$lane/scratch/cache" \
+    -e RUSTUP_HOME=/opt/rust/rustup \
+    -e PATH=/opt/rust/rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/bin:/usr/local/bin:/usr/bin:/bin \
+    -e CARGO_HOME="$lane/cargo-home" -e CARGO_INCREMENTAL=0 -e CARGO_BUILD_JOBS=4 \
+    -e CARGO_TARGET_DIR="${S267_TARGET:-$lane/target-u}" -e RUST_TEST_NOCAPTURE=1 \
+    ${S267_ENV:+$S267_ENV} \
+    "$img" \
+    setpriv --reuid="$(id -u)" --regid="$(id -g)" --clear-groups --bounding-set=-all \
+    --inh-caps=-all --ambient-caps=-all --no-new-privs \
+    taskset -c 12-15 bash -c 'ulimit -c 0; exec "$@"' bash "$@"
