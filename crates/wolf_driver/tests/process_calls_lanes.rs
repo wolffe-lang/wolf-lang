@@ -33,7 +33,7 @@
 //!   cores-on one; on macOS on CI's throwaway runner only
 //!   (`GITHUB_ACTIONS`), `ulimit -c 0`, and never the reserved rows (macOS
 //!   has no real-time signals). The process rows also run under
-//!   `taskset -c 0-3` where there are four cpus (wolf-lang#570).
+//!   `taskset` on four CPUs of the allocation where there are four cpus (wolf-lang#570).
 //!
 //! **Cores.** A core is written only where the container's working
 //! directory is, the test's own scratch directory, and removed there. A
@@ -59,6 +59,7 @@
 //! listed in the PR).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -795,13 +796,19 @@ impl Live {
 }
 
 /// A compiled machine's row: the binary's name in the test's directory,
-/// and whether it runs under `taskset -c 0-3`.
+/// and again under `taskset` on four of the allocation (`test_cpus`).
 #[cfg(unix)]
 fn compiled_rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(String, String)> {
-    let four = live.four_cpus();
-    if !four && cfg!(target_os = "linux") {
-        eprintln!("SKIP: {test}: fewer than four cpus — the taskset -c 0-3 rows did not run");
-    }
+    // The pinned rows: four of the allocation (`test_cpus`, wolf-lang#925),
+    // asked of the place's own `taskset`.
+    let four = if live.four_cpus() {
+        test_cpus::subset(4, test)
+    } else {
+        if cfg!(target_os = "linux") {
+            eprintln!("SKIP: {test}: fewer than four cpus — the pinned rows did not run");
+        }
+        None
+    };
     let mut rows = Vec::new();
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
@@ -810,10 +817,10 @@ fn compiled_rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(Stri
         };
         let name = exe.file_name().unwrap().to_string_lossy().to_string();
         rows.push((tier.to_string(), live.at(&name)));
-        if four {
+        if let Some(list) = &four {
             rows.push((
-                format!("{tier} taskset -c 0-3"),
-                format!("taskset -c 0-3 {}", live.at(&name)),
+                format!("{tier} taskset -c {list}"),
+                format!("taskset -c {list} {}", live.at(&name)),
             ));
         }
     }
