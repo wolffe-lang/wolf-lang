@@ -844,6 +844,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s256 (#866): `[conf.trap.stack]` — the main thread's guard
         // bounds and alternate signal stack, one call at startup.
         "__wolf_rt_stack_start",
+        // s267 (#962): `[abi.target.main]` — the C entry's arguments for
+        // the argv readers, the shim's first call.
+        "__wolf_rt_main_start",
         // s255 (#844): `[type.list.reserve]`.
         "__wolf_rt_list_reserve",
         // s261 (#899, #406): the name and all byte arguments.
@@ -859,7 +862,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        254,
+        255,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
