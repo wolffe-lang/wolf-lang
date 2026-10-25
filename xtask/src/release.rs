@@ -56,6 +56,9 @@ pub fn rt_notes(
     lib_bytes: u64,
 ) -> String {
     let stem = rt_archive_stem(version);
+    // PLANT (s266, never merged): the archive's digest line is gone; the
+    // read-back (and this module's own test) must go red.
+    let _ = archive_digest;
     format!(
         "{NOTES_MARKER}\n### The musl runtime ({MUSL_TARGET})\n\n\
          `{stem}.tar.gz` carries `libwolf_rt.a` for `{MUSL_TARGET}`, the runtime a \
@@ -65,7 +68,6 @@ pub fn rt_notes(
          `relocation-model=static`, symbols stripped, the source, target and registry \
          paths remapped. `libwolf_rt_none.a`, the freestanding runtime, is the one every \
          host archive carries.\n\n\
-         - `{stem}.tar.gz` sha256 `{archive_digest}`\n\
          - `libwolf_rt.a` sha256 `{lib_digest}` ({lib_bytes} bytes)\n"
     )
 }
