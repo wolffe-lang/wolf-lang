@@ -210,32 +210,37 @@ fn an_else_fallback_range_names_the_fallback_and_says_to_parenthesise() {
             "{lane}: {rec}"
         );
     }
-    // The ledger's own range refusal, outside a fallback, keeps its
-    // name and carries no note.
-    let plain = dir.path().join("plain.lu");
-    std::fs::write(
-        &plain,
-        "fn main() -> int {\n    let r = 2..\n    print(\"{r.start}\")\n    0\n}\n",
-    )
-    .unwrap();
-    let out = build(&plain, &dir.path().join("plain"), None);
-    assert_eq!(out.status.code(), Some(4));
-    let stderr = String::from_utf8(out.stderr).unwrap();
-    assert!(
-        stderr.starts_with(
-            "wolf build: cannot compile this yet — open-ended or end-relative ranges (slicing)"
+    // The ledger's own range refusal keeps its name and carries no note
+    // outside a fallback, and inside one the author parenthesised: the
+    // range there is what the author wrote.
+    for (name, body) in [
+        ("plain", "    let r = (2..)\n    print(\"{r.start}\")\n"),
+        (
+            "paren",
+            "    let rest = \"a\"\n    let v = rest[rest.find(\"a\") else (2..)]\n    print(v)\n",
         ),
-        "{stderr}"
-    );
-    assert!(!stderr.contains("= note:"), "{stderr}");
-    let Some(rec) = record(&plain, "--checked", None) else {
-        return;
-    };
-    assert_eq!(
-        rec["x-unsupported-construct"],
-        "open-ended or end-relative ranges (slicing)"
-    );
-    assert!(rec.get("x-unsupported-note").is_none(), "{rec}");
+    ] {
+        let file = dir.path().join(format!("{name}.lu"));
+        std::fs::write(&file, format!("fn main() -> int {{\n{body}    0\n}}\n")).unwrap();
+        let out = build(&file, &dir.path().join(name), None);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert_eq!(out.status.code(), Some(4), "{name}: {stderr}");
+        assert!(
+            stderr.starts_with(
+                "wolf build: cannot compile this yet — open-ended or end-relative ranges (slicing)"
+            ),
+            "{name}: {stderr}"
+        );
+        assert!(!stderr.contains("= note:"), "{name}: {stderr}");
+        let Some(rec) = record(&file, "--checked", None) else {
+            continue;
+        };
+        assert_eq!(
+            rec["x-unsupported-construct"], "open-ended or end-relative ranges (slicing)",
+            "{name}: {rec}"
+        );
+        assert!(rec.get("x-unsupported-note").is_none(), "{name}: {rec}");
+    }
 }
 
 #[test]
