@@ -1955,7 +1955,8 @@ const STARTUP_PATH: &str = "bench/startup.json";
 /// kasumi (+16 %), seventeen more system calls — with no row anywhere to
 /// see it. The DETERMINISTIC half gates: `corpus/hello.lu` on the release
 /// tier and its C twin (`bench/startup/hello.c`, the host's clang) are
-/// each traced by strace(1), and the difference in system calls from
+/// each traced by strace(1) in an empty environment, and the difference
+/// in system calls from
 /// `execve` to exit is the runtime's own start-up and exit; the dynamic
 /// loader's calls appear in both and cancel, so the number holds for a
 /// given wolf build on a given C library. It may not rise above
@@ -1997,7 +1998,13 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
     }
     let trace = |bin: &Path, name: &str| -> Option<(usize, usize)> {
         let log = dir.join(format!("startup-{name}.strace"));
+        // An empty environment: under `cargo run` LD_LIBRARY_PATH names
+        // several directories, and the loader probes each for every
+        // library — two for wolf (libgcc_s, libc), one for C — so the
+        // difference grew with the caller's environment (the gauntlet
+        // read 15 where the bare count is 12; s265).
         let ok = Command::new(&strace)
+            .env_clear()
             .arg("-qq")
             .arg("-o")
             .arg(&log)
@@ -2064,6 +2071,7 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
         for (bin, out) in [(&wolf_bin, &mut wolf_ns), (&c_bin, &mut c_ns)] {
             let t0 = Instant::now();
             let ok = Command::new(bin)
+                .env_clear()
                 .stdout(std::process::Stdio::null())
                 .status()
                 .is_ok_and(|s| s.success());
