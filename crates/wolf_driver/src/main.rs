@@ -21,6 +21,7 @@ mod cimport_cmd;
 mod doc_cmd;
 mod doctest_cmd;
 mod help;
+mod link;
 mod pkg_cmd;
 mod prelude_cmd;
 mod profile_cmd;
@@ -945,6 +946,8 @@ struct BuildOpts {
     manifest_target: bool,
     /// Explicit as-shaped assembler; otherwise WOLF_AS then the legacy driver.
     assembler: Option<PathBuf>,
+    /// Explicit cc-shaped linker; otherwise WOLF_LD then the platform path.
+    linker: Option<PathBuf>,
 }
 
 impl BuildOpts {
@@ -967,6 +970,7 @@ impl BuildOpts {
             target: None,
             manifest_target: false,
             assembler: None,
+            linker: None,
         }
     }
 }
@@ -2061,7 +2065,13 @@ fn compile_native(
             .values()
             .any(|e| e.name == format!("c.{}", wolf_backend::target::TRAP_HOOK))
     });
-    link_objects(&objects, out, opts.verbose, trap_hook)
+    link_objects(
+        &objects,
+        out,
+        opts.verbose,
+        trap_hook,
+        opts.linker.as_deref(),
+    )
 }
 
 /// `--codegen-report` (s43): the whole-program phase's decisions, in
@@ -2322,7 +2332,12 @@ fn link_objects(
     out: &Path,
     verbose: bool,
     trap_hook: bool,
+    linker: Option<&Path>,
 ) -> Result<(), BuildStop> {
+    let selected = link::selection(linker, std::env::var_os("WOLF_LD"));
+    if selected.is_some() {
+        link::supported().map_err(BuildStop::Environment)?;
+    }
     let rt = find_rt_lib().ok_or_else(|| {
         BuildStop::Environment(format!(
             "{RT_LIB_NAME} not found next to the `wolf` binary (build it with \
@@ -2355,7 +2370,12 @@ fn link_objects(
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
         paths.push(p);
     }
-    let result = link_staged(&paths, out, &rt, &dir, verbose, trap_hook);
+    let result = if let Some(linker) = selected {
+        link::selected(&linker, &paths, out, &rt, verbose, trap_hook)
+            .map_err(BuildStop::Environment)
+    } else {
+        link_staged(&paths, out, &rt, &dir, verbose, trap_hook)
+    };
     let _ = std::fs::remove_dir_all(&dir);
     result
 }
@@ -2801,6 +2821,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         target: None,
         manifest_target: true,
         assembler: None,
+        linker: None,
     };
     let mut prog_args: Vec<std::ffi::OsString> = Vec::new();
     let mut script = script_cmd::Posture::default();
@@ -2844,6 +2865,17 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 Ok(n) => opts.error_limit = n,
                 Err(_) => fail("--error-limit needs a count (0 for no limit)"),
             }
+        } else if a == "--linker" {
+            i += 1;
+            match args.get(i) {
+                Some(v) if !v.is_empty() => opts.linker = Some(PathBuf::from(v)),
+                _ => fail("--linker needs a path"),
+            }
+        } else if let Some(v) = a.strip_prefix("--linker=") {
+            if v.is_empty() {
+                fail("--linker needs a path");
+            }
+            opts.linker = Some(PathBuf::from(v));
         } else if a == "--assembler" {
             i += 1;
             match args.get(i) {
