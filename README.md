@@ -24,7 +24,11 @@ page. The linux archives need **glibc 2.35 or later** (Ubuntu 22.04,
 Debian 12, Fedora 36 and later); each is built on Ubuntu 22.04 and run,
 one program per tier, on a 22.04 host before the release is published
 (#447). [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md)
-says which compiler tiers run on which host.
+says which compiler tiers run on which host. From the release after
+0.2.35 the page also carries `wolf-rt-<version>-x86_64-unknown-linux-musl.tar.gz`:
+the runtime, `libwolf_rt.a`, built for musl (the recipe PAX's image uses),
+for linking wolf objects statically against musl; its digests are in the
+release notes (#935).
 
 ```sh
 printf 'fn main() {\n  print("hello, wolf")\n}\n' > hello.lu
