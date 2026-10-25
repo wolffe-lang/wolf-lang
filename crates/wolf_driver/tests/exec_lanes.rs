@@ -13,7 +13,7 @@
 //! - the fixtures under `fixtures/exec/`, which exec `sh` or spawn it,
 //!   so they run on unix only: the checked machine and lupin under
 //!   `conform-run`, the native and release binaries `wolf build` made —
-//!   plain, and on linux again under `taskset -c 0-3` (wolf-lang#570).
+//!   plain, and on linux again under `taskset` on four CPUs of the allocation (wolf-lang#570).
 //!
 //! An exec that succeeds ends the observation: under `conform-run` no
 //! record follows, and the stream is the program's own bytes then the new
@@ -29,6 +29,7 @@
 //! the mirror, so the pins are dropped, not widened.
 
 mod lane_exit;
+mod test_cpus;
 
 use std::io::Write as _;
 #[cfg(unix)]
@@ -183,20 +184,10 @@ struct Lane {
 
 /// `taskset` on linux, from PATH (NixOS keeps it outside `/usr/bin`).
 #[cfg(unix)]
-fn taskset() -> Option<PathBuf> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("taskset"))
-        .find(|p| p.is_file())
-}
-
 #[cfg(unix)]
 /// Every machine a unix fixture runs on: checked and lupin under
 /// `conform-run`, the native and release binaries — plain, and on linux
-/// again under `taskset -c 0-3` (taskset execs its command, so the pid
+/// again under `taskset` on four CPUs of the allocation (taskset execs its command, so the pid
 /// is the program's).
 fn lanes(entry: &Path, dir: &Path) -> Vec<Lane> {
     let mut out = Vec::new();
@@ -222,12 +213,10 @@ fn lanes(entry: &Path, dir: &Path) -> Vec<Lane> {
             recorded: false,
             lupin: false,
         });
-        if let Some(taskset) = taskset() {
-            let mut t = Command::new(taskset);
-            t.args(["-c", "0-3"]).arg(&exe);
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
             out.push(Lane {
-                name: format!("{tier} (taskset -c 0-3)"),
-                cmd: t,
+                name: format!("{tier} ({})", pin.label()),
+                cmd: pin.command(&exe),
                 recorded: false,
                 lupin: false,
             });
