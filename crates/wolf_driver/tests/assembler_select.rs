@@ -117,7 +117,7 @@ mod linux {
             &args[..3],
             &["--64", "-o", "output object.asm-seven source.o"]
         );
-        assert!(args[3].ends_with("/seven source.S"), "{argv}");
+        assert_eq!(args[3], "seven source.S", "{argv}");
         assert!(dir.join("output object.asm-seven source.o").is_file());
     }
 
@@ -312,6 +312,61 @@ mod linux {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn pinned_corpus_sources_all_pass_through_the_root_manifest() {
+        let Some(clef) = clef() else { return };
+        let root = clef.parent().unwrap().parent().unwrap();
+        let inventory: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join("census/repositories.json")).unwrap())
+                .unwrap();
+        let dir = package("real clef pinned corpus");
+        // No assembly is executed by this corpus row: it emits objects only.
+        std::fs::write(dir.join("main.lu"), "export fn answer() -> i64 { 7 }\n").unwrap();
+        let mut listed = Vec::new();
+        for repo in inventory.as_array().unwrap() {
+            for source in repo["files"].as_array().unwrap() {
+                let source = source.as_str().unwrap();
+                if source.ends_with("seven_aarch64_macos.S") {
+                    eprintln!("REFUSED BY SCOPE: seven_aarch64_macos.S (clef is ELF x86-64 only)");
+                    continue;
+                }
+                let source_path = root
+                    .join("census/sources")
+                    .join(repo["repository"].as_str().unwrap())
+                    .join(source);
+                let name = format!("corpus {}.S", listed.len());
+                std::fs::copy(source_path, dir.join(&name)).unwrap();
+                listed.push(format!("\"{name}\""));
+            }
+        }
+        assert_eq!(listed.len(), 43, "the pinned source census changed");
+        std::fs::write(
+            dir.join("wolf.pkg"),
+            format!(
+                "pkg {{\n name: \"as02a/corpus\"\n version: \"0.0.1\"\n asm: [{}]\n}}\n",
+                listed.join(", ")
+            ),
+        )
+        .unwrap();
+        for release in [false, true] {
+            let mut c = build(&dir);
+            c.env("WOLF_AS", &clef).arg("--target=x86_64-unknown-none");
+            if release {
+                c.arg("--release");
+            }
+            success(c.output().unwrap());
+            for i in 0..43 {
+                use object::Object;
+                let bytes =
+                    std::fs::read(dir.join(format!("output object.asm-corpus {i}.o"))).unwrap();
+                let file = object::File::parse(&*bytes).unwrap();
+                assert_eq!(file.architecture(), object::Architecture::X86_64);
+                assert_eq!(file.kind(), object::ObjectKind::Relocatable);
+            }
+            eprintln!("PASS: all 43 root-manifest sources via real clef; release={release}");
         }
     }
 
