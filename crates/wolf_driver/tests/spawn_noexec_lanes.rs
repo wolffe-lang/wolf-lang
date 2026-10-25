@@ -24,12 +24,13 @@
 //!
 //! The fixtures spawn host programs (`sh` through the control), so this
 //! runs on unix only: native and release (and native again under
-//! `taskset -c 0-3` on linux), the checked machine and lupin under
+//! `taskset` on four CPUs of the allocation on linux), the checked machine and lupin under
 //! `conform-run`, each in a fresh directory holding the three files.
 
 #![cfg(unix)]
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -122,18 +123,19 @@ fn wolfgang_runs(fixture: &str) -> Vec<(String, String)> {
             tier.to_string(),
             String::from_utf8_lossy(&run.stdout).into_owned(),
         ));
-        if tier == "native" && cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists() {
+        if tier == "native"
+            && let Some(pin) = test_cpus::pin(4, fixture)
+        {
             let again = stage(fixture, "taskset");
             std::fs::copy(dir.join(tier), again.join(tier)).unwrap();
-            let mut t = Command::new("taskset");
-            t.args(["-c", "0-3"]).arg(again.join(tier));
-            let run = run_in(t, &again);
+            let run = run_in(pin.command(again.join(tier)), &again);
             assert!(
                 run.status.success(),
-                "{fixture} native under taskset: {run:?}"
+                "{fixture} native under {}: {run:?}",
+                pin.label()
             );
             seen.push((
-                "native, taskset -c 0-3".into(),
+                format!("native, {}", pin.label()),
                 String::from_utf8_lossy(&run.stdout).into_owned(),
             ));
         }
