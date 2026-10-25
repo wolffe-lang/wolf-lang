@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Build the pinned real linker. The strict test also needs the matching musl
+# runtime and sysroot (WOLF_TEST_LIGATURE_RT and LIGATURE_SYSROOT; pax#167).
+# Optional WOLF supplies an already digest-verified complete 0.2.35 toolchain.
+set -euo pipefail
+pin=3f206413
+root=$(git rev-parse --show-toplevel)
+tree=${1:-$root/target/test-ligature}
+if [ ! -e "$tree" ]; then
+    git clone --no-checkout https://github.com/wolffe-lang/ligature.git "$tree"
+    git -C "$tree" checkout --detach "$pin"
+fi
+[ "$(git -C "$tree" rev-parse HEAD)" = "$(git -C "$tree" rev-parse "$pin^{commit}")" ]
+git -C "$tree" diff --exit-code HEAD -- src tools wolf-toolchain.toml
+if [ -z "${WOLF:-}" ]; then
+    "$tree/tools/fetch-toolchain"
+    WOLF="$tree/.wolf-bin/wolf"
+fi
+[ "$("$WOLF" --version | head -1)" = 'wolf 0.2.35 (wolfgang, pin cf0c13d)' ]
+mkdir -p "$tree/target"
+"$WOLF" build --deny-warnings "$tree/src/ligature.lu" -o "$tree/target/ligature"
+sha256sum "$tree/target/ligature"
+sha256sum "$tree/target/ligature"
+if [ -n "${GITHUB_ENV:-}" ]; then
+    printf 'WOLF_TEST_LIGATURE=%s/target/ligature\nWOLF_TEST_LIGATURE_REQUIRE=1\n' "$tree" >> "$GITHUB_ENV"
+fi

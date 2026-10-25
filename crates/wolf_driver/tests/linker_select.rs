@@ -330,11 +330,25 @@ mod linux {
             ),
             (
                 "arithmetic",
-                "fn main() -> int { var n = 0; for i in 0..4 { n += i }; n }\n",
+                "fn main() -> int {\n var n = 0\n for i in 0..4 { n += i }\n n\n}\n",
                 6,
                 "",
             ),
         ];
+        // Compile every fixture on both tiers before the expensive links.
+        // A source error must not hide behind several long real-tool calls.
+        for (name, source, _, _) in cases {
+            let dir = package(&format!("preflight {name}"));
+            std::fs::write(dir.join("main.lu"), source).unwrap();
+            for release in [false, true] {
+                let mut c = build(&dir);
+                c.arg("--emit=obj");
+                if release {
+                    c.arg("--release");
+                }
+                success(c.output().unwrap());
+            }
+        }
         for (name, source, code, stdout) in cases {
             let dir = package(&format!("real {name}"));
             std::fs::write(dir.join("main.lu"), source).unwrap();
