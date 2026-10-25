@@ -1,0 +1,15 @@
+//! check: run(exit=0, stdout="[ value]")
+//! phase: run
+//! conforms: gram.amb.else, mem.str.view
+//!
+//! s266 (wolf-lang#932) — the parenthesised spelling of
+//! `else_fallback_range_refused.lu`: `(rest.find(":=") else 0) + 2..`
+//! closes the fallback before the `+`, so the index is an `int` and the
+//! open-ended `str` slice runs (as wolf-lang#171 settled).
+
+fn main() -> int {
+    let rest = "NAME := value"
+    let v = rest[(rest.find(":=") else 0) + 2..]
+    print("[{v}]")
+    0
+}

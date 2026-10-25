@@ -1,0 +1,22 @@
+//! check: pass
+//! phase: resolve
+//! conforms: gram.amb.else
+//!
+//! s266 (wolf-lang#932) — the `else` fallback takes a complete
+//! expression (`[gram.amb.else]`), so in `rest[rest.find(":=") else 0 +
+//! 2..]` the fallback is `0 + 2..`, an open-ended range VALUE, and the
+//! ledger declines it. Before s266 the refusal named the slicing entry
+//! alone ("open-ended or end-relative ranges (slicing)" and "not a bug
+//! in your program"), and a model writing mk spent a session moving the
+//! slice instead of parenthesising. The refusal now names the fallback
+//! and carries the note "the `else` fallback extends to the end of the
+//! expression; parenthesise `(… else 0)`" (`refusal_site.rs` reads both
+//! from this file). `else_fallback_paren_slice.lu` and
+//! `else_fallback_bound_slice.lu` are the two spellings that compile.
+
+fn main() -> int {
+    let rest = "NAME := value"
+    let v = rest[rest.find(":=") else 0 + 2..]
+    print("[{v}]")
+    0
+}

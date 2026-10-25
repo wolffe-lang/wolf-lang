@@ -1,5 +1,6 @@
 //! s259 (#889, #890): refusals keep their source identity; a typo in a
 //! container's type arguments is E0301 on every machine, not a refusal.
+//! s266 (#932): an `else` fallback that swallowed a range says so.
 mod lane_exit;
 
 use std::path::{Path, PathBuf};
@@ -162,6 +163,78 @@ fn an_unresolved_container_argument_is_e0301_on_every_lane() {
         );
         assert!(!stderr.contains("not a bug in your program"), "{stderr}");
     }
+}
+
+/// s266 (wolf-lang#932, R-s266-1 A): an open-ended range that IS an
+/// `else` fallback (`rest[i else 0 + 2..]`, `[gram.amb.else]`) is
+/// refused under a name that says so, with the parenthesising note, on
+/// the build and in every lane's record; the parenthesised and bound
+/// spellings beside it run (`xtask corpus` holds their output).
+#[test]
+fn an_else_fallback_range_names_the_fallback_and_says_to_parenthesise() {
+    const CONSTRUCT: &str = "an open-ended or end-relative range as an `else` fallback (slicing)";
+    const NOTE: &str =
+        "the `else` fallback extends to the end of the expression; parenthesise `(… else 0)`";
+    let entry = corpus("rows/else_fallback_range_refused.lu");
+    let src = std::fs::read_to_string(&entry).unwrap();
+    let dir = Scratch::new("else-fallback");
+    let out = build(&entry, &dir.path().join("out"), None);
+    assert_eq!(
+        out.status.code(),
+        Some(4),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.starts_with(&format!(
+            "wolf build: cannot compile this yet — {CONSTRUCT}"
+        )),
+        "{stderr}"
+    );
+    assert!(stderr.contains(&format!("= note: {NOTE}")), "{stderr}");
+    assert!(stderr.contains("0 + 2.."), "{stderr}");
+    let lo = src.find("0 + 2..").unwrap();
+    for lane in ["--checked", "--native", "--release"] {
+        let Some(rec) = record(&entry, lane, None) else {
+            continue;
+        };
+        assert_eq!(rec["verdict"], "unsupported", "{lane}: {rec}");
+        assert_eq!(rec["phase_reached"], "resolve", "{lane}: {rec}");
+        assert_eq!(rec["x-unsupported-construct"], CONSTRUCT, "{lane}: {rec}");
+        assert_eq!(rec["x-unsupported-note"], NOTE, "{lane}: {rec}");
+        assert_eq!(
+            rec["x-unsupported-span"],
+            serde_json::json!([lo, lo + "0 + 2..".len()]),
+            "{lane}: {rec}"
+        );
+    }
+    // The ledger's own range refusal, outside a fallback, keeps its
+    // name and carries no note.
+    let plain = dir.path().join("plain.lu");
+    std::fs::write(
+        &plain,
+        "fn main() -> int {\n    let r = 2..\n    print(\"{r.start}\")\n    0\n}\n",
+    )
+    .unwrap();
+    let out = build(&plain, &dir.path().join("plain"), None);
+    assert_eq!(out.status.code(), Some(4));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        stderr.starts_with(
+            "wolf build: cannot compile this yet — open-ended or end-relative ranges (slicing)"
+        ),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("= note:"), "{stderr}");
+    let Some(rec) = record(&plain, "--checked", None) else {
+        return;
+    };
+    assert_eq!(
+        rec["x-unsupported-construct"],
+        "open-ended or end-relative ranges (slicing)"
+    );
+    assert!(rec.get("x-unsupported-note").is_none(), "{rec}");
 }
 
 #[test]
