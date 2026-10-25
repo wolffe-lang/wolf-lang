@@ -231,10 +231,14 @@ keeps every report. If the ruling is A: revert `26d3a10d` and
   above), one round's median moves 2-5 % against the next, and CI's
   runners are not this host. bench-gates prints the medians and the ratio
   to C beside the count; D5 keeps them out of the merge gate.
-- **The plant**: `s265-plant-startup` (`58924a44`, on `df1bf08b`) restores
+- **The plant**: `s265-plant-startup` (`c18ce4e8`, on `643a967b`) restores
   the eager 0.2.35 registration (`__wolf_rt_stack_start` →
-  `enter_runtime_thread`); dispatched as `-f jobs=lint-test`: run
-  40146566459 (PENDING: read at resume).
+  `enter_runtime_thread`: `pthread_getattr_np` on the main thread and its
+  altstack unmapped at exit); dispatched as `-f jobs=lint-test`: run
+  40147037892 (PENDING: read at resume). The first dispatch, run
+  40146566459 at `58924a44`, went red at `fmt` on this branch's own
+  unformatted code — not the gate; superseded by `2e0d98c6` (rustfmt) and
+  `643a967b` (clippy's type-complexity), and the plant re-cut.
 
 ## 2. The bisection, yew's rows, the gauntlet and the differ
 
@@ -244,4 +248,6 @@ PENDING: phase 2b on kasumi (`tools/phase2b.sh`, pid 2493612, log
 (a 0.2.34, b 0.2.35, fix the head), the fifteen landing commits and
 trunk built and their hellos timed, yew's cold-open and clean first
 paint 3 x 50 each, the overflow rows at the head, the gauntlet at
-`df1bf08b`, the differ against 0.2.35 on all three tiers.
+`643a967b` (the code head; the head's toolchain for the timings was
+built at `26d3a10d`, and the two commits since are rustfmt and a type
+alias), the differ against 0.2.35 on all three tiers.
