@@ -127,6 +127,17 @@ pub fn assemble(
         command.arg("-c").arg(src).arg("-o").arg(obj);
         command
     };
+    // A successful no-output tool must not validate a previous build's object.
+    match std::fs::remove_file(obj) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(format!(
+                "assembly source `{spelled}`: remove {}: {e}",
+                obj.display()
+            ));
+        }
+    }
     let run = command
         .output()
         .map_err(|e| format!("assembly source `{spelled}`: cannot run {command:?} ({e})"))?;
