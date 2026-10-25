@@ -61,6 +61,13 @@ C's `va_list` parameter is spelled `*VaList`. Other targets report E0826,
 and the checked machine refuses these calls by name. This support is
 not in the 0.2.35 release archive; build from source to use it.
 
+The development compiler also accepts `--assembler PATH` (or `WOLF_AS`)
+for assembly files listed in the root `wolf.pkg`. The flag wins over the
+environment, and failures are not retried with another tool. The default
+remains the target's C driver. Selecting an assembler does not replace the
+linker or the release compiler's LLVM path. See `wolf build --help` and
+[the assembly contract](spec/04-abi.md#6-assembly-abiasm).
+
 ### Building from source
 
 ```sh
