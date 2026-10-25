@@ -234,10 +234,27 @@ pub fn enter_thread() {
     if CURRENT_GUARD.with(|g| g.get().1 != 0) {
         return;
     }
+    let Some(bounds) = pthread_bounds() else {
+        return;
+    };
+    // A thread that ends unmaps the altstack it was given (`AltStack`).
+    let Some(ptr) = ensure_altstack() else {
+        return;
+    };
+    if !ptr.is_null() {
+        OWN_ALT.with(|a| *a.borrow_mut() = Some(AltStack(ptr)));
+    }
+    register_guard(bounds.0, bounds.1);
+    install_overflow_handler();
+}
+
+/// The calling thread's guard, from the host's pthread queries.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn pthread_bounds() -> Option<(usize, usize)> {
     // SAFETY: pthread queries describe only this live thread. The Linux
     // main-thread attributes include its RLIMIT_STACK range; macOS gives
     // the high address, rather than the low one. Neither query faults.
-    let bounds = unsafe {
+    unsafe {
         #[cfg(target_os = "linux")]
         {
             let mut attr: libc::pthread_attr_t = std::mem::zeroed();
@@ -245,16 +262,16 @@ pub fn enter_thread() {
             let mut len = 0;
             let mut guard = 0;
             if libc::pthread_getattr_np(libc::pthread_self(), &mut attr) != 0 {
-                return;
+                return None;
             }
             let rc = libc::pthread_attr_getstack(&attr, &mut low, &mut len);
             let grc = libc::pthread_attr_getguardsize(&attr, &mut guard);
             libc::pthread_attr_destroy(&mut attr);
             if rc != 0 || grc != 0 || len == 0 {
-                return;
+                return None;
             }
             let hi = low as usize;
-            (hi.saturating_sub(guard.max(page())), hi)
+            Some((hi.saturating_sub(guard.max(page())), hi))
         }
         #[cfg(target_os = "macos")]
         {
@@ -262,46 +279,48 @@ pub fn enter_thread() {
             let top = libc::pthread_get_stackaddr_np(thread) as usize;
             let len = libc::pthread_get_stacksize_np(thread);
             let hi = top.saturating_sub(len);
-            (hi.saturating_sub(page()), hi)
+            Some((hi.saturating_sub(page()), hi))
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        {
-            return;
-        }
-    };
+    }
+}
+
+/// An altstack for the calling thread: `Some(null)` when it already has
+/// one (a Rust thread's, kept and not owned), `Some(ptr)` for a fresh
+/// [`ALT`]-byte mapping now installed, `None` when none could be made.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn ensure_altstack() -> Option<*mut libc::c_void> {
     // SAFETY: queried signal-stack descriptor is local; a fresh mapping
-    // outlives all handler invocations and is owned by this thread's TLS.
+    // outlives all handler invocations (its owner decides when it ends).
     unsafe {
         let mut old: libc::stack_t = std::mem::zeroed();
         if libc::sigaltstack(std::ptr::null(), &mut old) != 0 {
-            return;
+            return None;
         }
-        if old.ss_flags & libc::SS_DISABLE != 0 {
-            let ptr = libc::mmap(
-                std::ptr::null_mut(),
-                ALT,
-                libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-                -1,
-                0,
-            );
-            if ptr == libc::MAP_FAILED {
-                return;
-            }
-            let ss = libc::stack_t {
-                ss_sp: ptr,
-                ss_flags: 0,
-                ss_size: ALT,
-            };
-            if libc::sigaltstack(&ss, std::ptr::null_mut()) != 0 {
-                libc::munmap(ptr, ALT);
-                return;
-            }
-            OWN_ALT.with(|a| *a.borrow_mut() = Some(AltStack(ptr)));
+        if old.ss_flags & libc::SS_DISABLE == 0 {
+            return Some(std::ptr::null_mut());
         }
+        let ptr = libc::mmap(
+            std::ptr::null_mut(),
+            ALT,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+        if ptr == libc::MAP_FAILED {
+            return None;
+        }
+        let ss = libc::stack_t {
+            ss_sp: ptr,
+            ss_flags: 0,
+            ss_size: ALT,
+        };
+        if libc::sigaltstack(&ss, std::ptr::null_mut()) != 0 {
+            libc::munmap(ptr, ALT);
+            return None;
+        }
+        Some(ptr)
     }
-    register_guard(bounds.0, bounds.1);
-    install_overflow_handler();
 }
 
 // Read the instruction address from the kernel's saved context. No
