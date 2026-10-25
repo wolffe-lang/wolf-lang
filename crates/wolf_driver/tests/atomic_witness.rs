@@ -3,9 +3,11 @@
 //! scope tasks adding 1 to one shared word 100000 times each with
 //! `atomic_add`, then four more adding 1 25000 times each through a
 //! compare-and-swap loop; it must print exactly `400000 100000` on the
-//! native and release tiers on EVERY cpu set: all cores, `taskset -c
-//! 0-3` and `taskset -c 0` (the runtime's pool on few cpus hid #570 from
-//! a 16-cpu host). Each set runs three times.
+//! native and release tiers on EVERY cpu set: all cores, four and one of
+//! the allocation under `taskset` (`test_cpus`, wolf-lang#925: the first
+//! four and the first one of `WOLF_TEST_CPUS` or this process's own; the
+//! runtime's pool on few cpus hid #570 from a 16-cpu host). Each set runs
+//! three times.
 //!
 //! The plain-increment twin, `atomic_race_plain.lu`, is a data race
 //! (`[conc.mm.race.1]`): it is built and run under the same sets and its
@@ -22,6 +24,7 @@
 //! 400000 on release, `rows-trunk-a3465f87.log`).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -88,19 +91,16 @@ fn build(row: &str, tier: &str) -> Option<PathBuf> {
     Some(exe)
 }
 
-/// The cpu sets this host can pin to: `None` is all cores.
-fn cpu_sets() -> Vec<Option<&'static str>> {
+/// The cpu sets this host can pin to: `None` is all cores. On linux the
+/// witness runs on four and one of the allocation as well, never skipping
+/// them.
+fn cpu_sets(test: &str) -> Vec<Option<test_cpus::Pin>> {
     if cfg!(target_os = "linux") {
-        let ok = Command::new("taskset")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        assert!(
-            ok,
-            "`taskset` (util-linux) is part of this gate's linux host: the witness must run \
-             on 1 and 4 cpus as well as all cores, never skip them"
-        );
-        vec![None, Some("0-3"), Some("0")]
+        vec![
+            None,
+            Some(test_cpus::pin_required(4, test)),
+            Some(test_cpus::pin_required(1, test)),
+        ]
     } else {
         eprintln!(
             "NOTE: no cpu-affinity tool on this host; the counter runs on all cores only \
@@ -110,9 +110,9 @@ fn cpu_sets() -> Vec<Option<&'static str>> {
     }
 }
 
-fn run(exe: &Path, set: Option<&str>) -> (String, Option<i32>) {
+fn run(exe: &Path, set: Option<&test_cpus::Pin>) -> (String, Option<i32>) {
     let out = match set {
-        Some(cpus) => Command::new("taskset").args(["-c", cpus]).arg(exe).output(),
+        Some(pin) => pin.command(exe).output(),
         None => Command::new(exe).output(),
     }
     .expect("the witness runs");
@@ -127,10 +127,10 @@ fn the_atomic_counter_is_exact_on_every_cpu_set() {
         let Some(exe) = build("atomic_counter.lu", tier) else {
             continue;
         };
-        for set in cpu_sets() {
+        for set in cpu_sets("the_atomic_counter_is_exact_on_every_cpu_set") {
             for n in 0..3 {
-                let (stdout, code) = run(&exe, set);
-                let label = set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"));
+                let (stdout, code) = run(&exe, set.as_ref());
+                let label = set.as_ref().map_or("all cores".to_string(), |p| p.label());
                 eprintln!(
                     "REPORT counter {tier} {label} run {n}: {:?} exit {code:?}",
                     stdout.trim()
@@ -153,9 +153,9 @@ fn the_plain_counter_runs_and_its_count_is_reported_only() {
         let Some(exe) = build("atomic_race_plain.lu", tier) else {
             continue;
         };
-        for set in cpu_sets() {
-            let (stdout, code) = run(&exe, set);
-            let label = set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"));
+        for set in cpu_sets("the_plain_counter_runs_and_its_count_is_reported_only") {
+            let (stdout, code) = run(&exe, set.as_ref());
+            let label = set.as_ref().map_or("all cores".to_string(), |p| p.label());
             eprintln!(
                 "REPORT (not asserted) racy counter {tier} {label}: {:?} exit {code:?}",
                 stdout.trim()
