@@ -406,7 +406,9 @@ fn mapping_holding(addr: usize) -> Option<(usize, usize, usize)> {
     if fd < 0 {
         return None;
     }
-    let mut buf = [0u8; 4096];
+    // A fresh process's map is a few KiB; one read takes it whole, so
+    // the start-up row's count does not depend on the binary's path length.
+    let mut buf = [0u8; 16384];
     // The line parser: field 0 the start, 1 the end, 2 the rest.
     let (mut field, mut start, mut end, mut prev_end) = (0u8, 0usize, 0usize, 0usize);
     let mut found = None;
