@@ -42,6 +42,8 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::cell::RefCell;
 use std::cell::{Cell, UnsafeCell};
+#[cfg(target_os = "linux")]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
 /// Guard region at the low end. Larger than one page so big frames
@@ -252,9 +254,12 @@ pub fn enter_thread() {
 /// s265 (wolf-lang#918): the main thread's registration, from the entry
 /// shim (`__wolf_rt_stack_start`) before user `main`. The same guard,
 /// altstack and handler as [`enter_thread`], paid for more cheaply:
-/// - linux: the bounds come from [`main_stack_bounds`] (one read of
-///   `/proc/self/maps` with no stdio, no scanf, no CPU-set query), not
-///   `pthread_getattr_np(3)`;
+/// - linux (R-s265-1, recommendation B, implemented pending the ruling):
+///   the guard's bounds are not asked for here at all. They are needed
+///   only when a fault arrives, so the handler resolves them on the main
+///   thread's first fault ([`resolve_main_guard`]); the entry records an
+///   address on the main stack and the page size, and costs only the
+///   altstack and the handler's installation;
 /// - the altstack lives as long as the process: the main thread's end
 ///   is the process's, so no thread-exit destructor is registered and
 ///   nothing is unmapped on the way out.
@@ -264,10 +269,14 @@ pub fn enter_main_thread() {
         return;
     }
     #[cfg(target_os = "linux")]
-    let bounds = main_stack_bounds().or_else(pthread_bounds);
+    let bounds = {
+        let marker = 0u8;
+        MAIN_STACK_HINT.store(std::hint::black_box(&raw const marker) as usize, SeqCst);
+        MAIN_PAGE.store(page(), SeqCst);
+        LAZY_MAIN
+    };
     #[cfg(not(target_os = "linux"))]
-    let bounds = pthread_bounds();
-    let Some(bounds) = bounds else {
+    let Some(bounds) = pthread_bounds() else {
         return;
     };
     if ensure_altstack().is_none() {
@@ -275,6 +284,36 @@ pub fn enter_main_thread() {
     }
     register_guard(bounds.0, bounds.1);
     install_overflow_handler();
+}
+
+/// s265: the main thread's guard before its first fault resolves it.
+/// No address lies in it (`lo <= addr < hi` never holds).
+#[cfg(target_os = "linux")]
+const LAZY_MAIN: (usize, usize) = (usize::MAX, usize::MAX);
+/// An address on the main thread's stack, taken at entry: the handler
+/// runs on the altstack, so its own frame cannot name the stack.
+#[cfg(target_os = "linux")]
+static MAIN_STACK_HINT: AtomicUsize = AtomicUsize::new(0);
+/// The page size, read at entry (sysconf is not async-signal-safe).
+#[cfg(target_os = "linux")]
+static MAIN_PAGE: AtomicUsize = AtomicUsize::new(4096);
+
+/// s265 (R-s265-1 B): in the handler, on the main thread's first fault,
+/// replace [`LAZY_MAIN`] with the guard [`main_stack_bounds`] reads —
+/// the bounds `pthread_getattr_np(3)` reports, read with `open`, `read`
+/// and `close` alone (all three async-signal-safe, signal-safety(7)) into
+/// a buffer on the altstack, and `getrlimit`. Any other thread, and the
+/// main thread after its first fault, is untouched. A map that cannot be
+/// read leaves no guard: the fault is not an overflow and dies the
+/// ordinary way, as a failed query at entry did before.
+#[cfg(target_os = "linux")]
+fn resolve_main_guard() {
+    if CURRENT_GUARD.with(|g| g.get()) != LAZY_MAIN {
+        return;
+    }
+    let hint = MAIN_STACK_HINT.load(SeqCst);
+    let bounds = main_stack_bounds(hint, MAIN_PAGE.load(SeqCst)).unwrap_or((0, 0));
+    register_guard(bounds.0, bounds.1);
 }
 
 /// The calling thread's guard, from the host's pthread queries.
@@ -356,19 +395,18 @@ fn ensure_altstack() -> Option<*mut libc::c_void> {
 /// `pthread_getattr_np(3)`. proc(5) documents `/proc/self/maps` as one
 /// line per mapping in address order, each starting `start-end ` in hex;
 /// getrlimit(2) documents `RLIMIT_STACK` as the most the main stack may
-/// grow. The stack is the mapping that holds this frame; it may grow down
-/// to `RLIMIT_STACK` below its top, never into the mapping beneath it;
-/// the guard is the page under that floor. These are the bounds
-/// glibc's `pthread_getattr_np` reports for the main thread, measured
-/// black-box on kasumi (s265 note, `stackprobe`) and held by the unit
-/// test `main_stack_bounds_match_pthread`; the cost it removes is that
-/// call's stdio and scanf over the same file, its `fstat` and its
-/// CPU-set query (`sched_getaffinity`). `None` when the file cannot be
-/// read or no mapping holds the frame: the caller falls back.
+/// grow. The stack is the mapping that holds `here` (an address on it);
+/// it may grow down to `RLIMIT_STACK` below its top, never into the
+/// mapping beneath it; the guard is the page under that floor. These are
+/// the bounds glibc's `pthread_getattr_np` reports for the main thread,
+/// measured black-box on kasumi (the s265 note, `stackprobe`) and held by
+/// `tests/main_stack_bounds.rs` under five limits and environments; the
+/// cost it avoids is that call's stdio and scanf over the same file, its
+/// `fstat` and its CPU-set query. Nothing here allocates or locks, so the
+/// handler may call it ([`resolve_main_guard`]). `None` when the file
+/// cannot be read or no mapping holds `here`.
 #[cfg(target_os = "linux")]
-fn main_stack_bounds() -> Option<(usize, usize)> {
-    let marker = 0u8;
-    let here = std::hint::black_box(&raw const marker) as usize;
+fn main_stack_bounds(here: usize, pg: usize) -> Option<(usize, usize)> {
     let (lo, hi, below) = mapping_holding(here)?;
     // SAFETY: a plain query of this process's own limit.
     let rlim = unsafe {
@@ -378,7 +416,6 @@ fn main_stack_bounds() -> Option<(usize, usize)> {
         }
         r.rlim_cur
     };
-    let pg = page();
     let floor = if rlim == libc::RLIM_INFINITY {
         below
     } else {
@@ -393,7 +430,9 @@ fn main_stack_bounds() -> Option<(usize, usize)> {
 /// equivalence test (`tests/main_stack_bounds.rs`, run on the main thread).
 #[cfg(target_os = "linux")]
 pub fn main_guard_both() -> (Option<(usize, usize)>, Option<(usize, usize)>) {
-    (main_stack_bounds(), pthread_bounds())
+    let marker = 0u8;
+    let here = std::hint::black_box(&raw const marker) as usize;
+    (main_stack_bounds(here, page()), pthread_bounds())
 }
 
 /// `(start, end, previous end)` of the `/proc/self/maps` line whose
@@ -406,9 +445,8 @@ fn mapping_holding(addr: usize) -> Option<(usize, usize, usize)> {
     if fd < 0 {
         return None;
     }
-    // A fresh process's map is a few KiB; one read takes it whole, so
-    // the start-up row's count does not depend on the binary's path length.
-    let mut buf = [0u8; 16384];
+    // Small: in the handler this buffer is on the 32 KiB altstack.
+    let mut buf = [0u8; 4096];
     // The line parser: field 0 the start, 1 the end, 2 the rest.
     let (mut field, mut start, mut end, mut prev_end) = (0u8, 0usize, 0usize, 0usize);
     let mut found = None;
@@ -450,7 +488,9 @@ fn mapping_holding(addr: usize) -> Option<(usize, usize, usize)> {
 }
 
 // Read the instruction address from the kernel's saved context. No
-// unwinder, loader lock, allocation, symbol lookup or file I/O in a handler.
+// unwinder, loader lock, allocation, symbol lookup or file I/O in a handler
+// — save the main thread's first fault, which reads `/proc/self/maps` with
+// `open`/`read`/`close` to resolve its guard (s265, [`resolve_main_guard`]).
 unsafe fn fault_pc(ctx: *mut libc::c_void) -> usize {
     // SAFETY: SA_SIGINFO supplied a ucontext for this delivery.
     unsafe {
@@ -666,6 +706,8 @@ extern "C" fn overflow_handler(
         }
         return;
     }
+    #[cfg(target_os = "linux")]
+    resolve_main_guard();
     if guard_hit(addr) {
         // "wolf-rt: stack overflow in task '<label>'\n" — byte-built,
         // write(2) direct, then a deterministic trap-discipline exit.
