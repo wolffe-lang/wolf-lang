@@ -335,18 +335,23 @@ jobs:
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'variadic-abi')
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Planted ABI defects may fault only the witness processes in this
+    # container, never a runner-host process. The oracle has no host state.
+    container:
+      image: ubuntu:24.04@sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc
+      options: --memory 12g --ulimit core=0:0
     env:
       CARGO_INCREMENTAL: "0"
       WOLF_VERIFY_EACH_PASS: "1"
     steps:
+      - name: container toolchain prerequisites and C17 oracle
+        run: apt-get update && apt-get install -y ca-certificates curl git build-essential clang lld binutils
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           key: variadic-abi
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
-      - name: C17 oracle and object disassembler
-        run: sudo apt-get update && sudo apt-get install -y clang lld binutils
       - name: the variadic prologue cannot be inlined
         run: cargo test -p wolf_wir --test midend_passes -- --nocapture
       - name: native save areas and vector-register count
