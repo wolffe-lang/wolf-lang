@@ -14,6 +14,8 @@ struct Instruction {
     address: u64,
     mnemonic: String,
     operands: String,
+    /// Kept until a bounded unreachable-suffix proof, never ignored.
+    invalid: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -182,6 +184,41 @@ fn branch_target(instruction: &Instruction) -> Option<u64> {
     u64::from_str_radix(first.trim_start_matches("0x"), 16).ok()
 }
 
+/// Find a bounded trailing literal pool, not arbitrary dead code.
+/// An invalid marker must follow a RET/UD2 boundary; every instruction
+/// before that boundary remains subject to the ordinary SSE proof.
+fn executable_prefix(code: &[Instruction]) -> Result<usize, String> {
+    let Some(first_bad) = code.iter().position(|i| i.invalid) else {
+        return Ok(code.len());
+    };
+    let boundary = code[..first_bad]
+        .iter()
+        .rposition(|i| matches!(i.mnemonic.as_str(), "ret" | "retq" | "ud2"))
+        .ok_or("malformed bytes have no preceding RET/UD2 suffix boundary")?;
+    Ok(boundary + 1)
+}
+
+/// A deliberately bounded non-control vocabulary for the literal-pool
+/// proof. Unknown instructions are not assumed to fall through. This
+/// list never grants an AL alias or exempts an executable SSE operation.
+fn known_fallthrough(i: &Instruction) -> bool {
+    let op = i.mnemonic.as_str();
+    let integer = [
+        "mov", "movabs", "push", "pop", "cmp", "test", "mul", "imul", "div", "idiv", "adc", "sbb",
+        "xchg",
+    ];
+    ordinary_alu(op)
+        || integer.iter().any(|base| op == *base || ["b", "w", "l", "q"].iter().any(|suffix| op == format!("{base}{suffix}")))
+        || ["e", "ne", "z", "nz", "a", "ae", "b", "be", "g", "ge", "l", "le", "s", "ns", "o", "no", "p", "np", "c", "nc"]
+            .iter().any(|cc| op == format!("set{cc}") || op == format!("cmov{cc}") || op == format!("cmov{cc}q") || op == format!("cmov{cc}l"))
+        || matches!(op, "movsbl" | "movsbq" | "movswl" | "movswq" | "movslq" | "movzbl" | "movzbq" | "movzwl" | "movzwq"
+            | "nop" | "nopl" | "nopw" | "endbr64" | "leave" | "leaveq" | "cbtw" | "cwtl" | "cltq" | "cwtd" | "cltd" | "cqto"
+            | "cbw" | "cwde" | "cdqe" | "cwd" | "cdq" | "cqo" | "ret" | "retq" | "ud2")
+        // Executable vector operations are still checked, and only
+        // guarded XMM stores survive check_function below.
+        || vector_state(i)
+}
+
 fn check_function(code: &[Instruction]) -> Result<usize, String> {
     let vector: Vec<_> = code
         .iter()
@@ -280,8 +317,18 @@ fn check_function(code: &[Instruction]) -> Result<usize, String> {
 pub fn check(text: &str) -> Result<usize, String> {
     let mut functions: BTreeMap<String, Vec<Instruction>> = BTreeMap::new();
     let mut current = None;
+    let mut scope = 0usize;
+    let mut scopes = BTreeMap::new();
     for line in text.lines() {
         let line = line.trim();
+        // Archive members and sections reuse addresses. Only direct
+        // control transfers in the same disassembled section can be
+        // compared numerically; never mix two members' offset zero.
+        if line.starts_with("Disassembly of section ") {
+            scope += 1;
+            current = None;
+            continue;
+        }
         if let Some((address, name)) = line.split_once(" <")
             && u64::from_str_radix(address, 16).is_ok()
             && let Some(name) = name.strip_suffix(">:")
@@ -290,6 +337,7 @@ pub fn check(text: &str) -> Result<usize, String> {
                 return Err(format!("duplicate function label {name}"));
             }
             functions.insert(name.to_string(), Vec::new());
+            scopes.insert(name.to_string(), scope);
             current = Some(name.to_string());
             continue;
         }
@@ -336,9 +384,11 @@ pub fn check(text: &str) -> Result<usize, String> {
                 return Err("instruction prefix without an operation".into());
             }
         }
-        if !mnemonic
-            .chars()
-            .all(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '.')
+        let invalid = matches!(mnemonic, "(bad)" | ".byte");
+        if !invalid
+            && !mnemonic
+                .chars()
+                .all(|ch| ch.is_ascii_alphabetic() || ch.is_ascii_digit() || ch == '.')
         {
             return Err(format!("unrecognized instruction syntax: {line}"));
         }
@@ -355,14 +405,67 @@ pub fn check(text: &str) -> Result<usize, String> {
             address,
             mnemonic: mnemonic.to_ascii_lowercase(),
             operands: operands.trim().to_string(),
+            invalid,
         });
     }
     if functions.is_empty() || functions.values().any(Vec::is_empty) {
         return Err("missing or empty function disassembly".into());
     }
+    let mut cuts = BTreeMap::new();
+    let mut pools = Vec::new();
+    for (name, code) in &functions {
+        let cut = executable_prefix(code).map_err(|why| format!("{name}: {why}"))?;
+        cuts.insert(name.clone(), cut);
+        if cut != code.len() {
+            // Bound the removed interval by the next symbol in this
+            // section. Without one, conservatively reject every forward
+            // control target at or beyond the pool's start.
+            let next = functions
+                .iter()
+                .filter(|(other, other_code)| {
+                    scopes[*other] == scopes[name]
+                        && other_code[0].address > code.last().unwrap().address
+                })
+                .map(|(_, other_code)| other_code[0].address)
+                .min();
+            pools.push((scopes[name], code[cut].address, next, name.clone()));
+        }
+    }
+    // No edge from ANY retained function in the same object/section
+    // may enter a trimmed suffix. This catches cross-function direct
+    // branches too. Indirect jumps and unknown control flow make this
+    // bounded proof unavailable, rather than guessing their targets.
+    for (name, code) in &functions {
+        let local_pools: Vec<_> = pools.iter().filter(|(s, ..)| *s == scopes[name]).collect();
+        if local_pools.is_empty() {
+            continue;
+        }
+        for instruction in &code[..cuts[name]] {
+            let op = instruction.mnemonic.as_str();
+            if op.starts_with('j') || op.starts_with("loop") || matches!(op, "call" | "callq") {
+                if let Some(target) = branch_target(instruction) {
+                    for (_, start, end, pool_name) in &local_pools {
+                        if target >= *start && end.is_none_or(|end| target < end) {
+                            return Err(format!(
+                                "{name}: direct control target enters removed literal pool of {pool_name}"
+                            ));
+                        }
+                    }
+                } else if !matches!(op, "call" | "callq") {
+                    return Err(format!(
+                        "{name}: indirect jump prevents an unreachable literal-pool proof"
+                    ));
+                }
+            } else if !known_fallthrough(instruction) {
+                return Err(format!(
+                    "{name}: unknown control-flow effects in literal-pool proof: {op}"
+                ));
+            }
+        }
+    }
     let mut saves = 0;
     for (name, code) in functions {
-        saves += check_function(&code).map_err(|why| format!("{name}: {why}"))?;
+        saves += check_function(&code[..cuts[&name]]).map_err(|why| format!("{name}: {why}"))?;
     }
     Ok(saves)
 }
@@ -460,6 +563,48 @@ mod tests {
         assert!(check(&good.replace("3: ret", "3: jmp 2")).is_err());
         assert!(check(&good.replace("3: ret", "3: jmp 0")).is_err());
         assert!(check(&good.replace("3: ret", "3: jmp *%rax")).is_err());
+    }
+
+    #[test]
+    fn unreachable_max_integer_literal_pools_are_trimmed() {
+        // UINT64_MAX: eight 0xff bytes do not decode as instructions.
+        let mut unsigned = "00000000 <unsigned_pool>:\n 0: ret\n".to_string();
+        for address in 1..=8 {
+            unsigned.push_str(&format!(" {address:x}: (bad)\n"));
+        }
+        assert_eq!(check(&unsigned), Ok(0));
+        // INT64_MAX, after padding and a nonreturning call/trap tail.
+        let signed = "00000000 <signed_pool>:\n 0: call *%rax\n 2: ud2\n 4: add %al,(%rax)\n 6: (bad)\n 7: (bad)\n 8: (bad)\n 9: (bad)\n a: (bad)\n b: (bad)\n c: (bad)\n d: .byte 0x7f\n";
+        assert_eq!(check(signed), Ok(0));
+        let guarded =
+            fixture(&[], "test %al,%al") + " 4: add %al,(%rax)\n 6: (bad)\n 7: .byte 0x7f\n";
+        assert_eq!(check(&guarded), Ok(1), "AL proof survives pool trimming");
+    }
+
+    #[test]
+    fn reachable_or_targeted_bad_bytes_are_never_trimmed() {
+        for text in [
+            "00000000 <bad>:\n 0: (bad)\n 1: ret\n",
+            "00000000 <bad>:\n 0: .byte 0xff\n 1: ret\n",
+            "00000000 <bad>:\n 0: jne 4\n 1: ret\n 2: add %al,(%rax)\n 4: (bad)\n",
+            "00000000 <bad>:\n 0: jmp 2\n 1: ud2\n 2: add %al,(%rax)\n 4: (bad)\n",
+            "00000000 <bad>:\n 0: call 4\n 1: ret\n 2: add %al,(%rax)\n 4: (bad)\n",
+            "00000000 <bad>:\n 0: jmp *%rax\n 1: ret\n 2: (bad)\n",
+            "00000000 <bad>:\n 0: xbegin 4\n 1: ret\n 2: (bad)\n",
+            "00000000 <bad>:\n 0: iretq\n 1: ret\n 2: (bad)\n",
+            "00000000 <bad>:\n 0: vzeroupper\n 1: ret\n 2: (bad)\n",
+        ] {
+            assert!(check(text).is_err(), "{text}");
+        }
+        let other_function_enters_pool =
+            "00000000 <pool>:\n 0: ret\n 1: (bad)\n00000020 <other>:\n 20: jmp 1\n 22: ret\n";
+        assert!(check(other_function_enters_pool).is_err());
+    }
+
+    #[test]
+    fn archive_sections_do_not_share_literal_pool_addresses() {
+        let text = "Disassembly of section .text:\n00000000 <pool>:\n 0: ret\n 1: (bad)\nDisassembly of section .text:\n00000000 <other>:\n 0: jmp 1\n 1: ret\n";
+        assert_eq!(check(text), Ok(0));
     }
 
     #[test]
