@@ -9,9 +9,18 @@ exec > $E/phase2b.log 2>&1
 echo $$ > $E/phase2b.pid
 trap 'rc=$?; echo $rc > $E/phase2b.exit; date -u; echo "phase2b exit=$rc"' EXIT
 step() { echo "=== $1 $(date -u +%T) $($L/scripts/hostload.sh)"; }
+# Resumable: S265_FROM=<step key> skips the steps before it (yew, bisect,
+# hello, yewtime, rows, gauntlet, differ); each step's own work also skips
+# what is already built (a yew cell's binary, a commit's hello).
+order="yew bisect hello yewtime rows gauntlet differ"
+from=${S265_FROM:-yew}
+case " $order " in *" $from "*) ;; *) echo "S265_FROM=$from is not a step"; exit 2;; esac
+want() { local k; for k in $order; do [ "$k" = "$from" ] && return 0; [ "$k" = "$1" ] && return 1; done; return 0; }
+echo "phase2b from step: $from"
 H=$L/witness/hello
 Y=$L/evidence/yew
 
+if want yew; then
 step "yew builds"
 git -C $L/yew worktree add -q --detach $L/yew-fix 280012fe 2>/dev/null || true
 git -C $L/yew-fix apply $L/evidence/compile-compat.patch 2>/dev/null || true
@@ -30,6 +39,8 @@ done
 sha256sum $L/yew-*/target/release/yew; size $L/yew-*/target/release/yew
 " || exit 1
 
+fi
+if want bisect; then
 step "bisection builds"
 git -C $L/wolf-lang fetch -q origin s265
 $L/ctr bash $L/scripts/bisect.sh $L/scripts/bisect-commits.txt || exit 1
@@ -41,6 +52,8 @@ du -sh $L/target; df -h --output=avail $L | tail -1
 rm -rf $L/target/release $L/target-var
 du -sh $L/target; df -h --output=avail $L | tail -1
 
+fi
+if want hello; then
 step "hello timings"
 $L/ctr bash -c "
 cd $L/bisect
@@ -56,6 +69,8 @@ for kv in \$args; do n=\${kv%%=*}; b=\${kv#*=}
 done
 "
 
+fi
+if want yewtime; then
 step "yew timings"
 $L/ctr bash -c "
 S=$L/sagitta
@@ -73,6 +88,8 @@ for r in 1 2 3; do
 done
 "
 
+fi
+if want rows; then
 step "behaviour rows at the head"
 $L/ctr bash -c "
 cd $L/wolf-head && git log --oneline -1
@@ -80,6 +97,8 @@ cargo test --offline -p wolf_rt --test main_stack_bounds --test stack_overflow 2
 cargo test --offline -p wolf_driver --test two_machines 2>&1 | grep -E 'test result|panicked|FAILED|running' | head -20
 "
 
+fi
+if want gauntlet; then
 step "gauntlet at the head"
 # One target directory for the lane: the gauntlet's cwd-relative
 # target/ (xtask reads target/debug/wolf) is the lane's own.
@@ -98,6 +117,8 @@ tail -40 $E/gauntlet.log
 grep -E 'bench-gates: startup' $E/gauntlet.log
 "
 
+fi
+if want differ; then
 step "differ against 0.2.35"
 $L/ctr bash -c "
 cd $L/wolf-head
@@ -111,4 +132,5 @@ for tier in checked native release; do
 done
 "
 du -sh $L/target; df -h --output=avail $L | tail -1
+fi
 step "done"

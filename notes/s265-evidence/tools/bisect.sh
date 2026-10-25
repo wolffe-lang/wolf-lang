@@ -4,7 +4,10 @@
 # the hello witness on the release tier with it, keep only the witness.
 # Runs INSIDE the lane container (ctr). Args: commit list file.
 set -uo pipefail
-L=$HOME/lanes/s265
+# Absolute: inside the container HOME is the lane's scratch home, so
+# $HOME/lanes/... named a directory that does not exist (phase 2b's
+# first run, 01:07 UTC).
+L=/home/mfwolffe/lanes/s265
 W=$L/wolf-lang
 B=$L/bisect
 mkdir -p $B
