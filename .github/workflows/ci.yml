@@ -157,7 +157,8 @@ jobs:
     runs-on: ubuntu-latest
     # s226: trunk ran 29m42s at 7d85c701 with bench smoke (~4–5 min) after the gauntlet, and s226's checked-machine rows add ~3.5 min.
     # s255: 45 timed out twice on docs-only commits (the job ran 44:43 green at 0c041c2d; trunk's gauntlet step 28 min, s255's 32–37; the setup steps swing 1–11 min).
-    timeout-minutes: 60
+    # ld02b: six real static links run once in the gauntlet (ligature#12).
+    timeout-minutes: 150
     # r10/#253: the pairing gate (crates/wolf_driver/tests/pairing.rs, D57)
     # only fires where a sibling lupin binary exists, and no runner had one,
     # so the single gate that compares the two implementations was the single
@@ -319,12 +320,19 @@ jobs:
           key: ld02-musl-link-bundle-6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1
       - name: verify musl link bundle and build pinned ligature
         run: |
+          mkdir -p target/link-bundle-negative
+          printf broken > target/link-bundle-negative/ld02-musl-link-bundle.tar.gz
+          if ci/fetch-test-link-bundle target/link-bundle-negative > target/link-bundle-negative.log 2>&1; then
+            echo "corrupt cached bundle was accepted"; exit 1
+          fi
+          grep 'REFUSED ld02-musl-link-bundle.tar.gz: sha256' target/link-bundle-negative.log
           ci/fetch-test-link-bundle
           ci/build-test-ligature
       - name: explicit linker selection and refusals
         run: |
           cargo build -p wolf_rt
-          cargo test -p wolf_driver --test linker_select -- --nocapture
+          # The six expensive real links execute once in the full gauntlet below.
+          cargo test -p wolf_driver --test linker_select -- --nocapture --skip every_root_manifest_program_links_with_real_ligature_on_both_tiers
       - name: explicit assembler selection and refusals
         run: cargo test -p wolf_driver --test assembler_select -- --nocapture
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)

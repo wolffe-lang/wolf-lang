@@ -3,6 +3,7 @@
 import hashlib
 import os
 import pathlib
+import sys
 import tarfile
 import urllib.request
 
@@ -10,8 +11,8 @@ SHA = "6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1"
 NAME = "ld02-musl-link-bundle.tar.gz"
 URL = "https://github.com/wolffe-lang/ligature/releases/download/link-bundle-2026-10-25/" + NAME
 root = pathlib.Path(__file__).resolve().parent.parent
-cache = root / ".link-bundle-cache"
-cache.mkdir(exist_ok=True)
+cache = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / ".link-bundle-cache"
+cache.mkdir(parents=True, exist_ok=True)
 archive = cache / NAME
 if not archive.exists():
     partial = cache / (NAME + ".partial")
