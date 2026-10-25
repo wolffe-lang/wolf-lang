@@ -29,7 +29,7 @@
 //! follow the program's own last line. Machines: the checked machine
 //! under `conform-run --checked` (its mode from `s248.mode`), the native
 //! and release binaries — plain, and on linux again under
-//! `taskset -c 0-3` (wolf-lang#570).
+//! `taskset` on four CPUs of the allocation (wolf-lang#570).
 //!
 //! Red at s248's prediction commit: E0301 (the name does not exist); at
 //! 0.2.33, yw00's witness and every row without the call leave the
@@ -38,6 +38,7 @@
 #![cfg(unix)]
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -532,10 +533,15 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
             continue;
         };
         lanes.push((tier.into(), live.at(&exe), false));
-        if live.engine.is_some() {
+        // Four of the allocation (`test_cpus`, wolf-lang#925), asked of the
+        // container's own `taskset`.
+        if live.engine.is_some()
+            && let Some(list) =
+                test_cpus::subset(4, "the_terminal_is_restored_on_every_exit_the_runtime_owns")
+        {
             lanes.push((
-                format!("{tier} taskset -c 0-3"),
-                format!("taskset -c 0-3 {}", live.at(&exe)),
+                format!("{tier} taskset -c {list}"),
+                format!("taskset -c {list} {}", live.at(&exe)),
                 false,
             ));
         }
