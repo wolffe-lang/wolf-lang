@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+s267 — the static entry (#962).
+
+- **A static musl link reads its arguments** (#962): a wolf program linked
+  statically against musl (ligature's link bundle, by `ld.lld` or GNU `ld`)
+  read `argc=0`, an empty `env_arg0()` and no `env_args_bytes()` on both
+  tiers, while the same object linked against glibc read every argument.
+  The entry the compiler emits is now `int main(int argc, char **argv,
+  char **envp)` and its first call hands the three to the runtime
+  (`__wolf_rt_main_start`, `[abi.target.main]`), so the argv readers answer
+  what the program was started with on every unix C library. glibc links
+  answer byte for byte as before, Windows keeps the host's own arguments,
+  and `env_vars()`, right under musl already, still reads the live
+  environment. The call replaces the entry's `__wolf_rt_stack_start()`,
+  so the entry has the instructions it had. The published link bundle's
+  runtime is 0.2.35's: a new bundle carries the fixed `libwolf_rt.a`.
+
 - **Choose the assembler for root-manifest assembly sources** (#937):
   `--assembler PATH` overrides `WOLF_AS`, then the existing target-specific
   C driver. An explicitly selected tool receives the as-shaped argv and is
