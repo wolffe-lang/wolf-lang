@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Fetch the digest-pinned musl link bundle for the static-entry rows (s267, wolf-lang#962).
+
+    ci/fetch-entry-bundle [CACHE_DIR]
+
+The bundle is ligature's `link-bundle-2026-10-25` (ligature#13): the archive
+is read twice and refused on a digest mismatch before anything is extracted,
+its member set must be exactly the eight files below, and every member is
+held to its published size and digest (ligature `tests/pax-link.sums`). The
+musl sysroot lands in `target/static-entry-bundle/sysroot`. The bundle's own
+`libwolf_rt.a` (0.2.35's) is verified and never linked: the rows link a musl
+runtime built from this checkout. With GITHUB_ENV set, the sysroot's path is
+written there as WOLF_STATIC_ENTRY_SYSROOT. ld02b's ci/fetch-test-link-bundle
+(wolf-lang#961) fetches the same archive into the same cache.
+"""
+import hashlib
+import os
+import pathlib
+import sys
+import tarfile
+import urllib.request
+
+SHA = "6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1"
+NAME = "ld02-musl-link-bundle.tar.gz"
+URL = "https://github.com/wolffe-lang/ligature/releases/download/link-bundle-2026-10-25/" + NAME
+MEMBERS = {
+    "cc": ("3161aea27abb8beeb669cc6499fa9dc162014b69eecc6fb0d169eed5def25b11", 499760),
+    "ld.lld": ("1217ca75f9df70439294844b2aba14895adc557e2514c6cdc76c4c6676a3757b", 66247008),
+    "libwolf_rt.a": ("9d859b9e6b5319f5a6f609e73ba0d71981d2dfa489882648ac9f454cd9db739c", 45363160),
+    "sysroot/crt1.o": ("51dba24287eb9b1e74f3c7cb8ea5464491d3a4ba54c016722f149179d08f90f6", 5560),
+    "sysroot/crti.o": ("5cbc84c78a23cdddda0db8cdcd5ec3b5a15b6b555510bd97e4c5a0334aca7b49", 2816),
+    "sysroot/crtn.o": ("d884ee5f9120490b98bb43496f88983ee379a0d2ebf027574fcca7eae9aaa1e7", 2760),
+    "sysroot/libc.a": ("8e69a73c464a86fd8b278f3aa08ab2640b720157e92b45a2d34441c22248ddd4", 10961970),
+    "sysroot/libunwind.a": ("264296d61db52859cc7a8cd6a7a09fc62bde189aa3ea8867fb62ef5129b694bc", 201794),
+}
+
+
+def digest(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+root = pathlib.Path(__file__).resolve().parent.parent
+cache = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / ".link-bundle-cache"
+cache.mkdir(parents=True, exist_ok=True)
+archive = cache / NAME
+if not archive.exists():
+    partial = cache / (NAME + ".partial")
+    urllib.request.urlretrieve(URL, partial)
+    partial.replace(archive)
+for _ in range(2):
+    actual = digest(archive)
+    if actual != SHA:
+        raise SystemExit(f"REFUSED {NAME}: sha256 {actual}, expected {SHA}")
+    print(f"{SHA}  {archive}", flush=True)
+stage = root / "target/static-entry-bundle"
+with tarfile.open(archive) as bundle:
+    members = bundle.getmembers()
+    names = sorted(m.name for m in members)
+    if names != sorted(MEMBERS) or any(not m.isfile() for m in members):
+        raise SystemExit(f"REFUSED {NAME}: members {names}")
+    bundle.extractall(stage, filter="data")
+for _ in range(2):
+    for name, (sha, size) in sorted(MEMBERS.items()):
+        path = stage / name
+        if path.stat().st_size != size or digest(path) != sha:
+            raise SystemExit(f"REFUSED bundle member {name}: not {sha} ({size} bytes)")
+print(f"static-entry bundle: {len(MEMBERS)} members verified twice; sysroot {stage / 'sysroot'}", flush=True)
+if os.environ.get("GITHUB_ENV"):
+    with open(os.environ["GITHUB_ENV"], "a") as env:
+        env.write(f"WOLF_STATIC_ENTRY_SYSROOT={stage / 'sysroot'}\n")
