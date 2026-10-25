@@ -1,0 +1,41 @@
+Sun Oct 25 12:09:42 AM UTC 2026
+== default
+getattr lo=0x7ffd53fab000 len=0x7ff000 hi=0x7ffd547aa000 guard=0 rlim_cur=0x800000 local=0x7ffd547a8a64
+below: 7f2405d1f000-7f2405d21000 rw-p 00038000 00:52 285938192                  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+stack: 7ffd5478a000-7ffd547ab000 rw-p 00000000 00:00 0                          [stack]
+== ulimit -s 4096
+getattr lo=0x7ffce8c33000 len=0x3ff000 hi=0x7ffce9032000 guard=0 rlim_cur=0x400000 local=0x7ffce9031004
+below: 7f517ec4b000-7f517ec4d000 rw-p 00038000 00:52 285938192                  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+stack: 7ffce9012000-7ffce9033000 rw-p 00000000 00:00 0                          [stack]
+== ulimit -s 65536
+getattr lo=0x7fff0ad3d000 len=0x3fff000 hi=0x7fff0ed3c000 guard=0 rlim_cur=0x4000000 local=0x7fff0ed3aaf4
+below: 7fb3334f5000-7fb3334f7000 rw-p 00038000 00:52 285938192                  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+stack: 7fff0ed1c000-7fff0ed3d000 rw-p 00000000 00:00 0                          [stack]
+== ulimit -s unlimited
+getattr lo=0x558400c77000 len=0x2a7be2595000 hi=0x7fffe320c000 guard=0 rlim_cur=0xffffffffffffffff local=0x7fffe320ab84
+below: 558400c56000-558400c77000 rw-p 00000000 00:00 0                          [heap]
+stack: 7fffe31ec000-7fffe320d000 rw-p 00000000 00:00 0                          [stack]
+== 1 MiB env
+getattr lo=0x7ffcd1bde000 len=0x714000 hi=0x7ffcd22f2000 guard=0 rlim_cur=0x800000 local=0x7ffcd22f0f24
+below: 7fbfe2285000-7fbfe2287000 rw-p 00038000 00:52 285938192                  /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+stack: 7ffcd22d3000-7ffcd23de000 rw-p 00000000 00:00 0                          [stack]
+Error: slirp4netns support has been removed, use --network=pasta instead; for existing containers, run `podman system migrate`
+0fac3d09 Record s265 start-up prediction
+ M crates/wolf_rt/Cargo.toml
+ M crates/wolf_rt/src/native.rs
+ M crates/wolf_rt/src/task/mod.rs
+ M crates/wolf_rt/src/task/stack.rs
+ M xtask/src/bench_t1.rs
+?? bench/startup/
+?? crates/wolf_rt/tests/main_stack_bounds.rs
+error: no matching package named `proptest` found
+location searched: crates.io index
+required by package `wolf_span v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_span)`
+note: offline mode (via `--offline`) can sometimes cause surprising resolution failures
+help: if this error is too confusing you may wish to retry without `--offline`
+PHASE1 DONE
+load=6.71/6.55/6.01 busy: cpu4=2% cpu5=1% cpu6=1% cpu7=1% cpu12=1% cpu13=0% cpu14=1% cpu15=0% 
+live PTY: child exited before frame (status 126)
+yewpaint: cold /home/mfwolffe/lanes/s265/yew-a/target/release/yew: no paint or bad exit
+load=6.71/6.55/6.01 busy: cpu4=2% cpu5=1% cpu6=0% cpu7=1% cpu12=0% cpu13=0% cpu14=0% cpu15=0% 
+PHASE1 YEW DONE
