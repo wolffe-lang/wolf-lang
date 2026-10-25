@@ -1,0 +1,1 @@
+load=1.62/1.51/2.50 busy: cpu4=2% cpu5=1% cpu6=1% cpu7=0% cpu12=0% cpu13=0% cpu14=0% cpu15=0% 

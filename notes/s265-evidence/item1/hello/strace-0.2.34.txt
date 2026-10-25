@@ -1,0 +1,44 @@
+6     execve("./hello-0.2.34", ["./hello-0.2.34"], 0x7fff39a4ff18 /* 17 vars */) = 0
+6     brk(NULL)                         = 0x563b68931000
+6     mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f048f30c000
+6     access("/etc/ld.so.preload", R_OK) = -1 ENOENT (No such file or directory)
+6     openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+6     fstat(3, {st_mode=S_IFREG|0644, st_size=13547, ...}) = 0
+6     mmap(NULL, 13547, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7f048f308000
+6     close(3)                          = 0
+6     openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+6     read(3, "\177ELF\2\1\1\0\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\0\0\0\0\0\0\0\0"..., 832) = 832
+6     fstat(3, {st_mode=S_IFREG|0644, st_size=183024, ...}) = 0
+6     mmap(NULL, 185256, PROT_READ, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0x7f048f2da000
+6     mmap(0x7f048f2de000, 147456, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x4000) = 0x7f048f2de000
+6     mmap(0x7f048f302000, 16384, PROT_READ, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x28000) = 0x7f048f302000
+6     mmap(0x7f048f306000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x2b000) = 0x7f048f306000
+6     close(3)                          = 0
+6     openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+6     read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\220\243\2\0\0\0\0\0"..., 832) = 832
+6     pread64(3, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
+6     fstat(3, {st_mode=S_IFREG|0755, st_size=2129424, ...}) = 0
+6     pread64(3, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
+6     mmap(NULL, 2174352, PROT_READ, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0x7f048f0c7000
+6     mmap(0x7f048f0ef000, 1609728, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x28000) = 0x7f048f0ef000
+6     mmap(0x7f048f278000, 323584, PROT_READ, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x1b1000) = 0x7f048f278000
+6     mmap(0x7f048f2c7000, 24576, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x1ff000) = 0x7f048f2c7000
+6     mmap(0x7f048f2cd000, 52624, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0x7f048f2cd000
+6     close(3)                          = 0
+6     mmap(NULL, 12288, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f048f0c4000
+6     arch_prctl(ARCH_SET_FS, 0x7f048f0c47c0) = 0
+6     set_tid_address(0x7f048f0c4a90)   = 6
+6     set_robust_list(0x7f048f0c4aa0, 24) = 0
+6     rseq(0x7f048f0c50e0, 0x20, 0, 0x53053053) = 0
+6     mprotect(0x7f048f2c7000, 16384, PROT_READ) = 0
+6     mprotect(0x7f048f306000, 4096, PROT_READ) = 0
+6     mprotect(0x563b40348000, 12288, PROT_READ) = 0
+6     mprotect(0x7f048f34c000, 8192, PROT_READ) = 0
+6     prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+6     munmap(0x7f048f308000, 13547)     = 0
+6     getrandom("\xbf\x49\x5d\xc7\x33\xd7\xb9\x62", 8, GRND_NONBLOCK) = 8
+6     brk(NULL)                         = 0x563b68931000
+6     brk(0x563b68952000)               = 0x563b68952000
+6     write(1, "hello, wolf\n", 12)     = 12
+6     exit_group(0)                     = ?
+6     +++ exited with 0 +++

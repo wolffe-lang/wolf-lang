@@ -1,0 +1,14 @@
+# started on Sat Oct 24 23:50:08 2026
+
+
+ Performance counter stats for './hello-0.2.34' (50 runs):
+
+              0.22 msec task-clock:u                     #    0.783 CPUs utilized               ( +-  2.17% )
+                63      page-faults:u                    #  280.411 K/sec                       ( +-  0.31% )
+                63      minor-faults:u                   #  280.411 K/sec                       ( +-  0.31% )
+                 0      major-faults:u                   #    0.000 /sec                      
+                 0      context-switches:u               #    0.000 /sec                      
+            173380      instructions:u                                                          ( +-  0.00% )
+
+        0.00028680 +- 0.00000652 seconds time elapsed  ( +-  2.27% )
+

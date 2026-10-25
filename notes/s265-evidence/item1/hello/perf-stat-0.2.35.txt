@@ -1,0 +1,14 @@
+# started on Sat Oct 24 23:50:08 2026
+
+
+ Performance counter stats for './hello-0.2.35' (50 runs):
+
+              0.27 msec task-clock:u                     #    0.803 CPUs utilized               ( +-  1.58% )
+                69      page-faults:u                    #  254.701 K/sec                       ( +-  0.28% )
+                69      minor-faults:u                   #  254.701 K/sec                       ( +-  0.28% )
+                 0      major-faults:u                   #    0.000 /sec                      
+                 0      context-switches:u               #    0.000 /sec                      
+            259628      instructions:u                                                          ( +-  0.02% )
+
+        0.00033744 +- 0.00000523 seconds time elapsed  ( +-  1.55% )
+

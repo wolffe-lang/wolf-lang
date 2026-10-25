@@ -1,0 +1,44 @@
+Sun Oct 25 12:14:28 AM UTC 2026
+2c825949 Record the start-up row at sixteen system calls over C
+hello, wolf
+0.2.34: 42 calls
+0.2.35: 59 calls
+head: 51 calls
+c: 35 calls
+   text	   data	    bss	    dec	    hex	filename
+ 329628	  11320	    954	 341902	  5378e	/home/mfwolffe/lanes/s265/witness/hello/hello-0.2.34
+ 336950	  11656	   1650	 350256	  55830	/home/mfwolffe/lanes/s265/witness/hello/hello-0.2.35
+ 338857	  11704	   3778	 354339	  56823	/home/mfwolffe/lanes/s265/witness/hello/hello-head
+load=7.24/5.48/5.54 busy: cpu4=6% cpu5=0% cpu6=4% cpu7=2% cpu12=0% cpu13=0% cpu14=1% cpu15=0% 
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	269221	249786	287856	239028	328746	0.141
+v0.2.35	50	308941	292508	388272	280010	461755	0.310
+head	50	292114	279506	324242	271335	480898	0.153
+c	50	230077	216979	253983	212303	289821	0.161
+                63      page-faults:u                    #  285.198 K/sec                       ( +-  0.31% )
+            173380      instructions:u                                                          ( +-  0.00% )
+        0.00027915 +- 0.00000501 seconds time elapsed  ( +-  1.79% )
+                69      page-faults:u                    #  268.278 K/sec                       ( +-  0.26% )
+            259700      instructions:u                                                          ( +-  0.02% )
+        0.00031818 +- 0.00000273 seconds time elapsed  ( +-  0.86% )
+                68      page-faults:u                    #  274.347 K/sec                       ( +-  0.26% )
+            242281      instructions:u                                                          ( +-  0.00% )
+        0.00030769 +- 0.00000479 seconds time elapsed  ( +-  1.56% )
+                53      page-faults:u                    #  291.953 K/sec                       ( +-  0.33% )
+            112486      instructions:u                                                          ( +-  0.00% )
+        0.00023232 +- 0.00000249 seconds time elapsed  ( +-  1.07% )
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+none	50	198001	189607	273222	182359	310551	0.422
+getattr	50	229192	219184	269657	215424	395900	0.220
+maps	50	209741	200900	262110	197839	355222	0.292
+stat	50	205510	198679	219713	195702	271283	0.102
+rlimit	50	196278	189919	223750	187827	331281	0.172
+alt	50	197720	188893	223552	181922	319093	0.175
+sig	50	197940	189130	213537	182759	356850	0.123
+all	50	233414	223778	267953	218047	398888	0.189
+            119860      instructions:u                                                          ( +-  0.00% )
+            183048      instructions:u                                                          ( +-  0.02% )
+            135741      instructions:u                                                          ( +-  0.00% )
+            183544      instructions:u                                                          ( +-  0.02% )
+load=7.30/5.53/5.55 busy: cpu4=14% cpu5=9% cpu6=9% cpu7=8% cpu12=5% cpu13=4% cpu14=5% cpu15=4% 
+PHASE2A DONE
