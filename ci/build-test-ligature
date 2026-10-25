@@ -3,7 +3,7 @@
 # runtime and sysroot (WOLF_TEST_LIGATURE_RT and LIGATURE_SYSROOT; pax#167).
 # Optional WOLF supplies an already digest-verified complete 0.2.35 toolchain.
 set -euo pipefail
-pin=3f206413
+pin=3f20641375d0493b5c62f802f435d624de172ede
 root=$(git rev-parse --show-toplevel)
 tree=${1:-$root/target/test-ligature}
 if [ ! -e "$tree" ]; then

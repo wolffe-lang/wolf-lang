@@ -304,6 +304,41 @@ mod linux {
         );
     }
 
+    fn assembly_package(dir: &Path) {
+        std::fs::write(dir.join("wolf.pkg"), "pkg {\n name: \"ld02b/assembly\"\n version: \"0.0.1\"\n capabilities: [ffi]\n asm: [\"seven source.S\"]\n}\n").unwrap();
+        std::fs::write(dir.join("seven source.S"), ".text\n.globl kw_seven\nkw_seven:\n mov $7, %eax\n ret\n.section .note.GNU-stack,\"\",@progbits\n").unwrap();
+    }
+
+    #[test]
+    fn root_assembly_objects_and_trap_aliases_reach_selected_linker() {
+        let dir = package("assembly and trap");
+        assembly_package(&dir);
+        std::fs::write(dir.join("main.lu"), "extern \"c\" fn kw_seven() -> i64\nextern \"c\" fn wolf_trap(kind: i32, file: i64, file_len: i64, line: i64, col: i64)\nfn main() -> int {\n let n = unsafe { kw_seven() }\n unsafe { wolf_trap(1, 0, 0, 0, 0) }\n n as int\n}\n").unwrap();
+        let path = tool(&dir, "printf '%s\\n' \"$@\" > argv.txt\nexec cc \"$@\"");
+        for release in [false, true] {
+            let mut c = build(&dir);
+            c.arg("--linker")
+                .arg(&path)
+                .arg("--assembler=as")
+                .env("CC", "/missing/cc");
+            if release {
+                c.arg("--release");
+            }
+            success(c.output().unwrap());
+            let argv = std::fs::read_to_string(dir.join("argv.txt")).unwrap();
+            let args: Vec<_> = argv.lines().collect();
+            assert!(args[2].ends_with("00-root.o"), "{argv}");
+            assert!(args[3].ends_with("01-asm-seven source.o"), "{argv}");
+            assert_eq!(
+                &args[args.len() - 2..],
+                &[
+                    "-Wl,--undefined=__wolf_rt_trap_at",
+                    "-Wl,--defsym=wolf_trap=__wolf_rt_trap_at"
+                ]
+            );
+        }
+    }
+
     #[test]
     fn every_root_manifest_program_links_with_real_ligature_on_both_tiers() {
         let Some(linker) = std::env::var_os("WOLF_TEST_LIGATURE") else {
@@ -329,9 +364,9 @@ mod linux {
                 "ld02b hello\n",
             ),
             (
-                "arithmetic",
-                "fn main() -> int {\n var n = 0\n for i in 0..4 { n += i }\n n\n}\n",
-                6,
+                "assembly",
+                "extern \"c\" fn kw_seven() -> i64\nfn main() -> int {\n let n = unsafe { kw_seven() }\n n as int\n}\n",
+                7,
                 "",
             ),
         ];
@@ -340,9 +375,12 @@ mod linux {
         for (name, source, _, _) in cases {
             let dir = package(&format!("preflight {name}"));
             std::fs::write(dir.join("main.lu"), source).unwrap();
+            if name == "assembly" {
+                assembly_package(&dir);
+            }
             for release in [false, true] {
                 let mut c = build(&dir);
-                c.arg("--emit=obj");
+                c.args(["--emit=obj", "--assembler=as"]);
                 if release {
                     c.arg("--release");
                 }
@@ -352,9 +390,13 @@ mod linux {
         for (name, source, code, stdout) in cases {
             let dir = package(&format!("real {name}"));
             std::fs::write(dir.join("main.lu"), source).unwrap();
+            if name == "assembly" {
+                assembly_package(&dir);
+            }
             for release in [false, true] {
                 let mut c = build(&dir);
-                c.arg("--linker")
+                c.arg("--assembler=as")
+                    .arg("--linker")
                     .arg(&linker)
                     .env("WOLF_RT_LIB", &rt)
                     .env("CC", "/missing/cc");
