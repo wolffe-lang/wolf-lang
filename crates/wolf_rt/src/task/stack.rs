@@ -254,7 +254,7 @@ pub fn enter_thread() {
 /// s265 (wolf-lang#918): the main thread's registration, from the entry
 /// shim (`__wolf_rt_stack_start`) before user `main`. The same guard,
 /// altstack and handler as [`enter_thread`], paid for more cheaply:
-/// - linux (R-s265-1, recommendation B, implemented pending the ruling):
+/// - linux (R-s265-1 = B, ruled 2026-10-24):
 ///   the guard's bounds are not asked for here at all. They are needed
 ///   only when a fault arrives, so the handler resolves them on the main
 ///   thread's first fault ([`resolve_main_guard`]); the entry records an
@@ -499,9 +499,16 @@ fn mapping_holding(addr: usize) -> Option<(usize, usize, usize)> {
 }
 
 // Read the instruction address from the kernel's saved context. No
-// unwinder, loader lock, allocation, symbol lookup or file I/O in a handler
-// — save the main thread's first fault, which reads `/proc/self/maps` with
-// `open`/`read`/`close` to resolve its guard (s265, [`resolve_main_guard`]).
+// unwinder, loader lock, allocation or symbol lookup in a handler.
+// File I/O: the rule changed at s265 (R-s265-1 = B, ruled 2026-10-24).
+// s256 kept every file out of the handler, so the main thread's stack
+// bounds were asked for before `main` — about 37 us at every program's
+// start (wolf-lang#918) for bounds that are read only when a fault
+// arrives. The handler now resolves them on the main thread's first fault
+// ([`resolve_main_guard`]) with `open`, `read` and `close` of
+// `/proc/self/maps` alone: all three async-signal-safe (signal-safety(7)),
+// into a buffer on the altstack, nothing allocated; the binaries are
+// BIND_NOW, so no symbol lookup runs here either.
 unsafe fn fault_pc(ctx: *mut libc::c_void) -> usize {
     // SAFETY: SA_SIGINFO supplied a ucontext for this delivery.
     unsafe {
