@@ -1,0 +1,8 @@
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:     Running tests/lower_corpus.rs (target/debug/deps/lower_corpus-eb730db0f226776d)
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:Snapshot file: crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:Source: crates/wolf_wir/tests/lower_corpus.rs:362
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:stored new snapshot /home/mfwolffe/lanes/s266/wolf-lang/crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap.new
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:test result: FAILED. 31 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.21s
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:error: test failed, to rerun pass `-p wolf_wir --test lower_corpus`
+/home/mfwolffe/lanes/s266/evidence/gauntlet-52824068-failed.log:xtask ci: step `test` failed
+/home/mfwolffe/lanes/s266/evidence/gauntlet-job-52824068.log:s266 gauntlet head=52824068c293b1cc2f0d9e2aebafb8a8f5cf8e3c host=4e808c871844 start=2026-10-25T06:30:20Z

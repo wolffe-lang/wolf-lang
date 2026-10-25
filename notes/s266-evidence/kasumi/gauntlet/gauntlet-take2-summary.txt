@@ -1,0 +1,8 @@
+/home/mfwolffe/lanes/s266/evidence/gauntlet.log:bench-gates: ir-volume per-file table: 694 recorded, 722 measured, 28 new, 0 unmeasured, 0 improved, 0 regressed
+/home/mfwolffe/lanes/s266/evidence/gauntlet.log:bench-gates: startup syscalls wolf 58 (56 before the first write), C 35 (33); the runtime's own: 23
+/home/mfwolffe/lanes/s266/evidence/gauntlet.log:bench-gates: startup wall (report-only): wolf median 304.8 us, C 213.8 us, ratio 1.43 over 50 interleaved starts
+/home/mfwolffe/lanes/s266/evidence/gauntlet.log:bench-gates: startup: a release-tier hello world makes 23 more system calls than its C twin, recorded 12 (bench/startup.json) — something new runs before or after `main` in every wolf program (wolf-lang#918's shape); see target/bench-gates/startup-wolf.strace
+/home/mfwolffe/lanes/s266/evidence/gauntlet.log:xtask ci: step `bench-gates` failed
+/home/mfwolffe/lanes/s266/evidence/gauntlet-job.log:s266 gauntlet head=e65b89e5fc77f43aaabe6539749c3fb70afbdb09 host=b94ea7b2184e start=2026-10-25T06:46:36Z
+/home/mfwolffe/lanes/s266/evidence/gauntlet-job.log:s266 gauntlet exit=1 end=2026-10-25T07:03:28Z
+/home/mfwolffe/lanes/s266/evidence/gauntlet-job.log:taskset requests: 180, translated: 0

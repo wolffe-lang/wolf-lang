@@ -146,7 +146,9 @@ the API, the checkout untouched); s263's `taskset-issue.txt`.
   field on `NotYet`: the checker records each `else` fallback's span, the
   refused range that IS one gets its own construct name, and
   `wolf_sema::ledger_note` maps that name to the note the driver prints.
-- **Gauntlet wall time:** in §6 when it ends.
+- **Gauntlet wall time: a miss.** Take 2 ran 17 minutes to its
+  `bench-gates` red (06:46-07:03Z) from a fresh `target/`; the steps
+  after it took 9 minutes alone. The prediction was about 2 h 30 min.
 
 ## 1. #932 — the `else` fallback and the index
 
@@ -261,15 +263,50 @@ the API, the checkout untouched); s263's `taskset-issue.txt`.
 
 ## 6. Gauntlet, plants, PR
 
-- **The gauntlet** (`cargo xtask ci`, the final head, kasumi CPUs 4-7 under
-  the lane lock, the lane's container: the shim, `--pids-limit 16384
-  --ulimit nproc=32768:32768`, a foreign pid 1, never `--pid=host`): its
-  verdict is the command's own exit status in
-  `~/lanes/s266/evidence/gauntlet.exit` on kasumi, the log beside it, the
-  pid in `gauntlet.pid`; started at the hand-back, so its number is the
-  hand-back's, not this note's. Known flake wolf-lang#631
+- **The gauntlet** (`cargo xtask ci`, kasumi CPUs 4-7 under the lane lock,
+  the lane's container: the shim, `--pids-limit 16384 --ulimit
+  nproc=32768:32768`, a foreign pid 1, never `--pid=host`; the verdict is
+  the command's own exit status). Known flake wolf-lang#631
   (`region_copyout_lanes::a_loop_keeping_a_scalar_is_flat`) is named
-  here, never waived.
+  here, never waived; it did not fire. Logs: `kasumi/gauntlet/`.
+  - Take 1 at `52824068` (06:30-06:44Z): exit 1 in `test`, `wolf_wir
+    --test lower_corpus` alone: the corpus lowering ledger lacked the
+    three new #932 rows. `e65b89e5` adds exactly those three lines.
+  - Take 2 at `e65b89e5` (06:46-07:03Z, a fresh `target/`): every step
+    through `midend-rate` green (fmt, fmt-fixpoint, clippy, rt-none, test,
+    fuzz-check, deps-check, corpus, abi-check, debug-check, midend-rate);
+    180 pinned requests, none outside 4-7. Then exit 1 in `bench-gates`,
+    the start-up row alone: a release-tier hello world makes **23 more
+    system calls than its C twin, recorded 12** (wolf 58, C 35). **The
+    environment's, not this pass's:** the bench step alone at trunk
+    `a5378e3f` in the same container on the same target reads the same
+    58 / 35 / 23, and the two wolf traces differ only in `getrandom`'s
+    bytes (`bench-startup.log`, `wolf-trace-trunk-vs-head.diff`). The
+    hello's `NEEDED` list is `libm.so.6`, `libgcc_s.so.1`, `libc.so.6`:
+    the driver links `-lm` unconditionally (wolf-lang#951), and this
+    container runs kasumi's own Arch userland, whose linker keeps an unused
+    library (clang wraps only `-lgcc_s` in `--as-needed`), where the
+    ubuntu rig the 12 was recorded on drops it. The loader mapping
+    `libm.so.6` is 10 of the 11 extra calls (the `ld.so.cache` stat,
+    `openat`, `read`, `fstat`, four `mmap`, `close`, and its RELRO
+    `mprotect`); the eleventh is unattributed. The row counts the loader's
+    work, so it depends on the host's linker defaults (wolf-lang#952).
+    Neither is this pass's; no waiver: CI's ubuntu lint-test is the row's
+    instrument and was green at `e65b89e5` (tier pr 40170282076, tier full
+    40170422660).
+  - The steps `xtask ci` did not reach after that red, each alone at
+    `e65b89e5` in the same container: spec-extract, conformance,
+    print-gate, diag-catalog, doc-catalog, fmt-lu, fmt-fuzz, audit-surface,
+    dist-smoke, differ-self, lane-coverage — every one exit 0
+    (`after-bench.log`).
+  - Seen in the same run, present at trunk (the same 34 lines at
+    `a5378e3f`): bench-gates' IR-volume sweep builds eight `phase: run`
+    corpus files that need their sibling `std/` fixture without
+    `--std-root`, so they fail E0301 and are never measured —
+    `corpus/methods/{comb_map_filter_fold,comb_sorted_ord,comb_sort_enumerate_zip,home_range_str_map,method_is_free_call,wordcount_par,wordcount_serial}.lu`
+    and `corpus/rows/ctor_arg_qualified/main.lu` (wolf-lang#953). The
+    sweep measured 720 files at trunk and 722 at `e65b89e5` (the two new
+    compiling #932 rows), 0 regressed.
 - **Plants** (each from `dca7496c`, a draft PR, never merged, no label):
   - `s266-plant-else-note` (#944, `9a8dc604`): `ledger_note` returns
     `None`; red by name in `refusal_site::an_else_fallback_range_names_the_fallback_and_says_to_parenthesise`,

@@ -1,0 +1,16 @@
+s266 job after-bench start=2026-10-25T07:29:28Z head=e65b89e5fc77f43aaabe6539749c3fb70afbdb09 pid=1663830
+s266 waiting for the CPUs 4-7 lock (2026-10-25T07:29:28Z); job s266-after-bench: bash /home/mfwolffe/lanes/s266/scripts/after-bench.sh
+head e65b89e5
+spec-extract exit=0 (1 s): spec-extract: spec/grammar.ebnf is in sync
+conformance exit=0 (0 s): conformance: 705 anchors, 370 covered (335 debt), 484 forward tags, 46 untagged non-litmus files
+print-gate exit=0 (0 s): print-gate: compiler phases are print-free and schedule-free
+diag-catalog exit=0 (5 s): diag-catalog: 192 codes (34 warnings), all with fixtures, catalogs in sync; the corpus pins 146 of them, plus 1 forward pin(s) on codes nothing emits 
+doc-catalog exit=0 (0 s): doc-catalog: docs/api is the generated documentation of crates/wolf_doc/fixtures/pkg and is in sync
+fmt-lu exit=0 (1 s): fmt-lu: corpus is canonical (4 relaid witness(es) read past)
+fmt-fuzz exit=0 (33 s): fmt-fuzz: invariants held
+audit-surface exit=0 (0 s): audit-surface: inventory green; undeclared-trusted red-test holds
+dist-smoke exit=0 (159 s): dist: smoke — target/dist/smoke/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf built and ran corpus/hello.lu from the unpacked archive
+differ-self exit=0 (30 s): differ: run-rung coverage — A executed 0, B executed 0, BOTH executed 0 of 1166 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gate
+lane-coverage exit=0 (265 s): lane-coverage: floors held (checked/native/release/union/all-three ≥ 221/242/242/256/207)
+worst exit=0
+s266 job after-bench exit=0 end=2026-10-25T07:37:42Z

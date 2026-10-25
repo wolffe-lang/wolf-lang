@@ -1,0 +1,20 @@
+s266 waiting for the CPUs 4-7 lock (2026-10-25T07:23:22Z); job s266-bench-startup: bash /home/mfwolffe/lanes/s266/scripts/bench-startup.sh
+=== a5378e3f (a5378e3f corpus: gate variadic declarations by target)
+bench-gates exit=1
+bench-gates: startup syscalls wolf 58 (56 before the first write), C 35 (33); the runtime's own: 23
+bench-gates: startup wall (report-only): wolf median 265.0 us, C 189.2 us, ratio 1.40 over 50 interleaved starts
+bench-gates: startup: a release-tier hello world makes 23 more system calls than its C twin, recorded 12 (bench/startup.json) — something new runs before or after `main` in every wolf program (wolf-lang#918's shape); see target/bench-gates/startup-wolf.strace
+NEEDED wolf: [libm.so.6] [libgcc_s.so.1] [libc.so.6] [ld-linux-x86-64.so.2] 
+NEEDED C:    [libc.so.6] 
+libraries the wolf hello maps: "/etc/ld.so.cache" "/usr/lib/libm.so.6" "/usr/lib/libgcc_s.so.1" "/usr/lib/libc.so.6" 
+=== e65b89e5 (e65b89e5 Add the three else-fallback rows to the lowering le)
+bench-gates exit=1
+bench-gates: startup syscalls wolf 58 (56 before the first write), C 35 (33); the runtime's own: 23
+bench-gates: startup wall (report-only): wolf median 248.7 us, C 180.4 us, ratio 1.38 over 50 interleaved starts
+bench-gates: startup: a release-tier hello world makes 23 more system calls than its C twin, recorded 12 (bench/startup.json) — something new runs before or after `main` in every wolf program (wolf-lang#918's shape); see target/bench-gates/startup-wolf.strace
+NEEDED wolf: [libm.so.6] [libgcc_s.so.1] [libc.so.6] [ld-linux-x86-64.so.2] 
+NEEDED C:    [libc.so.6] 
+libraries the wolf hello maps: "/etc/ld.so.cache" "/usr/lib/libm.so.6" "/usr/lib/libgcc_s.so.1" "/usr/lib/libc.so.6" 
+trace diff (trunk vs head, addresses masked): 8 lines
+--- the linker's default: 2 as-needed mentions; clang -### link line:
+"/usr/bin/ld" "--build-id" "/lib64/ld-linux-x86-64.so.2" "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed" "-lc" "-lgcc" "--as-needed" "-lgcc_s" "--no-as-needed" 
