@@ -20,7 +20,7 @@
 //! Machines: the checked machine under `conform-run --checked` (the
 //! conform-run process IS the machine, so it is what the terminal
 //! signals), the native and release binaries `wolf build` made — plain,
-//! and on linux again under `taskset -c 0-3` (wolf-lang#570) — and
+//! and on linux again under `taskset` on four CPUs of the allocation (wolf-lang#570) — and
 //! lupin under `conform-run`. The programs write to `/dev/tty`, never
 //! to standard output, because the checked machine and lupin buffer
 //! standard output into their record.
@@ -34,6 +34,7 @@
 #![cfg(unix)]
 
 mod lane_exit;
+mod test_cpus;
 
 use std::io::{Read as _, Write as _};
 use std::os::fd::FromRawFd as _;
@@ -310,10 +311,12 @@ fn lanes(name: &str) -> (PathBuf, Vec<Lane>) {
             argv: vec![exe.clone()],
             lupin: false,
         });
-        if cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists() {
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
+            let mut argv = pin.argv();
+            argv.push(exe);
             out.push(Lane {
-                name: format!("{tier} taskset -c 0-3"),
-                argv: vec!["/usr/bin/taskset".into(), "-c".into(), "0-3".into(), exe],
+                name: format!("{tier} {}", pin.label()),
+                argv,
                 lupin: false,
             });
         }
@@ -561,13 +564,10 @@ fn a_group_leader_a_joiner_and_their_status() {
         };
         let exe = exe.to_string_lossy().into_owned();
         let mut legs = vec![vec![exe.clone()]];
-        if cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists() {
-            legs.push(vec![
-                "/usr/bin/taskset".into(),
-                "-c".into(),
-                "0-3".into(),
-                exe,
-            ]);
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
+            let mut argv = pin.argv();
+            argv.push(exe);
+            legs.push(argv);
         }
         for leg in legs {
             let (code, out) = run(&leg);
