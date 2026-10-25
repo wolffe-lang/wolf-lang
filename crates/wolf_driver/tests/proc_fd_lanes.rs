@@ -17,7 +17,7 @@
 //!   (`printf`, `wc`, `ls`, `cat`), so they run on unix only: the
 //!   checked machine and lupin under `conform-run`, the native and
 //!   release binaries `wolf build` made — plain, and on linux again
-//!   under `taskset -c 0-3` (wolf-lang#570: a spawn-heavy program
+//!   under `taskset` on four CPUs of the allocation (wolf-lang#570: a spawn-heavy program
 //!   green on a 16-cpu host can starve on a 4-cpu runner).
 //!
 //! lupin 0.1.47 and 0.1.48 predated the mirror (they resolve none of
@@ -28,6 +28,7 @@
 //! which lupin forbids).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -123,14 +124,13 @@ fn under_script(argv: &[String]) -> Option<Command> {
     Some(c)
 }
 
-/// `taskset -c 0-3` in front of `argv` on linux, when the host has it.
-fn under_taskset(argv: &[String]) -> Option<Command> {
-    if !cfg!(target_os = "linux") || !Path::new("/usr/bin/taskset").exists() {
-        return None;
-    }
-    let mut c = Command::new("taskset");
-    c.args(["-c", "0-3"]).args(argv);
-    Some(c)
+/// `argv` under `taskset` on four of the allocation (`test_cpus`,
+/// wolf-lang#925) on linux, when the host has it; the label names the list.
+fn under_taskset(argv: &[String]) -> Option<(String, Command)> {
+    let pin = test_cpus::pin(4, module_path!())?;
+    let mut c = Command::new(&pin.taskset);
+    c.arg("-c").arg(&pin.list).args(argv);
+    Some((pin.label(), c))
 }
 
 /// One wolfgang lane under `conform-run`. `None` is a host that cannot
@@ -305,7 +305,7 @@ fn every_lane_says(rel: &str, want: &str) {
 
 /// A unix fixture on every machine: the checked machine and lupin under
 /// `conform-run`, the native and release binaries run directly — and on
-/// linux again under `taskset -c 0-3`. `check` judges each stdout.
+/// linux again under `taskset` on four CPUs of the allocation. `check` judges each stdout.
 #[cfg(unix)]
 fn every_lane_runs(name: &str, mirrored: Lupin<'_>, check: &dyn Fn(&str, &str)) {
     let entry = fixture(name);
@@ -322,9 +322,9 @@ fn every_lane_runs(name: &str, mirrored: Lupin<'_>, check: &dyn Fn(&str, &str)) 
             continue;
         };
         let argv = vec![exe.to_string_lossy().into_owned()];
-        let mut runs = vec![("plain", Command::new(&exe))];
-        if let Some(t) = under_taskset(&argv) {
-            runs.push(("taskset -c 0-3", t));
+        let mut runs = vec![("plain".to_string(), Command::new(&exe))];
+        if let Some((label, t)) = under_taskset(&argv) {
+            runs.push((label, t));
         }
         for (how, cmd) in runs {
             let out = run_in(cmd, &dir);
