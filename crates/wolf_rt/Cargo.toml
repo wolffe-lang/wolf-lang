@@ -37,6 +37,12 @@ harness = false
 name = "stack_overflow"
 harness = false
 
+# s265 (wolf-lang#918): the main thread's guard read cheaply at entry is
+# the one pthread_getattr_np(3) reports — on the main thread, so no libtest.
+[[test]]
+name = "main_stack_bounds"
+harness = false
+
 # s149 (#289, #290): the linux syscall COUNT, read with the tracer
 # lobo's ws27 counted with. `harness = false` because the child is
 # this binary re-executed and the trace must hold its calls alone.

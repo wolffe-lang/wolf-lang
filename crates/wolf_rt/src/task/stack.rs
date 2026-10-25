@@ -389,6 +389,13 @@ fn main_stack_bounds() -> Option<(usize, usize)> {
     Some((floor.saturating_sub(pg), floor))
 }
 
+/// s265: the main thread's guard both ways, `(cheap, pthread)`, for the
+/// equivalence test (`tests/main_stack_bounds.rs`, run on the main thread).
+#[cfg(target_os = "linux")]
+pub fn main_guard_both() -> (Option<(usize, usize)>, Option<(usize, usize)>) {
+    (main_stack_bounds(), pthread_bounds())
+}
+
 /// `(start, end, previous end)` of the `/proc/self/maps` line whose
 /// range holds `addr`, read with plain `open`/`read` into a stack buffer
 /// and parsed as the lines arrive (a line may span two reads).

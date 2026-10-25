@@ -908,6 +908,15 @@ pub(crate) fn enter_runtime_thread() {
     stack::enter_thread();
 }
 
+/// s265 (wolf-lang#918): the main thread's guard two ways — the query
+/// the entry uses and `pthread_getattr_np(3)`'s — for the equivalence
+/// test (`tests/main_stack_bounds.rs`). Linux; call it on the main thread.
+#[cfg(target_os = "linux")]
+#[doc(hidden)]
+pub fn main_guard_both() -> (Option<(usize, usize)>, Option<(usize, usize)>) {
+    stack::main_guard_both()
+}
+
 /// The main thread's registration, before user `main` (s265,
 /// wolf-lang#918: the cheaper bounds query and a process-lifetime
 /// altstack; the same guard, handler and report).
