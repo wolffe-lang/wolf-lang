@@ -1008,7 +1008,10 @@ pub fn names_a_descriptor_wait(m: &WirModule) -> bool {
 
 /// The entry shim's signature: [`C_MAIN_PARAMS`] in, the C exit code out.
 fn c_main_sig(m: &mut WirModule) -> SigId {
-    let params = C_MAIN_PARAMS.iter().map(|&t| wolf_wir::ir::Param::val(t)).collect();
+    let params = C_MAIN_PARAMS
+        .iter()
+        .map(|&t| wolf_wir::ir::Param::val(t))
+        .collect();
     m.make_sig(params, vec![types::I32])
 }
 
@@ -1040,7 +1043,10 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // It replaces the `__wolf_rt_stack_start()` call this list began with,
     // so the shim has the instructions it had.
     let main_start_sig = m.make_sig(
-        C_MAIN_PARAMS.iter().map(|&t| wolf_wir::ir::Param::val(t)).collect(),
+        C_MAIN_PARAMS
+            .iter()
+            .map(|&t| wolf_wir::ir::Param::val(t))
+            .collect(),
         vec![],
     );
     let starts: Vec<&str> = [

@@ -19,8 +19,15 @@ fn shim(text: &str) -> (Vec<String>, bool, usize) {
     let f = &m.funcs[id];
     let sd = &m.sigs[f.sig];
     let params: Vec<_> = sd.params.iter().map(|p| p.ty).collect();
-    assert_eq!(params, C_MAIN_PARAMS, "the shim's parameters are main's three");
-    assert_eq!(sd.results, vec![types::I32], "the shim returns the C exit code");
+    assert_eq!(
+        params, C_MAIN_PARAMS,
+        "the shim's parameters are main's three"
+    );
+    assert_eq!(
+        sd.results,
+        vec![types::I32],
+        "the shim returns the C exit code"
+    );
     let entry = f.entry().expect("an entry block");
     let entry_params = f.block_params(entry);
     assert_eq!(entry_params.len(), 3);
@@ -51,7 +58,10 @@ fn shim(text: &str) -> (Vec<String>, bool, usize) {
 fn a_unit_main_hands_mains_arguments_to_the_runtime_first() {
     let (callees, args, insts) = shim("fn @main() {\nb0:\n  ret\n}\n");
     assert_eq!(callees, [MAIN_START, "main"]);
-    assert!(args, "the start call's arguments are the shim's own parameters");
+    assert!(
+        args,
+        "the start call's arguments are the shim's own parameters"
+    );
     // The start call, wolf's main, the exit code's constant, the return:
     // what the niladic shim had, one call for one call.
     assert_eq!(insts, 4);
@@ -59,7 +69,8 @@ fn a_unit_main_hands_mains_arguments_to_the_runtime_first() {
 
 #[test]
 fn an_int_main_hands_mains_arguments_to_the_runtime_first() {
-    let (callees, args, insts) = shim("fn @main() -> i64 {\nb0:\n  %r = iconst.i64 7\n  ret %r\n}\n");
+    let (callees, args, insts) =
+        shim("fn @main() -> i64 {\nb0:\n  %r = iconst.i64 7\n  ret %r\n}\n");
     assert_eq!(callees, [MAIN_START, "main"]);
     assert!(args);
     // The start call, wolf's main, the truncation, the return.

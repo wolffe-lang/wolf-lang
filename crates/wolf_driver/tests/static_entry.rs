@@ -184,7 +184,11 @@ mod linux {
             .filter(|p| p.extension() == Some(OsStr::new("o")))
             .collect();
         files.sort();
-        assert!(!files.is_empty(), "wolf build {tier} {} wrote no object", r.name);
+        assert!(
+            !files.is_empty(),
+            "wolf build {tier} {} wrote no object",
+            r.name
+        );
         Ok(Objects {
             tier,
             reader: r.name,
@@ -268,7 +272,10 @@ mod linux {
                 let mut c = Command::new(linker);
                 c.args(["-static", "--gc-sections", "-o"]).arg(out);
                 c.arg(s("crt1.o")).arg(s("crti.o")).arg("--start-group");
-                c.args(&o.files).arg(&m.rt).arg(s("libc.a")).arg(s("libunwind.a"));
+                c.args(&o.files)
+                    .arg(&m.rt)
+                    .arg(s("libc.a"))
+                    .arg(s("libunwind.a"));
                 c.arg("--end-group").arg(s("crtn.o"));
                 c
             }
@@ -333,7 +340,11 @@ mod linux {
                     (
                         r.status.code(),
                         r.stdout,
-                        if ok { "right".to_string() } else { "WRONG".to_string() },
+                        if ok {
+                            "right".to_string()
+                        } else {
+                            "WRONG".to_string()
+                        },
                     )
                 }
             };
@@ -375,7 +386,11 @@ mod linux {
             rows.len() - wrong.len(),
             wrong.len()
         );
-        assert!(wrong.is_empty(), "{label}: wrong cells:\n{}", wrong.join("\n"));
+        assert!(
+            wrong.is_empty(),
+            "{label}: wrong cells:\n{}",
+            wrong.join("\n")
+        );
     }
 
     #[test]
