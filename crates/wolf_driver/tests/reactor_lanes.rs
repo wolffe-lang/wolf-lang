@@ -16,7 +16,8 @@
 //! (`setrlimit` in the child between fork and exec), never the test
 //! runner's and never the host's. Machines: the native and release
 //! binaries `wolf build` made — plain, and on linux again under
-//! `taskset -c 0-3` (wolf-lang#570) — the checked machine under
+//! `taskset` on four of the allocation (wolf-lang#570; `test_cpus`,
+//! #925) — the checked machine under
 //! `conform-run --checked` and lupin under `conform-run`.
 //!
 //! lupin 0.1.52 and 0.1.53 (0.2.30's pairing) predated the mirror: their
@@ -39,6 +40,7 @@
 #![cfg(unix)]
 
 mod lane_exit;
+mod test_cpus;
 
 use std::io::{BufRead as _, BufReader};
 use std::os::unix::process::CommandExt as _;
@@ -144,32 +146,20 @@ fn build(entry: &Path, dir: &Path, release: bool) -> Option<PathBuf> {
 }
 
 /// The cpu sets the compiled witnesses run on: all cores, and on linux
-/// four (`taskset -c 0-3`, wolf-lang#570) — never skipped there.
-fn cpu_sets() -> Vec<Option<&'static str>> {
+/// four of the allocation (wolf-lang#570, `test_cpus`) — never skipped
+/// there.
+fn cpu_sets(test: &str) -> Vec<Option<test_cpus::Pin>> {
     if cfg!(target_os = "linux") {
-        let ok = Command::new("taskset")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        assert!(
-            ok,
-            "`taskset` (util-linux) is part of this gate's linux host: the witness must run \
-             on four cpus as well as all cores, never skip them"
-        );
-        vec![None, Some("0-3")]
+        vec![None, Some(test_cpus::pin_required(4, test))]
     } else {
         eprintln!("NOTE: no cpu-affinity tool on this host; the witnesses run on all cores only");
         vec![None]
     }
 }
 
-fn compiled(exe: &Path, set: Option<&str>) -> Command {
+fn compiled(exe: &Path, set: Option<&test_cpus::Pin>) -> Command {
     match set {
-        Some(cpus) => {
-            let mut c = Command::new("taskset");
-            c.args(["-c", cpus]).arg(exe);
-            c
-        }
+        Some(pin) => pin.command(exe),
         None => Command::new(exe),
     }
 }
@@ -329,11 +319,12 @@ fn a_park_at_the_descriptor_limit_does_not_end_the_process() {
         let Some(exe) = build(&entry, &dir, release) else {
             continue;
         };
-        for set in cpu_sets() {
+        for set in cpu_sets("a_park_at_the_descriptor_limit_does_not_end_the_process") {
+            let set = set.as_ref();
             let what = format!(
                 "{} ({})",
                 if release { "release" } else { "native" },
-                set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"))
+                set.map_or("all cores".to_string(), test_cpus::Pin::label)
             );
             let out = limited(compiled(&exe, set), &dir, LIMIT);
             let stdout = String::from_utf8_lossy(&out.stdout);
@@ -403,11 +394,12 @@ fn a_signal_wait_at_the_descriptor_limit_is_io() {
         let Some(exe) = build(&entry, &dir, release) else {
             continue;
         };
-        for set in cpu_sets() {
+        for set in cpu_sets("a_signal_wait_at_the_descriptor_limit_is_io") {
+            let set = set.as_ref();
             let what = format!(
                 "{} ({})",
                 if release { "release" } else { "native" },
-                set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"))
+                set.map_or("all cores".to_string(), test_cpus::Pin::label)
             );
             let out = limited(compiled(&exe, set), &dir, LIMIT);
             let stdout = String::from_utf8_lossy(&out.stdout);
@@ -591,11 +583,12 @@ fn a_listen_at_the_descriptor_limit_does_not_end_the_process() {
         let Some(exe) = build(&entry, &dir, release) else {
             continue;
         };
-        for set in cpu_sets() {
+        for set in cpu_sets("a_listen_at_the_descriptor_limit_does_not_end_the_process") {
+            let set = set.as_ref();
             let what = format!(
                 "{} ({})",
                 if release { "release" } else { "native" },
-                set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"))
+                set.map_or("all cores".to_string(), test_cpus::Pin::label)
             );
             let out = limited(compiled(&exe, set), &dir, LIMIT);
             let stdout = String::from_utf8_lossy(&out.stdout);
