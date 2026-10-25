@@ -874,12 +874,6 @@ fn lower_body(
     let Some(block) = d.body() else {
         return Ok(None);
     };
-    if fsig.variadic {
-        return Err(refuse(
-            "a C variadic definition (native variadic lowering pending)",
-            span,
-        ));
-    }
     // s93: a generic body lowers only as an INSTANCE — the worklist
     // hands one in as a substitution. Reached with none (the plain pass
     // over `tc.bodies`), the ARCHETYPE has nothing to lower: its
@@ -3224,7 +3218,11 @@ fn wir_sig_of(
         Some(t) => vec![t],
         None => vec![],
     };
-    Ok(module.make_sig(params, results))
+    Ok(if fsig.variadic {
+        module.make_variadic_sig(params, results, fsig.params.len() as u32)
+    } else {
+        module.make_sig(params, results)
+    })
 }
 
 /// Control-flow result of lowering one expression/statement.
@@ -11008,6 +11006,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         let cs = cs.expect("checked");
+        if cs.is_va_builtin() {
+            return self.lower_va_builtin(d, cs, e);
+        }
+        if cs.variadic {
+            return self.lower_variadic_call(d, cs, e);
+        }
         if cs.c_call {
             return self.lower_c_call(d, cs, e);
         }
@@ -12210,6 +12214,191 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(results.first().copied()))
     }
 
+    /// C default promotions happen here, while signedness is still a
+    /// source-type fact. WIR only carries bit widths after this seam.
+    fn lower_variadic_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        let Some(candidates) = self.fns.get(cs.callee.as_str()) else {
+            return Err(refuse("an unresolved C variadic callee", e.span));
+        };
+        let hits: Vec<_> = candidates
+            .iter()
+            .filter(|(_, f)| candidates.len() == 1 || Some(f.name_span) == cs.decl_span)
+            .collect();
+        let &[&(module, fsig)] = hits.as_slice() else {
+            return Err(refuse("an ambiguous C variadic callee", e.span));
+        };
+        membrane_sig_check(self.sig_table, self.sigs, fsig)?;
+        let imported = fsig.membrane == Some(Membrane::Import);
+        let name = cs.callee.rsplit('.').next().unwrap_or(&cs.callee);
+        if imported && module_c_defines(self.sigs, name) {
+            return Err(refuse(C_MODULE_CLASH, e.span));
+        }
+        let symbol = if imported {
+            format!("c.{name}")
+        } else {
+            qualify(self.sigs, module, name)
+        };
+        let mut params = Vec::new();
+        let mut args = Vec::new();
+        for (i, arg) in d.args().into_iter().flat_map(|a| a.args()).enumerate() {
+            let Some(expr) = Arg::value(arg) else {
+                continue;
+            };
+            let Some(mut value) = flow_val!(self.lower_expr(expr)) else {
+                return Err(refuse("a valueless C variadic argument", expr.span));
+            };
+            let mut mode = Mode::Val;
+            if i < fsig.params.len() {
+                mode = match self.sig_table.kind(fsig.params[i].ty) {
+                    TyKind::Prim(Prim::I8 | Prim::I16) => Mode::Sext,
+                    TyKind::Prim(Prim::U8 | Prim::U16 | Prim::Byte | Prim::Bool) => Mode::Zext,
+                    _ => Mode::Val,
+                };
+            } else {
+                let Some(ty) = self.expr_sema_ty(expr.span) else {
+                    return Err(refuse("an untyped C variadic argument", expr.span));
+                };
+                if !c_crossing(self.table, self.sigs, ty, 0) {
+                    return Err(refuse(
+                        "an unnamed argument outside the C value types",
+                        expr.span,
+                    ));
+                }
+                let promote = match self.table.kind(ty) {
+                    TyKind::Prim(Prim::I8 | Prim::I16) => Some((Opcode::Sext, types::I32)),
+                    TyKind::Prim(Prim::U8 | Prim::U16 | Prim::Byte | Prim::Bool) => {
+                        Some((Opcode::Zext, types::I32))
+                    }
+                    TyKind::Prim(Prim::F32) => Some((Opcode::Fpromote, types::F64)),
+                    _ => None,
+                };
+                if let Some((op, to)) = promote {
+                    value = self.b.ins(op, &[value], &[to], Aux::None).one();
+                }
+            }
+            params.push(Param {
+                ty: self.b.func.value_ty(value),
+                mode,
+            });
+            args.push(value);
+        }
+        if args.len() < fsig.params.len() {
+            return Err(refuse("a C variadic call missing fixed arguments", e.span));
+        }
+        for formal in 0..2 {
+            params.push(Param::val(self.b.module.types.mem(RegionId::new(formal))));
+        }
+        let results = wir_ty(
+            &mut self.b.module.types,
+            self.sig_table,
+            self.sigs,
+            fsig.ret,
+            e.span,
+        )?
+        .into_iter()
+        .collect();
+        let sig = self
+            .b
+            .module
+            .make_variadic_sig(params, results, fsig.params.len() as u32);
+        let existing = self
+            .b
+            .func
+            .ext_funcs
+            .iter()
+            .find(|(_, f)| f.name == symbol && self.b.module.sigs[f.sig] == self.b.module.sigs[sig])
+            .map(|(id, _)| id);
+        let ext = existing.unwrap_or_else(|| self.b.func.import_func(symbol, sig));
+        let (headers, buffers) = self.foreign_regions();
+        let regions = [(0, headers), (1, buffers)].into_iter().collect();
+        let out = self.b.ins_call_regions(ext, &args, &regions);
+        Ok(Flow::Val(out.first().copied()))
+    }
+
+    fn lower_va_builtin(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        if cs.callee == "va_start" {
+            let ptr = self
+                .b
+                .ins(Opcode::VaStart, &[], &[types::PTR], Aux::None)
+                .one();
+            let ty = self
+                .expr_sema_ty(e.span)
+                .ok_or_else(|| refuse("untyped va_start", e.span))?;
+            let wty = self
+                .wir_ty_in(self.table, ty, e.span)?
+                .ok_or_else(|| refuse("valueless va_start", e.span))?;
+            let region = self.foreign_buf_region();
+            return Ok(Flow::Val(Some(self.load_flat(wty, ptr, region, e.span)?)));
+        }
+        let arg = d
+            .args()
+            .into_iter()
+            .flat_map(|a| a.args())
+            .next()
+            .and_then(Arg::value)
+            .ok_or_else(|| refuse("a cursor builtin without its list", e.span))?;
+        if cs.callee == "va_copy" {
+            // Four inline fields; the copied cursors advance independently
+            // while their storage pointers retain the source invocation.
+            return self.lower_expr(arg);
+        }
+        let Some(place) = self.lower_mut_arg(arg)? else {
+            return Ok(Flow::Diverged);
+        };
+        let mut writebacks = Vec::new();
+        let (ptr, region) = match place {
+            MutArg::Relend { ptr, region } => (ptr, region),
+            MutArg::Spill {
+                cur,
+                size,
+                writeback,
+            } => {
+                let (region, ptr) = self.b.ins_stack_alloc(size);
+                self.b
+                    .func
+                    .add_fact(FactData::new(FactKind::Region(ptr, region), Just::DefOp));
+                self.b.func.add_fact(FactData::new(
+                    FactKind::Deref(ptr, DerefSize::Const(size)),
+                    Just::DefOp,
+                ));
+                self.store_flat(cur, ptr, region, arg.span)?;
+                writebacks.push(writeback.filled(ptr, region, arg.span));
+                (ptr, region)
+            }
+        };
+        let token = self.b.use_mem(region);
+        let token_ty = self.b.module.types.mem(region);
+        let result = if cs.callee == "va_end" {
+            let successor = self
+                .b
+                .ins(Opcode::VaEnd, &[ptr, token], &[token_ty], Aux::None)
+                .one();
+            self.b.def_mem(region, successor);
+            None
+        } else {
+            let ty = self
+                .expr_sema_ty(e.span)
+                .ok_or_else(|| refuse("untyped va_arg", e.span))?;
+            let wty = self
+                .wir_ty_in(self.table, ty, e.span)?
+                .ok_or_else(|| refuse("valueless va_arg", e.span))?;
+            let InsOut::Vals(values) =
+                self.b
+                    .ins(Opcode::VaArg, &[ptr, token], &[wty, token_ty], Aux::None)
+            else {
+                unreachable!("va.arg does not fold");
+            };
+            self.b.def_mem(region, values[1]);
+            Some(values[0])
+        };
+        // Ending a cursor has no SysV writeback value. In particular do
+        // not reload its representation after the lifetime endpoint.
+        if cs.callee != "va_end" {
+            self.run_writebacks(writebacks)?;
+        }
+        Ok(Flow::Val(result))
+    }
+
     /// kw02 (`[abi.c.import]`, wolf-lang#521): a call into a bodyless
     /// `extern "c" fn`. The WIR callee is `c.<name>` — the `c.`
     /// namespace is the membrane, so the backends declare the plain C
@@ -12237,12 +12426,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             ));
         };
-        if fsig.variadic {
-            return Err(refuse(
-                "a C variadic call (native variadic lowering pending)",
-                e.span,
-            ));
-        }
         membrane_sig_check(&self.sigs.table, self.sigs, fsig)?;
         let cname = cs.callee.rsplit('.').next().unwrap_or(&cs.callee);
         if module_c_defines(self.sigs, cname) {

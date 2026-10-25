@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 362
 expression: "lines.join(\"\\n\")"
 ---
 comptime/align_of_layout.lu: not mem-clean (pre-wir rungs own it)
@@ -362,6 +361,8 @@ membrane/export_child.lu: lowers
 membrane/extern_let_image.lu: lowers
 membrane/extern_let_not_ptr.lu: not mem-clean (pre-wir rungs own it)
 membrane/extern_libc.lu: lowers
+membrane/variadic_declarations.lu: lowers
+membrane/variadic_position.lu: not mem-clean (pre-wir rungs own it)
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_list_ledger.lu: lowers
 memory/byte_producers_ledger.lu: lowers
