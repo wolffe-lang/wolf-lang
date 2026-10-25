@@ -327,7 +327,8 @@ mod linux {
             success(c.output().unwrap());
             let argv = std::fs::read_to_string(dir.join("argv.txt")).unwrap();
             let args: Vec<_> = argv.lines().collect();
-            assert!(args[2].ends_with("00-root.o"), "{argv}");
+            let module = if release { "00-c00.o" } else { "00-root.o" };
+            assert!(args[2].ends_with(module), "{argv}");
             assert!(args[3].ends_with("01-asm-seven source.o"), "{argv}");
             assert_eq!(
                 &args[args.len() - 2..],
