@@ -32,7 +32,7 @@
 //!   them (measured, s242: a `SUSPEND` stayed pending). Without the init
 //!   the program is the namespace's process 1 and every mask is empty,
 //!   which each witness prints. The process rows also run under
-//!   `taskset -c 0-3`, asked from inside (wolf-lang#570).
+//!   `taskset` on four CPUs of the allocation, asked from inside (wolf-lang#570).
 //! - LINUX, A CONTAINER: an idle program's context switches, every
 //!   thread's, counted from outside for three seconds while it is parked
 //!   in `os_signal_wait(CHILD | INTERRUPT)` (`idle.lu`) — none is
@@ -54,6 +54,7 @@
 //! pairing) carries it, measured.
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -594,7 +595,7 @@ mod container {
     /// The machines a fixture runs on in a container: the checked one
     /// under `conform-run` (process 1 is `wolf`), and the native and
     /// release binaries built on the host (process 1 is the program),
-    /// each also under `taskset -c 0-3` when the container has four cpus.
+    /// each also under `taskset` on four CPUs of the allocation when the container has four cpus.
     fn machines(
         b: &Throwaway<'_>,
         entry: &Path,
@@ -613,13 +614,16 @@ mod container {
                 "--json",
             ]),
         )];
-        let four = b.cpus() >= 4;
-        if !four {
+        // The pinned rows ask the container's own `taskset` for four of
+        // the allocation (`test_cpus`, wolf-lang#925).
+        let four = if b.cpus() >= 4 {
+            test_cpus::subset(4, test)
+        } else {
             eprintln!(
-                "SKIP: {test}: the container has fewer than four cpus — the taskset -c 0-3 rows \
-                 did not run"
+                "SKIP: {test}: the container has fewer than four cpus — the pinned rows did not run"
             );
-        }
+            None
+        };
         for release in [false, true] {
             let tier = if release { "release" } else { "native" };
             let Some(exe) = build(entry, dir, release) else {
@@ -627,10 +631,10 @@ mod container {
             };
             let inside = format!("/w/{}", exe.file_name().unwrap().to_string_lossy());
             rows.push((tier.to_string(), strs(&[&inside])));
-            if four {
+            if let Some(list) = &four {
                 rows.push((
-                    format!("{tier} taskset -c 0-3"),
-                    strs(&["taskset", "-c", "0-3", &inside]),
+                    format!("{tier} taskset -c {list}"),
+                    strs(&["taskset", "-c", list, &inside]),
                 ));
             }
         }
