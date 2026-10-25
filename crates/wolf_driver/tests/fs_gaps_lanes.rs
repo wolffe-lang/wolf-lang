@@ -10,7 +10,7 @@
 //! **Two places.** The rows that touch no fifo, no lock and no pipe
 //! (access, the no-follow open, the handle's record) run on the host:
 //! the checked machine and lupin under `conform-run`, the native and
-//! release binaries directly (on linux again under `taskset -c 0-3`,
+//! release binaries directly (on linux again under `taskset` on four CPUs of the allocation,
 //! wolf-lang#570). The rows that make a fifo, take a lock or fill a pipe
 //! run where a park cannot cost a host anything: on linux inside a
 //! throwaway `--network none` container of their own (the fork
@@ -31,6 +31,7 @@
 //! compile error the build step fails on, never a skip.
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -169,17 +170,6 @@ fn build(entry: &Path, dir: &Path, stem: &str, release: bool) -> Option<PathBuf>
     Some(exe)
 }
 
-/// `taskset` on linux, from PATH.
-fn taskset() -> Option<PathBuf> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("taskset"))
-        .find(|p| p.is_file())
-}
-
 /// The sibling lupin, found as `pairing.rs` finds it, or a loud skip — a
 /// failure under `WOLF_PAIRING_REQUIRE_SIBLING`.
 fn lupin_or_skip() -> Option<PathBuf> {
@@ -267,7 +257,7 @@ fn judge_lupin(entry: &Path, dir: &Path, want: &str, calls: &[&str]) {
 
 /// `entry` on every machine, on the host, in `dir`: the checked machine
 /// under `conform-run`, the native and release binaries run directly (and
-/// under `taskset -c 0-3` on linux), lupin under `conform-run`. Each
+/// under `taskset` on four CPUs of the allocation on linux), lupin under `conform-run`. Each
 /// stdout is held to `check`; the checked machine's is the one lupin is
 /// held to past the pre-mirror releases.
 fn every_lane(entry: &Path, dir: &Path, calls: &[&str], check: &dyn Fn(&str, &str)) -> String {
@@ -301,10 +291,8 @@ fn every_lane(entry: &Path, dir: &Path, calls: &[&str], check: &dyn Fn(&str, &st
             continue;
         };
         let mut runs = vec![(tier.to_string(), Command::new(&exe))];
-        if let Some(t) = taskset() {
-            let mut c = Command::new(t);
-            c.args(["-c", "0-3"]).arg(&exe);
-            runs.push((format!("{tier} taskset -c 0-3"), c));
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
+            runs.push((format!("{tier} {}", pin.label()), pin.command(&exe)));
         }
         for (lane, cmd) in runs {
             let out = run_in(cmd, dir);
@@ -560,7 +548,7 @@ impl Place {
         )
     }
 
-    /// Four cpus where `taskset -c 0-3` can be asked from inside.
+    /// Four cpus where `taskset` on four CPUs of the allocation can be asked from inside.
     fn four_cpus(&self) -> bool {
         if !cfg!(target_os = "linux") {
             return false;
@@ -577,7 +565,7 @@ const CHECKED_SECS: u32 = 60;
 
 /// `name` on every machine in the place: the checked machine under
 /// `conform-run` there, the native and release binaries (and under
-/// `taskset -c 0-3` on linux with four cpus); lupin on the host. Each
+/// `taskset` on four CPUs of the allocation on linux with four cpus); lupin on the host. Each
 /// stdout is held to `check`; a watchdog's end is the red.
 fn every_place_lane(test: &str, name: &str, calls: &[&str], check: &dyn Fn(&str, &str)) {
     let Some(place) = Place::new(test) else {
@@ -622,10 +610,16 @@ fn every_place_lane(test: &str, name: &str, calls: &[&str], check: &dyn Fn(&str,
         "REPORT checked {name}: {}",
         checked.stdout.trim_end().replace('\n', " | ")
     ));
-    let four = place.four_cpus();
-    if !four && cfg!(target_os = "linux") {
-        eprintln!("SKIP: {test}: fewer than four cpus — the taskset -c 0-3 rows did not run");
-    }
+    // The pinned rows: four of the allocation (`test_cpus`, wolf-lang#925),
+    // asked of the place's own `taskset`.
+    let four = if place.four_cpus() {
+        test_cpus::subset(4, test)
+    } else {
+        if cfg!(target_os = "linux") {
+            eprintln!("SKIP: {test}: fewer than four cpus — the pinned rows did not run");
+        }
+        None
+    };
     let stem = name.trim_end_matches(".lu");
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
@@ -634,10 +628,10 @@ fn every_place_lane(test: &str, name: &str, calls: &[&str], check: &dyn Fn(&str,
         };
         let prog = place.at(&exe.file_name().unwrap().to_string_lossy());
         let mut rows = vec![(tier.to_string(), vec![prog.clone()])];
-        if four {
+        if let Some(list) = &four {
             rows.push((
-                format!("{tier} taskset -c 0-3"),
-                vec!["taskset".into(), "-c".into(), "0-3".into(), prog.clone()],
+                format!("{tier} taskset -c {list}"),
+                vec!["taskset".into(), "-c".into(), list.clone(), prog.clone()],
             ));
         }
         for (lane, argv) in rows {
