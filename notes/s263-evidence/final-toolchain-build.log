@@ -1,0 +1,78 @@
+STEP 1/9: FROM docker.io/library/ubuntu@sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc
+STEP 2/9: RUN taskset -c 6-11 sh -c 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git build-essential clang lld python3 pkg-config libssl-dev time && rm -rf /var/lib/apt/lists/*'
+--> Using cache 3d7d20378679aabb333662d6997d98896174a138c5ce0ff1f84cb18deca3ea7c
+--> 3d7d20378679
+STEP 3/9: WORKDIR /work
+--> Using cache 27f79ef8e9503fd01143d252d66bcc5b5d502a0f8d74e3625dd8a92e9468b57b
+--> 27f79ef8e950
+STEP 4/9: RUN taskset -c 6-11 cp /usr/bin/taskset /usr/bin/taskset.real
+--> Using cache 5ea507d80450aaa857f911a6124b2c8860bf3a499d799f455e11806199b38857
+--> 5ea507d80450
+STEP 5/9: COPY taskset-shim.py /usr/lib/s263-taskset-translate.py
+--> Using cache ff8d62c55eb4e2d30da4fe83941fb003521beb9280adf31ecd34435bd46128fe
+--> ff8d62c55eb4
+STEP 6/9: COPY taskset-shim.sh /usr/bin/taskset
+--> Using cache b0db55d98ba09410c1b4eb7cbe2f07ef6719bf4b3919b0519f5d9b41a0d9a5d3
+--> b0db55d98ba0
+STEP 7/9: RUN /usr/bin/taskset.real -c 6-11 chmod 755 /usr/bin/taskset
+--> Using cache efa05c7609b9cff00daace5571f5c5c3d3f5aa99f773ad95393639f1b903f8a8
+--> efa05c7609b9
+STEP 8/9: ENV RUSTUP_HOME=/opt/s263-rustup CARGO_HOME=/opt/s263-rust
+--> 0ec9dfe1de58
+STEP 9/9: RUN /usr/bin/taskset.real -c 6-11 sh -c 'set -eu; input=$(mktemp -d); curl -fsSL https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init -o "$input/rustup-init"; curl -fsSL https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init.sha256 -o "$input/rustup-init.sha256"; expected=$(cut -d " " -f1 "$input/rustup-init.sha256"); for read in 1 2; do printf "%s  %s\n" "$expected" "$input/rustup-init" | sha256sum -c -; done; chmod 755 "$input/rustup-init"; cd /; "$input/rustup-init" -y --no-modify-path --profile minimal --default-toolchain 1.97.1; /opt/s263-rust/bin/rustup component add --toolchain 1.97.1 rustfmt clippy; /opt/s263-rust/bin/rustup target add --toolchain 1.97.1 x86_64-unknown-none; /opt/s263-rust/bin/rustc -vV; /opt/s263-rust/bin/rustup target list --installed; rm -rf "$input"'
+/tmp/tmp.ziibrAlxgB/rustup-init: OK
+/tmp/tmp.ziibrAlxgB/rustup-init: OK
+info: profile set to minimal
+info: default host tuple is x86_64-unknown-linux-gnu
+info: syncing channel updates for 1.97.1-x86_64-unknown-linux-gnu
+info: latest update on 2026-07-16 for version 1.97.1 (8bab26f4f 2026-07-14)
+info: downloading 3 components
+info: default toolchain set to 1.97.1-x86_64-unknown-linux-gnu
+
+  1.97.1-x86_64-unknown-linux-gnu installed - rustc 1.97.1 (8bab26f4f 2026-07-14)
+
+
+Rust is installed now. Great!
+
+To get started you need Cargo's bin directory (/opt/s263-rust/bin) in your PATH
+environment variable. This has not been done automatically.
+
+To configure your current shell, you need to source
+the corresponding env file under /opt/s263-rust.
+
+Consider running the right command for your shell (note the leading DOT):
+. "/opt/s263-rust/env" # For sh/ash/dash/pdksh/bash
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
+info: downloading 2 components
+info: downloading component rust-std
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+binary: rustc
+commit-hash: 8bab26f4f68e0e26f0bb7960be334d5b520ea452
+commit-date: 2026-07-14
+host: x86_64-unknown-linux-gnu
+release: 1.97.1
+LLVM version: 22.1.6
+x86_64-unknown-linux-gnu
+x86_64-unknown-none
+COMMIT localhost/s263-toolchain:final-1.97.1
+--> ed3720d72f16
+Successfully tagged localhost/s263-toolchain:final-1.97.1
+ed3720d72f16470f3115635102af8ca01e3bac48b13d02d5bab9ac4438c637c6

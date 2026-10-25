@@ -5,3 +5,7 @@ RUN taskset -c 6-11 cp /usr/bin/taskset /usr/bin/taskset.real
 COPY taskset-shim.py /usr/lib/s263-taskset-translate.py
 COPY taskset-shim.sh /usr/bin/taskset
 RUN /usr/bin/taskset.real -c 6-11 chmod 755 /usr/bin/taskset
+# Final gauntlet owns a complete pinned toolchain, including the none target.
+# No host Rust installation or read-only /nix path is modified.
+ENV RUSTUP_HOME=/opt/s263-rustup CARGO_HOME=/opt/s263-rust
+RUN /usr/bin/taskset.real -c 6-11 sh -c 'set -eu; input=$(mktemp -d); curl -fsSL https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init -o "$input/rustup-init"; curl -fsSL https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init.sha256 -o "$input/rustup-init.sha256"; expected=$(cut -d " " -f1 "$input/rustup-init.sha256"); for read in 1 2; do printf "%s  %s\n" "$expected" "$input/rustup-init" | sha256sum -c -; done; chmod 755 "$input/rustup-init"; cd /; "$input/rustup-init" -y --no-modify-path --profile minimal --default-toolchain 1.97.1; /opt/s263-rust/bin/rustup component add --toolchain 1.97.1 rustfmt clippy; /opt/s263-rust/bin/rustup target add --toolchain 1.97.1 x86_64-unknown-none; /opt/s263-rust/bin/rustc -vV; /opt/s263-rust/bin/rustup target list --installed; rm -rf "$input"'
