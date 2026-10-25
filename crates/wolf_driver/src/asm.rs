@@ -166,7 +166,7 @@ pub fn assemble(
                 && file.architecture() == arch
                 && file.kind() == object::ObjectKind::Relocatable
         });
-        if !valid {
+        if !valid && !bytes.starts_with(&[0x64, 0x86]) {
             let expected = if arch == object::Architecture::X86_64 {
                 "ELF x86-64"
             } else {
