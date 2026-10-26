@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+No changes yet.
+
+## 0.2.36 — 2026-10-26
+
+C variadics work in both directions on hosted Linux x86-64 and the
+freestanding x86-64 target, with `VaList` and the four `va_*` operations.
+The invocation name and byte-exact arguments are available through
+`env_arg0` and `env_args_bytes`. Static musl links receive those arguments
+too: the generated C entry now hands argc, argv and envp to the runtime.
+Objects and runtime must come from this release together.
+
+This release pairs with **lupin 0.1.57**, spec pin `a5378e3`, and bundles
+**wolf-std at `78b9d3c`**: the thirteen corrected ledger cells, new process
+and filesystem wrappers, in-place List helpers and `fs.read_into`.
+Lupin's new vendored corpus resolves the stale three-region-row snapshot;
+its separate List-element escape limitation remains tracked at
+wolf-interp#232.
+
+Exclusive, exact-layout, single-use internal aggregate read lends can
+forward the owner's address instead of physically snapshotting it
+(s264). Value semantics and all conservative copy boundaries remain;
+there is no new memory rule or ABI class.
+
+The four host archives now have a fifth companion asset,
+`wolf-rt-0.2.36-x86_64-unknown-linux-musl.tar.gz`, containing the musl
+runtime, not a musl compiler executable. The musl link bundle is
+`link-bundle-wolf-0.2.36` on the ligature release page. Its staged archive
+`ld02-musl-link-bundle.tar.gz` has SHA-256
+`dd09895a13d3ea4056db73d3e974f025a732391c38044094ea6fc8ed69fb54cc`;
+its `libwolf_rt.a` has SHA-256
+`3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24`.
+The archive's digest and the separately built runtime archive's digest
+are distinct identities; use each artifact's own published digest.
+
 s267 — the static entry (#962).
 
 - **A static musl link reads its arguments** (#962): a wolf program linked
