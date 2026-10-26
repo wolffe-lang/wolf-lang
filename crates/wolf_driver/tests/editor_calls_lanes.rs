@@ -168,6 +168,22 @@ fn lupin_or_skip() -> Option<PathBuf> {
     found
 }
 
+/// Only these published records retain the measured served-tree boundary.
+fn realpath_served_tree_boundary(version: &str, commit: &str) -> bool {
+    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8")]
+        .iter()
+        .any(|(v, c)| *v == version && commit.starts_with(c))
+}
+
+#[test]
+fn only_measured_realpath_boundaries_are_pinned() {
+    assert!(realpath_served_tree_boundary("0.1.56", "28547b4"));
+    assert!(realpath_served_tree_boundary("0.1.57", "fb054c8"));
+    assert!(!realpath_served_tree_boundary("0.1.57", "28547b4"));
+    assert!(!realpath_served_tree_boundary("0.1.57", "unknown"));
+    assert!(!realpath_served_tree_boundary("0.1.58", "fb054c8"));
+}
+
 /// lupin 0.1.54 and 0.1.55 stop at one of `calls`, which they do not
 /// resolve (the first s248 name each meets); a newer lupin is held to the
 /// compiler's answer.
@@ -193,8 +209,7 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
             "REPORT PINNED pre-mirror lupin {} on {name}: {}",
             obs.version, obs.reason
         ));
-    } else if name == "realpath.lu" && obs.version == "0.1.56" && obs.commit.starts_with("28547b4")
-    {
+    } else if name == "realpath.lu" && realpath_served_tree_boundary(&obs.version, &obs.commit) {
         // is79 serves canonicalization only inside its tree. This fixture
         // deliberately asks for /tmp too; do not call that an absent name.
         assert_eq!(
