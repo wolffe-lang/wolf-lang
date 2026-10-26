@@ -54,3 +54,27 @@ No release/tag by this lane. Republish the byte-verified s267 bundle as
 link-bundle-wolf-0.2.36 only on the maintainer/orchestrator's public step.
 The requested docs/releases/0.2.36.md is now explicit despite no .35 file.
 The planning repo and private configuration stay read-only.
+
+Measured pairing-table prerequisite, 2026-10-26T21:34:32.414079+00:00
+
+The first debug ci pass at 7f2160ab failed its test step on the attribute
+control: published .56 and .57 both refuse its comptime fn, while the
+measured-version table stopped at .56. This is not an environment or
+compiler regression. Full records: hasu logs/attr-probe.log; the original
+debug/chain evidence is retained in logs/attempt1/.
+
+R-r41-5 recommend extending ONLY the independently measured remaining .57
+lag entries. Six unchanged-source targets were probed individually:
+checked_tasks (2 standing gaps, #227/#230), channel payloads (21, #232),
+process calls (2 named unresolved), filesystem calls (3 old answers),
+realpath's served-tree boundary (1), signal-listen before wait (2).
+Together with the attribute control, 32 assertions expose missing .57
+posture. Each raw failed target is banked as logs/probe-<target>.log and
+records/probe-<target>.exit; no failed target is called green.
+
+Prediction after restamping: those exact 32 failures disappear with no
+production change. Identity-pinned editor refusals gain .57/fb054c8 only,
+with negative identity tests; fixed copy, row-member and noexec mirrors
+gain NO .57 waiver. Subsequent full debug/release passes remain required;
+these focused probes are not a full green. If another row differs, name
+and measure it separately rather than broadening any pin.
