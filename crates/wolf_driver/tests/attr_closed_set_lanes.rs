@@ -400,6 +400,12 @@ fn the_implemented_attributes_still_compile() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            // r41: the published .57 still refuses the same comptime fn.
+            Pin {
+                version: "0.1.57",
+                verdict: "unsupported",
+                stdout: "",
+            },
         ],
     );
 }
