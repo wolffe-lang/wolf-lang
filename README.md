@@ -24,8 +24,7 @@ page. The linux archives need **glibc 2.35 or later** (Ubuntu 22.04,
 Debian 12, Fedora 36 and later); each is built on Ubuntu 22.04 and run,
 one program per tier, on a 22.04 host before the release is published
 (#447). [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md)
-says which compiler tiers run on which host. From the release after
-0.2.35 the page also carries `wolf-rt-<version>-x86_64-unknown-linux-musl.tar.gz`:
+says which compiler tiers run on which host. From 0.2.36 the page also carries `wolf-rt-<version>-x86_64-unknown-linux-musl.tar.gz`:
 the runtime, `libwolf_rt.a`, built for musl (the recipe PAX's image uses),
 for linking wolf objects statically against musl; its digests are in the
 release notes (#935). Take the objects and the runtime from the same
@@ -43,7 +42,7 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-v0.2.35 is tagged, under the codename wolfgang.
+The current release is v0.2.36, under the codename wolfgang.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -57,14 +56,13 @@ layer: `hello.exe` builds and runs, traps report and exit 134, and
 signal delivery do not run on windows yet. [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md)
 is the per-host ledger.
 
-The development compiler supports hand-declared C variadic calls and
+From 0.2.36 the compiler supports hand-declared C variadic calls and
 exported variadic functions on Linux x86-64 and `x86_64-unknown-none`.
 `VaList` and `va_start`, `va_arg`, `va_copy`, `va_end` provide list access;
 C's `va_list` parameter is spelled `*VaList`. Other targets report E0826,
-and the checked machine refuses these calls by name. This support is
-not in the 0.2.35 release archive; build from source to use it.
+and the checked machine refuses these calls by name.
 
-The development compiler also accepts `--assembler PATH` (or `WOLF_AS`)
+The compiler also accepts `--assembler PATH` (or `WOLF_AS`)
 for assembly files listed in the root `wolf.pkg`. The flag wins over the
 environment, and failures are not retried with another tool. The default
 remains the target's C driver. Selecting an assembler does not replace the
@@ -98,7 +96,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.35 by campaign, and
+tells the history of v0.2.36 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 
