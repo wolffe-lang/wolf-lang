@@ -80,7 +80,8 @@ fn report(line: &str) {
 /// The pairing at this lane, which predates the mirror of every answer
 /// s253 adds (each pinned below by what it was measured to say).
 // r40: the published 0.1.56 archive still predates these six names.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56"];
+// r41: the published .57 retains these measured pre-mirror answers.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56", "0.1.57"];
 
 #[derive(Debug)]
 struct Obs {
