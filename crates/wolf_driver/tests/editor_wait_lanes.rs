@@ -86,10 +86,21 @@ const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[("0.1.54", "0e536e8"), ("0.1.55", "e
 /// resolve" (0.1.55 on `wait_fds_race.lu`, measured, r39).
 const LISTEN_REFUSED_BY_NAME: &[&str] = &["0.1.55"];
 
-/// r40: the published .56 resolves the wait, then both wait fixtures
+/// r40/r41: published .56 and .57 resolve the wait; both wait fixtures
 /// reach the listen, refused by name. No unlisted build inherits this pin.
 fn listen_before_wait(version: &str, commit: &str) -> bool {
-    version == "0.1.56" && commit.starts_with("28547b4")
+    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8")]
+        .iter()
+        .any(|(v, c)| *v == version && commit.starts_with(c))
+}
+
+#[test]
+fn only_measured_listen_refusals_are_pinned() {
+    assert!(listen_before_wait("0.1.56", "28547b4"));
+    assert!(listen_before_wait("0.1.57", "fb054c8"));
+    assert!(!listen_before_wait("0.1.57", "28547b4"));
+    assert!(!listen_before_wait("0.1.57", "unknown"));
+    assert!(!listen_before_wait("0.1.58", "fb054c8"));
 }
 
 /// The native or release binary of `entry`. A compile error FAILS the
