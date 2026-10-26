@@ -1,0 +1,56 @@
+r41 STOP 2 prediction, before release edits
+Measured time: 2026-10-26T21:01:24.825875+00:00
+
+Inputs re-derived:
+wolf-lang trunk ed120cb97d35b5931c8991d4efb9cf6cacb7b6b7
+wolf v0.2.35 cf0c13d38479f444b69bb8356ad5709d07eff323
+lupin v0.1.57 source fb054c8bf4fc009227d45656b34d07dc30f19960
+lupin spec identity a5378e3fd5b6347f4a89a7d77dbe43aa576fee76
+lupin v0.1.56 source 28547b4324524d5477a6e54e4f6888462461a21f
+old lupin spec identity 294d626dd596122285d5df954762e3aee3e5db71
+fixed std 78b9d3cbc41d51db44d18c40b6694403644d1c83 (not newer std trunk)
+old STD-PIN 2386522eb059cca5a84108562c2c0a0e72345d34
+tap 087cf7b7baa4cb236420c2c8b1efeca63766350f
+s267 bundle dd09895a13d3ea4056db73d3e974f025a732391c38044094ea6fc8ed69fb54cc
+  kasumi /home/mfwolffe/lanes/s267/bundle/ld02-musl-link-bundle.tar.gz
+  archive hashed twice on kasumi before any release edit
+bundle runtime 3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24
+
+The current compiler trunk additionally carries s267, as02a's assembler
+selection and ld02b's linker selection. All are included in this cut;
+the Unreleased entry, not the launch date, is the release-note authority.
+The static entry ABI is int main(int, char **, char **) and its runtime
+start call takes those three values. A matching runtime is mandatory.
+
+Predictions (to be replaced by named measurements, not green claims):
+- Four stable full-run compiler-control moves: fs/copy_chunk_failed_write
+  (s260), os/arg0 and os/args_bytes (s261), membrane/variadic_position
+  (s263 E0822 rather than E0201). Additional parse-only move:
+  membrane/variadic_declarations. Native UB exit numbers may vary; do not
+  turn them into semantic regressions. s267's corpus inputs have the same
+  protocol arguments, so no new full-run corpus movement is predicted.
+- Lupin control independently moves the old copy/row/List mirror and the
+  three List/str stale-vendoring rows. Never add .57 to pre-mirror tuples.
+  The distinct #232 seven List-element rows still need their own lag pin,
+  after replaying the published .57 bytes; negative identity tests prove
+  the new source fb054c8b is not accidentally waived as pre-mirror.
+- Fixed std has 552 tests / 552 doc examples / 1656 observations. Count is
+  unchanged at this fixed pin; every answer change gets a named record.
+- Ubuntu start-up row predicts 12 own runtime syscalls, not Arch's 23
+  (#952). No threshold or compiler change to accommodate a different rig.
+- Published sets: five wolf assets and six lupin assets, all hashed twice.
+  The fifth wolf asset is only a runtime: #887 stays open.
+- Tap continues to choose host archives, no musl-specific change.
+
+R-r41-1 A is directed: STD-PIN -> 78b9d3c.
+R-r41-2 recommend A: ignore runtime-only fifth asset in the tap.
+R-r41-3 recommend: dry release notes extract the workspace package version
+rather than Unreleased, because the release pass curates the dated entry.
+This rehearses exactly the notes that the actual tag will use. Add a
+focused wiring test; the plant restores Unreleased at a curated head and
+must fail that test in the smallest selectable plan-test CI job.
+
+No release/tag by this lane. Republish the byte-verified s267 bundle as
+link-bundle-wolf-0.2.36 only on the maintainer/orchestrator's public step.
+The requested docs/releases/0.2.36.md is now explicit despite no .35 file.
+The planning repo and private configuration stay read-only.
