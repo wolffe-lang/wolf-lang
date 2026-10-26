@@ -28,7 +28,7 @@
 #
 # THE DRY RUN. `workflow_dispatch` (any branch, `dry` true, the only kind a
 # dispatch may be) runs every build and the read-back with no tag and no
-# release: the notes come from the CHANGELOG's `## Unreleased`, every
+# release: the notes come from the workspace version's CHANGELOG entry, every
 # archive travels as a workflow artifact, and nothing is uploaded,
 # published or dispatched. A release is cut by a tag push alone.
 
@@ -74,11 +74,14 @@ jobs:
         if: github.event_name == 'push'
         shell: bash
         run: cargo xtask release-notes "${GITHUB_REF_NAME}" --out target/release-notes.md
-      # The dry run's notes: the entry the next tag will read.
-      - name: release notes from the CHANGELOG's Unreleased (dry run)
+      # Rehearse the same curated entry the matching tag will publish.
+      - name: release notes from the workspace version (dry run)
         if: github.event_name == 'workflow_dispatch'
         shell: bash
-        run: cargo xtask release-notes Unreleased --out target/release-notes.md
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          test -n "$version"
+          cargo xtask release-notes "$version" --out target/release-notes.md
       - name: keep the notes for the read-back
         uses: actions/upload-artifact@v4
         with:
