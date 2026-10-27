@@ -444,7 +444,7 @@ fn decide(
         .block_params(entry)
         .iter()
         .any(|&p| m.types.is_token(callee.value_ty(p)));
-    if has_token_params && callee.layout.len() > 1 {
+    if has_token_params && callee.layout.len() > 64 {
         return false;
     }
     // Multi-result rets join at a continuation; token finals need the
