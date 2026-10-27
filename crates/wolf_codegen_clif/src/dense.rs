@@ -136,7 +136,7 @@ pub(crate) fn find(m: &Module, f: &Function) -> HashMap<Inst, DenseMatch> {
             }
         };
         let Some(default) = default else { continue };
-        if cases.len() < 8 {
+        if cases.len() < 64 {
             continue;
         }
         let min = *cases.first_key_value().unwrap().0;
