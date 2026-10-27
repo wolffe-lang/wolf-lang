@@ -1,0 +1,79 @@
+//! Reduced witness (yw08, yew#77): a release-tier helper with effect-token
+//! parameters and more than one block is never inlined
+//! (wolf_wir/src/midend/inline.rs:22-27, decide()'s token-parameter rule),
+//! so a byte-dispatch loop that reads its operands through a bounds-checked
+//! accessor pays a call per byte. Two loops over the same 1,000,000-byte
+//! program, five passes each, identical results: through `read8`, and with
+//! the same three statements written inline. `--codegen-report` shows
+//! `read8` flagged `T` with several blocks and still a call edge of
+//! `run_calls`; `run_inline` has none.
+
+struct Vm {
+    code: List[byte],
+    ip: int,
+}
+
+fn read8(mut vm: Vm) -> int {
+    let at = vm.ip
+    vm.ip = at + 1
+    vm.code[at] as int
+}
+
+fn run_calls(mut vm: Vm) -> int {
+    var acc = 0
+    vm.ip = 0
+    while vm.ip < vm.code.len {
+        let op = read8(mut vm)
+        if op == 1 { acc += read8(mut vm) } else if op == 2 { acc -= read8(mut vm) } else { acc = acc ^ op }
+    }
+    acc
+}
+
+fn run_inline(mut vm: Vm) -> int {
+    var acc = 0
+    vm.ip = 0
+    while vm.ip < vm.code.len {
+        let op = { let at = vm.ip; vm.ip = at + 1; vm.code[at] as int }
+        if op == 1 {
+            acc += { let at = vm.ip; vm.ip = at + 1; vm.code[at] as int }
+        } else if op == 2 {
+            acc -= { let at = vm.ip; vm.ip = at + 1; vm.code[at] as int }
+        } else {
+            acc = acc ^ op
+        }
+    }
+    acc
+}
+
+fn main() -> int {
+    var code = List[byte]()
+    var x: wrapping[u64] = 88172645463325252
+    for i in 0..1000000 {
+        x = x ^ (x << 13)
+        x = x ^ (x >> 7)
+        x = x ^ (x << 17)
+        // Every operand byte follows its opcode, so both loops decode alike.
+        let b = (x % 7) as int
+        (mut code).push(if i == 999999 && (b == 1 || b == 2) then 3 as byte else b as byte)
+    }
+    var vm = Vm { code: code, ip: 0 }
+    var calls_ns = 0
+    var inline_ns = 0
+    var a = 0
+    var b = 0
+    for _ in 0..5 {
+        let t0 = os_clock_ns()
+        a = run_calls(mut vm)
+        let t1 = os_clock_ns()
+        b = run_inline(mut vm)
+        let t2 = os_clock_ns()
+        calls_ns += t1 - t0
+        inline_ns += t2 - t1
+    }
+    if a != b {
+        print("MISMATCH calls={a} inline={b}")
+        return 1
+    }
+    print("result={a} calls_ns={calls_ns} inline_ns={inline_ns} calls/inline={calls_ns * 1000 / inline_ns}/1000")
+    0
+}
