@@ -1,0 +1,19 @@
+s268 detached verification pid=3447704 started 2026-10-27T03:12:59Z
+yew container completed 2026-10-27T03:17:00Z
+s268 verification waiting for CPUs 4-7 2026-10-27T03:17:00Z
+s268 source cd60d930 (code b0b6c72a); started 2026-10-27T03:23:50Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+NoNewPrivs:	1
+Cpus_allowed_list:	4-7
+pid1 uid=0 self=1000
+991d54cf28e4f182b339d9eeb4dba7b2df3ad2618acb3bb53bddca42856b4bb9  /opt/s268-lupin
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /opt/s268-musl-rt.a
+991d54cf28e4f182b339d9eeb4dba7b2df3ad2618acb3bb53bddca42856b4bb9  /opt/s268-lupin
+3d6f821ae70ebb40d106f31c6a95ee46c0c3626d9bf230f43c1f0b8c7c26eb24  /opt/s268-musl-rt.a
+gauntlet exit=1 2026-10-27T03:28:20Z
+differ checked exit=0 2026-10-27T03:29:22Z
+differ native exit=1 2026-10-27T03:31:04Z
+differ release exit=1 2026-10-27T03:33:51Z
+kernels exit=0 2026-10-27T03:35:28Z
+s268 verification exit=1 finished 2026-10-27T03:35:28Z

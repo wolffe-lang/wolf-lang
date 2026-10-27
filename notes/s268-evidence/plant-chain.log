@@ -1,0 +1,639 @@
+   Compiling foldhash v0.2.0
+   Compiling cranelift-srcgen v0.134.3
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.189
+   Compiling libm v0.2.16
+   Compiling hashbrown v0.17.1
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling crossbeam-utils v0.8.22
+   Compiling crossbeam-epoch v0.9.20
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling cranelift-isle v0.134.3
+   Compiling crossbeam-deque v0.8.7
+   Compiling shlex v2.0.1
+   Compiling equivalent v1.0.2
+   Compiling find-msvc-tools v0.1.10
+   Compiling wolf_span v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_span)
+   Compiling cc v1.4.2
+   Compiling indexmap v2.14.0
+   Compiling heck v0.5.0
+   Compiling rayon-core v1.13.0
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling blake3 v1.8.6
+   Compiling cranelift-bitset v0.134.3
+   Compiling wolf_diag v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_diag)
+   Compiling fnv v1.0.7
+   Compiling allocator-api2 v0.2.21
+   Compiling unicode-ident v1.0.24
+   Compiling hashbrown v0.16.1
+   Compiling target-lexicon v0.13.5
+   Compiling gimli v0.33.0
+   Compiling wolf_lex v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_lex)
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling wolf_ast v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_ast)
+   Compiling log v0.4.33
+   Compiling rustc-hash v2.1.3
+   Compiling cranelift-codegen v0.134.3
+   Compiling smallvec v1.15.2
+   Compiling cpufeatures v0.3.0
+   Compiling constant_time_eq v0.4.2
+   Compiling arbitrary v1.4.2
+   Compiling arrayref v0.3.9
+   Compiling either v1.17.0
+   Compiling arrayvec v0.7.8
+   Compiling rayon v1.12.0
+   Compiling cranelift-control v0.134.3
+   Compiling regalloc2 v0.15.2
+   Compiling wolf_parse v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_parse)
+   Compiling cranelift-bforest v0.134.3
+   Compiling anyhow v1.0.104
+   Compiling crc32fast v1.5.0
+   Compiling wolf_sema v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_sema)
+   Compiling getrandom v0.4.3
+   Compiling rustix v1.1.4
+   Compiling object v0.39.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.1
+   Compiling memchr v2.8.3
+   Compiling wolf_mem v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_mem)
+   Compiling fastrand v2.5.0
+   Compiling once_cell v1.21.4
+   Compiling wolf_rt v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_rt)
+   Compiling tempfile v3.27.0
+   Compiling wolf_wir v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_wir)
+   Compiling console v0.16.4
+   Compiling similar v2.7.0
+   Compiling insta v1.48.0
+   Compiling wolf_backend v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_backend)
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.35 (/home/mfwolffe/lanes/s268/plant-chain/crates/wolf_codegen_clif)
+    Finished `test` profile [unoptimized] target(s) in 20.41s
+     Running tests/dense_match.rs (/home/mfwolffe/lanes/s268/plant-chain/target/debug/deps/dense_match-a98526828f10ee78)
+
+running 1 test
+
+thread 'dense_integer_chain_emits_one_bounded_table' (2848) panicked at crates/wolf_codegen_clif/tests/dense_match.rs:45:5:
+assertion `left == right` failed: dense match must not remain a chain: function u0:0(i64) -> i64 system_v {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp eq v0, v1  ; v1 = 0
+    brif v2, block1, block2
+
+block1:
+    v3 = iconst.i64 0
+    return v3  ; v3 = 0
+
+block2:
+    v4 = iconst.i64 1
+    v5 = icmp.i64 eq v0, v4  ; v4 = 1
+    brif v5, block3, block4
+
+block3:
+    v6 = iconst.i64 1
+    return v6  ; v6 = 1
+
+block4:
+    v7 = iconst.i64 2
+    v8 = icmp.i64 eq v0, v7  ; v7 = 2
+    brif v8, block5, block6
+
+block5:
+    v9 = iconst.i64 2
+    return v9  ; v9 = 2
+
+block6:
+    v10 = iconst.i64 3
+    v11 = icmp.i64 eq v0, v10  ; v10 = 3
+    brif v11, block7, block8
+
+block7:
+    v12 = iconst.i64 3
+    return v12  ; v12 = 3
+
+block8:
+    v13 = iconst.i64 4
+    v14 = icmp.i64 eq v0, v13  ; v13 = 4
+    brif v14, block9, block10
+
+block9:
+    v15 = iconst.i64 4
+    return v15  ; v15 = 4
+
+block10:
+    v16 = iconst.i64 5
+    v17 = icmp.i64 eq v0, v16  ; v16 = 5
+    brif v17, block11, block12
+
+block11:
+    v18 = iconst.i64 5
+    return v18  ; v18 = 5
+
+block12:
+    v19 = iconst.i64 6
+    v20 = icmp.i64 eq v0, v19  ; v19 = 6
+    brif v20, block13, block14
+
+block13:
+    v21 = iconst.i64 6
+    return v21  ; v21 = 6
+
+block14:
+    v22 = iconst.i64 7
+    v23 = icmp.i64 eq v0, v22  ; v22 = 7
+    brif v23, block15, block16
+
+block15:
+    v24 = iconst.i64 7
+    return v24  ; v24 = 7
+
+block16:
+    v25 = iconst.i64 8
+    v26 = icmp.i64 eq v0, v25  ; v25 = 8
+    brif v26, block17, block18
+
+block17:
+    v27 = iconst.i64 8
+    return v27  ; v27 = 8
+
+block18:
+    v28 = iconst.i64 9
+    v29 = icmp.i64 eq v0, v28  ; v28 = 9
+    brif v29, block19, block20
+
+block19:
+    v30 = iconst.i64 9
+    return v30  ; v30 = 9
+
+block20:
+    v31 = iconst.i64 10
+    v32 = icmp.i64 eq v0, v31  ; v31 = 10
+    brif v32, block21, block22
+
+block21:
+    v33 = iconst.i64 10
+    return v33  ; v33 = 10
+
+block22:
+    v34 = iconst.i64 11
+    v35 = icmp.i64 eq v0, v34  ; v34 = 11
+    brif v35, block23, block24
+
+block23:
+    v36 = iconst.i64 11
+    return v36  ; v36 = 11
+
+block24:
+    v37 = iconst.i64 12
+    v38 = icmp.i64 eq v0, v37  ; v37 = 12
+    brif v38, block25, block26
+
+block25:
+    v39 = iconst.i64 12
+    return v39  ; v39 = 12
+
+block26:
+    v40 = iconst.i64 13
+    v41 = icmp.i64 eq v0, v40  ; v40 = 13
+    brif v41, block27, block28
+
+block27:
+    v42 = iconst.i64 13
+    return v42  ; v42 = 13
+
+block28:
+    v43 = iconst.i64 14
+    v44 = icmp.i64 eq v0, v43  ; v43 = 14
+    brif v44, block29, block30
+
+block29:
+    v45 = iconst.i64 14
+    return v45  ; v45 = 14
+
+block30:
+    v46 = iconst.i64 15
+    v47 = icmp.i64 eq v0, v46  ; v46 = 15
+    brif v47, block31, block32
+
+block31:
+    v48 = iconst.i64 15
+    return v48  ; v48 = 15
+
+block32:
+    v49 = iconst.i64 16
+    v50 = icmp.i64 eq v0, v49  ; v49 = 16
+    brif v50, block33, block34
+
+block33:
+    v51 = iconst.i64 16
+    return v51  ; v51 = 16
+
+block34:
+    v52 = iconst.i64 17
+    v53 = icmp.i64 eq v0, v52  ; v52 = 17
+    brif v53, block35, block36
+
+block35:
+    v54 = iconst.i64 17
+    return v54  ; v54 = 17
+
+block36:
+    v55 = iconst.i64 18
+    v56 = icmp.i64 eq v0, v55  ; v55 = 18
+    brif v56, block37, block38
+
+block37:
+    v57 = iconst.i64 18
+    return v57  ; v57 = 18
+
+block38:
+    v58 = iconst.i64 19
+    v59 = icmp.i64 eq v0, v58  ; v58 = 19
+    brif v59, block39, block40
+
+block39:
+    v60 = iconst.i64 19
+    return v60  ; v60 = 19
+
+block40:
+    v61 = iconst.i64 20
+    v62 = icmp.i64 eq v0, v61  ; v61 = 20
+    brif v62, block41, block42
+
+block41:
+    v63 = iconst.i64 20
+    return v63  ; v63 = 20
+
+block42:
+    v64 = iconst.i64 21
+    v65 = icmp.i64 eq v0, v64  ; v64 = 21
+    brif v65, block43, block44
+
+block43:
+    v66 = iconst.i64 21
+    return v66  ; v66 = 21
+
+block44:
+    v67 = iconst.i64 22
+    v68 = icmp.i64 eq v0, v67  ; v67 = 22
+    brif v68, block45, block46
+
+block45:
+    v69 = iconst.i64 22
+    return v69  ; v69 = 22
+
+block46:
+    v70 = iconst.i64 23
+    v71 = icmp.i64 eq v0, v70  ; v70 = 23
+    brif v71, block47, block48
+
+block47:
+    v72 = iconst.i64 23
+    return v72  ; v72 = 23
+
+block48:
+    v73 = iconst.i64 24
+    v74 = icmp.i64 eq v0, v73  ; v73 = 24
+    brif v74, block49, block50
+
+block49:
+    v75 = iconst.i64 24
+    return v75  ; v75 = 24
+
+block50:
+    v76 = iconst.i64 25
+    v77 = icmp.i64 eq v0, v76  ; v76 = 25
+    brif v77, block51, block52
+
+block51:
+    v78 = iconst.i64 25
+    return v78  ; v78 = 25
+
+block52:
+    v79 = iconst.i64 26
+    v80 = icmp.i64 eq v0, v79  ; v79 = 26
+    brif v80, block53, block54
+
+block53:
+    v81 = iconst.i64 26
+    return v81  ; v81 = 26
+
+block54:
+    v82 = iconst.i64 27
+    v83 = icmp.i64 eq v0, v82  ; v82 = 27
+    brif v83, block55, block56
+
+block55:
+    v84 = iconst.i64 27
+    return v84  ; v84 = 27
+
+block56:
+    v85 = iconst.i64 28
+    v86 = icmp.i64 eq v0, v85  ; v85 = 28
+    brif v86, block57, block58
+
+block57:
+    v87 = iconst.i64 28
+    return v87  ; v87 = 28
+
+block58:
+    v88 = iconst.i64 29
+    v89 = icmp.i64 eq v0, v88  ; v88 = 29
+    brif v89, block59, block60
+
+block59:
+    v90 = iconst.i64 29
+    return v90  ; v90 = 29
+
+block60:
+    v91 = iconst.i64 30
+    v92 = icmp.i64 eq v0, v91  ; v91 = 30
+    brif v92, block61, block62
+
+block61:
+    v93 = iconst.i64 30
+    return v93  ; v93 = 30
+
+block62:
+    v94 = iconst.i64 31
+    v95 = icmp.i64 eq v0, v94  ; v94 = 31
+    brif v95, block63, block64
+
+block63:
+    v96 = iconst.i64 31
+    return v96  ; v96 = 31
+
+block64:
+    v97 = iconst.i64 32
+    v98 = icmp.i64 eq v0, v97  ; v97 = 32
+    brif v98, block65, block66
+
+block65:
+    v99 = iconst.i64 32
+    return v99  ; v99 = 32
+
+block66:
+    v100 = iconst.i64 33
+    v101 = icmp.i64 eq v0, v100  ; v100 = 33
+    brif v101, block67, block68
+
+block67:
+    v102 = iconst.i64 33
+    return v102  ; v102 = 33
+
+block68:
+    v103 = iconst.i64 34
+    v104 = icmp.i64 eq v0, v103  ; v103 = 34
+    brif v104, block69, block70
+
+block69:
+    v105 = iconst.i64 34
+    return v105  ; v105 = 34
+
+block70:
+    v106 = iconst.i64 35
+    v107 = icmp.i64 eq v0, v106  ; v106 = 35
+    brif v107, block71, block72
+
+block71:
+    v108 = iconst.i64 35
+    return v108  ; v108 = 35
+
+block72:
+    v109 = iconst.i64 36
+    v110 = icmp.i64 eq v0, v109  ; v109 = 36
+    brif v110, block73, block74
+
+block73:
+    v111 = iconst.i64 36
+    return v111  ; v111 = 36
+
+block74:
+    v112 = iconst.i64 37
+    v113 = icmp.i64 eq v0, v112  ; v112 = 37
+    brif v113, block75, block76
+
+block75:
+    v114 = iconst.i64 37
+    return v114  ; v114 = 37
+
+block76:
+    v115 = iconst.i64 38
+    v116 = icmp.i64 eq v0, v115  ; v115 = 38
+    brif v116, block77, block78
+
+block77:
+    v117 = iconst.i64 38
+    return v117  ; v117 = 38
+
+block78:
+    v118 = iconst.i64 39
+    v119 = icmp.i64 eq v0, v118  ; v118 = 39
+    brif v119, block79, block80
+
+block79:
+    v120 = iconst.i64 39
+    return v120  ; v120 = 39
+
+block80:
+    v121 = iconst.i64 40
+    v122 = icmp.i64 eq v0, v121  ; v121 = 40
+    brif v122, block81, block82
+
+block81:
+    v123 = iconst.i64 40
+    return v123  ; v123 = 40
+
+block82:
+    v124 = iconst.i64 41
+    v125 = icmp.i64 eq v0, v124  ; v124 = 41
+    brif v125, block83, block84
+
+block83:
+    v126 = iconst.i64 41
+    return v126  ; v126 = 41
+
+block84:
+    v127 = iconst.i64 42
+    v128 = icmp.i64 eq v0, v127  ; v127 = 42
+    brif v128, block85, block86
+
+block85:
+    v129 = iconst.i64 42
+    return v129  ; v129 = 42
+
+block86:
+    v130 = iconst.i64 43
+    v131 = icmp.i64 eq v0, v130  ; v130 = 43
+    brif v131, block87, block88
+
+block87:
+    v132 = iconst.i64 43
+    return v132  ; v132 = 43
+
+block88:
+    v133 = iconst.i64 44
+    v134 = icmp.i64 eq v0, v133  ; v133 = 44
+    brif v134, block89, block90
+
+block89:
+    v135 = iconst.i64 44
+    return v135  ; v135 = 44
+
+block90:
+    v136 = iconst.i64 45
+    v137 = icmp.i64 eq v0, v136  ; v136 = 45
+    brif v137, block91, block92
+
+block91:
+    v138 = iconst.i64 45
+    return v138  ; v138 = 45
+
+block92:
+    v139 = iconst.i64 46
+    v140 = icmp.i64 eq v0, v139  ; v139 = 46
+    brif v140, block93, block94
+
+block93:
+    v141 = iconst.i64 46
+    return v141  ; v141 = 46
+
+block94:
+    v142 = iconst.i64 47
+    v143 = icmp.i64 eq v0, v142  ; v142 = 47
+    brif v143, block95, block96
+
+block95:
+    v144 = iconst.i64 47
+    return v144  ; v144 = 47
+
+block96:
+    v145 = iconst.i64 48
+    v146 = icmp.i64 eq v0, v145  ; v145 = 48
+    brif v146, block97, block98
+
+block97:
+    v147 = iconst.i64 48
+    return v147  ; v147 = 48
+
+block98:
+    v148 = iconst.i64 49
+    v149 = icmp.i64 eq v0, v148  ; v148 = 49
+    brif v149, block99, block100
+
+block99:
+    v150 = iconst.i64 49
+    return v150  ; v150 = 49
+
+block100:
+    v151 = iconst.i64 50
+    v152 = icmp.i64 eq v0, v151  ; v151 = 50
+    brif v152, block101, block102
+
+block101:
+    v153 = iconst.i64 50
+    return v153  ; v153 = 50
+
+block102:
+    v154 = iconst.i64 51
+    v155 = icmp.i64 eq v0, v154  ; v154 = 51
+    brif v155, block103, block104
+
+block103:
+    v156 = iconst.i64 51
+    return v156  ; v156 = 51
+
+block104:
+    v157 = iconst.i64 52
+    v158 = icmp.i64 eq v0, v157  ; v157 = 52
+    brif v158, block105, block106
+
+block105:
+    v159 = iconst.i64 52
+    return v159  ; v159 = 52
+
+block106:
+    v160 = iconst.i64 53
+    v161 = icmp.i64 eq v0, v160  ; v160 = 53
+    brif v161, block107, block108
+
+block107:
+    v162 = iconst.i64 53
+    return v162  ; v162 = 53
+
+block108:
+    v163 = iconst.i64 54
+    v164 = icmp.i64 eq v0, v163  ; v163 = 54
+    brif v164, block109, block110
+
+block109:
+    v165 = iconst.i64 54
+    return v165  ; v165 = 54
+
+block110:
+    v166 = iconst.i64 55
+    v167 = icmp.i64 eq v0, v166  ; v166 = 55
+    brif v167, block111, block112
+
+block111:
+    v168 = iconst.i64 55
+    return v168  ; v168 = 55
+
+block112:
+    v169 = iconst.i64 56
+    v170 = icmp.i64 eq v0, v169  ; v169 = 56
+    brif v170, block113, block114
+
+block113:
+    v171 = iconst.i64 56
+    return v171  ; v171 = 56
+
+block114:
+    v172 = iconst.i64 57
+    v173 = icmp.i64 eq v0, v172  ; v172 = 57
+    brif v173, block115, block116
+
+block115:
+    v174 = iconst.i64 57
+    return v174  ; v174 = 57
+
+block116:
+    v175 = iconst.i64 58
+    v176 = icmp.i64 eq v0, v175  ; v175 = 58
+    brif v176, block117, block118
+
+block117:
+    v177 = iconst.i64 58
+    return v177  ; v177 = 58
+
+block118:
+    v178 = iconst.i64 59
+    v179 = icmp.i64 eq v0, v178  ; v178 = 59
+    brif v179, block119, block120
+
+block119:
+    v180 = iconst.i64 59
+    return v180  ; v180 = 59
+
+block120:
+    v181 = iconst.i64 -1
+    return v181  ; v181 = -1
+}
+
+  left: 0
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test dense_integer_chain_emits_one_bounded_table ... FAILED
+
+failures:
+
+failures:
+    dense_integer_chain_emits_one_bounded_table
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p wolf_codegen_clif --test dense_match`

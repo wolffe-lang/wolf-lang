@@ -1,0 +1,66 @@
+chain plant status=101
+test dense_integer_chain_emits_one_bounded_table ... FAILED
+token plant status=101
+   Compiling crossbeam-utils v0.8.22
+   Compiling libc v0.2.189
+   Compiling crossbeam-epoch v0.9.20
+   Compiling shlex v2.0.1
+   Compiling cfg-if v1.0.4
+   Compiling find-msvc-tools v0.1.10
+   Compiling crossbeam-deque v0.8.7
+   Compiling wolf_span v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_span)
+   Compiling cc v1.4.2
+   Compiling rayon-core v1.13.0
+   Compiling wolf_diag v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_diag)
+   Compiling unicode-ident v1.0.24
+   Compiling wolf_lex v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_lex)
+   Compiling wolf_ast v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_ast)
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling either v1.17.0
+   Compiling getrandom v0.4.3
+   Compiling blake3 v1.8.6
+   Compiling rustix v1.1.4
+   Compiling arrayref v0.3.9
+   Compiling cpufeatures v0.3.0
+   Compiling rayon v1.12.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling wolf_parse v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_parse)
+   Compiling bitflags v2.13.1
+   Compiling fastrand v2.5.0
+   Compiling once_cell v1.21.4
+   Compiling console v0.16.4
+   Compiling similar v2.7.0
+   Compiling wolf_sema v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_sema)
+   Compiling tempfile v3.27.0
+   Compiling insta v1.48.0
+   Compiling wolf_mem v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_mem)
+   Compiling wolf_wir v0.2.35 (/home/mfwolffe/lanes/s268/plant-token/crates/wolf_wir)
+    Finished `test` profile [unoptimized] target(s) in 11.68s
+     Running tests/token_inline.rs (/home/mfwolffe/lanes/s268/plant-token/target/debug/deps/token_inline-ace0c487874984ea)
+
+running 2 tests
+
+thread 'multi_return_token_cfg_stays_out_of_line' (3455) panicked at crates/wolf_wir/src/midend/inline.rs:693:9:
+assertion `left == right` failed: multi-ret token callees are rejected at decide()
+  left: 2
+ right: 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test multi_return_token_cfg_stays_out_of_line ... FAILED
+
+thread 'single_return_token_cfg_stays_out_of_line' (3456) panicked at crates/wolf_wir/tests/token_inline.rs:49:64:
+token finals remain valid: VerifyError { class: TokenOrder, func: "caller", msg: "token %5 is read by b5: `%14 = load.i64 %0, %5` after being consumed by b1: `br %4, b2(%5), b3(%5)` — no live token, no loads", dump: "fn @caller(mut ptr, bool, mem.r1) -> i64 {\nb0(%0: ptr, %1: bool, %2: mem.r1):\n  jmp b1(%0, %1, %2)\nb1(%3: ptr, %4: bool, %5: mem.r1):\n  br %4, b2(%5), b3(%5)\nb2(%6: mem.r1):\n  %7 = iconst.i64 11\n  %8 = store.i64 %7, %3, %6\n  jmp b4(%7, %8)\nb3(%9: mem.r1):\n  %10 = iconst.i64 22\n  %11 = store.i64 %10, %3, %9\n  jmp b4(%10, %11)\nb4(%12: i64, %13: mem.r1):\n  jmp b5\nb5:\n  %14 = load.i64 %0, %5\n  ret %14\n}\n" }
+test single_return_token_cfg_stays_out_of_line ... FAILED
+
+failures:
+
+failures:
+    multi_return_token_cfg_stays_out_of_line
+    single_return_token_cfg_stays_out_of_line
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p wolf_wir --test token_inline`
+test single_return_token_cfg_stays_out_of_line ... FAILED
+test multi_return_token_cfg_stays_out_of_line ... FAILED
+both plants red by name

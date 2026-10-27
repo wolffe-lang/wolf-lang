@@ -1,0 +1,412 @@
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	﻿2026-10-27T03:06:06.1268482Z ##[group]Run cargo xtask ci
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1268715Z ^[[36;1mcargo xtask ci^[[0m
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1301653Z shell: /usr/bin/bash -e {0}
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1301885Z env:
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1302071Z   CARGO_TERM_COLOR: always
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1302252Z   PROPTEST_CASES: 256
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1302640Z   LUPIN: /home/runner/work/wolf-lang/wolf-lang/.lupin/lupin
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1302900Z   WOLF_PAIRING_REQUIRE_SIBLING: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1303094Z   WOLF_SYSCALL_REQUIRE_STRACE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1303294Z   WOLF_INTERRUPT_REQUIRE_QEMU: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1303483Z   WOLF_RT_NONE_REQUIRE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1303676Z   WOLF_IDS_REQUIRE_CONTAINER: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1303858Z   WOLF_IDS_ENGINE: docker
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1304036Z   WOLF_GROUP_REQUIRE_CONTAINER: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1304232Z   WOLF_GROUP_ENGINE: docker
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1304413Z   WOLF_JOBWAIT_REQUIRE_CONTAINER: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1304610Z   WOLF_JOBWAIT_ENGINE: docker
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1304796Z   WOLF_CORE_REQUIRE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1305000Z   WOLF_FORK_REQUIRE_CONTAINER: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1305219Z   WOLF_FORK_ENGINE: docker
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1305396Z   WOLF_TEST_NATIVE_REQUIRE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1305731Z   WOLF_STATIC_ENTRY_REQUIRE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1305926Z   CARGO_HOME: /home/runner/.cargo
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1306114Z   CARGO_INCREMENTAL: 0
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1306290Z   CACHE_ON_FAILURE: false
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1306593Z   WOLF_STATIC_ENTRY_SYSROOT: /home/runner/work/wolf-lang/wolf-lang/target/static-entry-bundle/sysroot
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1307111Z   WOLF_STATIC_ENTRY_MUSL_RT: /home/runner/work/wolf-lang/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1307571Z   WOLF_TEST_CLEF: /home/runner/work/wolf-lang/wolf-lang/target/test-clef/target/clef
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1307861Z   WOLF_TEST_CLEF_REQUIRE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1308199Z   WOLF_TEST_LIGATURE_RT: /home/runner/work/wolf-lang/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1308683Z   LIGATURE_SYSROOT: /home/runner/work/wolf-lang/wolf-lang/target/static-entry-bundle/sysroot
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1309099Z   WOLF_TEST_LIGATURE: /home/runner/work/wolf-lang/wolf-lang/target/test-ligature/target/ligature
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1309411Z   WOLF_TEST_LIGATURE_REQUIRE: 1
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1309593Z ##[endgroup]
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:06.1795940Z == xtask ci: fmt
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:08.3487875Z == xtask ci: fmt-fixpoint
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:09.6271054Z dist: wolf-std 2386522eb059cca5a84108562c2c0a0e72345d34 fetched from https://github.com/wolffe-lang/wolf-std.git
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:15.9419040Z fmt-fixpoint: 1306 file(s) formatted twice — 1228 corpus, 55 std (wolf-std 2386522eb0), 23 fmt regressions, 0 named — every one a fixed point
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:15.9419885Z == xtask ci: clippy
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.1498129Z ^[[1m^[[92m    Checking^[[0m wolf_span v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_span)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.1543410Z ^[[1m^[[92m    Checking^[[0m wolf_rt v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_rt)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.1632007Z ^[[1m^[[92m    Checking^[[0m xtask v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/xtask)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.1632878Z ^[[1m^[[92m    Checking^[[0m wolf_rt_none v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_rt_none)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.2037457Z ^[[1m^[[92m    Checking^[[0m wolf_diag v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_diag)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.2556221Z ^[[1m^[[92m    Checking^[[0m wolf_ast v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_ast)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.4161230Z ^[[1m^[[92m    Checking^[[0m wolf_lex v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_lex)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.4803774Z ^[[1m^[[92m    Checking^[[0m wolf_cimport v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_cimport)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.6283701Z ^[[1m^[[92m    Checking^[[0m wolf_parse v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_parse)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:16.9903681Z ^[[1m^[[92m    Checking^[[0m wolf_sema v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_sema)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:17.0237583Z ^[[1m^[[92m    Checking^[[0m wolf_fmt v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_fmt)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:17.0441279Z ^[[1m^[[92m    Checking^[[0m wolf_pkg v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_pkg)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:20.5475488Z ^[[1m^[[92m    Checking^[[0m wolf_mem v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_mem)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:20.6684056Z ^[[1m^[[92m    Checking^[[0m wolf_query v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_query)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:21.1623808Z ^[[1m^[[92m    Checking^[[0m wolf_lsp v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_lsp)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:21.1673629Z ^[[1m^[[92m    Checking^[[0m wolf_doc v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_doc)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:23.6864631Z ^[[1m^[[92m    Checking^[[0m wolf_wir v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_wir)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:27.2696570Z ^[[1m^[[92m    Checking^[[0m wolf_backend v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_backend)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:27.5532753Z ^[[1m^[[92m    Checking^[[0m wolf_codegen_clif v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_codegen_clif)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:27.6163902Z ^[[1m^[[92m    Checking^[[0m wolf_codegen_llvm v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_codegen_llvm)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:28.2194364Z ^[[1m^[[92m    Checking^[[0m wolf_driver v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_driver)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:33.2624999Z ^[[1m^[[92m    Finished^[[0m `dev` profile [unoptimized + debuginfo] target(s) in 17.30s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:33.4477113Z == xtask ci: rt-none
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.2640740Z rt-none: target/x86_64-unknown-none/release/libwolf_rt_none.a
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.2641987Z == xtask ci: test
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.3939715Z ^[[1m^[[92m   Compiling^[[0m wolf_backend v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_backend)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.4004705Z ^[[1m^[[92m   Compiling^[[0m xtask v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/xtask)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.4005835Z ^[[1m^[[92m   Compiling^[[0m wolf_rt_none v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_rt_none)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.4007029Z ^[[1m^[[92m   Compiling^[[0m wolf_lex v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_lex)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.6405864Z ^[[1m^[[92m   Compiling^[[0m wolf_span v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_span)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:34.8584203Z ^[[1m^[[92m   Compiling^[[0m wolf_codegen_clif v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_codegen_clif)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:35.2144248Z ^[[1m^[[92m   Compiling^[[0m wolf_codegen_llvm v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_codegen_llvm)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:37.2836385Z ^[[1m^[[92m   Compiling^[[0m wolf_driver v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_driver)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:06:59.0696773Z ^[[1m^[[92m   Compiling^[[0m wolf_fmt v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_fmt)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:00.2114807Z ^[[1m^[[92m   Compiling^[[0m wolf_lsp v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_lsp)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:00.2894260Z ^[[1m^[[92m   Compiling^[[0m wolf_parse v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_parse)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:00.3143828Z ^[[1m^[[92m   Compiling^[[0m wolf_wir v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_wir)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:00.4204430Z ^[[1m^[[92m   Compiling^[[0m wolf_mem v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_mem)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:00.7664141Z ^[[1m^[[92m   Compiling^[[0m wolf_sema v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_sema)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:06.3710253Z ^[[1m^[[92m   Compiling^[[0m wolf_cimport v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_cimport)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:08.8404055Z ^[[1m^[[92m   Compiling^[[0m wolf_doc v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_doc)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:09.1751314Z ^[[1m^[[92m   Compiling^[[0m wolf_diag v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_diag)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:13.3870039Z ^[[1m^[[92m   Compiling^[[0m wolf_pkg v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_pkg)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:29.0724832Z ^[[1m^[[92m   Compiling^[[0m wolf_query v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_query)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:29.9463048Z ^[[1m^[[92m   Compiling^[[0m wolf_rt v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_rt)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:31.9320312Z ^[[1m^[[92m   Compiling^[[0m wolf_ast v0.2.35 (/home/runner/work/wolf-lang/wolf-lang/crates/wolf_ast)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:35.4696859Z ^[[1m^[[92m    Finished^[[0m `test` profile [unoptimized + debuginfo] target(s) in 1m 01s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1649811Z ^[[1m^[[92m     Running^[[0m unittests src/lib.rs (target/debug/deps/wolf_ast-2fcf1f375635cdd6)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1657171Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1657455Z running 7 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1660110Z test atomic::tests::the_admitted_orders ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1660614Z test atomic::tests::marks_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1661354Z test kind::tests::token_node_partition ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1661910Z test green::tests::text_reassembles_trivia_and_tokens_in_order ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1662288Z test verify::tests::accepts_a_tiling_tree ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1670730Z test verify::tests::rejects_gaps_and_bad_spans ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1671096Z test verify::tests::rejects_kind_partition_violations ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1671317Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1671744Z ^[[1m^[[92m     Running^[[0m tests/keyword_block.rs (target/debug/deps/keyword_block-4184b38f1d44cedf)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1672301Z test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1672728Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1672742Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1672830Z running 1 test
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1676481Z test every_keyword_kind_is_inside_the_run_and_nothing_else_is ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1676747Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1676914Z test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1677139Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1678822Z ^[[1m^[[92m     Running^[[0m unittests src/lib.rs (target/debug/deps/wolf_backend-a2bee5605a59e1ac)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1686694Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1686912Z running 48 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1688844Z test abi::tests::a_module_named_c_is_not_the_membrane ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1689314Z test abi::tests::apple_arm64_sret_consumes_no_argument_register ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1689862Z test abi::tests::apple_arm64_hfa_and_gp_classification ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1690360Z test abi::tests::apple_arm64_register_exhaustion_refuses_by_shape ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1690810Z test abi::tests::c_aggregates_revert_wholesale_when_registers_exhaust ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1691290Z test abi::tests::eu_returns_put_the_discriminant_in_the_first_int_register ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1691738Z test abi::tests::convention_version_participates_in_mangling ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1692171Z test abi::tests::exhausted_scalar_bank_does_not_demote_other_class_aggregate ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1692780Z test abi::tests::the_c_namespace_is_the_membrane ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1693200Z test abi::tests::scalars_pass_direct_and_tokens_erase ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1693683Z test abi::tests::small_aggregates_scalarize_with_sysv_classes ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1694466Z test abi::tests::three_eightbytes_are_memory_class ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1694927Z test abi::variadic::tests::hidden_sret_precedes_named_arguments_and_tokens_erase ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1697404Z test abi::tests::win64_scalars_direct_and_aggregates_refused_by_shape ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1698121Z test abi::variadic::tests::mixed_aggregate_rollback_preserves_the_other_bank ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1698690Z test abi::variadic::tests::independent_banks_overflow_and_named_vector_count ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1699174Z test abi::variadic::tests::named_overflow_is_not_the_whole_stack_area ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1699626Z test abi::variadic::tests::offsets_match_the_psabi_record_and_full_save_area ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1700443Z test abi::variadic::x64::tests::tail_shims_set_the_entire_eax_and_preserve_the_stack ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1701063Z test abi::variadic::x64::tests::save_area_is_complete_before_scratch_or_named_stack_copy ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1701546Z test dwarf::tests::line_col_is_one_based ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1701891Z test dwarf::tests::synthetic_functions_are_skipped ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1702474Z test abi::variadic::tests::trampoline_frame_keeps_context_save_area_and_return_address_disjoint ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1703123Z test dwarf::tests::deterministic_output ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1703588Z test layout::tests::eu_layout_tag_first ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1704149Z test dwarf::tests::emits_line_and_info_sections_with_relocs ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1704677Z test layout::tests::tokens_have_no_layout ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1706369Z test layout::tests::scalar_and_agg_layout ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1706881Z test layout::tests::union_is_the_widest_member_at_the_strictest_alignment ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1710145Z test read_lend::tests::counts_uses_on_branch_edges ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1714515Z test read_lend::tests::does_not_change_take_or_external_calls ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1715297Z test read_lend::tests::does_not_lend_into_a_call_with_a_mut_argument ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1719785Z test read_lend::tests::keeps_a_snapshot_across_an_intervening_write ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1720247Z test read_lend::tests::keeps_a_snapshot_across_an_opaque_call ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1720649Z test read_lend::tests::keeps_a_snapshot_used_again_after_the_call ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1721104Z test read_lend::tests::keeps_a_snapshot_when_fields_span_a_write ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1721538Z test read_lend::tests::keeps_a_snapshot_without_exclusive_provenance ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1721873Z test read_lend::tests::keeps_reordered_fields ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1722173Z test read_lend::tests::lends_nested_aggregates_with_matching_layout ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1722668Z test target::tests::every_runtime_family_has_a_surface_name ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1723071Z test target::tests::the_flag_names_the_freestanding_target_or_the_host ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1723460Z test target::tests::the_freestanding_runtime_carries_the_allocating_families_only ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1723819Z test target::tests::the_message_names_the_construct_and_the_target ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1724167Z test read_lend::tests::lends_the_exclusive_address_until_the_read_call_returns ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1724472Z test tests::mangling_folds_the_module_path ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1724732Z test read_lend::tests::keeps_small_register_arguments ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1725026Z test tests::mangling_is_deterministic_and_distinguishes_sigs ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1725302Z test tests::null_backend_implements_the_trait ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1725457Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1725638Z test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1725862Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1727311Z ^[[1m^[[92m     Running^[[0m unittests src/lib.rs (target/debug/deps/wolf_cimport-4d0fa6649278e9e8)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1734592Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1734700Z running 83 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1738324Z test artifact::tests::refusals_are_counted_not_hidden ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1738957Z test artifact::tests::lookup_needs_canonical_order ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1739463Z test artifact::tests::a_refused_decl_leaves_its_siblings_usable ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1740480Z test cache::tests::every_input_moves_the_key ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1741038Z test cache::tests::header_order_matters_but_define_order_does_not ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1741559Z test cache::tests::include_path_order_matters ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1741985Z test cache::tests::the_key_is_stable ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1742748Z test ctype::tests::char_signedness_follows_the_target ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1743367Z test ctype::tests::long_is_not_one_type_across_targets ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1744144Z test ctype::tests::interning_is_structural_and_stable ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1744696Z test ctype::tests::recursive_types_spell_without_looping ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1745312Z test ctype::tests::spelling_is_c_syntax ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1745832Z test ctype::tests::unknown_triples_are_refused_not_guessed ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1748718Z test dump::tests::dump_is_deterministic ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1749258Z test dump::tests::dump_survives_the_binary_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1749780Z test dump::tests::every_refusal_appears_by_name ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1750283Z test dump::tests::the_sample_exercises_a_union ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1750832Z test encode::tests::a_stale_format_version_is_refused_not_misread ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1751410Z test encode::tests::encoding_is_byte_deterministic ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1765733Z test encode::tests::foreign_bytes_are_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1766793Z test encode::tests::round_trips_a_full_artifact ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1767493Z test map::tests::c_int_maps_to_i32_not_to_wolf_int ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1775838Z test cache::tests::cache_round_trips_through_disk ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1776617Z test map::tests::internal_linkage_is_not_callable ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1777458Z test map::tests::long_double_is_refused_not_rounded ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1778182Z test map::tests::size_t_maps_to_uint_on_every_target ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1785493Z test map::tests::inline_only_without_a_shim_is_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1785924Z test map::tests::the_mapping_never_launders_a_refusal ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1786350Z test map::tests::the_modelled_five_come_out_of_an_artifact ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1788092Z test protocol::tests::a_bare_define_survives_the_wire ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1788820Z test protocol::tests::a_protocol_mismatch_is_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1789251Z test protocol::tests::a_truncated_payload_is_an_error ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1789821Z test protocol::tests::empty_imports_are_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1790289Z test protocol::tests::artifact_responses_round_trip_with_arbitrary_bytes ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1790778Z test protocol::tests::expand_macro_requests_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1791243Z test protocol::tests::error_responses_round_trip_and_stay_one_line ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1791685Z test protocol::tests::import_requests_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1792075Z test protocol::tests::token_responses_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1792645Z test protocol::tests::unterminated_requests_are_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1803833Z test recipe::tests::a_recipe_with_no_headers_is_pointless_and_says_so ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1804548Z test recipe::tests::absolute_and_escaping_include_paths_are_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1805122Z test recipe::tests::all_violations_are_reported_together ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1805695Z test recipe::tests::flags_that_run_things_are_refused_by_name ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1806313Z test recipe::tests::include_and_define_cannot_be_smuggled_through_cflags ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1806917Z test recipe::tests::link_takes_names_not_paths_or_flags ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1807453Z test recipe::tests::sysroot_is_a_named_choice_not_a_path ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1808063Z test recipe::tests::the_forbidden_key_list_covers_the_obvious_ways_to_ask_for_a_script ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1808742Z test recipe::tests::to_request_resolves_include_paths_against_the_package ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1809356Z test refuse::tests::every_refusal_says_something_and_offers_a_way_out ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1809963Z test refuse::tests::refuse_at_never_demotes_less_than_the_refusal_asks ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1810506Z test refuse::tests::tags_are_unique_and_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1811042Z test refworker::tests::a_missing_header_names_the_paths_it_searched ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1811632Z test refworker::tests::a_nested_record_field_advances_the_offset ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1812763Z test refworker::tests::a_record_with_an_unsizeable_member_reports_no_layout ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1813337Z test refworker::tests::a_refused_decl_does_not_kill_its_siblings ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1813937Z test refworker::tests::a_tag_colliding_with_a_function_is_renamed_visibly ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1814554Z test refworker::tests::a_typedef_keeps_its_size_for_later_fields ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1817971Z test refworker::tests::a_union_is_opaque_by_name ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1818476Z test recipe::tests::a_well_formed_recipe_passes ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1818984Z test refworker::tests::an_opaque_type_crosses_by_pointer_only ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1819542Z test refworker::tests::an_unknown_target_is_refused_not_guessed ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1830336Z test refworker::tests::bitfields_get_offsets_and_widths ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1831090Z test refworker::tests::comments_do_not_confuse_the_scanner ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1831620Z test refworker::tests::enums_carry_their_values ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1832184Z test refworker::tests::function_macros_are_kept_or_refused_by_class ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1832950Z test refworker::tests::includes_are_followed_and_guarded_against_cycles ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1833734Z test refworker::tests::k_and_r_declarations_are_refused ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1834281Z test refworker::tests::macro_expansion_is_refused_with_a_reason ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1834867Z test refworker::tests::object_macros_become_constants_or_say_why_not ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1835407Z test refworker::tests::reads_a_function_prototype ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1835927Z test refworker::tests::serve_round_trips_through_the_protocol ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1836469Z test refworker::tests::static_functions_have_internal_linkage ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1837046Z test refworker::tests::static_inline_without_a_shim_is_refused_at_import ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1837666Z test refworker::tests::the_same_header_imports_differently_per_target ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1838232Z test refworker::tests::the_tokenizer_always_advances ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1838760Z test refworker::tests::variadic_functions_import_as_variadic ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1839276Z test worker::tests::a_cached_import_spawns_nothing ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1839840Z test worker::tests::a_different_worker_does_not_inherit_cached_answers ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1840443Z test worker::tests::a_missing_worker_names_every_place_it_looked ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1841025Z test worker::tests::a_pinned_worker_that_is_missing_does_not_fall_through ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1841642Z test worker::tests::an_empty_pin_falls_through_to_the_ordinary_search ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.1875153Z test encode::tests::absurd_lengths_do_not_allocate ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2450674Z test encode::tests::every_truncation_is_an_error_not_a_panic ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2450904Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2451076Z test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2451355Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2455292Z ^[[1m^[[92m     Running^[[0m unittests src/bin/worker.rs (target/debug/deps/wolf_cimport_worker-48e02942220fc69e)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2461408Z ^[[1m^[[92m     Running^[[0m tests/conformance.rs (target/debug/deps/conformance-3edef6a59835d8a3)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2461753Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2461868Z running 0 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2461978Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2462160Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2462649Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2469437Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2469678Z running 6 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2470312Z test an_external_worker_agrees_with_the_reference ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2633709Z test the_suite_exercises_the_demotion_ladder ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2634259Z test every_case_survives_the_binary_round_trip ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2634735Z test imports_are_byte_reproducible ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2635419Z test the_suite_is_big_enough_to_mean_something ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2636026Z test every_case_matches_its_expected_dump ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2636286Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2636517Z test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2636766Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2637755Z ^[[1m^[[92m     Running^[[0m unittests src/lib.rs (target/debug/deps/wolf_codegen_clif-f5aeb8b7474f2158)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2716114Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2716278Z running 0 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2716405Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2716616Z test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2716863Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2717757Z ^[[1m^[[92m     Running^[[0m tests/abi_check.rs (target/debug/deps/abi_check-f6c5288ebd481800)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2728338Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.2728437Z running 2 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4525163Z test abi_table_round_trips_against_host_cc ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4528410Z test wolf_trap_behind_export_aborts ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4528655Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4528844Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4529066Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4530395Z ^[[1m^[[92m     Running^[[0m tests/clif_goldens.rs (target/debug/deps/clif_goldens-f276e68fe77c2293)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4539741Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4539840Z running 8 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4865300Z test clif_dyn_dispatch ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4865733Z test clif_call_ind ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4866036Z test clif_intdot_range ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4866312Z test clif_exclusivity ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4916064Z test clif_overflow ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4919016Z test clif_region_freeze_ok ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.4949701Z test clif_region_infer_tree_transform ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5275941Z test clif_qmark_defer ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5276121Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5276316Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5276567Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5279491Z ^[[1m^[[92m     Running^[[0m tests/dense_match.rs (target/debug/deps/dense_match-369ad1c356e2c9c0)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5289730Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5289868Z running 8 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5353096Z test argument_edges_stay_out_of_the_recognizer ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5473246Z test dense_integer_chain_emits_one_bounded_table ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5473818Z test a_shared_literal_keeps_the_first_arm_in_the_table ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5516827Z test escaping_comparison_definitions_are_not_bypassed ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5543314Z test dense_negative_holes_and_integer_boundaries_emit_tables ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5553260Z test escaping_integer_literals_are_rematerialized ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:36.5640637Z test sparse_short_and_trapping_chains_stay_branches ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1177703Z test dense_tables_execute_every_arm_and_default_at_integer_boundaries ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1178220Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1178611Z test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.59s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1178932Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1180220Z ^[[1m^[[92m     Running^[[0m tests/entry_shim.rs (target/debug/deps/entry_shim-6bb6a89b73cc7c5e)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1186442Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1186532Z running 2 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1190164Z test a_unit_main_hands_mains_arguments_to_the_runtime_first ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1190596Z test an_int_main_hands_mains_arguments_to_the_runtime_first ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1190781Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1190976Z test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1191301Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1191649Z ^[[1m^[[92m     Running^[[0m tests/exec_smoke.rs (target/debug/deps/exec_smoke-ba4b897fd99a18dd)
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1551271Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.1551491Z running 16 tests
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.3751598Z test call_ind_runs_through_the_pointer ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.3762603Z test dyn_dispatch_runs_through_the_table ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.3793563Z test dynamic_checked_add_traps ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.4050063Z test aliased_stencil_takes_the_slow_loop ... FAILED
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.5138022Z test exit_code_flows_through_shim ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.5153184Z test eu_main_err_reports_tag_and_exits_one ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.5153610Z test eu_main_ok_and_err_paths ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.5153922Z test dynamic_div_zero_traps ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.5154259Z test mangled_symbol_characters_survive_object_emission ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.6294761Z test overflow_traps_with_identity ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.6478966Z test no_result_main_exits_zero ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.6481562Z test float_nan_compare_semantics ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.6484616Z test unsupported_entry_signature_names_surface_types ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.6628981Z test narrow_checked_vs_wrap ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7029317Z test tree_transform_runs_to_zero ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7029654Z test qmark_defer_runs_to_zero ... ok
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7029849Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7029939Z failures:
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7030040Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7030181Z ---- aliased_stencil_takes_the_slow_loop stdout ----
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7030569Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7030877Z thread 'aliased_stencil_takes_the_slow_loop' (20959) panicked at crates/wolf_codegen_clif/tests/exec_smoke.rs:459:6:
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7036050Z midend: VerifyError { class: FactJust, func: "main", msg: "`fact noalias %38 %39 : guard %37`: guard operands do not tie the compared extents to the fact subjects' bases", dump: "fn @main() -> i64 {\n  fact noalias %38 %39 : guard %37\nb0:\n  %0: ptr, %1: mem.r0 = region.new\n  %2 = iconst.i64 32\n  %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1\n  %5 = iconst.i64 64\n  %6: ptr, %7: mem.r0 = region.alloc %0, %5, %4\n  %8 = store.ptr %6, %3, %7\n  %9 = iconst.i64 8\n  %10 = ptr.off %3, %9, 1\n  %11 = iconst.i64 6\n  %12 = store.i64 %11, %10, %8\n  %13 = iconst.i64 0\n  %14 = iconst.i64 1\n  jmp b1(%13, %12)\nb1(%15: i64, %16: mem.r0):\n  %17 = icmp.slt %15, %11\n  br %17, b2, b3\nb2:\n  %18 = ptr.off %6, %15, 8\n  %19 = store.i64 %15, %18, %16\n  %20 = iadd.wrap %15, %14\n  jmp b1(%20, %19)\nb3:\n  %21: ptr, %22: mem.r1 = stack.alloc %9\n  jmp b4\nb4:\n  %23: mem.r3 = region.foreign 1\n  %24: mem.r4 = region.foreign 0\n  %25 = load.i64 %10, %24\n  %26 = isub.chk %25, %14\n  %27 = load.ptr %3, %24\n  %28 = iconst.i64 1048575\n  %29 = ptr.off %3, %9, 1\n  %30 = load.i64 %29, %24\n  jmp b5\nb5:\n  %31 = icmp.sle %13, %30\n  br %31, b6, b15\nb6:\n  %32 = icmp.sle %26, %30\n  br %32, b7, b15\nb7:\n  %33 = ptr.off %27, %30, 8\n  %34 = ptr.off %27, %25, 8\n  %35 = icmp.ule %33, %27\n  %36 = icmp.ule %34, %27\n  %37 = bor %35, %36\n  br %37, b8, b15\nb8:\n  %38 = ptr.off %27, %13, 1\n  %39 = ptr.off %27, %13, 1\n  jmp b9(%14, %23)\nb9(%40: i64, %41: mem.r3):\n  %42 = icmp.slt %40, %26\n  br %42, b10, b23\nb10:\n  %43 = isub.wrap %40, %14\n  jmp b11\nb11:\n  %44 = ptr.off %39, %43, 8\n  %45 = load.i64 %44, %41\n  jmp b12\nb12:\n  %46 = ptr.off %39, %40, 8\n  %47 = load.i64 %46, %41\n  %48 = iadd.chk %45, %47\n  %49 = iadd.wrap %40, %14\n  jmp b13\nb13:\n  %50 = ptr.off %39, %49, 8\n  %51 = load.i64 %50, %41\n  %52 = iadd.chk %48, %51\n  %53 = band %52, %28\n  jmp b14\nb14:\n  %54 = ptr.off %38, %40, 8\n  %55 = store.i64 %53, %54, %41\n  jmp b9(%49, %55)\nb15:\n  jmp b16(%14, %23)\nb16(%56: i64, %57: mem.r3):\n  %58 = icmp.slt %56, %26\n  br %58, b17, b23\nb17:\n  %59 = isub.wrap %56, %14\n  jmp b18\nb18:\n  %60 = ptr.off %27, %59, 8\n  %61 = load.i64 %60, %57\n  jmp b19\nb19:\n  %62 = ptr.off %27, %56, 8\n  %63 = load.i64 %62, %57\n  %64 = iadd.chk %61, %63\n  %65 = iadd.wrap %56, %14\n  jmp b20\nb20:\n  %66 = ptr.off %27, %65, 8\n  %67 = load.i64 %66, %57\n  %68 = iadd.chk %64, %67\n  %69 = band %68, %28\n  %70 = icmp.ult %56, %30\n  br %70, b21, b22\nb21:\n  %71 = ptr.off %27, %56, 8\n  %72 = store.i64 %69, %71, %57\n  jmp b16(%65, %72)\nb22:\n  trap.bounds\nb23:\n  jmp b24\nb24:\n  %73 = iconst.i64 4\n  %74 = ptr.off %6, %73, 8\n  %75 = load.i64 %74, %16\n  ret %75\n}\n" }
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7040567Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7040796Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7040802Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7040876Z failures:
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7041051Z     aliased_stencil_takes_the_slow_loop
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7041199Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7041399Z test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7041651Z 
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7042146Z ^[[1m^[[91merror^[[0m: test failed, to rerun pass `-p wolf_codegen_clif --test exec_smoke`
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7082926Z xtask ci: step `test` failed
+lint + test + corpus (linux x86-64)	full gauntlet (fmt, clippy, test, deps-check, corpus)	2026-10-27T03:07:37.7143723Z ##[error]Process completed with exit code 1.
+tier pr	every chosen job succeeded, every other was skipped	﻿2026-10-27T03:11:51.6691327Z ##[group]Run python3 ci/tiers.py verdict
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6691785Z ^[[36;1mpython3 ci/tiers.py verdict^[[0m
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6956317Z shell: /usr/bin/bash -e {0}
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6956659Z env:
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6956881Z   CARGO_TERM_COLOR: always
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6957131Z   PROPTEST_CASES: 256
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6959183Z   NEEDS: {
+tier pr	every chosen job succeeded, every other was skipped	  "plan": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "success",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {
+tier pr	every chosen job succeeded, every other was skipped	      "tier": "pr",
+tier pr	every chosen job succeeded, every other was skipped	      "jobs": "[\"plan-test\", \"lint-test\", \"fuzz-smoke\"]"
+tier pr	every chosen job succeeded, every other was skipped	    }
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "plan-test": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "success",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "lint-test": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "failure",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "variadic-abi": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "static-entry": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "native-macos": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "fuzz-smoke": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "success",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "build-test": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  },
+tier pr	every chosen job succeeded, every other was skipped	  "freebsd-check": {
+tier pr	every chosen job succeeded, every other was skipped	    "result": "skipped",
+tier pr	every chosen job succeeded, every other was skipped	    "outputs": {}
+tier pr	every chosen job succeeded, every other was skipped	  }
+tier pr	every chosen job succeeded, every other was skipped	}
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.6961228Z ##[endgroup]
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7345815Z tier pr: 3 of 8 job(s) chosen
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7346512Z   plan-test          success   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7346906Z   lint-test          failure   WANTED success
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7347332Z   variadic-abi       skipped   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7347719Z   static-entry       skipped   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7348117Z   native-macos       skipped   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7348665Z   fuzz-smoke         success   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7348994Z   build-test         skipped   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7349318Z   freebsd-check      skipped   ok
+tier pr	every chosen job succeeded, every other was skipped	2026-10-27T03:11:51.7402379Z ##[error]Process completed with exit code 1.

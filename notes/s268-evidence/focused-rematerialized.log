@@ -1,0 +1,72 @@
+s268 check waiting for CPUs 4-7 2026-10-27T02:33:17Z
+   Compiling wolf_codegen_clif v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_codegen_clif)
+    Finished `test` profile [unoptimized] target(s) in 0.72s
+     Running tests/dense_match.rs (target/debug/deps/dense_match-a98526828f10ee78)
+
+running 6 tests
+test escaping_comparison_definitions_are_not_bypassed ... ok
+test escaping_integer_literals_are_rematerialized ... ok
+test dense_integer_chain_emits_one_bounded_table ... ok
+test dense_negative_holes_and_integer_boundaries_emit_tables ... ok
+test sparse_short_and_trapping_chains_stay_branches ... ok
+test dense_tables_execute_every_arm_and_default_at_integer_boundaries ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+
+running 2 tests
+test multi_return_token_cfg_stays_out_of_line ... ok
+test single_return_token_cfg_stays_out_of_line ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+     Running tests/token_inline.rs (target/debug/deps/token_inline-ace0c487874984ea)
+   Compiling wolf_codegen_clif v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 1.43s
+     Running tests/dense_match_lanes.rs (target/debug/deps/dense_match_lanes-f870a5180d3afbac)
+
+running 1 test
+    Finished `dev` profile [unoptimized] target(s) in 0.03s
+test dense_dispatch_preserves_holes_defaults_widths_and_boundaries ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+    Finished `dev` profile [unoptimized] target(s) in 0.05s
+tier=native bench=dense-match run=1
+arm=0 result=1000000 best_ns=1732449 ns_per_op=1732/1000
+arm=30 result=31000000 best_ns=1924167 ns_per_op=1924/1000
+arm=59 result=60000000 best_ns=1700482 ns_per_op=1700/1000
+tier=native bench=dense-match run=2
+arm=0 result=1000000 best_ns=1700125 ns_per_op=1700/1000
+arm=30 result=31000000 best_ns=1889789 ns_per_op=1889/1000
+arm=59 result=60000000 best_ns=1701742 ns_per_op=1701/1000
+tier=native bench=dense-match run=3
+arm=0 result=1000000 best_ns=1701774 ns_per_op=1701/1000
+arm=30 result=31000000 best_ns=1888344 ns_per_op=1888/1000
+arm=59 result=60000000 best_ns=1702754 ns_per_op=1702/1000
+tier=native bench=token-leaf run=1
+result=1289 calls_ns=18623705 inline_ns=13347414 calls/inline=1395/1000
+tier=native bench=token-leaf run=2
+result=1289 calls_ns=16777358 inline_ns=13177829 calls/inline=1273/1000
+tier=native bench=token-leaf run=3
+result=1289 calls_ns=16644475 inline_ns=13084557 calls/inline=1272/1000
+tier=release bench=dense-match run=1
+arm=0 result=1000000 best_ns=1372849 ns_per_op=1372/1000
+arm=30 result=31000000 best_ns=1510853 ns_per_op=1510/1000
+arm=59 result=60000000 best_ns=1511021 ns_per_op=1511/1000
+tier=release bench=dense-match run=2
+arm=0 result=1000000 best_ns=1322452 ns_per_op=1322/1000
+arm=30 result=31000000 best_ns=1510850 ns_per_op=1510/1000
+arm=59 result=60000000 best_ns=1510951 ns_per_op=1510/1000
+tier=release bench=dense-match run=3
+arm=0 result=1000000 best_ns=1322595 ns_per_op=1322/1000
+arm=30 result=31000000 best_ns=1511056 ns_per_op=1511/1000
+arm=59 result=60000000 best_ns=1510987 ns_per_op=1510/1000
+tier=release bench=token-leaf run=1
+result=1289 calls_ns=8654248 inline_ns=8086109 calls/inline=1070/1000
+tier=release bench=token-leaf run=2
+result=1289 calls_ns=8160866 inline_ns=7995016 calls/inline=1020/1000
+tier=release bench=token-leaf run=3
+result=1289 calls_ns=8053689 inline_ns=7896127 calls/inline=1019/1000
