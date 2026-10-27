@@ -28,12 +28,12 @@
 //! - **Region ops** call the `wolf_rt` shims; `stack.alloc` is a real
 //!   stack slot.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    AbiParam, BlockArg, InstBuilder, MemFlagsData, Signature, SourceLoc, StackSlot, StackSlotData,
-    StackSlotKind, TrapCode, Value as CValue, types as ctypes,
+    AbiParam, BlockArg, InstBuilder, JumpTableData, MemFlagsData, Signature, SourceLoc, StackSlot,
+    StackSlotData, StackSlotKind, TrapCode, Value as CValue, types as ctypes,
 };
 use cranelift_codegen::isa::CallConv;
 use cranelift_frontend::FunctionBuilder;
@@ -816,6 +816,8 @@ struct Tx<'a, 'b> {
     b: FunctionBuilder<'b>,
     m: &'a WModule,
     f: &'a WFunction,
+    dense_matches: HashMap<wolf_wir::ir::Inst, crate::dense::DenseMatch>,
+    hoisted_constants: HashSet<wolf_wir::ir::Value>,
     /// The convention THIS function is defined under (wolf-native for
     /// module functions; C for `export`ed membranes).
     conv: Conv,
@@ -934,6 +936,8 @@ pub(crate) fn translate_function(
         b,
         m,
         f,
+        dense_matches: crate::dense::find(m, f),
+        hoisted_constants: HashSet::new(),
         conv,
         om,
         funcs,
@@ -1118,6 +1122,22 @@ impl<'a, 'b> Tx<'a, 'b> {
                     self.vals.insert(wv, Repr::Scalar(cv));
                 }
             }
+        }
+        // Bypassed tests can define literals used by an arm or default.
+        // Emit them in the entry so both dispatch and non-chain incoming
+        // paths retain those definitions. Sort to keep object bytes stable.
+        let mut constants: Vec<_> = self
+            .dense_matches
+            .values()
+            .flat_map(|table| table.constants.iter().copied())
+            .collect();
+        constants.sort_by_key(|&(v, _)| v);
+        constants.dedup_by_key(|&mut (v, _)| v);
+        for (wv, n) in constants {
+            let ty = scalar_clif_ty(self.m, self.f.value_ty(wv)).expect("integer constant");
+            let cv = self.b.ins().iconst(ty, n);
+            self.vals.insert(wv, Repr::Scalar(cv));
+            self.hoisted_constants.insert(wv);
         }
         // 2. Translate every block. The entry is first in the walk order
         // and the builder is ALREADY positioned there (step 1 may have
@@ -1695,6 +1715,9 @@ impl<'a, 'b> Tx<'a, 'b> {
         let results = self.results_of(inst);
         match op {
             Opcode::Iconst => {
+                if self.hoisted_constants.contains(&results[0]) {
+                    return Ok(());
+                }
                 let Aux::Int(n) = data.aux else {
                     return Err(ice("iconst without payload"));
                 };
@@ -2359,6 +2382,10 @@ impl<'a, 'b> Tx<'a, 'b> {
                 self.b.ins().jump(tb, cargs.iter());
             }
             Opcode::Br => {
+                if let Some(table) = self.dense_matches.remove(&inst) {
+                    self.dense_match(table)?;
+                    return Ok(());
+                }
                 let Aux::Br(t, e) = data.aux else {
                     return Err(ice("br without edges"));
                 };
@@ -2470,6 +2497,42 @@ impl<'a, 'b> Tx<'a, 'b> {
     }
 
     /// Constant payload of a value defined by `iconst`, if any.
+    // s268: subtract in the bit domain (never checked source arithmetic).
+    // The unsigned range check precedes narrowing to the br_table index,
+    // so distant i64 values cannot alias an arm through their low 32 bits.
+    fn dense_match(&mut self, table: crate::dense::DenseMatch) -> Result<(), BackendError> {
+        let mut value = self.scalar(table.value)?;
+        if self.b.func.dfg.value_type(value) != ctypes::I64 {
+            value = self.b.ins().sextend(ctypes::I64, value);
+        }
+        let min = self.b.ins().iconst(ctypes::I64, table.min);
+        let index = self.b.ins().isub(value, min);
+        let outside = self.b.ins().icmp_imm_s(
+            IntCC::UnsignedGreaterThanOrEqual,
+            index,
+            table.targets.len() as i64,
+        );
+        let dispatch = self.b.create_block();
+        let default = self.blocks[&table.default];
+        let empty: [BlockArg; 0] = [];
+        self.b
+            .ins()
+            .brif(outside, default, empty.iter(), dispatch, empty.iter());
+        self.b.switch_to_block(dispatch);
+        let index = self.b.ins().ireduce(ctypes::I32, index);
+        let fallback = self.b.func.dfg.block_call(default, &[]);
+        let targets: Vec<_> = table
+            .targets
+            .into_iter()
+            .map(|b| self.b.func.dfg.block_call(self.blocks[&b], &[]))
+            .collect();
+        let jt = self
+            .b
+            .create_jump_table(JumpTableData::new(fallback, &targets));
+        self.b.ins().br_table(index, jt);
+        Ok(())
+    }
+
     fn const_of(&self, v: wolf_wir::ir::Value) -> Option<i64> {
         match self.f.values[v].def {
             wolf_wir::ir::ValueDef::Result(inst, 0) if self.f.insts[inst].op == Opcode::Iconst => {

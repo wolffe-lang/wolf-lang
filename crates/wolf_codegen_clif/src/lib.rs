@@ -45,6 +45,7 @@
 //! through `wolf_backend::layout` — locals stay addressable (no SROA
 //! heroics; s30's debugger story depends on it).
 
+mod dense;
 mod translate;
 
 use std::collections::HashMap;
