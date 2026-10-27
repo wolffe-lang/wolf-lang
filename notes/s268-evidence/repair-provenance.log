@@ -1,0 +1,12 @@
+90b25789b8523bea5f4ff5c7c85ba1dd2b5459d6450c113ac9583096fab62b57  /home/mfwolffe/lanes/ld02b/ligature/target/ligature
+90b25789b8523bea5f4ff5c7c85ba1dd2b5459d6450c113ac9583096fab62b57  /home/mfwolffe/lanes/ld02b/ligature/target/ligature
+0fde34eb9e7f6fecaabee17ed069eb009a7bfbfd157312efeeb604f76217cbc1  /home/mfwolffe/lanes/ld02b/clef/target/clef
+0fde34eb9e7f6fecaabee17ed069eb009a7bfbfd157312efeeb604f76217cbc1  /home/mfwolffe/lanes/ld02b/clef/target/clef
+216970
+repair detached pid=216970 start 2026-10-27T04:24:58Z
+taskset snapshot=/home/mfwolffe/lanes/s268/scratch/taskset.okIm69
+s268 verification waiting for CPUs 4-7 2026-10-27T04:24:58Z
+parked repair start 2026-10-27T04:24:58Z
+755 /usr/bin/taskset
+Cpus_allowed_list:	4-7
+parked repair exit=0 2026-10-27T04:26:08Z

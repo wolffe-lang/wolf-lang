@@ -1,0 +1,10 @@
+726b30e90cc00a5ae482b5b52d9ad221791c30f922473cbf33815b18805c0c57  /home/mfwolffe/lanes/s268/candidate/wolf
+0b65bd9d449c2780f47d268595777a6177b52aef6e640ddbef590a083f117827  /home/mfwolffe/lanes/s268/candidate/libwolf_rt.a
+e61e424c24578e008cd4feaa75d67a83c74d9cf46b8ea44d1ca595b52fe8729f  /home/mfwolffe/lanes/s268/candidate/wolf-rust-release
+726b30e90cc00a5ae482b5b52d9ad221791c30f922473cbf33815b18805c0c57  /home/mfwolffe/lanes/s268/candidate/wolf
+0b65bd9d449c2780f47d268595777a6177b52aef6e640ddbef590a083f117827  /home/mfwolffe/lanes/s268/candidate/libwolf_rt.a
+e61e424c24578e008cd4feaa75d67a83c74d9cf46b8ea44d1ca595b52fe8729f  /home/mfwolffe/lanes/s268/candidate/wolf-rust-release
+time="2026-10-27T01:09:24-04:00" level=error msg="Refreshing container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: retrieving temporary directory for container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: no such container"
+7.7G	/home/mfwolffe/lanes/s268/wolf-lang/target
+443M	/home/mfwolffe/lanes/s268/plant-chain/target
+150M	/home/mfwolffe/lanes/s268/plant-token/target

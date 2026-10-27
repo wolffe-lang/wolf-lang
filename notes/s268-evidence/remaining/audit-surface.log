@@ -1,0 +1,9 @@
+unsafety surface (D11 rings)
+module root:
+  trusted fn scratch — "the scratch pointer never leaves this frame; freed before return"
+  unsafe blocks: 1 · assume sites: 0 · re-entry doors: 0 · import c: 1 · inline c/asm: 0
+unsafety surface (D11 rings)
+module root:
+  trusted fn base — "owns the arena base pointer; nothing outside this module sees it"
+  unsafe blocks: 1 · assume sites: 0 · re-entry doors: 0 · import c: 0 · inline c/asm: 0
+audit-surface: inventory green; undeclared-trusted red-test holds

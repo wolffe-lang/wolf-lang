@@ -1,0 +1,6 @@
+rt-none: target/x86_64-unknown-none/release/libwolf_rt_none.a
+dist: staged std/ (56 files) from wolf-std 2386522eb059cca5a84108562c2c0a0e72345d34
+dist: target/dist/wolf-0.2.35-x86_64-unknown-linux-gnu.tar.gz
+dist: smoke — `use std.env` ran from the archive's own std/ (checked and native)
+dist: smoke — an allocating x86_64-unknown-none object built from the unpacked archive
+dist: smoke — target/dist/smoke/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf built and ran corpus/hello.lu from the unpacked archive

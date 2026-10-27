@@ -1,0 +1,36 @@
+execve("/home/mfwolffe/lanes/s268/evidence/startup-baseline/c", ["/home/mfwolffe/lanes/s268/eviden"...], 0x7ffcf5735e48 /* 0 vars */) = 0
+newfstatat(AT_FDCWD, "/etc/ld.so.cache", {st_mode=S_IFREG|0644, st_size=27911, ...}, 0) = 0
+openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+fstat(3, {st_mode=S_IFREG|0644, st_size=27911, ...}) = 0
+mmap(NULL, 27911, PROT_READ, MAP_PRIVATE, 3, 0) = 0x7f7038574000
+close(3)                                = 0
+brk(NULL)                               = 0x5599448bb000
+mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f7038572000
+access("/etc/ld.so.preload", R_OK)      = -1 ENOENT (No such file or directory)
+newfstatat(AT_FDCWD, "/etc/ld.so.cache", {st_mode=S_IFREG|0644, st_size=27911, ...}, 0) = 0
+openat(AT_FDCWD, "/usr/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\20\177\2\0\0\0\0\0"..., 1024) = 1024
+fstat(3, {st_mode=S_IFREG|0755, st_size=2375072, ...}) = 0
+mmap(NULL, 2399120, PROT_READ, MAP_PRIVATE|MAP_DENYWRITE, 3, 0) = 0x7f7038200000
+mmap(0x7f7038224000, 1695744, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x24000) = 0x7f7038224000
+mmap(0x7f70383c2000, 499712, PROT_READ, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x1c2000) = 0x7f70383c2000
+mmap(0x7f703843c000, 24576, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x23b000) = 0x7f703843c000
+mmap(0x7f7038442000, 31632, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0) = 0x7f7038442000
+close(3)                                = 0
+mmap(NULL, 12288, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f703856f000
+arch_prctl(ARCH_SET_FS, 0x7f703856f740) = 0
+set_tid_address(0x7f703856fd68)         = 247086
+set_robust_list(0x7f703856fa20, 24)     = 0
+rseq({cpu_id_start=0, cpu_id=RSEQ_CPU_ID_UNINITIALIZED, rseq_cs=NULL, flags=0, node_id=0, mm_cid=0, slice_ctrl={request=0, granted=0, __reserved=0}, __reserved=0}, 33, 0, 0x53053053) = 0
+getrandom("\x9e\xf6\x57\x2f\x86\xe7\xab\xa2\x9e\x30\x1e\x4f\x99\x63\x76\x9f", 16, GRND_NONBLOCK) = 16
+mprotect(0x7f703843c000, 16384, PROT_READ) = 0
+mprotect(0x559931aef000, 4096, PROT_READ) = 0
+mprotect(0x7f70385c6000, 8192, PROT_READ) = 0
+prlimit64(0, RLIMIT_STACK, NULL, {rlim_cur=8192*1024, rlim_max=RLIM64_INFINITY}) = 0
+getrandom("\x28\xe3\xc7\xa3\x1c\x74\x3e\xb9", 8, GRND_NONBLOCK) = 8
+fstat(1, {st_mode=S_IFCHR|0666, st_rdev=makedev(0x1, 0x3), ...}) = 0
+ioctl(1, TCGETS2, 0x7ffd1ab07870)       = -1 ENOTTY (Inappropriate ioctl for device)
+brk(NULL)                               = 0x5599448bb000
+brk(0x5599448dd000)                     = 0x5599448dd000
+write(1, "hello, wolf\n", 12)           = 12
+exit_group(0)                           = ?

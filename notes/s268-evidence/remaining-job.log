@@ -1,0 +1,40 @@
+remaining detached pid=352885 start 2026-10-27T04:43:11Z
+taskset snapshot=/home/mfwolffe/lanes/s268/scratch/taskset.dedRZk
+s268 verification waiting for CPUs 4-7 2026-10-27T04:43:11Z
+time="2026-10-27T00:43:11-04:00" level=error msg="Refreshing container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: retrieving temporary directory for container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: no such container"
+crates/wolf_codegen_clif/src/dense.rs: OK
+crates/wolf_codegen_clif/src/translate.rs: OK
+crates/wolf_codegen_clif/tests/dense_match.rs: OK
+crates/wolf_driver/tests/dense_match_lanes.rs: OK
+crates/wolf_wir/tests/token_inline.rs: OK
+remaining startup-baseline start 2026-10-27T04:43:11Z
+remaining startup-baseline exit=0 2026-10-27T04:43:11Z
+remaining workspace start 2026-10-27T04:43:11Z
+remaining workspace exit=0 2026-10-27T04:53:27Z
+remaining fuzz-check start 2026-10-27T04:53:27Z
+remaining fuzz-check exit=0 2026-10-27T04:53:34Z
+remaining deps-check start 2026-10-27T04:53:34Z
+remaining deps-check exit=0 2026-10-27T04:53:34Z
+remaining spec-extract start 2026-10-27T04:53:34Z
+remaining spec-extract exit=0 2026-10-27T04:53:35Z
+remaining conformance start 2026-10-27T04:53:35Z
+remaining conformance exit=0 2026-10-27T04:53:35Z
+remaining print-gate start 2026-10-27T04:53:35Z
+remaining print-gate exit=0 2026-10-27T04:53:35Z
+remaining diag-catalog start 2026-10-27T04:53:35Z
+remaining diag-catalog exit=0 2026-10-27T04:53:39Z
+remaining doc-catalog start 2026-10-27T04:53:39Z
+remaining doc-catalog exit=0 2026-10-27T04:53:39Z
+remaining fmt-lu start 2026-10-27T04:53:39Z
+remaining fmt-lu exit=0 2026-10-27T04:53:40Z
+remaining fmt-fuzz start 2026-10-27T04:53:40Z
+remaining fmt-fuzz exit=0 2026-10-27T04:54:10Z
+remaining audit-surface start 2026-10-27T04:54:10Z
+remaining audit-surface exit=0 2026-10-27T04:54:10Z
+remaining dist-smoke start 2026-10-27T04:54:10Z
+remaining dist-smoke exit=0 2026-10-27T04:56:12Z
+remaining differ-self start 2026-10-27T04:56:12Z
+remaining differ-self exit=0 2026-10-27T04:56:32Z
+remaining lane-coverage start 2026-10-27T04:56:32Z
+remaining lane-coverage exit=0 2026-10-27T05:00:33Z
+remaining container exit=0 2026-10-27T05:00:34Z

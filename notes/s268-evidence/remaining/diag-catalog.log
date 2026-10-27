@@ -1,0 +1,2 @@
+diag-catalog: voice: 5288 reader-facing strings carry no internal ids
+diag-catalog: 192 codes (34 warnings), all with fixtures, catalogs in sync; the corpus pins 146 of them, plus 1 forward pin(s) on codes nothing emits yet

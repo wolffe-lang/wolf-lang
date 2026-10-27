@@ -1,0 +1,83 @@
+   Compiling cfg-if v1.0.4
+   Compiling getrandom v0.3.4
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling bitflags v2.13.1
+   Compiling wolf_span v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_span)
+   Compiling zerocopy v0.8.56
+   Compiling linux-raw-sys v0.12.1
+   Compiling rand_core v0.9.5
+   Compiling fastrand v2.5.0
+   Compiling autocfg v1.5.1
+   Compiling once_cell v1.21.4
+   Compiling wolf_diag v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_diag)
+   Compiling num-traits v0.2.19
+   Compiling unicode-ident v1.0.24
+   Compiling wolf_ast v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_ast)
+   Compiling tempfile v3.27.0
+   Compiling wolf_lex v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_lex)
+   Compiling ppv-lite86 v0.2.21
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.8.0
+   Compiling quick-error v1.2.3
+   Compiling fnv v1.0.7
+   Compiling rusty-fork v0.3.1
+   Compiling bit-set v0.8.0
+   Compiling rand_chacha v0.9.0
+   Compiling wolf_parse v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_parse)
+   Compiling rand_xorshift v0.4.0
+   Compiling rand v0.9.5
+   Compiling console v0.16.4
+   Compiling regex-syntax v0.8.11
+   Compiling similar v2.7.0
+   Compiling unarray v0.1.4
+   Compiling insta v1.48.0
+   Compiling proptest v1.11.0
+   Compiling wolf_fmt v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_fmt)
+    Finished `release` profile [optimized + debuginfo] target(s) in 13.56s
+fmt-fuzz: 1253 seeds, seed=0x000000000000003F, budget=0s, cases=60000
+fmt-fuzz: 60000 cases, 13 distinct findings
+--- finding 1 [not-idempotent] ---
+fn e(n:t)->n!{B//
+n}
+fn n()
+--- finding 2 [second-pass-fallback] ---
+struct w{}fn n(){o{i
+t}}
+--- finding 3 [second-pass-fallback] ---
+impl V{fn x()
+}fn n(){V{a
+s:[]}({})}
+--- finding 4 [second-pass-fallback] ---
+fn n(){M{x
+s}}
+--- finding 5 [not-idempotent] ---
+fn s(k:t)->n!{l//
+a}
+--- finding 6 [second-pass-fallback] ---
+fn n(){F{a
+t}}
+--- finding 7 [not-idempotent] ---
+fn y()
+fn r()->n!{r//
+f}
+--- finding 8 [second-pass-fallback] ---
+impl y{fn b(r:f)->l
+fn g(){e{t
+s}}}
+--- finding 9 [not-idempotent] ---
+fn e(n:t)->n!{p//
+i}
+--- finding 10 [not-idempotent] ---
+error I={o//
+o}fn e(p:r)->t
+--- finding 11 [second-pass-fallback] ---
+fn n(){{o{s
+e}}}
+--- finding 12 [not-idempotent] ---
+fn f(r:l){t(s).h(if p=="a sentence long enough that this bare if cannot stay on its own line"then 1else 2)}fn n()
+--- finding 13 [second-pass-fallback] ---
+fn f(n:t){{{}}}let r=g{s
+p}
+fmt-fuzz: 13 layout finding(s) still open — banked, not corrupting
+fmt-fuzz: invariants held

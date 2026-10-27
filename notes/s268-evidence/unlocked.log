@@ -1,0 +1,54 @@
+taskset snapshot=/home/mfwolffe/lanes/s268/scratch/taskset.GaGQNp
+s268 verification waiting for CPUs 4-7 2026-10-27T05:02:09Z
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.21s
+     Running tests/scope_handle_param.rs (target/debug/deps/scope_handle_param-ac235bbdd3b33e25)
+
+running 4 tests
+test the_gate_passes_a_scope_spawned_into_by_its_own_frame ... ok
+test the_capture_record_outlives_the_scope_it_is_spawned_into ... ok
+    Finished `dev` profile [unoptimized] target(s) in 0.03s
+test a_task_capture_survives_a_scope_handle_passed_as_a_parameter ... ok
+capture-across-a-parameter: 2 tier(s) checked
+test every_lane_bounds_a_scope_handle_passed_as_a_parameter ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+
+wolf 0.2.35+dev.unknown (wolfgang)
+paired with lupin 0.1.56 (reference interpreter), pin 294d626
+tier=native bench=dense-match run=1
+arm=0 result=1000000 best_ns=2079031 ns_per_op=2079/1000
+arm=30 result=31000000 best_ns=1889826 ns_per_op=1889/1000
+arm=59 result=60000000 best_ns=2078497 ns_per_op=2078/1000
+tier=native bench=dense-match run=2
+arm=0 result=1000000 best_ns=2108834 ns_per_op=2108/1000
+arm=30 result=31000000 best_ns=1888385 ns_per_op=1888/1000
+arm=59 result=60000000 best_ns=2078422 ns_per_op=2078/1000
+tier=native bench=dense-match run=3
+arm=0 result=1000000 best_ns=2101651 ns_per_op=2101/1000
+arm=30 result=31000000 best_ns=1888473 ns_per_op=1888/1000
+arm=59 result=60000000 best_ns=2078398 ns_per_op=2078/1000
+tier=native bench=token-leaf run=1
+result=1289 calls_ns=17083260 inline_ns=13549837 calls/inline=1260/1000
+tier=native bench=token-leaf run=2
+result=1289 calls_ns=16925745 inline_ns=13199352 calls/inline=1282/1000
+tier=native bench=token-leaf run=3
+result=1289 calls_ns=16908706 inline_ns=13412614 calls/inline=1260/1000
+tier=release bench=dense-match run=1
+arm=0 result=1000000 best_ns=1352328 ns_per_op=1352/1000
+arm=30 result=31000000 best_ns=1133614 ns_per_op=1133/1000
+arm=59 result=60000000 best_ns=1133604 ns_per_op=1133/1000
+tier=release bench=dense-match run=2
+arm=0 result=1000000 best_ns=1322550 ns_per_op=1322/1000
+arm=30 result=31000000 best_ns=1133631 ns_per_op=1133/1000
+arm=59 result=60000000 best_ns=1133590 ns_per_op=1133/1000
+tier=release bench=dense-match run=3
+arm=0 result=1000000 best_ns=1322249 ns_per_op=1322/1000
+arm=30 result=31000000 best_ns=1133573 ns_per_op=1133/1000
+arm=59 result=60000000 best_ns=1133594 ns_per_op=1133/1000
+tier=release bench=token-leaf run=1
+result=1289 calls_ns=8109295 inline_ns=7921080 calls/inline=1023/1000
+tier=release bench=token-leaf run=2
+result=1289 calls_ns=8087722 inline_ns=8233581 calls/inline=982/1000
+tier=release bench=token-leaf run=3
+result=1289 calls_ns=8229856 inline_ns=8250313 calls/inline=997/1000

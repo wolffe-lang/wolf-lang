@@ -1,0 +1,16 @@
+lane-coverage: 1166 non-member corpus entries ([proto.cmp.coverage])
+lane-coverage:   default  executes   0 at run
+lane-coverage:   checked  executes 751 at run  (13 the other lanes reach and it does not)
+lane-coverage:   native   executes 756 at run  (8 the other lanes reach and it does not)
+lane-coverage:   release  executes 756 at run  (8 the other lanes reach and it does not)
+lane-coverage:   UNION 764 of 1166 — all three 743, so the lanes are NOT nested
+lane-coverage:   residue `forward`: 3
+lane-coverage:     forward pin: corpus/comptime/sandbox_os_exec.lu
+lane-coverage:     forward pin: corpus/comptime/sandbox_spawn_fds.lu
+lane-coverage:     forward pin: corpus/memory/borrow_escape.lu
+lane-coverage:   residue `refused@mem`: 3
+lane-coverage:   residue `refused@resolve`: 8
+lane-coverage:   residue `refused@wir`: 2
+lane-coverage:   residue `rejected`: 386
+lane-coverage:   static rejections: 386 rule(s) every lane enforces, 3 forward pin(s) no lane can make yet
+lane-coverage: floors held (checked/native/release/union/all-three ≥ 221/242/242/256/207)

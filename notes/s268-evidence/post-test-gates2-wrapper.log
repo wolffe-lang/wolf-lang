@@ -1,0 +1,10 @@
+taskset snapshot=/home/mfwolffe/lanes/s268/scratch/taskset.Mc4q2Q
+s268 verification waiting for CPUs 4-7 2026-10-27T04:34:51Z
+time="2026-10-27T00:34:51-04:00" level=error msg="Refreshing container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: retrieving temporary directory for container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: no such container"
+gates2 without WOLF_STD start 2026-10-27T04:34:52Z
+crates/wolf_codegen_clif/src/dense.rs: OK
+crates/wolf_codegen_clif/src/translate.rs: OK
+crates/wolf_codegen_clif/tests/dense_match.rs: OK
+crates/wolf_driver/tests/dense_match_lanes.rs: OK
+crates/wolf_wir/tests/token_inline.rs: OK
+gates2 exit=1 2026-10-27T04:36:27Z

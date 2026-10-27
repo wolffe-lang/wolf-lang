@@ -1,0 +1,29 @@
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/s268/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.29s
+     Running tests/parked_tasks.rs (target/debug/deps/parked_tasks-2a28f0da953b4291)
+
+running 4 tests
+REPORT open-file limit for the runs: 1048576
+    Finished `dev` profile [unoptimized] target(s) in 0.03s
+REPORT waitwolf native taskset -c 4 loop 0 64: "waitwolf loop: 64 connections at once, 64 requests answered, 64 answered right, 64 ended as they should" exit Some(0) in 20.223439ms
+test two_builds_of_the_witness_at_once_each_keep_their_own ... ok
+REPORT checked machine: exit(0) "waitwolf loop: 64 connections at once, 64 requests answered, 64 answered right, 64 ended as they should" in 566.544364ms
+REPORT lupin: exit(0) "waitwolf loop: 64 connections at once, 64 requests answered, 64 answered right, 64 ended as they should" in 643.735698ms
+REPORT native all cores loop 0 64: "waitwolf loop: 64 connections at once, 64 requests answered, 64 answered right, 64 ended as they should" exit Some(0) in 30.258269ms
+REPORT release all cores loop 0 64: "waitwolf loop: 64 connections at once, 64 requests answered, 64 answered right, 64 ended as they should" exit Some(0) in 30.211656ms
+test every_tier_answers_the_witness_alike ... ok
+REPORT waitwolf native taskset -c 4-7 loop 0 1000: "waitwolf loop: 1000 connections at once, 1000 requests answered, 1000 answered right, 1000 ended as they should" exit Some(0) in 2.189879314s
+REPORT waitwolf native all cores loop 0 1000: "waitwolf loop: 1000 connections at once, 1000 requests answered, 1000 answered right, 1000 ended as they should" exit Some(0) in 1.187502793s
+REPORT waitwolf release taskset -c 4 loop 0 64: "waitwolf loop: 64 connections at once, 64 requests answered, 64 answered right, 64 ended as they should" exit Some(0) in 30.284611ms
+REPORT waitwolf release taskset -c 4-7 loop 0 1000: "waitwolf loop: 1000 connections at once, 1000 requests answered, 1000 answered right, 1000 ended as they should" exit Some(0) in 314.67179ms
+REPORT waitwolf release all cores loop 0 1000: "waitwolf loop: 1000 connections at once, 1000 requests answered, 1000 answered right, 1000 ended as they should" exit Some(0) in 1.141911014s
+test the_witness_completes_on_every_cpu_set ... ok
+REPORT soak chan all cores M=10000: "released: chan 10000 parked, 10000 answered" exit Some(0) in 12.154113774s; parked: Some((Sample { threads: 10006, rss_kib: 154228, cpu_ticks: 31 }, 0.0)); baseline(100): Some((Sample { threads: 106, rss_kib: 5184, cpu_ticks: 0 }, 0.0)); RSS per parked task 15.1 KiB
+REPORT soak read all cores M=10000: "released: read 10000 parked, 10000 answered" exit Some(0) in 12.826597968s; parked: Some((Sample { threads: 10006, rss_kib: 159380, cpu_ticks: 42 }, 0.0)); baseline(100): Some((Sample { threads: 106, rss_kib: 5280, cpu_ticks: 0 }, 0.0)); RSS per parked task 15.6 KiB
+REPORT soak accept all cores M=10000: "released: accept 10000 parked, 10000 answered" exit Some(0) in 13.257916019s; parked: Some((Sample { threads: 10006, rss_kib: 156464, cpu_ticks: 171 }, 0.0)); baseline(100): Some((Sample { threads: 106, rss_kib: 5188, cpu_ticks: 0 }, 0.0)); RSS per parked task 15.3 KiB
+test ten_thousand_parked_tasks_hold_and_release has been running for over 60 seconds
+REPORT soak chan taskset -c 4 M=10000: "released: chan 10000 parked, 10000 answered" exit Some(0) in 14.723983433s; parked: Some((Sample { threads: 10004, rss_kib: 154372, cpu_ticks: 20 }, 0.0)); baseline(100): Some((Sample { threads: 104, rss_kib: 5140, cpu_ticks: 0 }, 0.0)); RSS per parked task 15.1 KiB
+test ten_thousand_parked_tasks_hold_and_release ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 69.26s
+
