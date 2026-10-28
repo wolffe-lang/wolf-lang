@@ -1,0 +1,36 @@
+s270 c-differ acquired block A 2026-10-28T20:15:24Z
+s270c DIFFER START 2026-10-28T20:15:25Z head=0de8a1e0e3db54709602ef2988c89e3cfdb76e84
+HEAD_BUILD_EXIT 0
+BASE_BUILD_EXIT 0
+wolf 0.2.36+dev.unknown (wolfgang)
+wolf 0.2.36+dev.unknown (wolfgang)
+5
+0
+DIFFER checked exit 0 at 2026-10-28T20:17:02Z
+differ: 1232 file(s), 0 divergence(s), 29 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 756, B executed 756, BOTH executed 756 of 1170 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+DIFFER native exit 1 at 2026-10-28T20:19:37Z
+differ: 1232 file(s), 4 divergence(s), 25 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 760, B executed 759, BOTH executed 759 of 1169 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+DIFFER release exit 1 at 2026-10-28T20:23:25Z
+differ: 1232 file(s), 4 divergence(s), 25 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 760, B executed 759, BOTH executed 759 of 1169 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+TIER checked: 1170 entries compared, 0 moved
+TIER native: 1170 entries compared, 6 moved
+  MOVED corpus/conc/atomic_race_plain.lu: base exit(0) '105115\n' -> head exit(0) '102708\n'
+  MOVED corpus/conc/atomic_ub_uaf.lu: base exit(248) '' -> head exit(76) ''
+  MOVED corpus/memory/unsafe_ub_uaf.lu: base exit(2) '' -> head exit(89) ''
+  MOVED corpus/memory/volatile_ub_uaf.lu: base exit(174) '' -> head exit(91) ''
+  MOVED corpus/rows/mixed_payload_display.lu: base <no record: > '' -> head exit(0) 'A(0)\nB(p)\nA(0)\nB(p)\n'
+  MOVED corpus/typecheck/enum_str_bare_choice.lu: base unsupported '' -> head exit(0) 'T.Text(x)\nT.Nothing\n'
+TIER release: 1170 entries compared, 8 moved
+  MOVED corpus/conc/atomic_race_plain.lu: base exit(0) '100000\n' -> head exit(0) '200000\n'
+  MOVED corpus/conc/atomic_ub_uaf.lu: base exit(39) '' -> head exit(246) ''
+  MOVED corpus/memory/mut_param_replaced.lu: base exit(0) '7\n' -> head exit(0) '6\n'
+  MOVED corpus/memory/mut_relay_push.lu: base exit(0) '7\n7\n7\n' -> head exit(0) '6\n2\n7\n'
+  MOVED corpus/memory/unsafe_ub_uaf.lu: base exit(79) '' -> head exit(74) ''
+  MOVED corpus/memory/volatile_ub_uaf.lu: base exit(165) '' -> head exit(27) ''
+  MOVED corpus/rows/mixed_payload_display.lu: base <no record: > '' -> head exit(0) 'A(0)\nB(p)\nA(0)\nB(p)\n'
+  MOVED corpus/typecheck/enum_str_bare_choice.lu: base unsupported '' -> head exit(0) 'T.Text(x)\nT.Nothing\n'
+TOTAL MOVED 14
+s270c DIFFER END 2026-10-28T20:23:25Z

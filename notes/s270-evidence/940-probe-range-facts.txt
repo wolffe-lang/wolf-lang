@@ -1,0 +1,15 @@
+55:  fact range %73 7..=7 : summary.210caf9c0331c250
+390:  fact range %2 0..=255 : summary.210caf9c0331c250
+961:  fact range %3 1000..=1000 : summary.210caf9c0331c250
+992:  fact range %2 1100..=1100 : summary.210caf9c0331c250
+midend: 13 func(s), 965 -> 721 inst(s)
+  simplify: 35 fold(s), 0 rule hit(s) (table of 52), 59 gvn, 30 br-fold, 24 trivial param(s), 74 dce
+  inline: 9 call site(s) (6 cross-module, 0 cross-cluster)
+  memopt: 0 load(s) eliminated, 0 store(s) forwarded, 0 dead store(s)
+  ranges: 4 check(s) -> wrap; hot loops 4/22 eliminated (18.2%), 0 loop(s) versioned
+  bounds: 1/3 guard(s) proven away (33.3%)
+  regions: 0 promoted (0 alloc(s)), 0 alloc(s) coalesced
+  licm: 3 load(s), 25 invariant op(s) hoisted, 0 loop(s) cse'd; 7 dead func(s) dropped
+  hdrprom: 0 header(s) promoted (0 cell(s): 0 load(s) folded, 0 store(s) deferred); bails 0 alias / 0 call / 0 shape
+  whole-program: 2 module(s) -> 2 cluster(s), 0 import(s); 6 cross-module inline(s), 0 cross-cluster
+  dedup: 13 bodies -> 13 unique (0 merged, 0 site(s) retargeted, 1.00x); summary v3 e49bc9bf83834adf

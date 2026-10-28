@@ -1,0 +1,30 @@
+// v1: recursive writer, recursive relay, constant writer
+fn put(mut keys: List[int], k: int, depth: int) {
+    if depth > 0 {
+        put(mut keys, k, depth - 1)
+        return
+    }
+    (mut keys).push(k)
+}
+
+fn relay(mut keys: List[int], ks: List[int], i: int) {
+    if i < ks.len {
+        put(mut keys, ks[i], 1)
+        relay(mut keys, ks, i + 1)
+    }
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    relay(mut keys, ks, 0)
+    quit(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}

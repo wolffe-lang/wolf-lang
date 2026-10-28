@@ -1,0 +1,6 @@
+{"class":"Verdict","detail":"Exit(76) vs Exit(248)","file":"corpus/conc/atomic_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(89) vs Exit(2)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(91) vs Exit(174)","file":"corpus/memory/volatile_ub_uaf.lu"}
+differ: corpus/rows/mixed_payload_display.lu: /lane/scripts/s270c-proxy-B: conform-run exited nonzero
+differ: 1232 file(s), 4 divergence(s), 25 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 760, B executed 759, BOTH executed 759 of 1169 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)

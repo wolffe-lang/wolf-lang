@@ -1,0 +1,27 @@
+// v8: the relay reaches the writer through a function value
+fn put(mut keys: List[int], ks: List[int]) {
+    for k in ks {
+        (mut keys).push(k)
+    }
+}
+
+fn relay(mut keys: List[int], ks: List[int], f: fn(mut List[int], List[int])) {
+    if ks.len > 0 {
+        f(mut keys, ks)
+    }
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    relay(mut keys, ks, put)
+    quit(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}

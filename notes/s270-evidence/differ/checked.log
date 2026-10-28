@@ -1,0 +1,2 @@
+differ: 1232 file(s), 0 divergence(s), 29 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 756, B executed 756, BOTH executed 756 of 1170 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)

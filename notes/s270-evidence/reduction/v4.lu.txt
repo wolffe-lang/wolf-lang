@@ -1,0 +1,29 @@
+// v4: the relay is a loop, not recursive
+fn put(mut keys: List[int], k: int, depth: int) {
+    if depth > 0 {
+        put(mut keys, k, depth - 1)
+        return
+    }
+    (mut keys).push(k)
+}
+
+fn relay(mut keys: List[int], ks: List[int]) {
+    for b in ks {
+        put(mut keys, b, 1)
+    }
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    relay(mut keys, ks)
+    quit(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}

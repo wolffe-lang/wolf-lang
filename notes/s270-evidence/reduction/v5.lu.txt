@@ -1,0 +1,21 @@
+// v5: no recursion: a relay passes its `mut` list straight to the writer
+fn put(mut keys: List[int], k: int) {
+    (mut keys).push(k)
+}
+
+fn relay(mut keys: List[int], k: int) {
+    put(mut keys, k)
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var keys = List[int]()
+    relay(mut keys, 6)
+    quit(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}

@@ -1,0 +1,39 @@
+s270 c-940-red acquired block A 2026-10-28T19:47:00Z
+s270c TESTS stage=red 2026-10-28T19:47:00Z head=81df75737b1212c9dcf7d1e7562b3fcfcc65b7a9
+ M crates/wolf_driver/tests/four_machine_regressions.rs
+ M crates/wolf_wir/tests/interproc.rs
+?? corpus/memory/mut_param_replaced.lu
+?? corpus/memory/mut_relay_push.lu
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... FAILED
+test a_relayed_mut_param_carries_the_callees_writes ... FAILED
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... FAILED
+test analyze_grants_match_the_phase ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+thread 'a_mut_param_reaching_an_unknown_external_kills_the_callers_list' (239) panicked at crates/wolf_wir/tests/interproc.rs:266:5:
+assertion `left == right` failed
+  left: Some((7, 7))
+ right: None
+thread 'a_relayed_mut_param_carries_the_callees_writes' (241) panicked at crates/wolf_wir/tests/interproc.rs:246:5:
+assertion `left == right` failed
+  left: Some((7, 7))
+ right: Some((6, 7))
+thread 'a_mut_relay_chain_longer_than_the_widen_passes_still_closes' (240) panicked at crates/wolf_wir/tests/interproc.rs:255:5:
+assertion `left != right` failed: the writer's 6 was lost on the way up
+  left: Some((7, 7))
+ right: Some((7, 7))
+test result: FAILED. 5 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+WIR_INTERPROC_EXIT 101
+test bare_enum_variant_initializes_its_unused_string_slot ... ok
+thread 'a_mut_list_replaced_by_its_callee_is_the_new_list' (367) panicked at crates/wolf_driver/tests/four_machine_regressions.rs:22:5:
+assertion `left == right` failed: --release memory/mut_param_replaced.lu: {"commit":"unknown","diagnostics":[],"file":"/lane/wolf-lang/crates/wolf_driver/../../corpus/memory/mut_param_replaced.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"7\n","stdout_sha256":"10159baf262b43a92d95db59dae1f72c645127301661e0a3ce4e38b295a9
+test a_mut_list_replaced_by_its_callee_is_the_new_list ... FAILED
+test mixed_error_payload_display_projects_the_active_tag ... ok
+thread 'a_relayed_mut_list_keeps_its_callees_pushes' (368) panicked at crates/wolf_driver/tests/four_machine_regressions.rs:22:5:
+assertion `left == right` failed: --release memory/mut_relay_push.lu: {"commit":"unknown","diagnostics":[],"file":"/lane/wolf-lang/crates/wolf_driver/../../corpus/memory/mut_relay_push.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"7\n7\n7\n","stdout_sha256":"1e74477de3d0600fa17d558d72961f665cceda1f2eae1d9e96098dadb88ea0
+test a_relayed_mut_list_keeps_its_callees_pushes ... FAILED
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+FOUR_MACHINE_EXIT 101
+s270c TESTS DONE 2026-10-28T19:47:07Z

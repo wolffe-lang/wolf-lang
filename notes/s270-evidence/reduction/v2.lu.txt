@@ -1,0 +1,26 @@
+// v2: the writer is not recursive (it inlines into the relay)
+fn put(mut keys: List[int], k: int) {
+    (mut keys).push(k)
+}
+
+fn relay(mut keys: List[int], ks: List[int], i: int) {
+    if i < ks.len {
+        put(mut keys, ks[i])
+        relay(mut keys, ks, i + 1)
+    }
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    relay(mut keys, ks, 0)
+    quit(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}

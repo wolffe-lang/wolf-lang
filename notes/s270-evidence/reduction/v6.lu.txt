@@ -1,0 +1,25 @@
+// v6: v5 with one more relay hop and the value from a list
+fn put(mut keys: List[int], k: int) {
+    (mut keys).push(k)
+}
+
+fn relay(mut keys: List[int], ks: List[int]) {
+    for k in ks {
+        put(mut keys, k)
+    }
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    relay(mut keys, ks)
+    quit(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}

@@ -1,0 +1,49 @@
+s270 c-940-pack waiting for block A 2026-10-28T19:49:24Z
+s270 c-940-pack waiting for block A 2026-10-28T19:50:24Z
+s270 c-940-pack waiting for block A 2026-10-28T19:51:24Z
+s270 c-940-pack waiting for block A 2026-10-28T19:52:24Z
+s270 c-940-pack acquired block A 2026-10-28T19:53:07Z
+ M crates/wolf_driver/tests/four_machine_regressions.rs
+ M crates/wolf_wir/src/midend/interproc.rs
+ M crates/wolf_wir/tests/interproc.rs
+?? corpus/memory/mut_param_replaced.lu
+?? corpus/memory/mut_relay_push.lu
+CARGO_BUILD_EXIT 0
+5
+
+035 pack-full (release, mid-end on) BUILD_EXIT 0
+selftest: ok (the decoder table whole and split at every byte; the diff property over 12 frames)
+PTY_EXIT 1
+pty: quit ok (linux x86_64, exit 0, 186248 bytes captured)
+pty: ctrl-c FAILED (linux x86_64):
+  - the closing line does not say b'ended by the interrupt': b'pack: ended by the quit key; 22 ticks, 22 frames, 0 dropped, 23 waits, 8 cells; render avg 284 us max 506 us; seed 7 tier rich 80x24\n'
+
+035 pack-rec (release, mid-end on) BUILD_EXIT 0
+PTY_EXIT 1
+pty: quit ok (linux x86_64, exit 0, 186248 bytes captured)
+pty: ctrl-c FAILED (linux x86_64):
+  - the closing line does not say b'ended by the interrupt': b'pack: ended by the quit key; 22 ticks, 22 frames, 0 dropped, 23 waits, 8 cells; render avg 238 us max 396 us; seed 7 tier rich 80x24\n'
+
+base pack-full (release, mid-end on) BUILD_EXIT 0
+selftest: ok (the decoder table whole and split at every byte; the diff property over 12 frames)
+PTY_EXIT 1
+pty: quit ok (linux x86_64, exit 0, 186248 bytes captured)
+pty: ctrl-c FAILED (linux x86_64):
+  - the closing line does not say b'ended by the interrupt': b'pack: ended by the quit key; 22 ticks, 22 frames, 0 dropped, 23 waits, 8 cells; render avg 261 us max 500 us; seed 7 tier rich 80x24\n'
+
+base pack-rec (release, mid-end on) BUILD_EXIT 0
+PTY_EXIT 1
+pty: quit ok (linux x86_64, exit 0, 186248 bytes captured)
+pty: ctrl-c FAILED (linux x86_64):
+  - the closing line does not say b'ended by the interrupt': b'pack: ended by the quit key; 22 ticks, 22 frames, 0 dropped, 23 waits, 8 cells; render avg 224 us max 375 us; seed 7 tier rich 80x24\n'
+
+fixed pack-full (release, mid-end on) BUILD_EXIT 0
+selftest: ok (the decoder table whole and split at every byte; the diff property over 12 frames)
+PTY_EXIT 0
+pty: quit ok (linux x86_64, exit 0, 186314 bytes captured)
+pty: ctrl-c ok (linux x86_64, exit 0, 186314 bytes captured)
+
+fixed pack-rec (release, mid-end on) BUILD_EXIT 0
+PTY_EXIT 0
+pty: quit ok (linux x86_64, exit 0, 186314 bytes captured)
+pty: ctrl-c ok (linux x86_64, exit 0, 186314 bytes captured)

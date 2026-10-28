@@ -1,0 +1,47 @@
+s270 c-probe waiting for block A 2026-10-28T19:21:45Z
+s270 c-probe waiting for block A 2026-10-28T19:22:45Z
+s270 c-probe waiting for block A 2026-10-28T19:23:45Z
+s270 c-probe waiting for block A 2026-10-28T19:24:45Z
+s270 c-probe acquired block A 2026-10-28T19:25:44Z
+s270c PROBE 2026-10-28T19:25:44Z
+81df75737b1212c9dcf7d1e7562b3fcfcc65b7a9
+CARGO_BUILD_EXIT 0
+wolf 0.2.36+dev.unknown (wolfgang)
+head native BUILD_EXIT 0
+consts up 1 down 2 parry 5 leap 6 quit 7 interrupt 8
+plain_key 32 6 122 5 113 7 3 8 65 0
+space: keys [6] pending 0 dropped 0 ignored 0
+down: keys [2] pending 0 dropped 0 ignored 0
+head native RUN_EXIT 0
+head release-on BUILD_EXIT 0
+consts up 1 down 2 parry 5 leap 6 quit 7 interrupt 8
+plain_key 32 6 122 5 113 7 3 8 65 0
+space: keys [7] pending 0 dropped 0 ignored 0
+down: keys [7] pending 0 dropped 0 ignored 0
+head release-on RUN_EXIT 0
+head release-off BUILD_EXIT 0
+consts up 1 down 2 parry 5 leap 6 quit 7 interrupt 8
+plain_key 32 6 122 5 113 7 3 8 65 0
+space: keys [6] pending 0 dropped 0 ignored 0
+down: keys [2] pending 0 dropped 0 ignored 0
+head release-off RUN_EXIT 0
+wolf 0.2.35 (wolfgang, pin cf0c13d)
+035 native BUILD_EXIT 0
+consts up 1 down 2 parry 5 leap 6 quit 7 interrupt 8
+plain_key 32 6 122 5 113 7 3 8 65 0
+space: keys [6] pending 0 dropped 0 ignored 0
+down: keys [2] pending 0 dropped 0 ignored 0
+035 native RUN_EXIT 0
+035 release-on BUILD_EXIT 0
+consts up 1 down 2 parry 5 leap 6 quit 7 interrupt 8
+plain_key 32 6 122 5 113 7 3 8 65 0
+space: keys [7] pending 0 dropped 0 ignored 0
+down: keys [7] pending 0 dropped 0 ignored 0
+035 release-on RUN_EXIT 0
+035 release-off BUILD_EXIT 0
+consts up 1 down 2 parry 5 leap 6 quit 7 interrupt 8
+plain_key 32 6 122 5 113 7 3 8 65 0
+space: keys [6] pending 0 dropped 0 ignored 0
+down: keys [2] pending 0 dropped 0 ignored 0
+035 release-off RUN_EXIT 0
+s270c PROBE DONE 2026-10-28T19:25:46Z

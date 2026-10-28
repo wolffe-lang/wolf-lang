@@ -1,0 +1,23 @@
+// v7: the callee replaces the caller's list through its `mut` parameter
+fn refill(mut keys: List[int], ks: List[int]) {
+    var fresh = List[int]()
+    for k in ks {
+        (mut fresh).push(k)
+    }
+    keys = fresh
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    quit(mut keys)
+    refill(mut keys, ks)
+    for k in keys {
+        print("{k}")
+    }
+}

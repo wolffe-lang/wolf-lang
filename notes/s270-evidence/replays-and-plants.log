@@ -1,0 +1,108 @@
+s270 c-replay-plants acquired block A 2026-10-28T20:24:40Z
+#### UB AND RACE REPLAYS
+0de8a1e0
+atomic_ub_uaf native head build=0 sha256=21b50ebd1645d715
+atomic_ub_uaf native base build=0 sha256=21b50ebd1645d715
+atomic_ub_uaf native head: exit=235/out=/err=0 exit=110/out=/err=0 exit=59/out=/err=0 exit=226/out=/err=0 exit=241/out=/err=0
+atomic_ub_uaf native base: exit=243/out=/err=0 exit=148/out=/err=0 exit=12/out=/err=0 exit=189/out=/err=0 exit=143/out=/err=0
+atomic_ub_uaf release head build=0 sha256=9d2a9703ca788ca4
+atomic_ub_uaf release base build=0 sha256=9d2a9703ca788ca4
+atomic_ub_uaf release head: exit=166/out=/err=0 exit=120/out=/err=0 exit=68/out=/err=0 exit=175/out=/err=0 exit=94/out=/err=0
+atomic_ub_uaf release base: exit=64/out=/err=0 exit=195/out=/err=0 exit=162/out=/err=0 exit=35/out=/err=0 exit=106/out=/err=0
+unsafe_ub_uaf native head build=0 sha256=29dec0f51e92a026
+unsafe_ub_uaf native base build=0 sha256=29dec0f51e92a026
+unsafe_ub_uaf native head: exit=28/out=/err=0 exit=254/out=/err=0 exit=117/out=/err=0 exit=162/out=/err=0 exit=105/out=/err=0
+unsafe_ub_uaf native base: exit=225/out=/err=0 exit=63/out=/err=0 exit=149/out=/err=0 exit=217/out=/err=0 exit=249/out=/err=0
+unsafe_ub_uaf release head build=0 sha256=c30244eaf536f2c6
+unsafe_ub_uaf release base build=0 sha256=c30244eaf536f2c6
+unsafe_ub_uaf release head: exit=26/out=/err=0 exit=98/out=/err=0 exit=134/out=/err=0 exit=202/out=/err=0 exit=46/out=/err=0
+unsafe_ub_uaf release base: exit=170/out=/err=0 exit=25/out=/err=0 exit=17/out=/err=0 exit=194/out=/err=0 exit=218/out=/err=0
+volatile_ub_uaf native head build=0 sha256=feab57f55aed49d9
+volatile_ub_uaf native base build=0 sha256=feab57f55aed49d9
+volatile_ub_uaf native head: exit=147/out=/err=0 exit=61/out=/err=0 exit=119/out=/err=0 exit=47/out=/err=0 exit=0/out=/err=0
+volatile_ub_uaf native base: exit=210/out=/err=0 exit=163/out=/err=0 exit=125/out=/err=0 exit=182/out=/err=0 exit=238/out=/err=0
+volatile_ub_uaf release head build=0 sha256=67eb0a424c1b45ea
+volatile_ub_uaf release base build=0 sha256=67eb0a424c1b45ea
+volatile_ub_uaf release head: exit=224/out=/err=0 exit=162/out=/err=0 exit=69/out=/err=0 exit=220/out=/err=0 exit=197/out=/err=0
+volatile_ub_uaf release base: exit=250/out=/err=0 exit=12/out=/err=0 exit=241/out=/err=0 exit=103/out=/err=0 exit=86/out=/err=0
+atomic_race_plain native head build=0 sha256=53aa7279d30c810d
+atomic_race_plain native base build=0 sha256=53aa7279d30c810d
+atomic_race_plain native head: exit=0/out=148006 /err=0 exit=0/out=124952 /err=0 exit=0/out=139075 /err=0 exit=0/out=102949 /err=0 exit=0/out=186110 /err=0
+atomic_race_plain native base: exit=0/out=101399 /err=0 exit=0/out=194914 /err=0 exit=0/out=101674 /err=0 exit=0/out=141192 /err=0 exit=0/out=158745 /err=0
+atomic_race_plain release head build=0 sha256=d27d0e146933d782
+atomic_race_plain release base build=0 sha256=d27d0e146933d782
+atomic_race_plain release head: exit=0/out=100000 /err=0 exit=0/out=200000 /err=0 exit=0/out=200000 /err=0 exit=0/out=200000 /err=0 exit=0/out=300000 /err=0
+atomic_race_plain release base: exit=0/out=300000 /err=0 exit=0/out=200000 /err=0 exit=0/out=200000 /err=0 exit=0/out=200000 /err=0 exit=0/out=200000 /err=0
+
+#### PLANTS
+
+== PLANT s270-plant-940-relay at 170812f9 (2026-10-28T20:24:42Z)
+170812f9 PLANT: read a relayed mut parameter as opaque again (#940)
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_relayed_mut_param_carries_the_callees_writes ... FAILED
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... FAILED
+test reverify_rejects_a_tampered_fact ... ok
+test analyze_grants_match_the_phase ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+  left: Some((7, 7))
+ right: Some((6, 7))
+  left: Some((7, 7))
+ right: Some((7, 7))
+test result: FAILED. 6 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+PLANT 940-relay WIR_INTERPROC_EXIT 101
+test bare_enum_variant_initializes_its_unused_string_slot ... ok
+test mixed_error_payload_display_projects_the_active_tag ... ok
+test a_relayed_mut_list_keeps_its_callees_pushes ... FAILED
+test a_mut_list_replaced_by_its_callee_is_the_new_list ... ok
+thread 'a_relayed_mut_list_keeps_its_callees_pushes' (1176) panicked at crates/wolf_driver/tests/four_machine_regressions.rs:22:5:
+assertion `left == right` failed: --release memory/mut_relay_push.lu: {"commit":"unknown","diagnostics":[],"file":"/lane/wolf-lang/crates/wolf_driver/../../corpus/memory/mut_relay_push.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+PLANT 940-relay FOUR_MACHINE_EXIT 101
+
+== PLANT s270-plant-950-payload at 9e6141d7 (2026-10-28T20:24:49Z)
+9e6141d7 PLANT: read error display payloads off the union again (#950)
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_relayed_mut_param_carries_the_callees_writes ... ok
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test analyze_grants_match_the_phase ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+PLANT 950-payload WIR_INTERPROC_EXIT 0
+test mixed_error_payload_display_projects_the_active_tag ... FAILED
+test bare_enum_variant_initializes_its_unused_string_slot ... ok
+test a_mut_list_replaced_by_its_callee_is_the_new_list ... ok
+test a_relayed_mut_list_keeps_its_callees_pushes ... ok
+thread 'mixed_error_payload_display_projects_the_active_tag' (2191) panicked at crates/wolf_driver/tests/lane_exit/mod.rs:59:9:
+--native hit an internal compiler error (exit 2), not an environment refusal — an ICE fails the gate, never skips it (wolf-lang#471): wolf build: ICE: lowered WIR failed verification
+wolf build: ICE: lowered WIR failed verification
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+PLANT 950-payload FOUR_MACHINE_EXIT 101
+
+== PLANT s270-plant-735-zero at 83e11e27 (2026-10-28T20:24:55Z)
+83e11e27 PLANT: refuse the zero value of a pointer slot again (#735)
+test a_relayed_mut_param_carries_the_callees_writes ... ok
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... ok
+test analyze_grants_match_the_phase ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+PLANT 735-zero WIR_INTERPROC_EXIT 0
+test bare_enum_variant_initializes_its_unused_string_slot ... FAILED
+test mixed_error_payload_display_projects_the_active_tag ... ok
+test a_relayed_mut_list_keeps_its_callees_pushes ... ok
+test a_mut_list_replaced_by_its_callee_is_the_new_list ... ok
+thread 'bare_enum_variant_initializes_its_unused_string_slot' (3531) panicked at crates/wolf_driver/tests/four_machine_regressions.rs:21:5:
+assertion `left == right` failed: --native typecheck/enum_str_bare_choice.lu: {"commit":"unknown","diagnostics":[],"file":"/lane/wolf-lang/crates/wolf_driver/../../corpus/typecheck/enum_str_bare_choice.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seed
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+PLANT 735-zero FOUR_MACHINE_EXIT 101
+## s270
+0de8a1e0
+HEAD_REBUILD_EXIT 0

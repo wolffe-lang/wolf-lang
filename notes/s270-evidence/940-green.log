@@ -1,0 +1,44 @@
+s270 c-940-green acquired block A 2026-10-28T19:47:25Z
+1
+879:    // s270 check: widening removed
+== fix WITHOUT the widening
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_relayed_mut_param_carries_the_callees_writes ... ok
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... FAILED
+test analyze_grants_match_the_phase ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+  left: Some((7, 7))
+ right: Some((7, 7))
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+NO_WIDEN_EXIT 101
+ .../wolf_driver/tests/four_machine_regressions.rs  |  10 ++
+ crates/wolf_wir/src/midend/interproc.rs            | 197 ++++++++++++++-------
+ crates/wolf_wir/tests/interproc.rs                 | 109 ++++++++++++
+ 3 files changed, 250 insertions(+), 66 deletions(-)
+== whole fix
+s270c TESTS stage=green 2026-10-28T19:47:30Z head=81df75737b1212c9dcf7d1e7562b3fcfcc65b7a9
+ M crates/wolf_driver/tests/four_machine_regressions.rs
+ M crates/wolf_wir/src/midend/interproc.rs
+ M crates/wolf_wir/tests/interproc.rs
+?? corpus/memory/mut_param_replaced.lu
+?? corpus/memory/mut_relay_push.lu
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_relayed_mut_param_carries_the_callees_writes ... ok
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... ok
+test analyze_grants_match_the_phase ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+WIR_INTERPROC_EXIT 0
+test mixed_error_payload_display_projects_the_active_tag ... ok
+test bare_enum_variant_initializes_its_unused_string_slot ... ok
+test a_mut_list_replaced_by_its_callee_is_the_new_list ... ok
+test a_relayed_mut_list_keeps_its_callees_pushes ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+FOUR_MACHINE_EXIT 0
+s270c TESTS DONE 2026-10-28T19:47:37Z

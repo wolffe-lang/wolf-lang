@@ -1,0 +1,19 @@
+s270 c-quick acquired block A 2026-10-28T20:25:50Z
+0de8a1e0
+XTASK corpus EXIT 0
+XTASK fmt-lu EXIT 1
+wolf fmt --check: corpus/rows/mixed_payload_display.lu is not canonically formatted
+wolf fmt --check: corpus/typecheck/enum_str_bare_choice.lu is not canonically formatted
+fmt-lu: unformatted .lu files — run `wolf fmt <file>` on each named file (not `wolf fmt corpus`: the `fmt: relaid` witnesses must keep their layout)
+XTASK conformance EXIT 0
+XTASK spec-extract --check EXIT 0
+XTASK diag-catalog --check EXIT 0
+/lane/scratch/s270c-quick-corpus.log:corpus: corpus/memory/mut_param_replaced.lu [phase: run] conforms: mem.tier0.mode.mut
+/lane/scratch/s270c-quick-corpus.log:corpus: corpus/memory/mut_relay_push.lu [phase: run] conforms: mem.tier0.mode.mut
+/lane/scratch/s270c-quick-corpus.log:corpus: corpus/rows/mixed_payload_display.lu [phase: run] conforms: err.rows, type.interp.row
+/lane/scratch/s270c-quick-corpus.log:corpus: corpus/typecheck/enum_str_bare_choice.lu [phase: run] conforms: abi.native.enum
+/lane/scratch/s270c-quick-fmt-lu.log:wolf fmt --check: corpus/rows/mixed_payload_display.lu is not canonically formatted
+/lane/scratch/s270c-quick-fmt-lu.log:wolf fmt --check: corpus/typecheck/enum_str_bare_choice.lu is not canonically formatted
+corpus: corpus/wordcount.lu [phase: resolve] conforms: str.interp, str.views, err.union, err.propagate, task.par, generics.brackets, mem.map.absent
+corpus: 1232 file(s), 0 bad — phase ledger enforced via conform-run
+corpus: fail-pin ledger: 382 rule(s) the compiler enforces, 3 forward pin(s) it does not implement yet
