@@ -9,12 +9,12 @@ class Nightly(unittest.TestCase):
         text = (pathlib.Path(__file__).resolve().parent.parent /
                 ".github/workflows/nightly.yml").read_text()
         job = text.split("  proptest-large:\n", 1)[1].split("  fuzz-long:\n", 1)[0]
-        steps = ["ci/fetch-entry-bundle", "cargo xtask dist-rt --target x86_64-unknown-linux-musl",
+        steps = ["rustup target add x86_64-unknown-linux-musl", "ci/fetch-entry-bundle", "cargo xtask dist-rt --target x86_64-unknown-linux-musl",
                  "WOLF_STATIC_ENTRY_MUSL_RT=", "ci/fetch-test-link-bundle",
                  "ci/build-test-ligature", "cargo test --workspace"]
         positions = [job.index(step) for step in steps]
         self.assertEqual(positions, sorted(positions))
-        self.assertIn("targets: x86_64-unknown-linux-musl", job)
+        self.assertIn("run: rustup target add x86_64-unknown-linux-musl", job)
         self.assertNotIn("--skip", job)
 
     def test_dispatch_can_select_only_one_job(self):

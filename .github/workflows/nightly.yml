@@ -35,8 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-musl
+      # The checkout's rust-toolchain.toml overrides the action's stable
+      # toolchain. Install musl for the compiler cargo actually selects.
+      - run: rustup target add x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - name: install native toolchain (clang for the s41 release tier's
           long differential lane; a skip here would be a lane bug)
