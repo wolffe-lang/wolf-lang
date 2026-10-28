@@ -58,7 +58,7 @@ jobs:
       - name: verify link inputs and build the pinned linker and assembler
         run: |
           ci/fetch-test-link-bundle
-          ci/build-test-ligature
+          # Deliberate plant: omit ci/build-test-ligature and its exports.
           ci/build-test-clef
       - run: cargo test --workspace
 
