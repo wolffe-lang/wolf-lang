@@ -32,6 +32,8 @@ mod pkg_cmd;
 mod prelude_cmd;
 mod profile_cmd;
 mod record_files;
+#[cfg(test)]
+mod refusal_tests;
 mod script_cmd;
 mod status;
 mod test_cmd;
@@ -3104,6 +3106,17 @@ const EXIT_REFUSED: i32 = 4;
 /// stderr says which.
 const EXIT_TOOL_ERROR: i32 = 2;
 
+fn render_coded_refusal(reason: &str, span: Option<wolf_span::Span>, sources: &Sources) -> bool {
+    let Some(diag) = span.and_then(|span| wolf_sema::ledger_diagnostic(reason, span)) else {
+        return false;
+    };
+    eprint!(
+        "{}",
+        report_capped(sources, &[diag], 0, RenderOptions::default())
+    );
+    true
+}
+
 fn report_build_stop(cmd: &str, stop: BuildStop, sources: &Sources) -> ! {
     match stop {
         BuildStop::Errors(first) => {
@@ -3128,6 +3141,9 @@ fn report_build_stop(cmd: &str, stop: BuildStop, sources: &Sources) -> ! {
             reason,
             span,
         } => {
+            if render_coded_refusal(&reason, span, sources) {
+                std::process::exit(EXIT_REFUSED);
+            }
             eprintln!(
                 "wolf {cmd}: cannot compile this yet — {reason} (pipeline is honest \
                  through `{phase}`; the conservatism ledger, not a bug in your program)"
@@ -3749,16 +3765,18 @@ fn native_run(
             reason,
             span,
         }) => {
-            eprintln!("wolf conform-run --native: unsupported — {reason}");
-            if let Some(span) = span {
-                eprint!(
-                    "{}",
-                    wolf_diag::render_source_span(
-                        span,
-                        &scratch_sources,
-                        &RenderOptions::default()
-                    )
-                );
+            if !render_coded_refusal(&reason, span, &scratch_sources) {
+                eprintln!("wolf conform-run --native: unsupported — {reason}");
+                if let Some(span) = span {
+                    eprint!(
+                        "{}",
+                        wolf_diag::render_source_span(
+                            span,
+                            &scratch_sources,
+                            &RenderOptions::default()
+                        )
+                    );
+                }
             }
             record_refusal(x_ext, &reason, span, &scratch_sources);
             (phase, "unsupported".to_string(), all)
@@ -3801,11 +3819,13 @@ fn report_refusal(
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
 ) {
     if let Some(nyc) = nyc {
-        eprintln!("wolf conform-run: unsupported — {}", nyc.construct);
-        eprint!(
-            "{}",
-            wolf_diag::render_source_span(nyc.span, sources, &RenderOptions::default())
-        );
+        if !render_coded_refusal(nyc.construct, Some(nyc.span), sources) {
+            eprintln!("wolf conform-run: unsupported — {}", nyc.construct);
+            eprint!(
+                "{}",
+                wolf_diag::render_source_span(nyc.span, sources, &RenderOptions::default())
+            );
+        }
         record_refusal(x_ext, nyc.construct, Some(nyc.span), sources);
     }
 }
@@ -3824,6 +3844,9 @@ fn record_refusal(
         x_ext.push(("x-unsupported-note", serde_json::json!(note)));
     }
     if let Some(span) = span {
+        if let Some(diag) = wolf_sema::ledger_diagnostic(construct, span) {
+            x_ext.push(("x-unsupported-code", serde_json::json!(diag.code.as_str())));
+        }
         x_ext.push(("x-unsupported-span", serde_json::json!([span.lo, span.hi])));
         if let Some(file) = sources.file_name(span.file) {
             x_ext.push(("x-unsupported-file", serde_json::json!(file)));

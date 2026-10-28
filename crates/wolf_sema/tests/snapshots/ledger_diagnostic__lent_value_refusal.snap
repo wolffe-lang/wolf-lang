@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/ledger_diagnostic.rs
+expression: "render_human(&diag, &sources, &RenderOptions::default())"
+---
+error[E1016]: the compiled tier cannot use this lent byte view here
+ --> lend.lu:2:17
+  |
+2 |     let owned = view
+  |                 ^^^^
+  |
+  = note: a lent `bytes()` view in a value position (bind it with `let` to materialize, s89)
+  = note: copy the view to materialize an independent List[byte], or bind text.bytes() before the
+    call; `wolf --explain E1016` shows both patterns
