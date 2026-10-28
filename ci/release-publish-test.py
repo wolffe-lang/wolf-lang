@@ -150,7 +150,7 @@ class PublishRelease(unittest.TestCase):
     def test_the_post_publish_one_release_guard_still_fails_a_bad_shape(self):
         got, _ = self.invoke([release()], duplicate_on_publish=True)
         self.assertNotEqual(got.returncode, 0)
-        self.assertIn("one-release, zero-draft shape", got.stderr)
+        self.assertIn("one-release, zero-draft shape", got.stdout + got.stderr)
 
     def test_the_guard_is_wired_into_the_small_ci_job(self):
         self.assertIn("python3 ci/release-publish-test.py",
