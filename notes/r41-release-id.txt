@@ -1,0 +1,20 @@
+r41 publish-id follow-on, prediction before implementation
+Issue: wolf-lang#984. Observed run 40744446774 created id 427033151 for
+v0.2.36 but GitHub stored an untagged-* draft. Tag lookup then returned
+zero releases. The coordinator repaired the draft tag and retried publish;
+this branch never creates, edits or publishes a real release.
+
+Keep the handed RELEASE_ID authoritative. Read its identity/state; only
+normalize a mismatched tag while that id is still a draft. Keep #226's
+exactly-one-tagged-release/id guard BEFORE publication and its post-shape
+guard after publication, plus all five-asset/musl guards. Include tag_name
+in the SAME id-addressed PATCH that sets draft=false. Published releases
+with a mismatched tag must never be retagged by this recovery path.
+
+Tests first: extract the actual YAML publish script and run it against a
+local fake gh API, no credentials/network. Predict the old script fails
+an untagged-owned-draft case and the atomic tag-name/publish requirement.
+Exercise normal/idempotent publication, duplicate/foreign tagged release,
+asset refusal and published-wrong-tag refusal. Wire into plan-test.
+Use a focused CI plant after the fixed code is committed; no labels, no CI
+wait. Separate cross-cutting PR; no tag/release/merge/AUR action.
