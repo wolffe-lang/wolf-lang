@@ -47,6 +47,7 @@ fn the_copy_pin_names_only_the_measured_release_records() {
     assert!(!copy_before_mirror("0.1.57", "28547b4"));
     assert!(!copy_before_mirror("0.1.56", "unknown"));
     assert!(!copy_before_mirror("0.1.57", "fb054c8"));
+    assert!(!copy_before_mirror("0.1.58", "6240efe"));
 }
 
 fn wolf() -> &'static str {

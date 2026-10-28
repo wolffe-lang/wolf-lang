@@ -179,8 +179,9 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 /// the same; and on the published 0.1.55 archive (the 0.2.34 pairing,
 /// r39; #232 still open), the same.
 // r40/r41: published .56 and .57 retain these separately measured answers.
+// r41 resume: published .58 re-measured these exact 21 rows.
 const LUPIN_MISSES_CHANNEL_PAYLOADS: &[&str] = &[
-    "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57",
+    "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57", "0.1.58",
 ];
 
 fn base_version(v: &str) -> &str {

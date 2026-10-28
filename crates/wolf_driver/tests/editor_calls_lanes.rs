@@ -170,7 +170,7 @@ fn lupin_or_skip() -> Option<PathBuf> {
 
 /// Only these published records retain the measured served-tree boundary.
 fn realpath_served_tree_boundary(version: &str, commit: &str) -> bool {
-    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8")]
+    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8"), ("0.1.58", "6240efe")]
         .iter()
         .any(|(v, c)| *v == version && commit.starts_with(c))
 }
@@ -182,6 +182,9 @@ fn only_measured_realpath_boundaries_are_pinned() {
     assert!(!realpath_served_tree_boundary("0.1.57", "28547b4"));
     assert!(!realpath_served_tree_boundary("0.1.57", "unknown"));
     assert!(!realpath_served_tree_boundary("0.1.58", "fb054c8"));
+    assert!(realpath_served_tree_boundary("0.1.58", "6240efe"));
+    assert!(!realpath_served_tree_boundary("0.1.58", "unknown"));
+    assert!(!realpath_served_tree_boundary("0.1.59", "6240efe"));
 }
 
 /// lupin 0.1.54 and 0.1.55 stop at one of `calls`, which they do not

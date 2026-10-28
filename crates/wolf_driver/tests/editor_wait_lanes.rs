@@ -89,7 +89,7 @@ const LISTEN_REFUSED_BY_NAME: &[&str] = &["0.1.55"];
 /// r40/r41: published .56 and .57 resolve the wait; both wait fixtures
 /// reach the listen, refused by name. No unlisted build inherits this pin.
 fn listen_before_wait(version: &str, commit: &str) -> bool {
-    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8")]
+    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8"), ("0.1.58", "6240efe")]
         .iter()
         .any(|(v, c)| *v == version && commit.starts_with(c))
 }
@@ -101,6 +101,9 @@ fn only_measured_listen_refusals_are_pinned() {
     assert!(!listen_before_wait("0.1.57", "28547b4"));
     assert!(!listen_before_wait("0.1.57", "unknown"));
     assert!(!listen_before_wait("0.1.58", "fb054c8"));
+    assert!(listen_before_wait("0.1.58", "6240efe"));
+    assert!(!listen_before_wait("0.1.58", "unknown"));
+    assert!(!listen_before_wait("0.1.59", "6240efe"));
 }
 
 /// The native or release binary of `entry`. A compile error FAILS the

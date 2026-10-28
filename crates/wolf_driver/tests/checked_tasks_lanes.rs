@@ -50,8 +50,9 @@ fn wolf() -> &'static str {
 
 /// The lupin releases whose two partings are measured and pinned.
 // r40/r41: published .56 and .57 retain these separately measured answers.
+// r41 resume: published .58 re-measured the same two answers.
 const PINNED_LUPIN: &[&str] = &[
-    "0.1.49", "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57",
+    "0.1.49", "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57", "0.1.58",
 ];
 
 #[derive(Debug, Clone)]

@@ -81,7 +81,8 @@ fn report(line: &str) {
 /// s253 adds (each pinned below by what it was measured to say).
 // r40: the published 0.1.56 archive still predates these six names.
 // r41: the published .57 retains these measured pre-mirror answers.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56", "0.1.57"];
+// r41 resume: published .58 re-measured the same named gaps.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56", "0.1.57", "0.1.58"];
 
 #[derive(Debug)]
 struct Obs {

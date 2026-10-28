@@ -41,6 +41,7 @@ fn the_copy_pin_names_only_the_measured_release_records() {
     assert!(!copy_before_mirror("0.1.57", "28547b4"));
     assert!(!copy_before_mirror("0.1.56", "unknown"));
     assert!(!copy_before_mirror("0.1.57", "fb054c8"));
+    assert!(!copy_before_mirror("0.1.58", "6240efe"));
 }
 
 fn wolf() -> &'static str {
@@ -175,8 +176,9 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 /// still open), the same; and on the published 0.1.55 archive (the
 /// 0.2.34 pairing, r39; #232 still open), the same.
 // r40/r41: published 0.1.56/0.1.57 retain these seven measured answers (#232).
+// r41 resume: published .58 re-measured these exact seven rows.
 const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &[
-    "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57",
+    "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57", "0.1.58",
 ];
 
 fn base_version(v: &str) -> &str {

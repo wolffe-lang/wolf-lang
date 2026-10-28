@@ -52,7 +52,8 @@ fn report(line: &str) {
 /// pairing. A newer lupin is held to the compiler's answer.
 // r40: every s254 refusal re-measured on the published 0.1.56 archive.
 // r41: the published .57 retains these measured pre-mirror answers.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56", "0.1.57"];
+// r41 resume: published .58 re-measured the same named gaps.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56", "0.1.57", "0.1.58"];
 
 #[derive(Debug)]
 struct Obs {
