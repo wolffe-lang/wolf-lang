@@ -2340,6 +2340,77 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s270b (wolf-lang#948): does a COPY of a value of this type
+    /// allocate — does it reach a `List`, a `Map`, a `Pool` or a cell
+    /// (or a type this frame cannot see through: a parameter, an
+    /// unresolved type)? The mirror of `wolf_wir`'s `copy_reaches_heap`,
+    /// the predicate `deep_copy_in` asks before it copies anything: a
+    /// scalar, a `str` (its copy shares the bytes, `[mem.tier0.move.3]`)
+    /// and an aggregate of those are their own copy, and make none.
+    fn copy_reaches_heap(&self, t: Ty<'t>, depth: u32) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.kind() {
+            TyKind::List(_)
+            | TyKind::Map(..)
+            | TyKind::Pool(_)
+            | TyKind::Shared(_)
+            | TyKind::Weak(_) => true,
+            TyKind::Distinct(i) => self.copy_reaches_heap(sub(*i), depth + 1),
+            TyKind::Tuple(es) => es
+                .iter()
+                .any(|e| self.copy_reaches_heap(sub(*e), depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.copy_reaches_heap(sub(*ok), depth + 1)
+                    || self.copy_reaches_heap(sub(*row), depth + 1)
+            }
+            TyKind::Row { tags, .. } => tags
+                .iter()
+                .flat_map(|(_, ps)| ps.iter())
+                .any(|p| self.copy_reaches_heap(sub(*p), depth + 1)),
+            TyKind::Nominal { module, name, args } => match self.sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(_)) => match self.fields_of(t) {
+                    Some(fs) => fs
+                        .into_iter()
+                        .any(|(_, ft)| self.copy_reaches_heap(ft, depth + 1)),
+                    None => true,
+                },
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants.iter().flat_map(|v| v.payload.iter()).any(|&p| {
+                    match self.sigs.table.kind(p) {
+                        TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                            Some(i) if i < args.len() => {
+                                self.copy_reaches_heap(sub(args[i]), depth + 1)
+                            }
+                            _ => true,
+                        },
+                        _ if mentions_rigid(&self.sigs.table, p) => true,
+                        _ => self.copy_reaches_heap(
+                            Ty {
+                                table: &self.sigs.table,
+                                id: p,
+                            },
+                            depth + 1,
+                        ),
+                    }
+                }),
+                Some(ItemSig::Distinct { base, .. }) => self.copy_reaches_heap(
+                    Ty {
+                        table: &self.sigs.table,
+                        id: *base,
+                    },
+                    depth + 1,
+                ),
+                _ => false,
+            },
+            TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..) => true,
+            _ => false,
+        }
+    }
+
     /// s252 (wolf-lang#816, #801, #822, `[mem.region.scalar]`): does a
     /// value of this type reach no storage at all — a scalar (every
     /// integer type, `wrapping[T]`, the floats, `bool`, `char`, `byte`),
@@ -7324,6 +7395,11 @@ impl<'t> Lowerer<'t> {
         // `List`/`Map` receiver — its growth, and a `copy` pushed into
         // it, land in the container's own region.
         let mut recv_container_root: Option<u32> = None;
+        // s270b (wolf-lang#948, `[mem.region.outer-write]`): a builtin
+        // store's PLAIN element whose copy reaches the heap — the value
+        // wolf-lang#385 copies into the container, in the AMBIENT region
+        // (`deep_copy_in`, `__wolf_rt_list_copy`): its span and type.
+        let mut stored_copy: Option<(Span, String)> = None;
         // s255: each `mut` argument's place with the callee's declared
         // index for it (the receiver is 0), for the ambient-clean table.
         let mut mut_arg_index: Vec<(PlaceId, u32)> = Vec::new();
@@ -7600,12 +7676,14 @@ impl<'t> Lowerer<'t> {
                     // s255 (`[mem.region.outer-write]`): a `copy` pushed
                     // into an outer container is aimed at the
                     // container's own region.
+                    let mut materialized = false;
                     if param.store
                         && let Some(l) = recv_container_root
                         && self.is_outer_write(l)
                         && self.is_copy_prefix(v)
                     {
                         self.copy_target = Some(self.outer_target(l, true));
+                        materialized = true;
                     }
                     let lowered = self.lower_arg(
                         cs,
@@ -7631,6 +7709,25 @@ impl<'t> Lowerer<'t> {
                     // s227 (#660): what this argument put on the
                     // call, by itself.
                     let ty = self.value_ty(v);
+                    // s270b (wolf-lang#948): a builtin store's element
+                    // passed PLAINLY is copied into the container
+                    // (wolf-lang#385), and the lowering makes that copy
+                    // in the AMBIENT region (`deep_copy_in`) — never the
+                    // container's — whenever the copy reaches the heap. A
+                    // `take` moves the value itself (its own sites ride
+                    // below, as an owned argument's) and a `copy` aimed at
+                    // an outer container is made in that container's region
+                    // (s255); neither makes this second copy.
+                    if param.store
+                        && site_mode != Some(ParamMode::Take)
+                        && !materialized
+                        && ty.is_some_and(|t| self.copy_reaches_heap(t, 0))
+                    {
+                        let rendered = ty
+                            .map(|t| render(t.table, t.id, &|_| Err("_")))
+                            .unwrap_or_else(|| "?".to_string());
+                        stored_copy = Some((v.span, rendered));
+                    }
                     // s252 (`[mem.region.scalar]`): a scalar-only
                     // argument names nothing — not a parameter's
                     // pseudo-site either — for the result or another
@@ -7952,6 +8049,32 @@ impl<'t> Lowerer<'t> {
                         if let Err(i) = out.sites.binary_search(&s) {
                             out.sites.insert(i, s);
                         }
+                    }
+                }
+            }
+            // s270b (wolf-lang#948, `[mem.region.outer-write]`): the site
+            // above stands for the GROWTH, which s255 rightly put in the
+            // container's own region; the element a plain store copies
+            // in is a second allocation, made where the copy is made —
+            // the ambient region (wolf-lang#385, `deep_copy_in`). Without
+            // this site the receiver held nothing of the block: a plain
+            // `push` of a `List`, or of a struct holding one, into an
+            // outer list was admitted inside a `region` block (and a
+            // callee doing it was judged ambient-clean), the copy's
+            // header and its later growth lived in the block, and native
+            // and release read the freed arena after it — yew's heap of
+            // slots, #948. So the receiver holds the copy, and the
+            // block's close refuses it (E1010), naming the push; `copy`
+            // at the store is the repair.
+            if site_region.is_some()
+                && builtin_recv_early
+                && let Some((cspan, cty)) = stored_copy.take()
+            {
+                let copied = self.alloc_site(cty, SiteKind::Lit, cspan);
+                let copy_val = Val::site(copied, cspan);
+                for &place in &mut_targets {
+                    if let Base::Local(l) = self.places.get(place).base {
+                        self.hold(l, &copy_val, cspan);
                     }
                 }
             }
