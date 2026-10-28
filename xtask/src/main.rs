@@ -3786,51 +3786,76 @@ fn fmt_lu() -> ExitCode {
     }
     let mut files = Vec::new();
     collect_wolf_files(Path::new("corpus"), &mut files);
-    let relaid: BTreeSet<String> = files
-        .iter()
-        .filter(|f| {
-            std::fs::read_to_string(f)
+    let mut relaid = 0usize;
+    let mut refusals = 0usize;
+    let mut bad = 0usize;
+    for f in &files {
+        let out = match Command::new("target/debug/wolf")
+            .args(["fmt", "--check"])
+            .arg(f)
+            .output()
+        {
+            Ok(out) => out,
+            Err(e) => {
+                eprintln!("fmt-lu: {}: {e}", f.display());
+                return ExitCode::FAILURE;
+            }
+        };
+        if out.status.success() {
+            continue;
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let codes: BTreeSet<&str> = stderr
+            .lines()
+            .filter_map(|l| l.strip_prefix("error["))
+            .filter_map(|l| l.split_once(']').map(|(code, _)| code))
+            .collect();
+        // #506: a deliberate parser counter-example must refuse with the
+        // parser's actual codes, not be blessed as canonical. Source-local
+        // parsing matters: `phase: parse` also includes resolver refusals,
+        // and broken member files can have no header of their own.
+        if out.status.code() == Some(1) && !codes.is_empty() {
+            let record = Command::new("target/debug/wolf")
+                .args(["conform-run", "--json", "--phase=parse"])
+                .arg(f)
+                .output()
                 .ok()
-                .and_then(|src| corpus::parse_directives(&src).ok())
-                .is_some_and(|d| d.relaid)
-        })
-        .map(|f| f.display().to_string().replace('\\', "/"))
-        .collect();
-    let out = match Command::new("target/debug/wolf")
-        .args(["fmt", "--check", "corpus"])
-        .output()
-    {
-        Ok(out) => out,
-        Err(e) => {
-            eprintln!("fmt-lu: wolf fmt --check: {e}");
-            return ExitCode::FAILURE;
+                .filter(|o| o.status.success())
+                .and_then(|o| serde_json::from_slice::<serde_json::Value>(&o.stdout).ok());
+            if let Some(record) = record
+                && let Some(ds) = record["diagnostics"].as_array()
+                && !ds.is_empty()
+                && ds
+                    .iter()
+                    .all(|d| d["code"].as_str().is_some_and(|c| codes.contains(c)))
+                && matches!(record["phase_reached"].as_str(), Some("lex" | "parse"))
+            {
+                refusals += 1;
+                continue;
+            }
         }
-    };
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    let mut unformatted = Vec::new();
-    let mut other_noise = false;
-    for line in stderr.lines() {
-        let named = line
-            .strip_prefix("wolf fmt --check: ")
-            .and_then(|r| r.strip_suffix(" is not canonically formatted"));
-        match named {
-            Some(f) if relaid.contains(&f.replace('\\', "/")) => continue,
-            Some(f) => unformatted.push(f.to_string()),
-            None => other_noise = true,
+        let is_relaid = std::fs::read_to_string(f)
+            .ok()
+            .and_then(|src| corpus::parse_directives(&src).ok())
+            .is_some_and(|d| d.relaid);
+        if out.status.code() == Some(1)
+            && is_relaid
+            && codes.is_empty()
+            && stderr.lines().all(|l| l.starts_with("wolf fmt --check: "))
+        {
+            relaid += 1;
+            continue;
         }
-        eprintln!("{line}");
+        bad += 1;
+        eprint!("{stderr}");
     }
-    if unformatted.is_empty() && (out.status.success() || !other_noise) {
-        eprintln!(
-            "fmt-lu: corpus is canonical ({} relaid witness(es) read past)",
-            relaid.len()
-        );
+    eprintln!(
+        "fmt-lu: {} file(s), {refusals} parser refusals verified, {relaid} relaid witnesses, {bad} unexpected failures",
+        files.len()
+    );
+    if bad == 0 {
         ExitCode::SUCCESS
     } else {
-        eprintln!(
-            "fmt-lu: unformatted .lu files — run `wolf fmt <file>` on each named file \
-             (not `wolf fmt corpus`: the `fmt: relaid` witnesses must keep their layout)"
-        );
         ExitCode::FAILURE
     }
 }
