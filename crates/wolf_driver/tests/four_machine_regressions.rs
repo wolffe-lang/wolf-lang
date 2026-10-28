@@ -74,7 +74,10 @@ fn four_machines(row: &str, stdout: &str) {
 
 #[test]
 fn bare_enum_variant_initializes_its_unused_string_slot() {
-    four_machines("typecheck/enum_str_bare_choice.lu", "T.Text(x)\nT.Nothing\n");
+    four_machines(
+        "typecheck/enum_str_bare_choice.lu",
+        "T.Text(x)\nT.Nothing\n",
+    );
 }
 
 #[test]
