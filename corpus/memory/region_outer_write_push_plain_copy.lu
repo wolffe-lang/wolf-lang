@@ -1,0 +1,39 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem, mem.tier0.move.3
+//!
+//! s270b (wolf-lang#948; `[mem.region.outer-write]`): the copy is the
+//! site, not the value. `x` is built OUTSIDE the block and pushed plainly
+//! inside it: a plain `push` copies a `List` element into the container
+//! (`[mem.region.edge.elem]`'s cost: "one allocation for each list or map
+//! reached ... in the ambient region"), so the element `outs` holds is a
+//! fresh header made in the block, and the block frees it. At trunk
+//! 5adf3d91 the checked machine and lupin 0.1.58 printed `1 100 99 2000`
+//! while native and release printed `1 1000 7777777 2000` — the second
+//! region's list, read through the freed header. `push(copy x)` (made in
+//! the list's own region) or `push(take x)` (no copy at all) is the repair.
+
+fn churn(n: int) -> int {
+    var junk = List[int]()
+    for _ in 0..n {
+        (mut junk).push(7777777)
+    }
+    junk.len
+}
+
+fn main() {
+    var outs = List[List[int]]()
+    let x = List[int]()
+    var total = 0
+    region scratch {
+        (mut outs).push(x)                 // ERROR E1010: the push's copy is made in the block
+        for i in 0..100 {
+            (mut outs[0]).push(i)
+        }
+        total += churn(1000)
+    }
+    region other {
+        total += churn(1000)
+    }
+    print("{outs.len} {outs[0].len} {outs[0][99]} {total}")
+}

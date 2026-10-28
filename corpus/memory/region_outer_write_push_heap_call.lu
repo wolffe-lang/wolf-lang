@@ -1,0 +1,61 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem, mem.region.create.3
+//!
+//! s270b (wolf-lang#948; `[mem.region.outer-write]`): yew's native heap
+//! at its smallest. `alloc` pushes a fresh slot — a struct holding a
+//! `List` — into the heap its caller owns. A plain `push` COPIES its
+//! element into the list (`[mem.region.edge.elem]`, wolf-lang#385), and
+//! the copy is made where the push runs: the callee's caller's region
+//! (D12), which inside `region scratch { }` is the block. So the slot's
+//! `List` header, and every byte later pushed into it, live in the block,
+//! and `h` outlives the block holding them: `alloc`'s `mut` parameter is
+//! not ambient-clean, and the call inside the block is E1010 at its close.
+//! The repair is one word at the store, `push(copy …)`, which makes the
+//! copy in the heap's own region (`region_outer_write_push_copy_*.lu`).
+//!
+//! What it needed to differ: the block, a callee pushing a heap-holding
+//! element into the outer list, a second region taking the freed chunk
+//! back, and the read after it. At trunk 5adf3d91 every compiling
+//! machine accepted it: the checked machine printed `1 100 99 1000` (its
+//! containers never die), native and release died on SIGSEGV, and lupin
+//! 0.1.58 trapped `region-fault` at the read. s255 had attributed the
+//! push's whole call site to the list's own region (right for the
+//! growth), and nothing stood for the copy the push makes in the block.
+
+struct Slot {
+    t: int,
+    bytes: List[int],
+}
+
+struct Heap {
+    slots: List[Slot],
+}
+
+fn alloc(mut h: Heap) -> int {
+    (mut h.slots).push(Slot { t: -1, bytes: List[int]() })
+    h.slots.len - 1
+}
+
+fn churn(n: int) -> int {
+    var junk = List[int]()
+    for _ in 0..n {
+        (mut junk).push(7777777)
+    }
+    junk.len
+}
+
+fn main() {
+    var h = Heap { slots: List[Slot]() }
+    var total = 0
+    region scratch {
+        let at = alloc(mut h)              // ERROR E1010: `alloc` keeps the block's copy in `h`
+        for i in 0..100 {
+            (mut h.slots[at].bytes).push(i)
+        }
+    }
+    region other {
+        total += churn(1000)
+    }
+    print("{h.slots.len} {h.slots[0].bytes.len} {h.slots[0].bytes[99]} {total}")
+}

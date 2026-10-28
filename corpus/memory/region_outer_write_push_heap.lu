@@ -1,0 +1,46 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem
+//!
+//! s270b (wolf-lang#948; `[mem.region.outer-write]`): the same store
+//! written in the block itself. `empty()` builds the slot in the block,
+//! the plain `push` copies it into `slots` there too, and `slots` —
+//! declared before the block — keeps the copy's `List` header and its
+//! growth past the block's close. The clause admits a store into an
+//! outer value only when the stored value names no region or is written
+//! `copy e` at the store; this one is neither, so it is E1010, naming the
+//! push. At trunk 5adf3d91 checked printed `1 -1 100 99 2000`, native and
+//! release died on SIGSEGV, and lupin 0.1.58 trapped `region-fault`.
+
+struct Slot {
+    t: int,
+    bytes: List[int],
+}
+
+fn empty() -> Slot {
+    Slot { t: -1, bytes: List[int]() }
+}
+
+fn churn(n: int) -> int {
+    var junk = List[int]()
+    for _ in 0..n {
+        (mut junk).push(7777777)
+    }
+    junk.len
+}
+
+fn main() {
+    var slots = List[Slot]()
+    var total = 0
+    region scratch {
+        (mut slots).push(empty())          // ERROR E1010: `slots` would keep the block's copy
+        for i in 0..100 {
+            (mut slots[0].bytes).push(i)
+        }
+        total += churn(1000)
+    }
+    region other {
+        total += churn(1000)
+    }
+    print("{slots.len} {slots[0].t} {slots[0].bytes.len} {slots[0].bytes[99]} {total}")
+}
