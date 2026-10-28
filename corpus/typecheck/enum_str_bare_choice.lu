@@ -1,11 +1,14 @@
 //! check: run(exit=0, stdout="T.Text(x)\nT.Nothing\n")
 //! phase: run
 //! conforms: abi.native.enum
+
 // A bare variant leaves the str payload slot unused (#735).
 enum T { Text(str), Nothing }
+
 fn choose(c: bool) -> T {
     if c then T.Text("x") else T.Nothing
 }
+
 fn main() {
     let a = choose(true)
     let b = choose(false)
