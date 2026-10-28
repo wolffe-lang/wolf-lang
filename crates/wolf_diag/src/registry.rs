@@ -1970,6 +1970,27 @@ for free), and the only thing the program loses is the zero-cost lend
 it could not have kept anyway. See W1004 and [mem.str.view.lend].
 "#);
 
+code!(E1016, "the compiled tier cannot use this lent byte view here", r#"
+This is a compiler-capacity refusal, not a new memory rule. The compiled
+tier represents a lent `bytes()` view as a pointer and a length rather
+than an owned `List[byte]`. A position that needs an owned value cannot
+use that representation. The command still exits 4 (unsupported); the
+code and source site make the workaround reachable from the refusal.
+
+To give the callee an owned list, bind the bytes before the call:
+
+```wolf
+let bytes = text.bytes()
+consume(bytes)
+```
+
+Or materialize an independent list inside the callee with `copy view`
+and use the copy in the position the compiler refuses. Bind the copy
+once if several uses need it. Both spellings preserve the original
+bytes; neither asks for a longer-lived lend. `wolf --explain E1016`
+explains this refusal even when the compiled tier cannot proceed.
+"#);
+
 // ------------------------------------------------------------------------
 // E11xx — the concurrency family (spec/03, D14). The static half of
 // the conc-safety contract: dangerous sharing shapes are rejected at
