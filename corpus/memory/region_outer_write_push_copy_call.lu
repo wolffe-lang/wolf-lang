@@ -1,0 +1,107 @@
+//! check: run(exit=0, stdout="4 100000 101 64 4 0 2000\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.create.3
+//!
+//! s270b (wolf-lang#948; `[mem.region.outer-write]`): yew's native heap
+//! as yew writes it — the slots made by an allocator CALLED inside the
+//! block — after the one-word repair the new E1010 names, `push(copy
+//! empty())` in the allocator. A `copy` at a store through a `mut`
+//! parameter into its list is made in the list's own region, so `alloc`'s
+//! parameter is ambient-clean and the call inside the block keeps nothing
+//! of it. A second region takes the freed chunk back, and the collector
+//! copies every live slot into the other half after both are gone: the
+//! answer is read from the copies. This row is the issue's own witness
+//! size: a 100,000-byte value and a 64-element list (the "large region
+//! value" #948 is named for). The byte count was never the variable: at 2
+//! list elements yew's unrepaired witness ran at 1,024 and at 100,000
+//! bytes alike on wolf 0.2.35; the list's growth was. lupin 0.1.58 traps
+//! `region-fault` here (the copy through a `mut` parameter is the one it
+//! does not mirror yet; written in the block, `_under.lu` and its twins,
+//! it agrees). Twins: `_under.lu`, `_over.lu`, `_control.lu`.
+
+struct Val {
+    t: int,
+    i: int,
+    f: f64,
+}
+
+struct Slot {
+    t: int,
+    bytes: List[byte],
+    vals: List[Val],
+}
+
+struct Heap {
+    slots: List[Slot],
+    half: int,
+    used: int,
+}
+
+fn empty() -> Slot {
+    Slot { t: -1, bytes: List[byte](), vals: List[Val]() }
+}
+
+fn alloc(mut h: Heap, t: int) -> int {
+    let at = h.used * 2 + h.half
+    if at >= h.slots.len {
+        (mut h.slots).push(copy empty())
+        (mut h.slots).push(copy empty())
+    }
+    h.slots[at].t = t
+    h.used += 1
+    at
+}
+
+fn collect(mut h: Heap) {
+    let old = h.half
+    let new = 1 - old
+    for k in 0..h.used {
+        let src = k * 2 + old
+        let dst = k * 2 + new
+        h.slots[dst].t = h.slots[src].t
+        for j in 0..h.slots[src].bytes.len {
+            let b = h.slots[src].bytes[j]
+            (mut h.slots[dst].bytes).push(b)
+        }
+        for j in 0..h.slots[src].vals.len {
+            let v = copy h.slots[src].vals[j]
+            (mut h.slots[dst].vals).push(v)
+        }
+    }
+    h.half = new
+}
+
+fn churn(n: int) -> int {
+    var junk = List[int]()
+    for _ in 0..n {
+        (mut junk).push(7777777)
+    }
+    junk.len
+}
+
+fn main() {
+    var h = Heap { slots: List[Slot](), half: 0, used: 0 }
+    var total = 0
+    region scratch {
+        let s = alloc(mut h, 4)
+        for i in 0..100000 {
+            (mut h.slots[s].bytes).push((i % 251) as byte)
+        }
+        let l = alloc(mut h, 5)
+        for _ in 0..64 {
+            (mut h.slots[l].vals).push(Val { t: 4, i: s, f: 0.0 })
+        }
+        total += churn(1000)
+    }
+    region other {
+        total += churn(1000)
+    }
+    collect(mut h)
+    let s = h.half
+    let l = 2 + h.half
+    let n = h.slots[s].bytes.len
+    let last = copy h.slots[l].vals[h.slots[l].vals.len - 1]
+    print(
+        "{h.slots.len} {n} {h.slots[s].bytes[n - 1]} {h.slots[l].vals.len} {last.t} {last.i} {total}",
+    )
+}
