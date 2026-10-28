@@ -78,3 +78,27 @@ with negative identity tests; fixed copy, row-member and noexec mirrors
 gain NO .57 waiver. Subsequent full debug/release passes remain required;
 these focused probes are not a full green. If another row differs, name
 and measure it separately rather than broadening any pin.
+
+STOP 2 resumption prediction, recorded before the .58 pairing edit:
+Measured time: 2026-10-28T12:39:22.258769+00:00
+Published v0.1.58 peels to 6240efe5570dba1a33ba6269e3ba44bae33dd972;
+its spec pin remains a5378e3. All six assets were downloaded under separate
+new directories on hasu and SHA-256 read twice against release metadata.
+Linux x86_64 GNU: 34f52792bb59bc7565e0edc1235cd47d9a6ad13d5e6528993627f2e699b62193.
+Digest ledger: /home/mfwolffe/lanes/r41/records/lupin058-digests.log.
+Current PR head b7db4184f06c575da79de6a20157ef00309588ab; current fetched
+trunk 7d026c6de0cdade60b8cc9f8eb408aa9500cf0a6. Rebase ONCE onto that
+trunk before final validation, preserving the version, std and artifact
+posture. No tag/release/label/merge/issue action; the coordinator owns the
+release-matrix request and tag authorization.
+
+Predict: .58 passes exec_lanes::exec_replaces_the_image_and_keeps_the_pid
+where the same .57 archive fails SIGPIPE/SigIgn. Leave that production
+assertion unchanged. .58's sole interpreter repair does not retire the
+independent measured .57 mirror gaps: probe their named targets first,
+then add only re-measured .58 identities, never a generic future-version
+waiver or a pre-mirror tuple for the fixed copy/row/noexec code. Re-run the
+FULL DEBUG cargo xtask ci at the final head in the existing contained
+hasu block-A rig. Report its literal completion line and every loud SKIP;
+never call a partial probe or an unfinished CI run green. Refresh release
+prose to pair wolf 0.2.36 with .58, not .57. The pin's spec stays unchanged.
