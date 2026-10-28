@@ -11,6 +11,10 @@
   timing records. See [the CLI page](docs/cli.md) for the schema and the
   distinction between wall time and overlapping contributions.
 
+s270b — the large region value (#948).
+
+- **A plain `push` of a heap value into a list that outlives the `region` block is refused** (`[mem.region.outer-write]`, E1010). A plain `push` copies its element into the list (`[mem.region.edge.elem]`), and the copy is made where the push runs: inside a block, the block. 0.2.35 and 0.2.36 admitted the store when the element was a `List`, or a struct holding one, directly in the block or through a callee's `mut` parameter, and the list then held a header the block freed: yew's native heap read freed memory (native and release exited 139, trapped `assert`, or, in a dev build, trapped `bounds`) while the checked machine printed the right answer and lupin trapped `region-fault`. The byte count never mattered; whether the freed chunk was reused before the read did. `push(copy …)` makes the copy in the list's own region and is the one-word repair the report names; `push(take x)` moves the value with no copy. Index and `Map` stores were refused already. The memory check's rule changed (`wolf_mem`); no runtime or codegen change.
+
 ## 0.2.36 — 2026-10-26
 
 C variadics work in both directions on hosted Linux x86-64 and the
