@@ -203,6 +203,12 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
             .collect::<Vec<_>>(),
     );
     for ((outcome, lowered), joined) in lowered_all.into_iter().zip(must_join) {
+        let _progress = wolf_span::progress::span(
+            "unit",
+            &pkg.modules[outcome.body.module].dotted(),
+            "mem/check",
+            &outcome.body.name,
+        );
         {
             {
                 out.diagnostics.extend(lowered.diags);
@@ -607,6 +613,12 @@ fn lower_body(
     statics: &std::collections::HashSet<wolf_span::Span>,
     mut_clean: &lower::MutClean,
 ) -> Option<Result<Lowered, NotYet>> {
+    let _progress = wolf_span::progress::span(
+        "unit",
+        &pkg.modules[body.module].dotted(),
+        "mem/lower",
+        &body.name,
+    );
     let root = &pkg.files[body.file].parse.root;
     let node = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl)?;
     let (node, outer) = match body.member {

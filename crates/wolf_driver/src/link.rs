@@ -40,8 +40,7 @@ pub fn selected(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("selected linker: remove {}: {e}", out.display())),
     }
-    let status = command
-        .status()
+    let status = crate::status::run_tool(&mut command)
         .map_err(|e| format!("selected linker: cannot run {command:?}: {e}"))?;
     if !status.success() {
         return Err(format!(

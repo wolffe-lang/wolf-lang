@@ -149,6 +149,7 @@ pub fn test_cmd(args: &[String]) {
         Ok(v) => v,
         Err(e) => fail(&e),
     };
+    let mut status = crate::status::Options::command("test");
     let mut filter: Option<String> = None;
     let mut fail_fast = false;
     let mut list = false;
@@ -174,7 +175,9 @@ pub fn test_cmd(args: &[String]) {
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
-        if let Some(v) = a.strip_prefix("--filter=") {
+        if status.flag(a).unwrap_or_else(|e| fail(&e)) {
+            // Compiler reporter options, not test execution options.
+        } else if let Some(v) = a.strip_prefix("--filter=") {
             filter = Some(v.to_string());
         } else if a == "--filter" {
             i += 1;
@@ -331,6 +334,7 @@ pub fn test_cmd(args: &[String]) {
         ..RunOpts::default()
     };
 
+    crate::status::set_test_options(status.clone());
     // ---- discovery: `*_test.lu` files, sorted (deterministic order) --
     let mut files: Vec<PathBuf> = Vec::new();
     for p in &paths {
@@ -372,6 +376,9 @@ pub fn test_cmd(args: &[String]) {
 
     'files: for file in &files {
         let display = file.display().to_string().replace('\\', "/");
+        let mut compilation = crate::status::Reporter::start(&status, "checked")
+            .unwrap_or_else(|e| fail(&format!("build status: {e}")));
+        let mut phase_progress = wolf_span::progress::span("package", &display, "load+resolve", "");
         let mut sm = wolf_span::SourceMap::new();
         let mut sources = Sources::new();
         let res =
@@ -444,6 +451,8 @@ pub fn test_cmd(args: &[String]) {
             }
             continue;
         }
+        drop(phase_progress);
+        phase_progress = wolf_span::progress::span("package", &display, "typecheck", "");
         let tc = wolf_sema::typecheck_package(&res);
         if let Some(nyc) = tc.not_yet.first() {
             // A promoted W1002 still waiting rejects the file, as it
@@ -467,6 +476,8 @@ pub fn test_cmd(args: &[String]) {
             }
             continue;
         }
+        drop(phase_progress);
+        phase_progress = wolf_span::progress::span("package", &display, "mem", "");
         let mem = wolf_mem::check_package(&res.package, &tc);
         if let Some(nyc) = mem.not_yet.first() {
             // A promoted W1002 still waiting rejects the file, as it
@@ -497,6 +508,10 @@ pub fn test_cmd(args: &[String]) {
             render(&sources, &pending);
         }
 
+        drop(phase_progress);
+        compilation
+            .finish(true)
+            .unwrap_or_else(|e| fail(&format!("timings: {e}")));
         // ---- the file's tests: `test_*` fns, else black-box main --
         // s248 (#799): the test file's own `test_*`, not the package's
         // first file's.

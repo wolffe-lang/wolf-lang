@@ -917,6 +917,7 @@ impl LoadState<'_> {
         });
         self.tables.push(ItemTable::default());
         self.loading.push(true);
+        let _parse_progress = wolf_span::progress::span("unit", &path.join("."), "lex/parse", "");
         // Parse every file of the module.
         let mut file_indices = Vec::new();
         for r in loaded.files {
@@ -924,6 +925,7 @@ impl LoadState<'_> {
             file_indices.push(self.files.len());
             self.files.push(SourceUnit { raw: r, parse });
         }
+        drop(_parse_progress);
         self.modules[idx].files = file_indices.clone();
         // Merged item table, duplicate definitions reported here.
         let mut table = ItemTable::default();

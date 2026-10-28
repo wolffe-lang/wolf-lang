@@ -788,6 +788,12 @@ fn row_fix_of(sig: &FnSig, table: &TypeTable) -> Option<RowFix> {
 /// Check one body against the elaborated signatures. Pure in
 /// `(&Package, &SigTables, &BodyRef)` — no shared mutable state.
 pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult {
+    let _progress = wolf_span::progress::span(
+        "unit",
+        &pkg.modules[body.module].dotted(),
+        "typecheck",
+        &body.name,
+    );
     let outer = pkg.files[body.file]
         .parse
         .root

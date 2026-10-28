@@ -112,3 +112,6 @@ impl SourceMap {
         self.files.is_empty()
     }
 }
+
+/// Optional observational events for driver-owned progress and timing.
+pub mod progress;

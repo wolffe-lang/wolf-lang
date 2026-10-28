@@ -721,6 +721,12 @@ fn lower_body(
     statics: &Statics,
     mut survey: Option<&mut Vec<NotYet>>,
 ) -> R<Option<Stats>> {
+    let _progress = wolf_span::progress::span(
+        "unit",
+        &pkg.modules[body.module].dotted(),
+        "WIR lowering",
+        &body.name,
+    );
     let view_mask = key.mask;
     let root = &pkg.files[body.file].parse.root;
     let Some(node) = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl) else {

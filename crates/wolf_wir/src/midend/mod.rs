@@ -531,14 +531,60 @@ fn optimize_one(
     stats: &mut OptStats,
     scope: inline::Scope<'_>,
 ) -> Result<(), VerifyError> {
+    let progress_function = m.funcs[fid].name.clone();
+    let progress_unit = scope
+        .homes
+        .map(|h| h.home_of(&progress_function))
+        .unwrap_or("package")
+        .to_string();
+    let _progress = wolf_span::progress::span(
+        "pass",
+        &progress_unit,
+        "midend/simplify",
+        &progress_function,
+    );
     simplify::run(m, fid, ve, th, stats)?;
+    drop(_progress);
+    let _progress =
+        wolf_span::progress::span("pass", &progress_unit, "midend/inline", &progress_function);
     inline::run(m, fid, ve, th, stats, scope)?;
+    drop(_progress);
+    let _progress = wolf_span::progress::span(
+        "pass",
+        &progress_unit,
+        "midend/simplify",
+        &progress_function,
+    );
     simplify::run(m, fid, ve, th, stats)?;
+    drop(_progress);
+    let _progress =
+        wolf_span::progress::span("pass", &progress_unit, "midend/memopt", &progress_function);
     memopt::run(m, fid, ve, stats)?;
+    drop(_progress);
+    let _progress = wolf_span::progress::span(
+        "pass",
+        &progress_unit,
+        "midend/rangeopt",
+        &progress_function,
+    );
     rangeopt::run(m, fid, ve, th, stats)?;
+    drop(_progress);
+    let _progress =
+        wolf_span::progress::span("pass", &progress_unit, "midend/sink", &progress_function);
     sink::run(m, fid, ve, th, stats)?;
+    drop(_progress);
+    let _progress = wolf_span::progress::span(
+        "pass",
+        &progress_unit,
+        "midend/coalesce",
+        &progress_function,
+    );
     coalesce::run(m, fid, ve, th, stats)?;
+    drop(_progress);
+    let _progress =
+        wolf_span::progress::span("pass", &progress_unit, "midend/licm", &progress_function);
     let hoisted = licm::run(m, fid, ve, stats)?;
+    drop(_progress);
     if hoisted {
         // A hoisted invariant is exactly what the versioner asks for
         // (s102): a bounds guard whose condition licm just moved out
@@ -547,15 +593,35 @@ fn optimize_one(
         // in-loop then. One re-visit, only when licm changed
         // something (D4: the pipeline stays a fixed count of passes
         // per shape, not a wall-clock fixpoint).
+        let _progress = wolf_span::progress::span(
+            "pass",
+            &progress_unit,
+            "midend/rangeopt",
+            &progress_function,
+        );
         rangeopt::revisit(m, fid, ve, th, stats)?;
+        drop(_progress);
     }
     // Header promotion after licm: what licm could not hoist (the
     // foreign-token conservatism) is exactly this pass's candidate
     // set, and its preheader loads must not be re-considered by licm
     // in the same visit (s110).
+    let _progress =
+        wolf_span::progress::span("pass", &progress_unit, "midend/hdrprom", &progress_function);
     hdrprom::run(m, fid, ve, th, stats)?;
+    drop(_progress);
+    let _progress =
+        wolf_span::progress::span("pass", &progress_unit, "midend/loopcse", &progress_function);
     loopcse::run(m, fid, ve, stats)?;
+    drop(_progress);
+    let _progress = wolf_span::progress::span(
+        "pass",
+        &progress_unit,
+        "midend/simplify",
+        &progress_function,
+    );
     simplify::run(m, fid, ve, th, stats)?;
+    drop(_progress);
     Ok(())
 }
 

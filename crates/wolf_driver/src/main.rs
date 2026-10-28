@@ -16,6 +16,12 @@ use std::path::{Path, PathBuf};
 use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
+// Keep diagnostics byte-identical while serializing them with the transient status line.
+macro_rules! eprintln { ($($arg:tt)*) => { crate::status::output(|| std::eprintln!($($arg)*)) }; }
+macro_rules! eprint { ($($arg:tt)*) => { crate::status::output(|| std::eprint!($($arg)*)) }; }
+macro_rules! println { ($($arg:tt)*) => { crate::status::output(|| std::println!($($arg)*)) }; }
+macro_rules! print { ($($arg:tt)*) => { crate::status::output(|| std::print!($($arg)*)) }; }
+
 mod asm;
 mod cimport_cmd;
 mod doc_cmd;
@@ -27,6 +33,7 @@ mod prelude_cmd;
 mod profile_cmd;
 mod record_files;
 mod script_cmd;
+mod status;
 mod test_cmd;
 
 /// The reference-interpreter pairing (r01 criteria row 7), read from
@@ -886,6 +893,7 @@ enum Emit {
 
 /// Build options (s31 driver v0).
 struct BuildOpts {
+    status: Option<status::Options>,
     /// Bypass `.lu-cache` reads AND writes (the determinism oracle:
     /// a `--no-cache` build must be bit-identical to a cached one).
     no_cache: bool,
@@ -953,6 +961,7 @@ struct BuildOpts {
 impl BuildOpts {
     fn ephemeral() -> BuildOpts {
         BuildOpts {
+            status: None,
             no_cache: true,
             verbose: false,
             checked: false,
@@ -1119,12 +1128,37 @@ fn compile_native(
     out: &Path,
     sources: &mut Sources,
     opts: &BuildOpts,
+    resolved: Option<&wolf_pkg::Project>,
+) -> Result<(), BuildStop> {
+    let options = opts.status.as_ref().or_else(|| status::test_options());
+    let mut reporter = options
+        .map(|o| status::Reporter::start(o, if opts.release { "release" } else { "native" }))
+        .transpose()
+        .map_err(|e| BuildStop::Environment(format!("build status: {e}")))?;
+    let result = compile_native_inner(file, std_root, out, sources, opts, resolved);
+    if let Some(reporter) = &mut reporter {
+        reporter
+            .finish(result.is_ok())
+            .map_err(|e| BuildStop::Environment(format!("timings: {e}")))?;
+    }
+    result
+}
+
+fn compile_native_inner(
+    file: &Path,
+    std_root: Option<&Path>,
+    out: &Path,
+    sources: &mut Sources,
+    opts: &BuildOpts,
     // `resolved`: a dependency graph the caller already resolved —
     // script mode (s53), whose manifest rode in the script's `//!` block
     // rather than in a `wolf.pkg` on disk. `None` means "look for a
     // manifest next to the entry", the s51 project path.
     resolved: Option<&wolf_pkg::Project>,
 ) -> Result<(), BuildStop> {
+    let progress_unit = file.file_stem().unwrap_or_default().to_string_lossy();
+    let mut phase_progress =
+        wolf_span::progress::span("package", &progress_unit, "load+resolve", "");
     let mut sm = wolf_span::SourceMap::new();
     // The s51 hookup: a real `wolf.pkg` next to the entry file makes
     // this a *project* build — the dependency graph resolves first
@@ -1241,6 +1275,8 @@ fn compile_native(
             false,
         )?;
     }
+    drop(phase_progress);
+    phase_progress = wolf_span::progress::span("package", &progress_unit, "typecheck", "");
     let tc = wolf_sema::typecheck_package(&res);
     if let Some(nyc) = tc.not_yet.first() {
         // A rung that declines ends the front end early: a promoted
@@ -1275,6 +1311,8 @@ fn compile_native(
             false,
         )?;
     }
+    drop(phase_progress);
+    phase_progress = wolf_span::progress::span("package", &progress_unit, "mem", "");
     let mem = wolf_mem::check_package(&res.package, &tc);
     if let Some(nyc) = mem.not_yet.first() {
         // A rung that declines ends the front end early: a promoted
@@ -1294,6 +1332,8 @@ fn compile_native(
         wolf_diag::sort_diagnostics(&mut pending);
         render(sources, &pending);
     }
+    drop(phase_progress);
+    phase_progress = wolf_span::progress::span("package", &progress_unit, "WIR lowering", "");
     let build = wolf_wir::lower_package(&res.package, &tc);
     if let Some(nyc) = build.not_yet.first() {
         return Err(BuildStop::Refused {
@@ -1368,6 +1408,8 @@ fn compile_native(
         eprintln!("wolf build: ICE: mid-end broke the module\n{e}");
         std::process::exit(2);
     };
+    drop(phase_progress);
+    phase_progress = wolf_span::progress::span("package", &progress_unit, "midend", "");
     let mid_stats = std::env::var("WOLF_MIDEND_STATS").as_deref() == Ok("1");
     let midend_off = std::env::var("WOLF_MIDEND").as_deref() == Ok("0");
     let mut whole: Option<wolf_wir::midend::WholeProgram> = None;
@@ -1474,6 +1516,9 @@ fn compile_native(
     if opts.release || std::env::var("WOLF_MIDEND").as_deref() == Ok("1") {
         ct_build_gate(sources, &module, &render)?;
     }
+    drop(phase_progress);
+    phase_progress =
+        wolf_span::progress::span("package", &progress_unit, "codegen preparation", "");
     // Backend: the driver drives the TRAIT; ClifBackend is the s28
     // implementation behind it (capabilities, never identity).
     let refuse = |phase: &'static str, e: wolf_backend::BackendError| match e {
@@ -1864,7 +1909,9 @@ fn compile_native(
     // backend instance per worker, results collected IN UNIT ORDER so
     // the link inputs (and the accounting lines) stay byte-stable
     // whatever the thread schedule did (D4).
+    wolf_span::progress::event(wolf_span::progress::Event::Units(units.len()));
     let acquire = |u: &ModUnit| -> UnitResult {
+        let _progress = wolf_span::progress::span("unit", &u.name, "codegen", "");
         let obj_file = cache
             .as_ref()
             .map(|c| c.join("obj").join(format!("{}-{}.o", u.name, &u.key[..16])));
@@ -1883,6 +1930,7 @@ fn compile_native(
                     &u.key[..16]
                 )
             });
+            wolf_span::progress::event(wolf_span::progress::Event::UnitDone { reused: true });
             return Ok((bytes, log));
         }
         let log = opts.verbose.then(|| {
@@ -1952,8 +2000,11 @@ fn compile_native(
             });
             let _ = std::fs::write(p, manifest.to_string());
         }
+        wolf_span::progress::event(wolf_span::progress::Event::UnitDone { reused: false });
         Ok((bytes, log))
     };
+    drop(phase_progress);
+    phase_progress = wolf_span::progress::span("package", &progress_unit, "codegen", "");
     let codegen_start = std::time::Instant::now();
     let acquired: Vec<UnitResult> = if whole.is_some() && units.len() > 1 {
         use rayon::prelude::*;
@@ -2065,6 +2116,8 @@ fn compile_native(
             .values()
             .any(|e| e.name == format!("c.{}", wolf_backend::target::TRAP_HOOK))
     });
+    drop(phase_progress);
+    let _link_progress = wolf_span::progress::span("package", &progress_unit, "link", "");
     link_objects(
         &objects,
         out,
@@ -2459,8 +2512,7 @@ fn link_staged(
     if let Some(flag) = lld_fuse_flag() {
         cmd.arg(flag);
     }
-    let status = cmd
-        .status()
+    let status = status::run_tool(&mut cmd)
         .map_err(|e| BuildStop::Environment(format!("cannot run `{cc}`: {e}")));
     // macOS (s59): Apple's static link does NOT copy DWARF into the
     // executable — it writes a debug MAP whose entries point at the
@@ -2473,11 +2525,11 @@ fn link_staged(
     #[cfg(target_os = "macos")]
     if matches!(&status, Ok(s) if s.success()) {
         let out_abs = std::path::absolute(out).unwrap_or_else(|_| out.to_path_buf());
-        match std::process::Command::new("dsymutil")
-            .current_dir(dir)
-            .arg(&out_abs)
-            .status()
-        {
+        match status::run_tool(
+            std::process::Command::new("dsymutil")
+                .current_dir(dir)
+                .arg(&out_abs),
+        ) {
             Ok(s) if s.success() => {}
             Ok(s) => eprintln!(
                 "wolf build: note: `dsymutil {}` failed ({s}) — the binary runs \
@@ -2567,7 +2619,7 @@ fn link_staged(
         cmd.arg("/INCLUDE:__wolf_rt_trap_at")
             .arg("/ALTERNATENAME:wolf_trap=__wolf_rt_trap_at");
     }
-    let status = cmd.status().map_err(|e| {
+    let status = status::run_tool(&mut cmd).map_err(|e| {
         BuildStop::Environment(format!(
             "cannot run the linker `{}` ({}): {e}",
             linker.path.display(),
@@ -2806,6 +2858,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     let mut file: Option<String> = None;
     let mut out: Option<PathBuf> = None;
     let mut opts = BuildOpts {
+        status: Some(status::Options::command(cmd)),
         no_cache: false,
         verbose: false,
         checked: false,
@@ -2834,7 +2887,15 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
             i += 1;
             continue;
         }
-        if let Some(path) = a.strip_prefix("--std-root=") {
+        if opts
+            .status
+            .as_mut()
+            .expect("CLI status options")
+            .flag(a)
+            .unwrap_or_else(|e| fail(&e))
+        {
+            // Reporter options never enter cache keys or compiler semantics.
+        } else if let Some(path) = a.strip_prefix("--std-root=") {
             std_flag = Some(PathBuf::from(path));
         } else if a == "--std-root" {
             i += 1;

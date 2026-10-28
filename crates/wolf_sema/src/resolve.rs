@@ -283,7 +283,10 @@ pub fn resolve_package_with(
     aliases: &AliasTable,
     single_thread: bool,
 ) -> Result<Resolution, String> {
+    let _load_progress = wolf_span::progress::span("package", "package", "load/lex/parse", "");
     let package = load_package(loader, aliases)?;
+    drop(_load_progress);
+    let _resolve_progress = wolf_span::progress::span("package", "package", "resolve", "");
     let order: Vec<usize> = package.topo.clone();
     let run = |&m: &usize| resolve_module(&package, m);
     let per_module: Vec<ModuleResolved> = if single_thread {
@@ -332,6 +335,7 @@ struct ModuleResolved {
 /// Resolve one module's files (independent of every other module once
 /// pass A has run — the parallel unit).
 fn resolve_module(pkg: &Package, module: usize) -> ModuleResolved {
+    let _progress = wolf_span::progress::span("unit", &pkg.modules[module].dotted(), "resolve", "");
     let mut sink = Diagnostics::new();
     let mut refs = Vec::new();
     for &fi in &pkg.modules[module].files {
