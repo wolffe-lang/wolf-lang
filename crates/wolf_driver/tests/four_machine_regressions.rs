@@ -73,6 +73,11 @@ fn four_machines(row: &str, stdout: &str) {
 }
 
 #[test]
+fn bare_enum_variant_initializes_its_unused_string_slot() {
+    four_machines("typecheck/enum_str_bare_choice.lu", "T.Text(x)\nT.Nothing\n");
+}
+
+#[test]
 fn mixed_error_payload_display_projects_the_active_tag() {
     four_machines("rows/mixed_payload_display.lu", "A(0)\nB(p)\nA(0)\nB(p)\n");
 }
