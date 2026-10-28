@@ -81,6 +81,21 @@ pub struct NotYet {
 pub const ELSE_FALLBACK_RANGE: &str =
     "an open-ended or end-relative range as an `else` fallback (slicing)";
 
+/// A coded explanation for the byte-view representation refusal (#947).
+/// It remains a ledger refusal (exit 4); the code does not reject new
+/// programs or change which uses can lend.
+pub fn ledger_diagnostic(construct: &str, span: Span) -> Option<Diagnostic> {
+    if !construct.starts_with("a lent `bytes()` view")
+        && !construct.starts_with("assignment to a lent `bytes()` view")
+    {
+        return None;
+    }
+    Some(Diagnostic::error(wolf_diag::codes::E1016, span,
+        "the compiled tier cannot use this lent byte view here")
+        .with_note(construct)
+        .with_note("copy the view to materialize an independent List[byte], or bind text.bytes() before the call; `wolf --explain E1016` shows both patterns"))
+}
+
 /// The note a refusal carries to its reader, by construct (s266,
 /// wolf-lang#932, R-s266-1 A): the driver prints it under the refusal
 /// and `conform-run` records it as `x-unsupported-note`. `None` for
