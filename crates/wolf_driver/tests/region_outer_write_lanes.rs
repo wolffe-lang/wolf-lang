@@ -24,6 +24,17 @@
 //! every turn's string (yew's measured shape, #839: hundreds of bytes
 //! a key); the block keeps nothing, so the row's bound is 4 B a turn on
 //! both tiers.
+//!
+//! s270b (wolf-lang#948) adds the stores the clause refuses that s255's
+//! push left open — a PLAIN `push` of a value whose copy reaches the heap
+//! (a `List`, a struct holding one) into an outer list, in the block or
+//! through a callee's `mut` parameter: wolf-lang#385's copy is made in the
+//! ambient region, so the list kept the block's header — and the repaired
+//! heap at the observed threshold's two sides, the issue's control and
+//! its own size. lupin 0.1.58 runs the repaired heap's block form to the
+//! compilers' answer and traps `region-fault` on the one copy it does not
+//! mirror yet, `push(copy …)` through a `mut` parameter (pinned below by
+//! its record; an unlisted release must mirror).
 
 #![cfg(unix)]
 
@@ -40,6 +51,16 @@ fn copy_before_mirror(version: &str, commit: &str) -> bool {
         .any(|(v, c)| *v == version && commit.starts_with(c))
 }
 
+/// s270b: the published lupin records whose `push(copy …)` through a `mut`
+/// parameter lands in the caller's block (measured: 0.1.58 traps
+/// `region-fault` on `region_outer_write_push_copy_call.lu`). An unlisted
+/// release or dev commit must mirror the compilers.
+fn param_copy_before_mirror(version: &str, commit: &str) -> bool {
+    [("0.1.58", "6240efe")]
+        .iter()
+        .any(|(v, c)| *v == version && commit.starts_with(c))
+}
+
 #[test]
 fn the_copy_pin_names_only_the_measured_release_records() {
     assert!(copy_before_mirror("0.1.55", "e642f26"));
@@ -48,6 +69,10 @@ fn the_copy_pin_names_only_the_measured_release_records() {
     assert!(!copy_before_mirror("0.1.56", "unknown"));
     assert!(!copy_before_mirror("0.1.57", "fb054c8"));
     assert!(!copy_before_mirror("0.1.58", "6240efe"));
+    assert!(param_copy_before_mirror("0.1.58", "6240efe"));
+    assert!(!param_copy_before_mirror("0.1.58", "unknown"));
+    assert!(!param_copy_before_mirror("0.1.59", "6240efe"));
+    assert!(!param_copy_before_mirror("0.1.57", "fb054c8"));
 }
 
 fn wolf() -> &'static str {
@@ -156,6 +181,9 @@ fn corpus(rel: &str) -> PathBuf {
 enum Lupin {
     Same,
     Verdict(&'static str),
+    /// s270b: what a [`param_copy_before_mirror`] record answers for a
+    /// `push(copy …)` through a `mut` parameter; an unlisted lupin mirrors.
+    ParamCopy(&'static str),
 }
 
 /// A run row: exit(0) and `want` on the checked machine, native and
@@ -178,7 +206,10 @@ fn run_row(rel: &str, want: &str, lupin: Lupin, why: &str) {
             Lupin::Verdict(v) if copy_before_mirror(&l.version, &l.commit) => {
                 assert_eq!(l.verdict, v, "{rel}: measured pre-mirror lupin");
             }
-            Lupin::Verdict(_) => {
+            Lupin::ParamCopy(v) if param_copy_before_mirror(&l.version, &l.commit) => {
+                assert_eq!(l.verdict, v, "{rel}: measured pre-mirror lupin (s270b)");
+            }
+            Lupin::Verdict(_) | Lupin::ParamCopy(_) => {
                 assert_eq!(
                     l.verdict, "exit(0)",
                     "{rel}: unlisted lupin must mirror #289"
@@ -232,7 +263,9 @@ fn fail_row(rel: &str, code: &str, needles: &[&str], lupin: Lupin, why: &str) {
     if let Some(l) = lupin_says(&entry) {
         match lupin {
             Lupin::Same => assert_eq!(l.verdict, format!("fail({code})"), "{rel}: lupin"),
-            Lupin::Verdict(v) => assert_eq!(l.verdict, v, "{rel}: lupin's verdict (its own)"),
+            Lupin::Verdict(v) | Lupin::ParamCopy(v) => {
+                assert_eq!(l.verdict, v, "{rel}: lupin's verdict (its own)")
+            }
         }
     }
 }
@@ -394,6 +427,94 @@ fn the_rewritten_stand_in_still_refuses_and_names_the_callee() {
         &["`grow` keeps a value built in its caller's region"],
         Lupin::Verdict("exit(0)"),
         "grow pushes a plain str it builds into h.names: not ambient-clean",
+    );
+}
+
+// ------------------------------------- s270b: the push's copy (#948) --
+
+#[test]
+fn a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store() {
+    fail_row(
+        "memory/region_outer_write_push_heap_call.lu",
+        "E1010",
+        &[
+            "`alloc` keeps a value built in its caller's region in its `mut` parameter `h`",
+            "a container store of a scalar or of a `copy`",
+        ],
+        Lupin::Verdict("trap(region-fault)"),
+        "yew's heap at its smallest: the plain push copies the slot in the block, so alloc's \
+         parameter is not ambient-clean",
+    );
+}
+
+#[test]
+fn a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy() {
+    fail_row(
+        "memory/region_outer_write_push_heap.lu",
+        "E1010",
+        &[
+            "`slots` still holds a value allocated in region `scratch`",
+            "written `copy e` at the store",
+        ],
+        Lupin::Verdict("trap(region-fault)"),
+        "the same store in the block: the slot's List header is the block's",
+    );
+}
+
+#[test]
+fn a_plain_push_copies_an_outer_list_into_the_block_and_is_refused() {
+    fail_row(
+        "memory/region_outer_write_push_plain_copy.lu",
+        "E1010",
+        &[
+            "`outs` still holds a value allocated in region `scratch`",
+            "mem.region.outer-write",
+        ],
+        Lupin::Verdict("exit(0)"),
+        "x is built outside the block, but the push's copy of it is made inside: native and \
+         release read the next region's list through the freed header",
+    );
+}
+
+#[test]
+fn the_repaired_heap_answers_just_under_the_threshold() {
+    run_row(
+        "memory/region_outer_write_push_copy_under.lu",
+        "4 1024 19 16 4 0 2000\n",
+        Lupin::Same,
+        "push(copy empty()) into the outer heap, 16 list elements, read after a reused chunk \
+         and a collection",
+    );
+}
+
+#[test]
+fn the_repaired_heap_answers_just_over_the_threshold() {
+    run_row(
+        "memory/region_outer_write_push_copy_over.lu",
+        "4 1024 19 17 4 0 2000\n",
+        Lupin::Same,
+        "17 list elements: the third doubling, where yew's unrepaired witness first trapped",
+    );
+}
+
+#[test]
+fn the_repaired_heap_answers_the_issues_one_kib_control() {
+    run_row(
+        "memory/region_outer_write_push_copy_control.lu",
+        "4 1024 19 2 4 0 2000\n",
+        Lupin::Same,
+        "the issue's 1,024-byte, 2-element control",
+    );
+}
+
+#[test]
+fn the_repaired_allocator_called_in_the_block_answers_at_the_issues_size() {
+    run_row(
+        "memory/region_outer_write_push_copy_call.lu",
+        "4 100000 101 64 4 0 2000\n",
+        Lupin::ParamCopy("trap(region-fault)"),
+        "push(copy empty()) through alloc's mut parameter is ambient-clean; 100,000 bytes and \
+         64 list elements",
     );
 }
 
