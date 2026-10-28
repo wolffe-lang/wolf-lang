@@ -89,9 +89,13 @@ const LISTEN_REFUSED_BY_NAME: &[&str] = &["0.1.55"];
 /// r40/r41: published .56 and .57 resolve the wait; both wait fixtures
 /// reach the listen, refused by name. No unlisted build inherits this pin.
 fn listen_before_wait(version: &str, commit: &str) -> bool {
-    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8"), ("0.1.58", "6240efe")]
-        .iter()
-        .any(|(v, c)| *v == version && commit.starts_with(c))
+    [
+        ("0.1.56", "28547b4"),
+        ("0.1.57", "fb054c8"),
+        ("0.1.58", "6240efe"),
+    ]
+    .iter()
+    .any(|(v, c)| *v == version && commit.starts_with(c))
 }
 
 #[test]

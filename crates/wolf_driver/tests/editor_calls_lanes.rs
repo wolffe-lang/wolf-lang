@@ -170,9 +170,13 @@ fn lupin_or_skip() -> Option<PathBuf> {
 
 /// Only these published records retain the measured served-tree boundary.
 fn realpath_served_tree_boundary(version: &str, commit: &str) -> bool {
-    [("0.1.56", "28547b4"), ("0.1.57", "fb054c8"), ("0.1.58", "6240efe")]
-        .iter()
-        .any(|(v, c)| *v == version && commit.starts_with(c))
+    [
+        ("0.1.56", "28547b4"),
+        ("0.1.57", "fb054c8"),
+        ("0.1.58", "6240efe"),
+    ]
+    .iter()
+    .any(|(v, c)| *v == version && commit.starts_with(c))
 }
 
 #[test]
