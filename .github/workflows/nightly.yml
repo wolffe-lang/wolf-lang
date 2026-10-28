@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+    inputs:
+      jobs:
+        description: "deep sweep to run; all keeps the scheduled coverage"
+        type: choice
+        options: [all, proptest-large, fuzz-long, fmt-fuzz-long, bench-full]
+        default: all
 
 permissions:
   contents: read
@@ -17,6 +23,7 @@ env:
 jobs:
   proptest-large:
     name: property tests, large case count
+    if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'proptest-large'
     runs-on: ubuntu-latest
     env:
       PROPTEST_CASES: "4096"
@@ -28,14 +35,37 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - name: install native toolchain (clang for the s41 release tier's
           long differential lane; a skip here would be a lane bug)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq clang lld
+      # R-s271-1: retain the workspace's real-link coverage, not a smaller
+      # test selection. These are the merge job's digest-checked inputs.
+      - name: cache the musl link bundle (ligature#13)
+        uses: actions/cache@v4
+        with:
+          path: .link-bundle-cache
+          key: ld02-musl-link-bundle-6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1
+      - name: build the head runtime against the verified musl sysroot
+        run: |
+          ci/fetch-entry-bundle
+          cargo xtask dist-rt --target x86_64-unknown-linux-musl
+          rt=$PWD/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+          sha256sum "$rt"; sha256sum "$rt"
+          echo "WOLF_STATIC_ENTRY_MUSL_RT=$rt" >> "$GITHUB_ENV"
+      - name: verify link inputs and build the pinned linker and assembler
+        run: |
+          ci/fetch-test-link-bundle
+          ci/build-test-ligature
+          ci/build-test-clef
+      - run: python3 ci/nightly-test.py
       - run: cargo test --workspace
 
   fuzz-long:
     name: fuzz (15m/target)
+    if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'fuzz-long'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -57,6 +87,7 @@ jobs:
 
   fmt-fuzz-long:
     name: fmt idempotence sweep (4 x 30m)
+    if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'fmt-fuzz-long'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -92,6 +123,7 @@ jobs:
 
   bench-full:
     name: full benchmarks -> bench-data branch
+    if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'bench-full'
     runs-on: ubuntu-latest
     permissions:
       contents: write
