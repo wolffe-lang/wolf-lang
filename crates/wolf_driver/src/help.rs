@@ -76,6 +76,7 @@ pub const COMMANDS: &[Cmd] = &[
         usage: &[
             "build <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]",
             "[--verbose] [--checked] [--release] [--codegen-report]",
+            "[-q|--quiet] [--timings|--timings=json:<file>]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
             "[--error-limit=N] [--target x86_64-unknown-none] [--assembler PATH] [--linker PATH]",
@@ -106,6 +107,15 @@ hosted Windows, Mach-O or foreign targets, and are unused by object-only
 builds. Assembly and release clang IR compilation remain separate.
 For `wolf run`, put build flags before the entry file.
 
+A terminal gets a live unit/phase line; other stderr stays silent until
+30 seconds without output, then heartbeats every 60 seconds. TERM=dumb
+uses heartbeats, never cursor controls. WOLF_STATUS_AFTER=<seconds>
+overrides the first deadline (0..86400, decimals accepted; invalid uses
+30). `-q`/`--quiet` hides the reporter, never diagnostics. `--timings`
+prints scoped elapsed contributions on stderr; `--timings=json:<file>`
+writes wolf-build-timings/1 JSON (even under quiet). See docs/cli.md for
+the schema and overlapping parallel/nested scopes.
+
 `--target x86_64-unknown-none` (or `target: \"x86_64-unknown-none\"` in
 `wolf.pkg`) builds a freestanding object for a kernel: `--emit=obj`
 only, no `main` shim and no runtime library; the entry is an `export
@@ -119,6 +129,7 @@ hosted runtime, allocates, or uses a float is refused by name.",
         usage: &[
             "run <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]",
             "[--verbose] [--checked] [--release] [--codegen-report]",
+            "[-q|--quiet] [--timings|--timings=json:<file>]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
             "[--error-limit=N] [--assembler PATH] [--linker PATH] [prog args…]",
@@ -126,7 +137,8 @@ hosted runtime, allocates, or uses a float is refused by name.",
         about: "\
 Every `wolf build` flag applies. The executable lands in the package's
 `.lu-cache/bin/`, and words after the entry file are the program's own
-argv. The exit code is the program's.",
+argv. Compilation progress/timings end before the program starts. The
+exit code is the program's.",
     },
     Cmd {
         name: "test",
@@ -135,6 +147,7 @@ argv. The exit code is the program's.",
         usage: &[
             "test [<dir>|<file.lu>]… [--std-root <dir>] [--deny-warnings]",
             "[--error-limit=N] [--json] [--nocapture] [--no-native-fallback]",
+            "[-q|--quiet] [--timings|--timings=json:<file>]",
         ],
         about: "\
 No registration and no life-before-main: a file whose name ends
@@ -154,7 +167,10 @@ says so: `ok [native: step budget exhausted]`, counted in the summary
 reports it `unsupported`. `--nocapture` shows each test's stdout and
 stderr as it writes them (both on stderr under `--json`). Under `wolf
 test` the checked machine refuses `os_exe()` by name, so a test that
-re-spawns itself runs natively, where `os_exe()` is its own binary.",
+re-spawns itself runs natively, where `os_exe()` is its own binary.
+Compilation has the same progress, --quiet and --timings options as
+build; reporting ends before test execution. --json keeps stdout as
+its test event stream; timing JSON goes only to the requested file.",
     },
     Cmd {
         name: "fmt",

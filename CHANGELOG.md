@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-No changes yet.
+- Long build/run/test compilations show live unit and phase progress on a
+  terminal. Non-interactive builds remain silent for 30 seconds without
+  output, then emit a heartbeat every 60 seconds and a completion line.
+  `WOLF_STATUS_AFTER` overrides the initial idle deadline. `-q`/`--quiet`
+  disables the reporter without hiding diagnostics. `--timings` prints
+  scoped elapsed contributions; `--timings=json:<file>` writes versioned
+  timing records. See [the CLI page](docs/cli.md) for the schema and the
+  distinction between wall time and overlapping contributions.
 
 ## 0.2.36 — 2026-10-26
 
