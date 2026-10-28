@@ -1,0 +1,428 @@
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  928G  885G   41G  96% /home
+3.4G	/home/mfwolffe/lanes/s269
+s269 replay acquired CPUs8-11 shim=/home/mfwolffe/lanes/s269/scratch/taskset.no0tqo 2026-10-28T20:16:59Z
+time="2026-10-28T16:16:59-04:00" level=error msg="Refreshing container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: retrieving temporary directory for container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: no such container"
+[
+  {
+    "file": "conc/atomic_ub_uaf.lu",
+    "tier": "native",
+    "checked_verdict": "ub(mem.ub)",
+    "checked_ub_row": "P1",
+    "records": [
+      {
+        "compiler": "baseline",
+        "sha256": "db37d664e2c88504d4a3f2ccce99788e5416194793385191b0725ea8b865e749",
+        "runs": [
+          {
+            "code": 58,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 187,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 166,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 42,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 106,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      },
+      {
+        "compiler": "candidate",
+        "sha256": "db37d664e2c88504d4a3f2ccce99788e5416194793385191b0725ea8b865e749",
+        "runs": [
+          {
+            "code": 60,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 30,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 97,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 62,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 87,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "conc/atomic_ub_uaf.lu",
+    "tier": "release",
+    "checked_verdict": "ub(mem.ub)",
+    "checked_ub_row": "P1",
+    "records": [
+      {
+        "compiler": "baseline",
+        "sha256": "9edee2fe4cf4f3ff365ae95a52923bc061b8af641371d142ed24b4c4ddfd31a5",
+        "runs": [
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      },
+      {
+        "compiler": "candidate",
+        "sha256": "9edee2fe4cf4f3ff365ae95a52923bc061b8af641371d142ed24b4c4ddfd31a5",
+        "runs": [
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "memory/unsafe_ub_uaf.lu",
+    "tier": "native",
+    "checked_verdict": "ub(mem.ub)",
+    "checked_ub_row": "P1",
+    "records": [
+      {
+        "compiler": "baseline",
+        "sha256": "9ac176798dffe1767b2fddd67f7b3283b5b9ef202d7c1471b12c7e5937553d20",
+        "runs": [
+          {
+            "code": 13,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 44,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 214,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 83,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 246,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      },
+      {
+        "compiler": "candidate",
+        "sha256": "9ac176798dffe1767b2fddd67f7b3283b5b9ef202d7c1471b12c7e5937553d20",
+        "runs": [
+          {
+            "code": 183,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 35,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 108,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 35,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 114,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "memory/unsafe_ub_uaf.lu",
+    "tier": "release",
+    "checked_verdict": "ub(mem.ub)",
+    "checked_ub_row": "P1",
+    "records": [
+      {
+        "compiler": "baseline",
+        "sha256": "9edee2fe4cf4f3ff365ae95a52923bc061b8af641371d142ed24b4c4ddfd31a5",
+        "runs": [
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      },
+      {
+        "compiler": "candidate",
+        "sha256": "9edee2fe4cf4f3ff365ae95a52923bc061b8af641371d142ed24b4c4ddfd31a5",
+        "runs": [
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 0,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "memory/volatile_ub_uaf.lu",
+    "tier": "native",
+    "checked_verdict": "ub(mem.ub)",
+    "checked_ub_row": "P1",
+    "records": [
+      {
+        "compiler": "baseline",
+        "sha256": "e86f8040d70de9d741f21c328637550f6159b12e2c74dab28b3f47ec5442e4c6",
+        "runs": [
+          {
+            "code": 22,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 26,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 121,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 76,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 8,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      },
+      {
+        "compiler": "candidate",
+        "sha256": "e86f8040d70de9d741f21c328637550f6159b12e2c74dab28b3f47ec5442e4c6",
+        "runs": [
+          {
+            "code": 162,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 252,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 233,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 33,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 84,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "memory/volatile_ub_uaf.lu",
+    "tier": "release",
+    "checked_verdict": "ub(mem.ub)",
+    "checked_ub_row": "P1",
+    "records": [
+      {
+        "compiler": "baseline",
+        "sha256": "abd7ed9a8714ee1114c7d530351f12e6626be05862205b1a4d628e1f00a69406",
+        "runs": [
+          {
+            "code": 255,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 36,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 36,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 166,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 182,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      },
+      {
+        "compiler": "candidate",
+        "sha256": "abd7ed9a8714ee1114c7d530351f12e6626be05862205b1a4d628e1f00a69406",
+        "runs": [
+          {
+            "code": 200,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 61,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 70,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 101,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          },
+          {
+            "code": 133,
+            "stdout_hex": "",
+            "stderr_hex": ""
+          }
+        ]
+      }
+    ]
+  }
+]
+PASS: all six compiled UB pairs are byte-identical; checked records identical P1; five replays each with empty streams. Arbitrary program exits are not build exits.

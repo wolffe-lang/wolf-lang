@@ -1,0 +1,3 @@
+{"class":"Verdict","detail":"Exit(228) vs Exit(16)","file":"corpus/memory/volatile_ub_uaf.lu"}
+differ: 1228 file(s), 1 divergence(s), 24 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 757, B executed 757, BOTH executed 757 of 1166 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)

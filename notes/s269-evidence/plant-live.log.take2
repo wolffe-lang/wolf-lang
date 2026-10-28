@@ -1,0 +1,138 @@
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  928G  885G   41G  96% /home
+2.8G	/home/mfwolffe/lanes/s269
+s269 plant-live acquired CPUs8-11 shim=/home/mfwolffe/lanes/s269/scratch/taskset.zqvGW7 2026-10-28T20:12:00Z
+time="2026-10-28T16:12:00-04:00" level=error msg="Refreshing container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: retrieving temporary directory for container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: no such container"
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling find-msvc-tools v0.1.10
+   Compiling hashbrown v0.17.1
+   Compiling shlex v2.0.1
+   Compiling cfg-if v1.0.4
+   Compiling stable_deref_trait v1.2.1
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling wolf_lex v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_lex)
+   Compiling cpufeatures v0.3.0
+   Compiling smallvec v1.15.2
+   Compiling blake3 v1.8.6
+   Compiling rayon-core v1.13.0
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling cranelift-srcgen v0.134.3
+   Compiling arrayref v0.3.9
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling wolf_ast v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling zerofrom v0.1.8
+   Compiling wolf_parse v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_parse)
+   Compiling yoke v0.8.3
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling either v1.17.0
+   Compiling equivalent v1.0.2
+   Compiling indexmap v2.14.0
+   Compiling zerovec v0.11.6
+   Compiling rayon v1.12.0
+   Compiling tinystr v0.8.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling cranelift-isle v0.134.3
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling libc v0.2.189
+   Compiling utf8_iter v1.0.4
+   Compiling serde_core v1.0.229
+   Compiling log v0.4.33
+   Compiling icu_properties_data v2.2.0
+   Compiling heck v0.5.0
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling icu_normalizer_data v2.2.0
+   Compiling fnv v1.0.7
+   Compiling hashbrown v0.16.1
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling icu_collections v2.2.0
+   Compiling wolf_sema v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_sema)
+   Compiling icu_provider v2.2.0
+   Compiling gimli v0.33.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling allocator-api2 v0.2.21
+   Compiling memchr v2.8.3
+   Compiling target-lexicon v0.13.5
+   Compiling cranelift-codegen v0.134.3
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling zmij v1.0.23
+   Compiling serde v1.0.229
+   Compiling arbitrary v1.4.2
+   Compiling rustc-hash v2.1.3
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-control v0.134.3
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling serde_derive v1.0.229
+   Compiling anyhow v1.0.104
+   Compiling crc32fast v1.5.0
+   Compiling serde_json v1.0.151
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_mem)
+   Compiling object v0.39.1
+   Compiling percent-encoding v2.3.2
+   Compiling itoa v1.0.18
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_fmt)
+   Compiling wolf_query v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_query)
+   Compiling wolf_wir v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_wir)
+   Compiling url v2.5.8
+   Compiling wolf_rt v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_rt)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling wolf_backend v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_backend)
+   Compiling lsp-server v0.10.0
+   Compiling wolf_cimport v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_cimport)
+   Compiling wolf_pkg v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_pkg)
+   Compiling wolf_codegen_llvm v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_codegen_llvm)
+   Compiling wolf_doc v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_lsp)
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.36 (/home/mfwolffe/lanes/s269/plant-live/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 18.98s
+     Running tests/status_lanes.rs (target/debug/deps/status_lanes-8340b8adf4efa447)
+
+running 1 test
+
+thread 'non_tty_never_receives_live_controls_even_with_immediate_heartbeat' (1901) panicked at crates/wolf_driver/tests/status_lanes.rs:27:5:
+assertion failed: !out.stderr.contains(&b'\r')
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test non_tty_never_receives_live_controls_even_with_immediate_heartbeat ... FAILED
+
+failures:
+
+failures:
+    non_tty_never_receives_live_controls_even_with_immediate_heartbeat
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p wolf_driver --test status_lanes`
+PASS plant witness: non_tty_never_receives_live_controls_even_with_immediate_heartbeat is RED, exit101
