@@ -51,6 +51,17 @@
 //! attributable store bounds every attributable load. Any store or
 //! escape the walk cannot attribute poisons: the group (an escape) or
 //! the whole function (an unattributable buffer store).
+//!
+//! A `mut` parameter is a pointer to the CALLER's slot holding the
+//! header. Handed straight on to a module call it is the container
+//! rooted at that parameter, so what the callee writes reaches every
+//! caller up the chain (pass 2 closes the chain, widening what is
+//! still moving); a pointer stored into it replaces the caller's
+//! container, which then holds anything. wolf-lang#940 is what
+//! happened when the channel read the relay as no container at all:
+//! pack's `feed_all(mut keys, …)` relayed to `feed`, the only store
+//! left on the caller's key list was a constant 7, and the release
+//! tier decoded every key as 7.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -180,6 +191,18 @@ struct Local {
     /// Params whose container is READ (loads observed) — used only
     /// for reporting; reads never kill.
     reads: BTreeSet<u32>,
+}
+
+impl Local {
+    /// The group rooted at `r` may hold anything: no fact on it here,
+    /// and when it is a parameter's, every caller's container passed
+    /// there is clobbered unbounded.
+    fn kill(&mut self, r: Root) {
+        self.meets.entry(r).or_insert(Meet::Empty).poison();
+        if let Root::Param(p) = r {
+            self.writes.entry(p).or_insert(Meet::Empty).poison();
+        }
+    }
 }
 
 /// The whole-program result the minter and the summary emitter read.
@@ -575,6 +598,22 @@ fn scan(m: &Module, f: &Function) -> Local {
                                 *w = w.join(vr);
                             }
                         }
+                        // wolf-lang#940: a pointer stored into a `mut`
+                        // parameter's slot REPLACES the container the
+                        // caller passed (`keys = fresh`). After the
+                        // call the caller reloads its slot and reads a
+                        // list it never saw a store into, so the
+                        // container reachable from param p is written
+                        // with anything — for every caller, and for
+                        // this function's own later loads.
+                        Origin::MutSlot(p) if f.value_ty(args[0]) == crate::types::PTR => {
+                            lf.kill(Root::Param(p));
+                            if let Origin::Hdr(r) = origin(args[0]) {
+                                // The stored header's identity escapes
+                                // into the caller's slot.
+                                lf.kill(r);
+                            }
+                        }
                         Origin::Stack(_) | Origin::HdrField | Origin::Const => {}
                         // A store of a HEADER into a stack slot is the
                         // `mut` argument pattern; benign as a store —
@@ -614,14 +653,8 @@ fn scan(m: &Module, f: &Function) -> Local {
                     // s97: no summary edge — anything container-linked
                     // through an indirect call dies, loudly.
                     for a in args.iter().copied() {
-                        match origin(a) {
-                            Origin::Hdr(r) | Origin::Data(r) | Origin::Elem(r) => {
-                                lf.meets.entry(r).or_insert(Meet::Empty).poison();
-                                if let Root::Param(p) = r {
-                                    lf.writes.entry(p).or_insert(Meet::Empty).poison();
-                                }
-                            }
-                            _ => {}
+                        if let Some(r) = reached_root(f, b, ii, a, &o) {
+                            lf.kill(r);
                         }
                     }
                 }
@@ -634,6 +667,14 @@ fn scan(m: &Module, f: &Function) -> Local {
                         for a in args.iter().copied() {
                             let flow = match origin(a) {
                                 Origin::Hdr(r) => ArgFlow::Container(r),
+                                // wolf-lang#940: this function's own
+                                // `mut` parameter handed straight on
+                                // (`feed_all` relaying `mut keys` to
+                                // `feed`) is the container rooted at
+                                // that parameter. Read as opaque, every
+                                // write the callee makes through it was
+                                // lost to this function's callers.
+                                Origin::MutSlot(p) => ArgFlow::Container(Root::Param(p)),
                                 Origin::Stack(_) => {
                                     // A slot: if a header was stored
                                     // into it in this block before the
@@ -697,22 +738,8 @@ fn scan(m: &Module, f: &Function) -> Local {
                         // Unknown external: any container-linked
                         // argument dies (import c and the whole world).
                         for a in args.iter().copied() {
-                            match origin(a) {
-                                Origin::Hdr(r) | Origin::Data(r) | Origin::Elem(r) => {
-                                    lf.meets.entry(r).or_insert(Meet::Empty).poison();
-                                    if let Root::Param(p) = r {
-                                        lf.writes.entry(p).or_insert(Meet::Empty).poison();
-                                    }
-                                }
-                                Origin::Stack(_) => {
-                                    if let Some(r) = slot_header(f, b, ii, a, &o) {
-                                        lf.meets.entry(r).or_insert(Meet::Empty).poison();
-                                        if let Root::Param(p) = r {
-                                            lf.writes.entry(p).or_insert(Meet::Empty).poison();
-                                        }
-                                    }
-                                }
-                                _ => {}
+                            if let Some(r) = reached_root(f, b, ii, a, &o) {
+                                lf.kill(r);
                             }
                         }
                     }
@@ -782,6 +809,26 @@ fn slot_header(
     }
 }
 
+/// The container a call argument reaches, for the kills at a call the
+/// channel cannot see into: a header or a pointer into one, this
+/// function's own `mut` parameter slot (the container rooted at that
+/// parameter, wolf-lang#940), or a stack slot a header was stored
+/// into before the call.
+fn reached_root(
+    f: &Function,
+    b: Block,
+    at: crate::ir::Inst,
+    a: Value,
+    o: &HashMap<Value, Origin>,
+) -> Option<Root> {
+    match o.get(&a).copied() {
+        Some(Origin::Hdr(r) | Origin::Data(r) | Origin::Elem(r)) => Some(r),
+        Some(Origin::MutSlot(p)) => Some(Root::Param(p)),
+        Some(Origin::Stack(_)) => slot_header(f, b, at, a, o),
+        _ => None,
+    }
+}
+
 /// Run the whole-program analysis. `digest_prefix` is the provenance
 /// tag every minted fact carries.
 pub fn analyze(m: &Module) -> Ipr {
@@ -818,51 +865,18 @@ pub fn analyze(m: &Module) -> Ipr {
 
     // ---- pass 2: close argw transitively (bottom-up, widened) ----------
     // A module call passing container root R at param j inherits the
-    // callee's writes[j]; iterate WIDEN_PASSES then widen unknowns to
-    // Poison.
+    // callee's writes[j]; iterate WIDEN_PASSES, then widen whatever is
+    // still moving to Poison until nothing moves. One round carries an
+    // effect one call hop, so a chain of `mut` relays longer than
+    // WIDEN_PASSES (wolf-lang#940: main → feed_all → feed is two)
+    // would otherwise stop short of its root caller, and that caller's
+    // loads would be proved from the stores it can see.
     for _ in 0..WIDEN_PASSES {
-        let snapshot: BTreeMap<String, BTreeMap<u32, Meet>> = locals
-            .iter()
-            .map(|(k, l)| (k.clone(), l.writes.clone()))
-            .collect();
-        let dirty_set: BTreeSet<String> = locals
-            .iter()
-            .filter(|(_, l)| l.dirty)
-            .map(|(k, _)| k.clone())
-            .collect();
-        for name in &order {
-            let calls = locals[name].calls.clone();
-            let lf = locals.get_mut(name).expect("scanned");
-            for cs in &calls {
-                let callee_writes = snapshot.get(&cs.callee);
-                let callee_dirty = dirty_set.contains(&cs.callee);
-                for (j, af) in cs.args.iter().enumerate() {
-                    let ArgFlow::Container(r) = af else { continue };
-                    let effect = callee_writes
-                        .and_then(|w| w.get(&(j as u32)).copied())
-                        .unwrap_or(Meet::Empty);
-                    let effect = if callee_dirty { Meet::Poison } else { effect };
-                    match effect {
-                        Meet::Empty => {}
-                        Meet::Range(rr) => {
-                            let e = lf.meets.entry(*r).or_insert(Meet::Empty);
-                            *e = e.join(Some(rr));
-                            if let Root::Param(p) = r {
-                                let w = lf.writes.entry(*p).or_insert(Meet::Empty);
-                                *w = w.join(Some(rr));
-                            }
-                        }
-                        Meet::Poison => {
-                            lf.meets.entry(*r).or_insert(Meet::Empty).poison();
-                            if let Root::Param(p) = r {
-                                lf.writes.entry(*p).or_insert(Meet::Empty).poison();
-                            }
-                        }
-                    }
-                }
-            }
+        if !close_writes(&mut locals, &order, false) {
+            break;
         }
     }
+    while close_writes(&mut locals, &order, true) {}
 
     // ---- pass 3: return ranges bottom-up (widened) ---------------------
     let mut rets: BTreeMap<String, Option<Rng>> = BTreeMap::new();
@@ -1167,6 +1181,57 @@ pub fn analyze(m: &Module) -> Ipr {
         }
     }
     ipr
+}
+
+/// One round of pass 2: every module call passing container root R at
+/// param j joins the callee's `writes[j]` as the round began into R's
+/// meet (and, for a parameter root, into this function's own
+/// `writes`). Answers whether any `writes` entry moved. With `widen`
+/// an entry that would move goes straight to Poison, so the rounds
+/// that follow are bounded by the number of entries (each widens at
+/// most once; D4: a count, never a clock).
+fn close_writes(locals: &mut BTreeMap<String, Local>, order: &[String], widen: bool) -> bool {
+    let snapshot: BTreeMap<String, BTreeMap<u32, Meet>> = locals
+        .iter()
+        .map(|(k, l)| (k.clone(), l.writes.clone()))
+        .collect();
+    let dirty_set: BTreeSet<String> = locals
+        .iter()
+        .filter(|(_, l)| l.dirty)
+        .map(|(k, _)| k.clone())
+        .collect();
+    let mut moved = false;
+    for name in order {
+        let calls = locals[name].calls.clone();
+        let lf = locals.get_mut(name).expect("scanned");
+        for cs in &calls {
+            let callee_writes = snapshot.get(&cs.callee);
+            let callee_dirty = dirty_set.contains(&cs.callee);
+            for (j, af) in cs.args.iter().enumerate() {
+                let ArgFlow::Container(r) = af else { continue };
+                let effect = callee_writes
+                    .and_then(|w| w.get(&(j as u32)).copied())
+                    .unwrap_or(Meet::Empty);
+                let effect = if callee_dirty { Meet::Poison } else { effect };
+                let add = match effect {
+                    Meet::Empty => continue,
+                    Meet::Range(rr) => Some(rr),
+                    Meet::Poison => None,
+                };
+                let e = lf.meets.entry(*r).or_insert(Meet::Empty);
+                *e = e.join(add);
+                if let Root::Param(p) = r {
+                    let w = lf.writes.entry(*p).or_insert(Meet::Empty);
+                    let next = w.join(add);
+                    if next != *w {
+                        moved = true;
+                        *w = if widen { Meet::Poison } else { next };
+                    }
+                }
+            }
+        }
+    }
+    moved
 }
 
 /// Can `cs` (a call in `caller` to a function whose Local is `callee`)
