@@ -667,14 +667,8 @@ fn scan(m: &Module, f: &Function) -> Local {
                         for a in args.iter().copied() {
                             let flow = match origin(a) {
                                 Origin::Hdr(r) => ArgFlow::Container(r),
-                                // wolf-lang#940: this function's own
-                                // `mut` parameter handed straight on
-                                // (`feed_all` relaying `mut keys` to
-                                // `feed`) is the container rooted at
-                                // that parameter. Read as opaque, every
-                                // write the callee makes through it was
-                                // lost to this function's callers.
-                                Origin::MutSlot(p) => ArgFlow::Container(Root::Param(p)),
+                                // PLANT (s270, never merge): the relayed
+                                // `mut` parameter is opaque again.
                                 Origin::Stack(_) => {
                                     // A slot: if a header was stored
                                     // into it in this block before the
