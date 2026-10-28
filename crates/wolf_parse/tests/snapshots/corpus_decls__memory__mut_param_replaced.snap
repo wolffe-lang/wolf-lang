@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 564..710 name=refill body=Block
+FnDecl 712..767 name=quit body=Block
+FnDecl 769..946 name=main body=Block

@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 974..1129 name=feed body=Block
+FnDecl 1131..1238 name=feed_all body=Block
+FnDecl 1240..1296 name=flush body=Block
+FnDecl 1298..1513 name=main body=Block
