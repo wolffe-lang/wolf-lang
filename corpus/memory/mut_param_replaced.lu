@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="6\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut
+//! wolf-lang#940's second road into the same channel: the callee
+//! replaces the list its `mut` parameter holds (`keys = fresh`), so
+//! after the call the caller's `keys` is a different list. The release
+//! tier's interprocedural range channel (s99) kept reading the
+//! caller's reload of `keys` as the list it had passed, whose only
+//! store was `quit`'s 7, proved every element load to be 7 and printed
+//! 7, while every other machine printed the 6 `refill` put there.
+
+fn refill(mut keys: List[int], ks: List[int]) {
+    var fresh = List[int]()
+    for k in ks {
+        (mut fresh).push(k)
+    }
+    keys = fresh
+}
+
+fn quit(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var ks = List[int]()
+    (mut ks).push(6)
+    var keys = List[int]()
+    quit(mut keys)
+    refill(mut keys, ks)
+    for k in keys {
+        print("{k}")
+    }
+}

@@ -1,0 +1,48 @@
+//! check: run(exit=0, stdout="6\n2\n7\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut
+//! wolf-lang#940, pack's key decoder reduced: a `mut` list parameter
+//! passed straight on to a callee that writes it. `feed_all` relays
+//! its `mut keys` to `feed`, and neither inlines (a multi-block
+//! callee with a token parameter never does, the s42 v0 rule), so the
+//! release tier's interprocedural range channel (s99) must carry
+//! `feed`'s pushes back through `feed_all` to `main`. It read the
+//! relay as no container at all: `flush`'s constant push was the only
+//! store it saw on `keys`, every element load was proved to be 7, and
+//! the release tier printed 7 for every key (pack's live loop read
+//! every key as the quit key) while the checked machine, the native
+//! tier, the release tier with `WOLF_MIDEND=0` and lupin printed the
+//! keys. No recursion is needed: pack's recursive `feed` kept its
+//! call for the same reason any multi-block `feed` does.
+
+fn feed(mut keys: List[int], b: int) {
+    if b == 32 {
+        (mut keys).push(6)
+        return
+    }
+    if b == 66 {
+        (mut keys).push(2)
+    }
+}
+
+fn feed_all(mut keys: List[int], bytes: List[int]) {
+    for b in bytes {
+        feed(mut keys, b)
+    }
+}
+
+fn flush(mut keys: List[int]) {
+    (mut keys).push(7)
+}
+
+fn main() {
+    var bytes = List[int]()
+    (mut bytes).push(32)
+    (mut bytes).push(66)
+    var keys = List[int]()
+    feed_all(mut keys, bytes)
+    flush(mut keys)
+    for k in keys {
+        print("{k}")
+    }
+}
