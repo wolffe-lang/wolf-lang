@@ -661,6 +661,9 @@ fn resolve_from_entry(
     std_root: Option<&Path>,
     project: Option<&wolf_pkg::Project>,
 ) -> Result<wolf_sema::Resolution, String> {
+    if !std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+        eprintln!("wolf build: still in parse of package (0 s)");
+    }
     let roots = package_roots(std_root, project);
     let mut loader = wolf_sema::DiskLoader::from_entry(entry, sm)
         .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
