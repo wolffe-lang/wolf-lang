@@ -81,11 +81,12 @@ not the language's.
 two releases agree (`records/build-profile.jsonl`): 0.2.35's own source dev-built traps `bounds` at
 every count, and trunk built `--release` reproduces the archive's pattern exactly (exit(0) at 1, 2,
 16; assert at 17, 24; SIGSEGV at 25, 64). A dev `wolf_rt` zeroes a pooled chunk when it hands it out
-again (`take_chunk`, `cfg(debug_assertions)`), so the freed block's slot headers read back as empty
-lists and the collector's copy loop (`fl/gc.lu:318`) indexes past a length that just became 0. And
-with yew's allocator repaired (below) the base compiler — trunk without this fix — runs the witness
-to the right answer on checked, native and release at 1,024 bytes and 2, 16 and 17 elements, as
-wolf 0.2.35 does (`records/yew-copy.jsonl`; TBD the larger sizes).
+again (`take_chunk`, `cfg(debug_assertions)`), so — consistent with every reading above — the freed
+block's slot headers read back as empty lists and the collector's copy loop (`fl/gc.lu:318`) indexes
+past a length that just became 0. And with yew's allocator repaired (below) the base compiler —
+trunk without this fix — runs the witness to the right answer on checked, native and release at
+every size tried (1,024 bytes with 2, 16, 17, 33 and 64 elements; 100,000 bytes with 2 and 64), as
+wolf 0.2.35 does (`records/yew-copy.jsonl`, 70 rows).
 
 **The reduction** (`probes/e/`, base compiler): `e1_no_block_work.lu` is the smallest that differs —
 a callee pushes `Slot { t: -1, bytes: List[int]() }` into the heap its caller owns, the call sits in
@@ -148,8 +149,9 @@ clean and runs.
 yew's witness at the head: E1010 at every size (`records/yew-head.jsonl`). The repair is the word
 the report names, `(mut vm.gc.slots).push(copy fl_empty_slot())` (twice, `fl/gc.lu:123-124`):
 with it the witness prints `native scratch constructors survive outside region and collection` on
-checked, native and release at 1,024 bytes and 2, 16, 17 elements (and TBD), on the head, the base
-and wolf 0.2.35 alike.
+checked, native and release at all seven sizes, on the head, the base and wolf 0.2.35 alike;
+lupin 0.1.58 traps `region-fault` on it at every size (the `push(copy …)` through a `mut` parameter
+it does not mirror yet, below).
 
 ## 5. Rows
 
@@ -226,7 +228,11 @@ TBD
 - Miss: I predicted 0.2.35 and 0.2.36 differ in how the cause surfaces. They do not: the difference
   is the dev build's runtime (pooled chunks zeroed), a fact of how the issue's 0.2.36 column was
   built, not of either release.
-- TBD (census, corpus differ).
+- Hit: the corpus differ moves exactly the three new refusals (and the three UB probes that move on
+  every comparison).
+- Half a miss: I predicted the census would move only yew. It moved one yew file and one pax file,
+  and both are this bug as reported downstream before (pax px72's witness "must be rejected",
+  yew G50 is wolf-lang#919); nothing else in 2,912 files.
 
 ## Issues (none filed or closed here)
 
