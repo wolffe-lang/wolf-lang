@@ -13,7 +13,7 @@ The invocation name and byte-exact arguments are available through
 too: the generated C entry now hands argc, argv and envp to the runtime.
 Objects and runtime must come from this release together.
 
-This release pairs with **lupin 0.1.57**, spec pin `a5378e3`, and bundles
+This release pairs with **lupin 0.1.58**, spec pin `a5378e3`, and bundles
 **wolf-std at `78b9d3c`**: the thirteen corrected ledger cells, new process
 and filesystem wrappers, in-place List helpers and `fs.read_into`.
 Lupin's new vendored corpus resolves the stale three-region-row snapshot;
