@@ -114,7 +114,7 @@ def expect(name, got, tier, jobs):
 
 
 # --- T1 the tiers by event ---------------------------------------------------
-say(EVERY == ["plan-test", "lint-test", "variadic-abi", "static-entry", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
+say(EVERY == ["plan-test", "tool-details", "lint-test", "variadic-abi", "static-entry", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
     "T1 the workflow's jobs between plan and tier: %s" % " ".join(EVERY))
 expect("T1 a push to trunk", plan(event="push"), "full", MERGE)
 expect("T1 the nightly", plan(event="schedule"), "release", EVERY)
@@ -301,6 +301,10 @@ say("variadic-abi" not in PR_JOBS and "variadic-abi" in plan(event="push")["jobs
 expect("static-entry plants run only their selected job", plan(event="workflow_dispatch", jobs="static-entry"), "partial", ["static-entry"])
 say("static-entry" not in PR_JOBS and "static-entry" in plan(event="push")["jobs"],
     "the focused static-entry job (s267) is full/release and explicit partial dispatch; lint-test's gauntlet runs its rows on a PR")
+
+expect("tool reporting plants run only their selected job", plan(event="workflow_dispatch", jobs="tool-details"), "partial", ["tool-details"])
+say("tool-details" not in PR_JOBS and "tool-details" in plan(event="push")["jobs"],
+    "the focused tool-details job is full/release and explicit partial dispatch; the PR gauntlet runs its rows")
 
 # --- T7 the change read from git ----------------------------------------------------
 def git(repo, *args):

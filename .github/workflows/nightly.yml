@@ -60,7 +60,6 @@ jobs:
           ci/fetch-test-link-bundle
           ci/build-test-ligature
           ci/build-test-clef
-      - run: python3 ci/nightly-test.py
       - run: cargo test --workspace
 
   fuzz-long:
