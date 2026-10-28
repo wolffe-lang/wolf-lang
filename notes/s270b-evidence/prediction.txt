@@ -1,0 +1,40 @@
+s270b prediction, written before the first change (2026-10-28 15:41 EDT, 19:41Z)
+Lane: s270b (#948). Base: wolf-lang trunk 5adf3d91f75b3545ff8d38e5b6693b0b9f367a05 (v0.2.36).
+
+Measured before this file (hasu block A, records under /home/mfwolffe/lanes/s270b/records/):
+- yew bf7ab4a3 scratch-once at trunk: checked exit(0) for every (bytes, elements) pair tried
+  ((1024,2) (1024,16) (1024,17) (1024,64) (100000,64) (100000,2)); native and release
+  trap(bounds) at fl/gc.lu:318 for all six; lupin 0.1.58 trap(region-fault) for all six
+  ("`vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale").
+- the same six at wolf 0.2.35: checked exit(0); native/release exit(0) at 2 and 16 elements,
+  trap(assert) at 17, died without an exit code (SIGSEGV) at 64, whatever the byte count.
+- `--dump=mut-clean` at trunk: fl_gc_alloc #0 vm: clean (it pushes fl_empty_slot(), a struct of
+  Lists built in its caller's region, into vm.gc.slots).
+- probes/c/c3 (the shape at its smallest, no yew): checked exit(0) "1 100 99 2000"; native and
+  release SIGSEGV; lupin trap(region-fault).
+- probes/c/c1 (an outer-built List pushed plainly inside a block): checked and lupin print
+  "1 100 99"; native and release print "1 1000 7777777" (the copy push makes lives in the block).
+
+Hypothesis (the cause): not the runtime's large-value path and not a byte-size threshold. The
+memory check is wrong. s255 attributed a builtin `push`'s call site to the container's own region
+(right for the growth), and with it dropped the only site that stood for the element the push
+STORES: the deep copy wolf-lang#385 makes in the AMBIENT region (wolf_wir `deep_copy_in`,
+`__wolf_rt_list_copy`). So a plain `push` of a heap-reaching value into an outer container is
+admitted inside a region block, and a callee doing it is judged ambient-clean — against
+[mem.region.outer-write] ("admitted when the stored value names no region or is written `copy e`
+... every other store ... is refused as before"). The checked machine never frees a container's
+storage, so it cannot see the read; native/release read the freed arena; lupin models the region.
+
+Predictions for the fix (wolf_mem only; no runtime, codegen, spec or CI change):
+1. A plain builtin `push` of a value whose copy reaches the heap gives the receiver a site in the
+   ambient region; `push(copy e)` into an outer list and `push(take x)` are unchanged.
+2. yew's scratch-once (every size, every element count) and probes c2/c3 become fail(E1010) on
+   checked, native and release; lupin's trap(region-fault) is the differ's agreement for E1010.
+3. c1 becomes fail(E1010) too; lupin runs it (a completeness note, wolf stricter).
+4. fl_gc_alloc's vm becomes unclean; with `push(copy fl_empty_slot())` in yew's gc.lu the witness
+   runs exit(0) with the right answer on checked, native and release at every size tried, which
+   says trunk's trap(bounds) is the same cause as 0.2.35's crash, surfacing on another path.
+5. The corpus: no existing entry changes verdict. Downstream census at --phase=mem (boreutils,
+   lobo, pelt, wolf-std, aspen, yew, scent, pax): verdicts move only in yew (files calling the fl
+   allocator inside a region block); every other repo zero.
+6. The full gauntlet green at the final head.
