@@ -19,7 +19,11 @@ fn non_tty_never_receives_live_controls_even_with_immediate_heartbeat() {
         .arg("--emit=wir")
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(!out.stderr.contains(&b'\r'));
     assert!(!out.stderr.contains(&0x1b));
     assert!(!String::from_utf8_lossy(&out.stderr).contains("Building ["));
