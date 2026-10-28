@@ -102,3 +102,26 @@ FULL DEBUG cargo xtask ci at the final head in the existing contained
 hasu block-A rig. Report its literal completion line and every loud SKIP;
 never call a partial probe or an unfinished CI run green. Refresh release
 prose to pair wolf 0.2.36 with .58, not .57. The pin's spec stays unchanged.
+
+Snapshot repair prediction, before the expected-output edit:
+Measured time: 2026-10-28T16:10:05.991650+00:00
+The 1a7dbbf1 full debug run stopped at two_mod_interface_dump. The actual
+snapshot differs ONLY in its two toolchain headers: 0.2.35 -> 0.2.36.
+Trunk commit 9ba49de62 supplies env!(CARGO_PKG_VERSION) to build_interfaces
+and prints that stamp without including it in either interface hash.
+Trunk cbb5abcb0d98fc9c5954f3f472ab04178ba97f8f previously updated the
+same two snapshot headers for 0.2.35. The current release's version bump
+1dd4b9966979a387c9349dbad3c2df4261ba3b99 moved Cargo.toml to .36 but
+omitted this snapshot. The rebase changes neither interface.rs nor the
+test relative to b7db4184; lupin is not called by this test. Therefore the
+actual .36 stamp is correct and this is release-owned stale output, not
+a new trunk semantics change or an interpreter output change.
+
+Predict that changing exactly the two toolchain stamp lines restores
+this gate, with both export/pkg hashes, dependency hashes and items
+byte-identical. Do not cargo insta accept or alter the test/renderer.
+The task panic output is expected containment/kill/debug-assert coverage:
+its wolf_rt aggregate reports 345 passed, 0 failed. Rerun the focused
+snapshot test, then launch ONE new complete debug gauntlet detached with
+pid/log/marker and hand it to the coordinator to watch; no green claim
+or tag while that full run is unfinished.
