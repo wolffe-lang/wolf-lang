@@ -213,7 +213,7 @@ fn conform_run_honours_deny_warnings_and_rejects_at_the_warning_rung() {
 }
 
 #[test]
-fn fix_applies_machine_applicable_edits_idempotently() {
+fn fix_applies_edits_but_keeps_an_invalid_program_red() {
     let dir = fixture(
         "fix-cycle",
         "use nowhere_needed\n\nfn main() -> !int {\n    let s = \"abc\"\n    let b = s[-1]\n    0\n}\n",
@@ -250,14 +250,19 @@ fn fix_applies_machine_applicable_edits_idempotently() {
     );
     // Apply: both fixes land.
     let (code, _, err) = run_fix(&["--apply"]);
-    assert_eq!(code, 0, "apply succeeds:\n{err}");
+    assert_eq!(
+        code, 1,
+        "the edits land, but str indexing still fails:\n{err}"
+    );
+    assert!(err.contains("E0411"), "post-edit type error:\n{err}");
     let after = std::fs::read_to_string(dir.join("main.lu")).expect("read");
     assert!(!after.contains("use nowhere_needed"), "import deleted");
     assert!(after.contains("s[^1]"), "index rewritten to `^`:\n{after}");
-    // Idempotent: nothing left to do.
+    // No edit left, but the invalid program must not turn green (#616).
     let (code, _, err) = run_fix(&[]);
-    assert_eq!(code, 0, "second run is clean");
-    assert!(err.contains("nothing to fix"), "{err}");
+    assert_eq!(code, 1, "the second run is still a type error");
+    assert!(err.contains("E0411"), "{err}");
+    assert!(!err.contains("nothing to fix"), "{err}");
 }
 
 /// The idiom arbiter's W1002 fix through the real subcommand: the

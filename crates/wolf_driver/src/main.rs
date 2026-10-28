@@ -3399,7 +3399,6 @@ fn fix(args: &[String]) {
     // The ladder, tolerant of errors (fixes often live ON errors):
     // each phase's diagnostics are collected as deep as the pipeline
     // honestly gets; allowed warnings never offer their fixes.
-    let scan = wolf_sema::scan_allows(&res.package);
     let levels = match effective_lints(path, &LintLevels::new()) {
         Ok(l) => l,
         Err(e) => {
@@ -3409,25 +3408,53 @@ fn fix(args: &[String]) {
     };
     let has_errors =
         |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
-    let mut diags = res.diagnostics.clone();
-    diags.extend(scan.diagnostics.iter().cloned());
-    if !has_errors(&diags) {
-        let tc = wolf_sema::typecheck_package(&res);
-        if tc.not_yet.is_empty() {
+    let collect = |res: &wolf_sema::Resolution| {
+        let scan = wolf_sema::scan_allows(&res.package);
+        let mut diags = res.diagnostics.clone();
+        let mut refused = Vec::new();
+        diags.extend(scan.diagnostics.iter().cloned());
+        if !has_errors(&diags) {
+            let tc = wolf_sema::typecheck_package(res);
+            refused.extend(tc.not_yet.iter().cloned());
             diags.extend(tc.diagnostics.iter().cloned());
-            if !has_errors(&diags) {
+            if refused.is_empty() && !has_errors(&diags) {
                 let mem = wolf_mem::check_package(&res.package, &tc);
-                if mem.not_yet.is_empty() {
-                    diags.extend(mem.diagnostics.iter().cloned());
+                refused.extend(mem.not_yet.iter().cloned());
+                diags.extend(mem.diagnostics.iter().cloned());
+                if refused.is_empty() && !has_errors(&diags) {
+                    refused.extend(wolf_wir::lower_package(&res.package, &tc).not_yet);
                 }
             }
         }
-    }
-    let mut diags = wolf_diag::lint::apply(&levels, &scan.allows, diags);
-    // #325: never offer W1002's drop-the-`mut` edit beside the mode
-    // error that asks for the opposite.
-    wolf_diag::suppress_mode_shadowed(&mut diags);
-    wolf_diag::sort_diagnostics(&mut diags);
+        let mut diags = wolf_diag::lint::apply(&levels, &scan.allows, diags);
+        // #325: a mode error retires the opposite drop-the-mut edit.
+        wolf_diag::suppress_mode_shadowed(&mut diags);
+        wolf_diag::sort_diagnostics(&mut diags);
+        (diags, refused)
+    };
+    let report_remaining =
+        |diags: &[Diagnostic], refused: &[wolf_sema::check::NotYet], sources: &Sources| {
+            let errors: Vec<_> = diags
+                .iter()
+                .filter(|d| d.severity == wolf_diag::Severity::Error)
+                .cloned()
+                .collect();
+            if !errors.is_empty() {
+                eprint!(
+                    "{}",
+                    report_capped(sources, &errors, 0, RenderOptions::default())
+                );
+            }
+            for nyc in refused {
+                eprintln!("wolf fix: cannot compile this yet — {}", nyc.construct);
+                eprint!(
+                    "{}",
+                    wolf_diag::render_source_span(nyc.span, sources, &RenderOptions::default())
+                );
+            }
+            !errors.is_empty() || !refused.is_empty()
+        };
+    let (diags, refused) = collect(&res);
 
     // FileId index → (display path, source bytes).
     let mut by_file: std::collections::HashMap<u32, (String, Vec<u8>)> =
@@ -3446,12 +3473,37 @@ fn fix(args: &[String]) {
         std::collections::HashMap::new();
     let mut planned: Vec<String> = Vec::new();
     let mut skipped = 0usize;
+    let mut unapplied = 0usize;
     for d in &diags {
-        let Some(sug) = d
+        let span = d.span();
+        let loc = match (
+            sources.file_name(span.file),
+            sources.line_col(span.file, span.lo),
+        ) {
+            (Some(file), Some((line, col))) => format!("{file}:{line}:{col}"),
+            _ => "?".to_string(),
+        };
+        let selected = d
             .suggestions
             .iter()
-            .find(|s| s.applicability == wolf_diag::Applicability::MachineApplicable)
-        else {
+            .position(|s| s.applicability == wolf_diag::Applicability::MachineApplicable);
+        for (i, sug) in d.suggestions.iter().enumerate() {
+            if Some(i) == selected {
+                continue;
+            }
+            let reason = match sug.applicability {
+                wolf_diag::Applicability::Maybe => "maybe: needs human review",
+                wolf_diag::Applicability::HasPlaceholders => {
+                    "has-placeholders: fill in the replacement"
+                }
+                wolf_diag::Applicability::MachineApplicable => {
+                    "machine-applicable: alternative to the selected fix"
+                }
+            };
+            eprintln!("unapplied {loc}: {}: {} ({reason})", d.code, sug.message);
+            unapplied += 1;
+        }
+        let Some(sug) = selected.map(|i| &d.suggestions[i]) else {
             continue;
         };
         let conflicts = sug.edits.iter().any(|(sp, _)| {
@@ -3460,7 +3512,12 @@ fn fix(args: &[String]) {
                 .is_some_and(|ivs| ivs.iter().any(|&(lo, hi)| sp.lo < hi && lo < sp.hi))
         });
         if conflicts {
+            eprintln!(
+                "unapplied {loc}: {}: {} (machine-applicable: overlaps an earlier fix; rerun after applying)",
+                d.code, sug.message
+            );
             skipped += 1;
+            unapplied += 1;
             continue;
         }
         for (sp, rep) in &sug.edits {
@@ -3471,24 +3528,16 @@ fn fix(args: &[String]) {
                 .or_default()
                 .push((*sp, rep.clone()));
         }
-        let loc = by_file
-            .get(&(d.span().file.index() as u32))
-            .map(|(p, src)| {
-                let line = 1 + src[..(d.span().lo as usize).min(src.len())]
-                    .iter()
-                    .filter(|&&b| b == b'\n')
-                    .count();
-                format!("{p}:{line}")
-            })
-            .unwrap_or_else(|| "?".to_string());
         planned.push(format!("{loc}: {}: {}", d.code, sug.message));
     }
     if planned.is_empty() {
-        eprintln!("wolf fix: nothing to fix");
-        if skipped > 0 {
-            eprintln!("wolf fix: {skipped} overlapping fix(es) skipped — rerun after applying");
+        let invalid = report_remaining(&diags, &refused, &sources);
+        if invalid {
+            eprintln!("wolf fix: the file still does not compile");
+        } else if unapplied == 0 {
+            eprintln!("wolf fix: nothing to fix");
         }
-        std::process::exit(0);
+        std::process::exit(i32::from(invalid));
     }
     for p in &planned {
         println!("{}{p}", if apply { "fixed " } else { "would fix " });
@@ -3527,6 +3576,28 @@ fn fix(args: &[String]) {
             String::new()
         }
     );
+    // Applying an edit is not the same as repairing the program (#616).
+    // Resolve fresh bytes and run the same ladder, including the lowerer.
+    let mut fresh_sm = wolf_span::SourceMap::new();
+    let mut fresh_sources = Sources::new();
+    let fresh = match resolve_from_entry(
+        path,
+        &mut fresh_sm,
+        &mut fresh_sources,
+        std_root.as_deref(),
+        None,
+    ) {
+        Ok(res) => res,
+        Err(e) => {
+            eprintln!("wolf fix: recheck: {e}");
+            std::process::exit(2);
+        }
+    };
+    let (remaining, refused) = collect(&fresh);
+    if report_remaining(&remaining, &refused, &fresh_sources) {
+        eprintln!("wolf fix: the file still does not compile");
+        std::process::exit(1);
+    }
 }
 
 /// The s28 native rung for `conform-run --native`: compile the
