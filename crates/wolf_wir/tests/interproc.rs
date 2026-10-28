@@ -156,3 +156,109 @@ fn a_zero_index_element_access_is_still_an_element() {
         "the element sum should discharge:\n{s}"
     );
 }
+
+/// wolf-lang#940's shape at the WIR level: `main` makes a list, passes
+/// its slot as `mut` to `r<hops>`, each relay `r<k>` hands its own
+/// `mut` parameter straight to `r<k-1>` and `r1` to `sink`; then `main`
+/// stores 7 into element 0 itself and loads it back. `sink` is either
+/// a module writer storing 6 into element 0 or an unknown external.
+/// Nothing here is optimized: the analysis reads the bodies as built.
+fn relay_chain(hops: usize, external_sink: bool) -> String {
+    let mut t = String::new();
+    t.push_str("decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n");
+    t.push_str("decl @__wolf_rt_print_i64(i64)\n");
+    if external_sink {
+        t.push_str("decl @sink(ptr)\n");
+    } else {
+        t.push_str("decl @sink(mut ptr, mem.r0)\n");
+    }
+    for k in 1..=hops {
+        t.push_str(&format!("decl @r{k}(mut ptr, mem.r0)\n"));
+    }
+    t.push('\n');
+    if !external_sink {
+        t.push_str(
+            "fn @sink(mut ptr, mem.r0) {\n\
+             b0(%0: ptr, %1: mem.r0):\n  \
+             %2: mem.r2 = region.foreign 1\n  \
+             %3: mem.r1 = region.foreign 0\n  \
+             %4 = load.ptr %0, %1\n  \
+             %5 = load.ptr %4, %3\n  \
+             %6 = iconst.i64 0\n  \
+             %7 = ptr.off %5, %6, 8\n  \
+             %8 = iconst.i64 6\n  \
+             %9 = store.i64 %8, %7, %2\n  \
+             ret\n}\n\n",
+        );
+    }
+    for k in 1..=hops {
+        let callee = if k == 1 {
+            "sink".to_string()
+        } else {
+            format!("r{}", k - 1)
+        };
+        let call = if k == 1 && external_sink {
+            "  call @sink(%0)\n".to_string()
+        } else {
+            format!("  %2 = call @{callee}(%0, %1)\n")
+        };
+        t.push_str(&format!(
+            "fn @r{k}(mut ptr, mem.r0) {{\nb0(%0: ptr, %1: mem.r0):\n{call}  ret\n}}\n\n"
+        ));
+    }
+    t.push_str(&format!(
+        "fn @main() {{\n\
+         b0:\n  \
+         %0: mem.r1 = region.foreign 1\n  \
+         %1: mem.r0 = region.foreign 0\n  \
+         %2 = iconst.i64 8\n  \
+         %3, %4, %5 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+         %6: ptr, %7: mem.r2 = stack.alloc %2\n  \
+         %8 = store.ptr %3, %6, %7\n  \
+         %9 = call @r{hops}(%6, %8)\n  \
+         %10 = load.ptr %6, %9\n  \
+         %11 = load.ptr %10, %4\n  \
+         %12 = iconst.i64 0\n  \
+         %13 = ptr.off %11, %12, 8\n  \
+         %14 = iconst.i64 7\n  \
+         %15 = store.i64 %14, %13, %5\n  \
+         %16 = load.i64 %13, %15\n  \
+         call @__wolf_rt_print_i64(%16)\n  \
+         ret\n}}\n"
+    ));
+    t
+}
+
+fn main_elems(text: &str) -> Option<(i128, i128)> {
+    let m = wolf_wir::parse_module(text).expect("parse");
+    let ipr = interproc::analyze(&m);
+    ipr.local_elems.get("main").and_then(|e| e.get(&0)).copied()
+}
+
+#[test]
+fn a_relayed_mut_param_carries_the_callees_writes() {
+    // One relay: before #940's fix the relay's `mut` parameter handed
+    // on was opaque, the writer's 6 never reached `main`, and `main`'s
+    // element load was proved to be 7.
+    assert_eq!(main_elems(&relay_chain(1, false)), Some((6, 7)));
+}
+
+#[test]
+fn a_mut_relay_chain_longer_than_the_widen_passes_still_closes() {
+    // Five relays: one round of pass 2 carries an effect one hop, so a
+    // chain past WIDEN_PASSES only reaches `main` through the widening.
+    const { assert!(interproc::WIDEN_PASSES < 5) };
+    let got = main_elems(&relay_chain(5, false));
+    assert_ne!(got, Some((7, 7)), "the writer's 6 was lost on the way up");
+    assert!(
+        got.is_none_or(|(lo, hi)| lo <= 6 && hi >= 7),
+        "main's elements must cover both stores: {got:?}"
+    );
+}
+
+#[test]
+fn a_mut_param_reaching_an_unknown_external_kills_the_callers_list() {
+    // The relay hands its `mut` slot to a function the channel cannot
+    // see into: whatever it does to the list, `main` may not claim 7.
+    assert_eq!(main_elems(&relay_chain(1, true)), None);
+}
