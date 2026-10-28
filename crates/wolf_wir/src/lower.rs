@@ -20595,12 +20595,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         if k > 0 {
                             z.emit_lit(sink, b", ");
                         }
-                        let value = slots
-                            .get(k)
-                            .copied()
-                            .map(|v| z.slot_view_as(v, table, pt, span))
-                            .transpose()?;
-                        z.emit_value(sink, value, table, pt, 0, span)?;
+                        // PLANT (s270, never merge): the payload read
+                        // straight off the union again.
+                        z.emit_value(sink, slots.get(k).copied(), table, pt, 0, span)?;
                     }
                     z.emit_lit(sink, b")");
                 }
