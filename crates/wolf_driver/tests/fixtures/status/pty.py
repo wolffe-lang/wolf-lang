@@ -46,7 +46,19 @@ assert b'wolf run: still in link of main' in result.stderr, result.stderr
 assert b'wolf run: finished native in ' in result.stderr, result.stderr
 print('PASS run reporter finishes before program execution')
 
-# Tiny terminal catches wrapped live-line residue; status must reserve its last column.
+# Actual external-tool output resets the idle clock and keeps its original stream.
+chatty = root / 'chatty-cc'
+chatty.write_text('#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(0.6)\nsys.stdout.write("tool stdout\\n");sys.stdout.flush()\nsys.stderr.write("tool stderr\\n");sys.stderr.flush()\ntime.sleep(0.6)\nos.execvp("cc", ["cc", *sys.argv[1:]])\n')
+chatty.chmod(0o755)
+chatty_args = [str(chatty) if a == str(linker) else a for a in args]
+for extra in [[], ['--quiet']]:
+    result = subprocess.run([wolf, *chatty_args, *extra], env=env, capture_output=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == b'tool stdout\n', result.stdout
+    assert result.stderr == b'tool stderr\n', result.stderr
+print('PASS tool output resets idle deadline, preserves both streams, and survives quiet')
+
+# Tiny terminal catches wrapped live-line residue; reserve room for echoed ^C.
 def screen(data, width=40):
     lines = [[]]
     cursor = 0
@@ -79,15 +91,18 @@ def terminal_row(name, argv, interrupt=False, dumb=False, expected=0):
     sent = False
     deadline = time.monotonic() + 30
     status = None
+    eof = False
     while time.monotonic() < deadline:
-        ready, _, _ = select.select([fd], [], [], 0.1)
+        ready, _, _ = select.select([] if eof else [fd], [], [], 0.1)
         if ready:
             try: block = os.read(fd, 65536)
             except OSError as error:
                 if error.errno != errno.EIO: raise
                 block = b''
             if not block:
-                break
+                # A PTY can report EOF just before waitpid observes the child's exit.
+                # Keep polling within the real deadline instead of treating that race as timeout.
+                eof = True
             data.extend(block)
             if interrupt and not sent and b'Building [' in data:
                 os.write(fd, b'\x03')

@@ -128,6 +128,17 @@ fn timings_failure_and_quiet_keep_diagnostics_honest() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("E0301"));
+    let path = dir.join("failure.json");
+    let out = build(&dir)
+        .args(["--emit=wir", "--quiet"])
+        .arg(format!("--timings=json:{}", path.display()))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("E0301"));
+    let data: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(data["builds"][0]["success"], false);
+    assert!(!data["builds"][0]["rows"].as_array().unwrap().is_empty());
 }
 #[test]
 fn test_command_keeps_json_stdout_and_records_each_compilation() {
