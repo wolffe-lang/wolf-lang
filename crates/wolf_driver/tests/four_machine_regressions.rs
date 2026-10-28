@@ -84,3 +84,13 @@ fn bare_enum_variant_initializes_its_unused_string_slot() {
 fn mixed_error_payload_display_projects_the_active_tag() {
     four_machines("rows/mixed_payload_display.lu", "A(0)\nB(p)\nA(0)\nB(p)\n");
 }
+
+#[test]
+fn a_relayed_mut_list_keeps_its_callees_pushes() {
+    four_machines("memory/mut_relay_push.lu", "6\n2\n7\n");
+}
+
+#[test]
+fn a_mut_list_replaced_by_its_callee_is_the_new_list() {
+    four_machines("memory/mut_param_replaced.lu", "6\n");
+}
