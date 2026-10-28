@@ -154,6 +154,29 @@ jobs:
       - run: python3 ci/release-publish-test.py
       - run: python3 ci/nightly-test.py
 
+  # Small selectable gate for failure reporting and formatter plants. The
+  # workspace gauntlet runs these too; a plant never needs that whole run.
+  tool-details:
+    name: CLI failure details (checked, native, release)
+    needs: plan
+    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'tool-details')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      WOLF_TEST_NATIVE_REQUIRE: "1"
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: native and release toolchains
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang lld
+      - run: cargo build --locked -p wolf_driver -p wolf_rt
+      - name: assertion messages, sites and operands; fmt and fix refusals
+        run: cargo test --locked -p wolf_driver --test assertion_details --test fmt_refusals --test fix_unapplied --test lend_refusal_code -- --nocapture
+      - name: if argument fixed points
+        run: cargo test --locked -p wolf_fmt --test s271_if -- --nocapture
+
   lint-test:
     name: lint + test + corpus (linux x86-64)
     needs: plan
@@ -647,6 +670,7 @@ jobs:
     needs:
       - plan
       - plan-test
+      - tool-details
       - lint-test
       - variadic-abi
       - static-entry
