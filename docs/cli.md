@@ -35,7 +35,7 @@ as `wolf build: finished release in 894.506s`; failure adds ` (failed)`.
 invalid values use 30. This is primarily a testing override.
 
 `-q` / `--quiet` disables progress, heartbeats, completion lines, and text
- timing tables. It does **not** suppress diagnostics, `--verbose` output,
+timing tables. It does **not** suppress diagnostics, `--verbose` output,
 test results, or the executed program's output. An explicitly requested JSON
 file is still written. Build/run/test carry these options; fmt/fix/doc do not.
 `run` and `test` stop compilation reporting before program/test execution.
