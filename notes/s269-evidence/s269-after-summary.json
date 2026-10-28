@@ -1,0 +1,3925 @@
+{
+  "native": {
+    "wall_seconds": 52.239,
+    "pass_seconds": {
+      "midend/licm": 0.0,
+      "midend/hdrprom": 0.0,
+      "midend/rangeopt": 0.0
+    },
+    "hottest": {
+      "midend/licm": {
+        "function_rows": 0,
+        "seconds": 0.0,
+        "top_two_fraction": 0,
+        "top": []
+      },
+      "midend/hdrprom": {
+        "function_rows": 0,
+        "seconds": 0.0,
+        "top_two_fraction": 0,
+        "top": []
+      },
+      "midend/rangeopt": {
+        "function_rows": 0,
+        "seconds": 0.0,
+        "top_two_fraction": 0,
+        "top": []
+      }
+    },
+    "contributions": [
+      {
+        "scope": "package",
+        "unit": "package",
+        "phase": "load/lex/parse",
+        "seconds": 0.178946
+      },
+      {
+        "scope": "package",
+        "unit": "package",
+        "phase": "resolve",
+        "seconds": 0.097867
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "WIR lowering",
+        "seconds": 21.55081
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "codegen",
+        "seconds": 25.875629
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "codegen preparation",
+        "seconds": 2.259835
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "link",
+        "seconds": 0.386978
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "load+resolve",
+        "seconds": 0.293861
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "mem",
+        "seconds": 1.335572
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "midend",
+        "seconds": 2e-06
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "typecheck",
+        "seconds": 0.294234
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "WIR lowering",
+        "seconds": 0.008081999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "codegen",
+        "seconds": 0.01062
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "lex/parse",
+        "seconds": 0.000429
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "mem/check",
+        "seconds": 4.999999999999999e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "mem/lower",
+        "seconds": 0.00035800000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "resolve",
+        "seconds": 0.000218
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "typecheck",
+        "seconds": 0.0007959999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "WIR lowering",
+        "seconds": 16.774426000000027
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "codegen",
+        "seconds": 23.675002
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "lex/parse",
+        "seconds": 0.085224
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "mem/check",
+        "seconds": 0.011260999999999976
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "mem/lower",
+        "seconds": 0.990304999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "resolve",
+        "seconds": 0.064738
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "typecheck",
+        "seconds": 0.44807800000000153
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "WIR lowering",
+        "seconds": 0.7844079999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "codegen",
+        "seconds": 1.06211
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "lex/parse",
+        "seconds": 0.021192
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "mem/check",
+        "seconds": 0.0034649999999999937
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "mem/lower",
+        "seconds": 0.15102900000000008
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "resolve",
+        "seconds": 0.018716
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "typecheck",
+        "seconds": 0.08111500000000005
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "WIR lowering",
+        "seconds": 0.17647000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "codegen",
+        "seconds": 0.182523
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "lex/parse",
+        "seconds": 0.001523
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "mem/check",
+        "seconds": 0.00022399999999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "mem/lower",
+        "seconds": 0.006375
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "resolve",
+        "seconds": 0.001151
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "typecheck",
+        "seconds": 0.00497
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "WIR lowering",
+        "seconds": 0.000738
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "codegen",
+        "seconds": 0.003622
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "lex/parse",
+        "seconds": 0.000207
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "mem/check",
+        "seconds": 1.6e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "mem/lower",
+        "seconds": 0.000175
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "resolve",
+        "seconds": 7.4e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "typecheck",
+        "seconds": 0.000437
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "WIR lowering",
+        "seconds": 0.11917500000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "codegen",
+        "seconds": 0.134466
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "lex/parse",
+        "seconds": 0.008218
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "mem/check",
+        "seconds": 0.0010560000000000018
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "mem/lower",
+        "seconds": 0.012303999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "resolve",
+        "seconds": 0.007043
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "typecheck",
+        "seconds": 0.032136999999999964
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "WIR lowering",
+        "seconds": 0.00032300000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "codegen",
+        "seconds": 0.002393
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "lex/parse",
+        "seconds": 0.00027
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "mem/check",
+        "seconds": 3.0000000000000004e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "mem/lower",
+        "seconds": 0.000176
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "resolve",
+        "seconds": 0.000107
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "typecheck",
+        "seconds": 0.0018939999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "WIR lowering",
+        "seconds": 0.000338
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "codegen",
+        "seconds": 0.003339
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "lex/parse",
+        "seconds": 0.000117
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "mem/check",
+        "seconds": 1.1000000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "mem/lower",
+        "seconds": 9.200000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "resolve",
+        "seconds": 7.4e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "typecheck",
+        "seconds": 0.001503
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "WIR lowering",
+        "seconds": 0.0009479999999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "codegen",
+        "seconds": 0.005502
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "lex/parse",
+        "seconds": 0.000237
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "mem/check",
+        "seconds": 2.6000000000000005e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "mem/lower",
+        "seconds": 0.000231
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "resolve",
+        "seconds": 0.000104
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "typecheck",
+        "seconds": 0.0018310000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "WIR lowering",
+        "seconds": 0.0035700000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "codegen",
+        "seconds": 0.015688
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "lex/parse",
+        "seconds": 0.000895
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "mem/check",
+        "seconds": 9.8e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "mem/lower",
+        "seconds": 0.000779
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "resolve",
+        "seconds": 0.000408
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "typecheck",
+        "seconds": 0.0032240000000000007
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "WIR lowering",
+        "seconds": 0.0025949999999999992
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "codegen",
+        "seconds": 0.019328
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "lex/parse",
+        "seconds": 0.001001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "mem/check",
+        "seconds": 7.399999999999991e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "mem/lower",
+        "seconds": 0.0005549999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "resolve",
+        "seconds": 0.000364
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "typecheck",
+        "seconds": 0.006233999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "WIR lowering",
+        "seconds": 0.00022200000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "codegen",
+        "seconds": 0.00197
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "lex/parse",
+        "seconds": 6.6e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "mem/check",
+        "seconds": 7e-06
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "mem/lower",
+        "seconds": 4.400000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "resolve",
+        "seconds": 2.8e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "typecheck",
+        "seconds": 0.0006609999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "WIR lowering",
+        "seconds": 0.005539
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "codegen",
+        "seconds": 0.006131
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "lex/parse",
+        "seconds": 0.000675
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "mem/check",
+        "seconds": 7.399999999999998e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "mem/lower",
+        "seconds": 0.0005740000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "resolve",
+        "seconds": 0.000264
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "typecheck",
+        "seconds": 0.0033840000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "WIR lowering",
+        "seconds": 2e-06
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "lex/parse",
+        "seconds": 0.000116
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "mem/check",
+        "seconds": 1.6e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "mem/lower",
+        "seconds": 0.00011299999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "resolve",
+        "seconds": 4.5e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "typecheck",
+        "seconds": 0.0010810000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "WIR lowering",
+        "seconds": 0.0012749999999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "codegen",
+        "seconds": 0.01514
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "lex/parse",
+        "seconds": 0.001147
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "mem/check",
+        "seconds": 8.899999999999995e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "mem/lower",
+        "seconds": 0.0008020000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "resolve",
+        "seconds": 0.000484
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "typecheck",
+        "seconds": 0.0055660000000000015
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "WIR lowering",
+        "seconds": 0.0006609999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "codegen",
+        "seconds": 0.005263
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "lex/parse",
+        "seconds": 0.000208
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "mem/check",
+        "seconds": 2.1000000000000002e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "mem/lower",
+        "seconds": 0.00014100000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "resolve",
+        "seconds": 8.8e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "typecheck",
+        "seconds": 0.0018379999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "WIR lowering",
+        "seconds": 0.0010259999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "codegen",
+        "seconds": 0.005149
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "lex/parse",
+        "seconds": 0.000214
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "mem/check",
+        "seconds": 3.0000000000000004e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "mem/lower",
+        "seconds": 0.000223
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "resolve",
+        "seconds": 8.6e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "typecheck",
+        "seconds": 0.001021
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "WIR lowering",
+        "seconds": 0.0012319999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "codegen",
+        "seconds": 0.009125
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "lex/parse",
+        "seconds": 0.000443
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "mem/check",
+        "seconds": 5.699999999999998e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "mem/lower",
+        "seconds": 0.000446
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "resolve",
+        "seconds": 0.000226
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "typecheck",
+        "seconds": 0.004006
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "WIR lowering",
+        "seconds": 4.3e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "codegen",
+        "seconds": 0.000422
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "lex/parse",
+        "seconds": 4.7e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "mem/check",
+        "seconds": 5.999999999999999e-06
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "mem/lower",
+        "seconds": 3.5e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "resolve",
+        "seconds": 1.5e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "typecheck",
+        "seconds": 0.000419
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "WIR lowering",
+        "seconds": 0.00038199999999999996
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "codegen",
+        "seconds": 0.003883
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "lex/parse",
+        "seconds": 0.000173
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "mem/check",
+        "seconds": 1.4000000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "mem/lower",
+        "seconds": 0.000137
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "resolve",
+        "seconds": 8.2e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "typecheck",
+        "seconds": 0.0036509999999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "WIR lowering",
+        "seconds": 0.00034500000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "codegen",
+        "seconds": 0.003464
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "lex/parse",
+        "seconds": 0.000244
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "mem/check",
+        "seconds": 2.600000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "mem/lower",
+        "seconds": 0.000183
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "resolve",
+        "seconds": 0.000101
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "typecheck",
+        "seconds": 0.001395
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "WIR lowering",
+        "seconds": 0.008464
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "codegen",
+        "seconds": 0.033027
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "lex/parse",
+        "seconds": 0.002008
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "mem/check",
+        "seconds": 0.0001579999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "mem/lower",
+        "seconds": 0.001633
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "resolve",
+        "seconds": 0.000854
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "typecheck",
+        "seconds": 0.006953
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "WIR lowering",
+        "seconds": 0.04557799999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "codegen",
+        "seconds": 0.104401
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "lex/parse",
+        "seconds": 0.006044
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "mem/check",
+        "seconds": 0.0008270000000000017
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "mem/lower",
+        "seconds": 0.009441
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "resolve",
+        "seconds": 0.00501
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "typecheck",
+        "seconds": 0.03380499999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "WIR lowering",
+        "seconds": 0.20226699999999995
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "codegen",
+        "seconds": 0.45471
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "lex/parse",
+        "seconds": 0.018625
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "mem/check",
+        "seconds": 0.0030489999999999996
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "mem/lower",
+        "seconds": 0.04318800000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "resolve",
+        "seconds": 0.015994
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "typecheck",
+        "seconds": 0.07508399999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "WIR lowering",
+        "seconds": 0.004146999999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "codegen",
+        "seconds": 0.021432
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "lex/parse",
+        "seconds": 0.001991
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "mem/check",
+        "seconds": 0.00016499999999999986
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "mem/lower",
+        "seconds": 0.001505
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "resolve",
+        "seconds": 0.001173
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "typecheck",
+        "seconds": 0.018175000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "WIR lowering",
+        "seconds": 0.004071999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "codegen",
+        "seconds": 0.016279
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "lex/parse",
+        "seconds": 0.001016
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "mem/check",
+        "seconds": 9.699999999999992e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "mem/lower",
+        "seconds": 0.0008700000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "resolve",
+        "seconds": 0.000667
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "typecheck",
+        "seconds": 0.006124000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "WIR lowering",
+        "seconds": 0.03092700000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "codegen",
+        "seconds": 0.079701
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "lex/parse",
+        "seconds": 0.004095
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "mem/check",
+        "seconds": 0.0006250000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "mem/lower",
+        "seconds": 0.004990999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "resolve",
+        "seconds": 0.003052
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "typecheck",
+        "seconds": 0.018083999999999996
+      }
+    ],
+    "interpretation": "Nested package scopes and parallel elapsed contributions are not additive. Per-function pass cost includes whole-module analysis performed by that invocation; no loop attribution."
+  },
+  "release": {
+    "wall_seconds": 893.084,
+    "pass_seconds": {
+      "midend/coalesce": 0.017113999999999675,
+      "midend/hdrprom": 342.45699699999955,
+      "midend/inline": 100.63679799999998,
+      "midend/licm": 344.5734759999996,
+      "midend/loopcse": 0.2756160000000031,
+      "midend/memopt": 1.0080109999999978,
+      "midend/rangeopt": 11.464250000000023,
+      "midend/simplify": 6.761477999999991,
+      "midend/sink": 0.25134900000000515
+    },
+    "hottest": {
+      "midend/licm": {
+        "function_rows": 4993,
+        "seconds": 344.5734759999996,
+        "top_two_fraction": 0.001036548152650033,
+        "top": [
+          {
+            "unit": "edit",
+            "function": "edit.ed_run",
+            "count": 3,
+            "seconds": 0.206623
+          },
+          {
+            "unit": "flcli",
+            "function": "flcli.repl_main",
+            "count": 3,
+            "seconds": 0.150544
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_read_key",
+            "count": 3,
+            "seconds": 0.140225
+          },
+          {
+            "unit": "text",
+            "function": "text.file_write_atomic",
+            "count": 3,
+            "seconds": 0.140016
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_read_string",
+            "count": 3,
+            "seconds": 0.13841
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_atom",
+            "count": 3,
+            "seconds": 0.137474
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_skip",
+            "count": 3,
+            "seconds": 0.137228
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_read_int",
+            "count": 3,
+            "seconds": 0.137089
+          },
+          {
+            "unit": "text",
+            "function": "text.hex16",
+            "count": 3,
+            "seconds": 0.136881
+          },
+          {
+            "unit": "unicode",
+            "function": "unicode.u_rec",
+            "count": 3,
+            "seconds": 0.134535
+          }
+        ]
+      },
+      "midend/hdrprom": {
+        "function_rows": 4993,
+        "seconds": 342.45699699999955,
+        "top_two_fraction": 0.001004394721127571,
+        "top": [
+          {
+            "unit": "edit",
+            "function": "edit.ed_run",
+            "count": 3,
+            "seconds": 0.20348
+          },
+          {
+            "unit": "text",
+            "function": "text.file_write_atomic",
+            "count": 3,
+            "seconds": 0.140482
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_parse",
+            "count": 3,
+            "seconds": 0.139082
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_atom",
+            "count": 3,
+            "seconds": 0.138088
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_read_int",
+            "count": 3,
+            "seconds": 0.137391
+          },
+          {
+            "unit": "text",
+            "function": "text.hex16",
+            "count": 3,
+            "seconds": 0.137251
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_read_key",
+            "count": 3,
+            "seconds": 0.137212
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_read_string",
+            "count": 3,
+            "seconds": 0.136711
+          },
+          {
+            "unit": "ws",
+            "function": "ws.fl_skip",
+            "count": 3,
+            "seconds": 0.136163
+          },
+          {
+            "unit": "unicode",
+            "function": "unicode.u_rec",
+            "count": 3,
+            "seconds": 0.134519
+          }
+        ]
+      },
+      "midend/rangeopt": {
+        "function_rows": 4993,
+        "seconds": 11.464250000000023,
+        "top_two_fraction": 0.15874418300368504,
+        "top": [
+          {
+            "unit": "edit",
+            "function": "edit.hp_flag_row",
+            "count": 5,
+            "seconds": 1.026894
+          },
+          {
+            "unit": "std.time",
+            "function": "std.time.tz_parse",
+            "count": 3,
+            "seconds": 0.792989
+          },
+          {
+            "unit": "edit",
+            "function": "edit.hp_sub_row",
+            "count": 4,
+            "seconds": 0.51945
+          },
+          {
+            "unit": "flcli",
+            "function": "flcli.repl_main",
+            "count": 5,
+            "seconds": 0.352216
+          },
+          {
+            "unit": "fl",
+            "function": "fl.fl_std_str_dispatch",
+            "count": 4,
+            "seconds": 0.34159
+          },
+          {
+            "unit": "text",
+            "function": "text.header_decode",
+            "count": 3,
+            "seconds": 0.334428
+          },
+          {
+            "unit": "edit",
+            "function": "edit.comp_where_note",
+            "count": 4,
+            "seconds": 0.328661
+          },
+          {
+            "unit": "edit",
+            "function": "edit.cp_parse_into",
+            "count": 3,
+            "seconds": 0.323701
+          },
+          {
+            "unit": "text",
+            "function": "text.write_truncated_tree",
+            "count": 4,
+            "seconds": 0.323633
+          },
+          {
+            "unit": "edit",
+            "function": "edit.cg_hosts_from_known",
+            "count": 3,
+            "seconds": 0.283526
+          }
+        ]
+      }
+    },
+    "contributions": [
+      {
+        "scope": "package",
+        "unit": "package",
+        "phase": "load/lex/parse",
+        "seconds": 0.179776
+      },
+      {
+        "scope": "package",
+        "unit": "package",
+        "phase": "resolve",
+        "seconds": 0.099972
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "WIR lowering",
+        "seconds": 21.602885
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "codegen",
+        "seconds": 43.954811
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "codegen preparation",
+        "seconds": 0.933204
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "link",
+        "seconds": 0.022255
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "load+resolve",
+        "seconds": 0.296827
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "mem",
+        "seconds": 1.334728
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "midend",
+        "seconds": 824.419988
+      },
+      {
+        "scope": "package",
+        "unit": "yew",
+        "phase": "typecheck",
+        "seconds": 0.279484
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/coalesce",
+        "seconds": 2.9000000000000004e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/hdrprom",
+        "seconds": 0.268714
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/inline",
+        "seconds": 0.096679
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/licm",
+        "seconds": 0.27326999999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/loopcse",
+        "seconds": 0.0006790000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/memopt",
+        "seconds": 0.0029859999999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/rangeopt",
+        "seconds": 0.006761
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/simplify",
+        "seconds": 0.010262
+      },
+      {
+        "scope": "pass",
+        "unit": "args",
+        "phase": "midend/sink",
+        "seconds": 0.000657
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/coalesce",
+        "seconds": 0.010357000000000055
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/hdrprom",
+        "seconds": 185.02046100000007
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/inline",
+        "seconds": 54.056156000000016
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/licm",
+        "seconds": 186.11450799999977
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/loopcse",
+        "seconds": 0.16095900000000118
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/memopt",
+        "seconds": 0.6731700000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/rangeopt",
+        "seconds": 6.4737209999999585
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/simplify",
+        "seconds": 5.056034000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "edit",
+        "phase": "midend/sink",
+        "seconds": 0.14942000000000116
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/coalesce",
+        "seconds": 0.001866000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/hdrprom",
+        "seconds": 24.067928999999978
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/inline",
+        "seconds": 8.609370999999994
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/licm",
+        "seconds": 24.314809000000015
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/loopcse",
+        "seconds": 0.03207399999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/memopt",
+        "seconds": 0.10243199999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/rangeopt",
+        "seconds": 1.1787610000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/simplify",
+        "seconds": 0.6106520000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "fl",
+        "phase": "midend/sink",
+        "seconds": 0.029457000000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/coalesce",
+        "seconds": 0.000248
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/hdrprom",
+        "seconds": 2.076238
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/inline",
+        "seconds": 0.7203370000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/licm",
+        "seconds": 2.1316770000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/loopcse",
+        "seconds": 0.0023829999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/memopt",
+        "seconds": 0.05259799999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/rangeopt",
+        "seconds": 0.4807889999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/simplify",
+        "seconds": 0.11060600000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "flcli",
+        "phase": "midend/sink",
+        "seconds": 0.002257
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/coalesce",
+        "seconds": 2.5000000000000005e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/hdrprom",
+        "seconds": 0.6345550000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/inline",
+        "seconds": 0.21805100000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/licm",
+        "seconds": 0.637966
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/loopcse",
+        "seconds": 0.00037099999999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/memopt",
+        "seconds": 0.00063
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/rangeopt",
+        "seconds": 0.0015619999999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/simplify",
+        "seconds": 0.004782999999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "root",
+        "phase": "midend/sink",
+        "seconds": 0.000331
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/coalesce",
+        "seconds": 0.0006490000000000018
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/hdrprom",
+        "seconds": 16.230772999999992
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/inline",
+        "seconds": 4.606404000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/licm",
+        "seconds": 16.326472999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/loopcse",
+        "seconds": 0.013565000000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/memopt",
+        "seconds": 0.03114000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/rangeopt",
+        "seconds": 0.6806210000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/simplify",
+        "seconds": 0.1435160000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "search",
+        "phase": "midend/sink",
+        "seconds": 0.011989000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/coalesce",
+        "seconds": 2.600000000000001e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/hdrprom",
+        "seconds": 0.9470799999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/inline",
+        "seconds": 0.341509
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/licm",
+        "seconds": 0.9572190000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/loopcse",
+        "seconds": 0.00024400000000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/memopt",
+        "seconds": 0.00041799999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/rangeopt",
+        "seconds": 0.0005880000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/simplify",
+        "seconds": 0.0022800000000000008
+      },
+      {
+        "scope": "pass",
+        "unit": "std.cmp",
+        "phase": "midend/sink",
+        "seconds": 0.00018999999999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/coalesce",
+        "seconds": 2.7000000000000006e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/hdrprom",
+        "seconds": 1.022343
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/inline",
+        "seconds": 0.33872
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/licm",
+        "seconds": 1.035761
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/loopcse",
+        "seconds": 0.00022499999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/memopt",
+        "seconds": 0.000427
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/rangeopt",
+        "seconds": 0.00061
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/simplify",
+        "seconds": 0.0026320000000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.env",
+        "phase": "midend/sink",
+        "seconds": 0.000177
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/coalesce",
+        "seconds": 3.699999999999999e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/hdrprom",
+        "seconds": 1.000918
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/inline",
+        "seconds": 0.36335599999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/licm",
+        "seconds": 1.007422
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/loopcse",
+        "seconds": 0.00032800000000000006
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/memopt",
+        "seconds": 0.00075
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/rangeopt",
+        "seconds": 0.0015660000000000006
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/simplify",
+        "seconds": 0.004757
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt",
+        "phase": "midend/sink",
+        "seconds": 0.00026199999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/coalesce",
+        "seconds": 9.099999999999999e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/hdrprom",
+        "seconds": 1.4913100000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/inline",
+        "seconds": 0.5260659999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/licm",
+        "seconds": 1.506358
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/loopcse",
+        "seconds": 0.0018240000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/memopt",
+        "seconds": 0.0032469999999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/rangeopt",
+        "seconds": 0.041415999999999994
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/simplify",
+        "seconds": 0.022327
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fmt.decimal",
+        "phase": "midend/sink",
+        "seconds": 0.0016200000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/coalesce",
+        "seconds": 0.0001479999999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/hdrprom",
+        "seconds": 4.360527000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/inline",
+        "seconds": 1.3765060000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/licm",
+        "seconds": 4.393504000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/loopcse",
+        "seconds": 0.0020369999999999993
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/memopt",
+        "seconds": 0.0032779999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/rangeopt",
+        "seconds": 0.0064280000000000006
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/simplify",
+        "seconds": 0.018068000000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "std.fs",
+        "phase": "midend/sink",
+        "seconds": 0.0017230000000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/coalesce",
+        "seconds": 1.1000000000000001e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/hdrprom",
+        "seconds": 0.393901
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/inline",
+        "seconds": 0.131821
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/licm",
+        "seconds": 0.398164
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/loopcse",
+        "seconds": 0.00012199999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/memopt",
+        "seconds": 0.000228
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/rangeopt",
+        "seconds": 0.000452
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/simplify",
+        "seconds": 0.0013080000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.io",
+        "phase": "midend/sink",
+        "seconds": 9.8e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/coalesce",
+        "seconds": 2.9e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/hdrprom",
+        "seconds": 0.830022
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/inline",
+        "seconds": 0.22813699999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/licm",
+        "seconds": 0.842393
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/loopcse",
+        "seconds": 0.00045400000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/memopt",
+        "seconds": 0.001196
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/rangeopt",
+        "seconds": 0.004161
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/simplify",
+        "seconds": 0.0061340000000000006
+      },
+      {
+        "scope": "pass",
+        "unit": "std.list",
+        "phase": "midend/sink",
+        "seconds": 0.000398
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/coalesce",
+        "seconds": 0.00011799999999999994
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/hdrprom",
+        "seconds": 2.667118
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/inline",
+        "seconds": 0.962974
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/licm",
+        "seconds": 2.6958519999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/loopcse",
+        "seconds": 0.002289
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/memopt",
+        "seconds": 0.002931000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/rangeopt",
+        "seconds": 0.021229
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/simplify",
+        "seconds": 0.018655999999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "std.math.float",
+        "phase": "midend/sink",
+        "seconds": 0.0018969999999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/coalesce",
+        "seconds": 4.100000000000001e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/hdrprom",
+        "seconds": 0.972961
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/inline",
+        "seconds": 0.35322300000000006
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/licm",
+        "seconds": 0.9872650000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/loopcse",
+        "seconds": 0.000511
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/memopt",
+        "seconds": 0.0008620000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/rangeopt",
+        "seconds": 0.0013599999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/simplify",
+        "seconds": 0.005059
+      },
+      {
+        "scope": "pass",
+        "unit": "std.net",
+        "phase": "midend/sink",
+        "seconds": 0.000418
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/coalesce",
+        "seconds": 2.2e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/hdrprom",
+        "seconds": 0.6452910000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/inline",
+        "seconds": 0.20476200000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/licm",
+        "seconds": 0.648001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/loopcse",
+        "seconds": 0.000312
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/memopt",
+        "seconds": 0.0006670000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/rangeopt",
+        "seconds": 0.001563
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/simplify",
+        "seconds": 0.004347
+      },
+      {
+        "scope": "pass",
+        "unit": "std.os.users",
+        "phase": "midend/sink",
+        "seconds": 0.00022800000000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/coalesce",
+        "seconds": 6.899999999999997e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/hdrprom",
+        "seconds": 2.770876000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/inline",
+        "seconds": 0.886755
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/licm",
+        "seconds": 2.791367000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/loopcse",
+        "seconds": 0.0005949999999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/memopt",
+        "seconds": 0.0013760000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/rangeopt",
+        "seconds": 0.001985
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/simplify",
+        "seconds": 0.007698999999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "std.process",
+        "phase": "midend/sink",
+        "seconds": 0.00047200000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/coalesce",
+        "seconds": 4.9999999999999996e-06
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/hdrprom",
+        "seconds": 0.177169
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/inline",
+        "seconds": 0.061981999999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/licm",
+        "seconds": 0.17736600000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/loopcse",
+        "seconds": 1.6e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/memopt",
+        "seconds": 3.8e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/rangeopt",
+        "seconds": 7.3e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/simplify",
+        "seconds": 0.000232
+      },
+      {
+        "scope": "pass",
+        "unit": "std.range",
+        "phase": "midend/sink",
+        "seconds": 1.2e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/coalesce",
+        "seconds": 5.499999999999997e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/hdrprom",
+        "seconds": 2.7958589999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/inline",
+        "seconds": 0.8665999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/licm",
+        "seconds": 2.8161280000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/loopcse",
+        "seconds": 0.00025599999999999993
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/memopt",
+        "seconds": 0.0005920000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/rangeopt",
+        "seconds": 0.0007429999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/simplify",
+        "seconds": 0.003233
+      },
+      {
+        "scope": "pass",
+        "unit": "std.signal",
+        "phase": "midend/sink",
+        "seconds": 0.00022299999999999992
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/coalesce",
+        "seconds": 2.7000000000000006e-05
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/hdrprom",
+        "seconds": 0.8992799999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/inline",
+        "seconds": 0.28106299999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/licm",
+        "seconds": 0.9069039999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/loopcse",
+        "seconds": 0.000302
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/memopt",
+        "seconds": 0.000536
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/rangeopt",
+        "seconds": 0.001816
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/simplify",
+        "seconds": 0.003274
+      },
+      {
+        "scope": "pass",
+        "unit": "std.term",
+        "phase": "midend/sink",
+        "seconds": 0.000277
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/coalesce",
+        "seconds": 0.00015899999999999988
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/hdrprom",
+        "seconds": 3.4396150000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/inline",
+        "seconds": 1.169872
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/licm",
+        "seconds": 3.4626159999999984
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/loopcse",
+        "seconds": 0.0025390000000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/memopt",
+        "seconds": 0.007572000000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/rangeopt",
+        "seconds": 0.915192
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/simplify",
+        "seconds": 0.03074800000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "std.time",
+        "phase": "midend/sink",
+        "seconds": 0.002327
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/coalesce",
+        "seconds": 0.0005450000000000011
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/hdrprom",
+        "seconds": 14.634912000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/inline",
+        "seconds": 4.276336
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/licm",
+        "seconds": 14.712584
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/loopcse",
+        "seconds": 0.008670000000000002
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/memopt",
+        "seconds": 0.017486000000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/rangeopt",
+        "seconds": 0.08171300000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/simplify",
+        "seconds": 0.10705100000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "term",
+        "phase": "midend/sink",
+        "seconds": 0.007476000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/coalesce",
+        "seconds": 0.001761000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/hdrprom",
+        "seconds": 47.72491299999999
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/inline",
+        "seconds": 12.82900200000001
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/licm",
+        "seconds": 47.94750599999993
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/loopcse",
+        "seconds": 0.033142
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/memopt",
+        "seconds": 0.07611499999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/rangeopt",
+        "seconds": 1.2631370000000006
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/simplify",
+        "seconds": 0.4500139999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "text",
+        "phase": "midend/sink",
+        "seconds": 0.029473999999999976
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/coalesce",
+        "seconds": 0.0002259999999999997
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/hdrprom",
+        "seconds": 8.930409999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/inline",
+        "seconds": 2.2887039999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/licm",
+        "seconds": 8.961728
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/loopcse",
+        "seconds": 0.0029609999999999975
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/memopt",
+        "seconds": 0.005493
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/rangeopt",
+        "seconds": 0.03485299999999999
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/simplify",
+        "seconds": 0.02988700000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "unicode",
+        "phase": "midend/sink",
+        "seconds": 0.0024500000000000004
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/coalesce",
+        "seconds": 0.00011499999999999991
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/hdrprom",
+        "seconds": 4.578119000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/inline",
+        "seconds": 1.2325260000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/licm",
+        "seconds": 4.607870000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/loopcse",
+        "seconds": 0.0015790000000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/memopt",
+        "seconds": 0.003436000000000003
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/rangeopt",
+        "seconds": 0.027684999999999998
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/simplify",
+        "seconds": 0.019271999999999994
+      },
+      {
+        "scope": "pass",
+        "unit": "util",
+        "phase": "midend/sink",
+        "seconds": 0.0013350000000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/coalesce",
+        "seconds": 0.0004280000000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/hdrprom",
+        "seconds": 13.875703000000005
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/inline",
+        "seconds": 3.6098859999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/licm",
+        "seconds": 13.918764999999993
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/loopcse",
+        "seconds": 0.007179000000000001
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/memopt",
+        "seconds": 0.018407000000000014
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/rangeopt",
+        "seconds": 0.23546499999999995
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/simplify",
+        "seconds": 0.08864699999999996
+      },
+      {
+        "scope": "pass",
+        "unit": "ws",
+        "phase": "midend/sink",
+        "seconds": 0.006180999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "WIR lowering",
+        "seconds": 0.007036
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "lex/parse",
+        "seconds": 0.000391
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "mem/check",
+        "seconds": 4.8999999999999985e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "mem/lower",
+        "seconds": 0.00035800000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "resolve",
+        "seconds": 0.000235
+      },
+      {
+        "scope": "unit",
+        "unit": "args",
+        "phase": "typecheck",
+        "seconds": 0.0007949999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "c00",
+        "phase": "codegen",
+        "seconds": 14.638015
+      },
+      {
+        "scope": "unit",
+        "unit": "c01",
+        "phase": "codegen",
+        "seconds": 19.23254
+      },
+      {
+        "scope": "unit",
+        "unit": "c02",
+        "phase": "codegen",
+        "seconds": 22.677377
+      },
+      {
+        "scope": "unit",
+        "unit": "c03",
+        "phase": "codegen",
+        "seconds": 18.27935
+      },
+      {
+        "scope": "unit",
+        "unit": "c04",
+        "phase": "codegen",
+        "seconds": 23.54005
+      },
+      {
+        "scope": "unit",
+        "unit": "c05",
+        "phase": "codegen",
+        "seconds": 20.413875
+      },
+      {
+        "scope": "unit",
+        "unit": "c06",
+        "phase": "codegen",
+        "seconds": 22.683079
+      },
+      {
+        "scope": "unit",
+        "unit": "c07",
+        "phase": "codegen",
+        "seconds": 18.713749
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "WIR lowering",
+        "seconds": 16.78816000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "lex/parse",
+        "seconds": 0.085804
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "mem/check",
+        "seconds": 0.011593999999999967
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "mem/lower",
+        "seconds": 0.9888329999999977
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "resolve",
+        "seconds": 0.066776
+      },
+      {
+        "scope": "unit",
+        "unit": "edit",
+        "phase": "typecheck",
+        "seconds": 0.3905850000000008
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "WIR lowering",
+        "seconds": 0.7863199999999996
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "lex/parse",
+        "seconds": 0.021314
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "mem/check",
+        "seconds": 0.003474999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "mem/lower",
+        "seconds": 0.15009699999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "resolve",
+        "seconds": 0.018975
+      },
+      {
+        "scope": "unit",
+        "unit": "fl",
+        "phase": "typecheck",
+        "seconds": 0.08194699999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "WIR lowering",
+        "seconds": 0.17535199999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "lex/parse",
+        "seconds": 0.001526
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "mem/check",
+        "seconds": 0.00020499999999999997
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "mem/lower",
+        "seconds": 0.0063760000000000015
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "resolve",
+        "seconds": 0.001152
+      },
+      {
+        "scope": "unit",
+        "unit": "flcli",
+        "phase": "typecheck",
+        "seconds": 0.0050339999999999985
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "WIR lowering",
+        "seconds": 0.0008049999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "lex/parse",
+        "seconds": 0.000211
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "mem/check",
+        "seconds": 1.8e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "mem/lower",
+        "seconds": 0.00017500000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "resolve",
+        "seconds": 7.3e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "root",
+        "phase": "typecheck",
+        "seconds": 0.000451
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "WIR lowering",
+        "seconds": 0.11322499999999996
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "lex/parse",
+        "seconds": 0.008279
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "mem/check",
+        "seconds": 0.0010630000000000012
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "mem/lower",
+        "seconds": 0.012354000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "resolve",
+        "seconds": 0.007192
+      },
+      {
+        "scope": "unit",
+        "unit": "search",
+        "phase": "typecheck",
+        "seconds": 0.03246399999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "WIR lowering",
+        "seconds": 0.000325
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "lex/parse",
+        "seconds": 0.000246
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "mem/check",
+        "seconds": 3.0000000000000004e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "mem/lower",
+        "seconds": 0.000179
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "resolve",
+        "seconds": 0.000109
+      },
+      {
+        "scope": "unit",
+        "unit": "std.cmp",
+        "phase": "typecheck",
+        "seconds": 0.0019329999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "WIR lowering",
+        "seconds": 0.000346
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "lex/parse",
+        "seconds": 0.000123
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "mem/check",
+        "seconds": 1.1000000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "mem/lower",
+        "seconds": 9.1e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "resolve",
+        "seconds": 5.5e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.env",
+        "phase": "typecheck",
+        "seconds": 0.0014950000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "WIR lowering",
+        "seconds": 0.0009399999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "lex/parse",
+        "seconds": 0.000234
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "mem/check",
+        "seconds": 2.900000000000001e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "mem/lower",
+        "seconds": 0.00023100000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "resolve",
+        "seconds": 0.000127
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt",
+        "phase": "typecheck",
+        "seconds": 0.001835
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "WIR lowering",
+        "seconds": 0.003499
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "lex/parse",
+        "seconds": 0.000892
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "mem/check",
+        "seconds": 9.9e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "mem/lower",
+        "seconds": 0.000784
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "resolve",
+        "seconds": 0.000403
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fmt.decimal",
+        "phase": "typecheck",
+        "seconds": 0.0032180000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "WIR lowering",
+        "seconds": 0.002563999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "lex/parse",
+        "seconds": 0.001026
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "mem/check",
+        "seconds": 8.199999999999989e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "mem/lower",
+        "seconds": 0.000573
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "resolve",
+        "seconds": 0.000379
+      },
+      {
+        "scope": "unit",
+        "unit": "std.fs",
+        "phase": "typecheck",
+        "seconds": 0.006484000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "WIR lowering",
+        "seconds": 0.00022100000000000006
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "lex/parse",
+        "seconds": 6.5e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "mem/check",
+        "seconds": 8e-06
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "mem/lower",
+        "seconds": 4.7999999999999994e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "resolve",
+        "seconds": 2.9e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.io",
+        "phase": "typecheck",
+        "seconds": 0.00062
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "WIR lowering",
+        "seconds": 0.005405
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "lex/parse",
+        "seconds": 0.000738
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "mem/check",
+        "seconds": 7.999999999999999e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "mem/lower",
+        "seconds": 0.0005750000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "resolve",
+        "seconds": 0.000299
+      },
+      {
+        "scope": "unit",
+        "unit": "std.list",
+        "phase": "typecheck",
+        "seconds": 0.003551
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "WIR lowering",
+        "seconds": 3e-06
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "lex/parse",
+        "seconds": 0.000112
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "mem/check",
+        "seconds": 1.3000000000000003e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "mem/lower",
+        "seconds": 0.000115
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "resolve",
+        "seconds": 4.4e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.map",
+        "phase": "typecheck",
+        "seconds": 0.001094
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "WIR lowering",
+        "seconds": 0.0012879999999999996
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "lex/parse",
+        "seconds": 0.00117
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "mem/check",
+        "seconds": 9.299999999999994e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "mem/lower",
+        "seconds": 0.0008160000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "resolve",
+        "seconds": 0.000478
+      },
+      {
+        "scope": "unit",
+        "unit": "std.math.float",
+        "phase": "typecheck",
+        "seconds": 0.005661000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "WIR lowering",
+        "seconds": 0.0006870000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "lex/parse",
+        "seconds": 0.000211
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "mem/check",
+        "seconds": 2.1000000000000006e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "mem/lower",
+        "seconds": 0.00013500000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "resolve",
+        "seconds": 8.9e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.net",
+        "phase": "typecheck",
+        "seconds": 0.0018250000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "WIR lowering",
+        "seconds": 0.001001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "lex/parse",
+        "seconds": 0.000217
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "mem/check",
+        "seconds": 3.1e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "mem/lower",
+        "seconds": 0.000223
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "resolve",
+        "seconds": 8.4e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.os.users",
+        "phase": "typecheck",
+        "seconds": 0.000955
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "WIR lowering",
+        "seconds": 0.001228
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "lex/parse",
+        "seconds": 0.000438
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "mem/check",
+        "seconds": 5.3999999999999984e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "mem/lower",
+        "seconds": 0.00044499999999999987
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "resolve",
+        "seconds": 0.000219
+      },
+      {
+        "scope": "unit",
+        "unit": "std.process",
+        "phase": "typecheck",
+        "seconds": 0.004024
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "WIR lowering",
+        "seconds": 4.2000000000000004e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "lex/parse",
+        "seconds": 4.6e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "mem/check",
+        "seconds": 6.999999999999999e-06
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "mem/lower",
+        "seconds": 3.4e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "resolve",
+        "seconds": 1.4e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.range",
+        "phase": "typecheck",
+        "seconds": 0.00042100000000000004
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "WIR lowering",
+        "seconds": 0.000379
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "lex/parse",
+        "seconds": 0.000177
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "mem/check",
+        "seconds": 1.5e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "mem/lower",
+        "seconds": 0.00013899999999999996
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "resolve",
+        "seconds": 7.9e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.signal",
+        "phase": "typecheck",
+        "seconds": 0.003562000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "WIR lowering",
+        "seconds": 0.00034799999999999995
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "lex/parse",
+        "seconds": 0.000243
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "mem/check",
+        "seconds": 1.8000000000000004e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "mem/lower",
+        "seconds": 0.000183
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "resolve",
+        "seconds": 0.000103
+      },
+      {
+        "scope": "unit",
+        "unit": "std.term",
+        "phase": "typecheck",
+        "seconds": 0.0013720000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "WIR lowering",
+        "seconds": 0.008645000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "lex/parse",
+        "seconds": 0.001953
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "mem/check",
+        "seconds": 0.0001599999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "mem/lower",
+        "seconds": 0.001648
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "resolve",
+        "seconds": 0.000852
+      },
+      {
+        "scope": "unit",
+        "unit": "std.time",
+        "phase": "typecheck",
+        "seconds": 0.007230000000000002
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "WIR lowering",
+        "seconds": 0.045242
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "lex/parse",
+        "seconds": 0.00605
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "mem/check",
+        "seconds": 0.0008430000000000017
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "mem/lower",
+        "seconds": 0.009478000000000007
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "resolve",
+        "seconds": 0.005089
+      },
+      {
+        "scope": "unit",
+        "unit": "term",
+        "phase": "typecheck",
+        "seconds": 0.034115
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "WIR lowering",
+        "seconds": 0.20373100000000008
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "lex/parse",
+        "seconds": 0.018627
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "mem/check",
+        "seconds": 0.0029779999999999954
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "mem/lower",
+        "seconds": 0.043236000000000045
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "resolve",
+        "seconds": 0.016054
+      },
+      {
+        "scope": "unit",
+        "unit": "text",
+        "phase": "typecheck",
+        "seconds": 0.0750519999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "WIR lowering",
+        "seconds": 0.004225999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "lex/parse",
+        "seconds": 0.001994
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "mem/check",
+        "seconds": 0.0001559999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "mem/lower",
+        "seconds": 0.0014810000000000001
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "resolve",
+        "seconds": 0.001162
+      },
+      {
+        "scope": "unit",
+        "unit": "unicode",
+        "phase": "typecheck",
+        "seconds": 0.017946999999999998
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "WIR lowering",
+        "seconds": 0.004153999999999999
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "lex/parse",
+        "seconds": 0.001011
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "mem/check",
+        "seconds": 9.799999999999993e-05
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "mem/lower",
+        "seconds": 0.0009060000000000003
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "resolve",
+        "seconds": 0.000683
+      },
+      {
+        "scope": "unit",
+        "unit": "util",
+        "phase": "typecheck",
+        "seconds": 0.0063760000000000015
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "WIR lowering",
+        "seconds": 0.029563999999999993
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "lex/parse",
+        "seconds": 0.004111
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "mem/check",
+        "seconds": 0.0006150000000000006
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "mem/lower",
+        "seconds": 0.0049939999999999984
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "resolve",
+        "seconds": 0.00308
+      },
+      {
+        "scope": "unit",
+        "unit": "ws",
+        "phase": "typecheck",
+        "seconds": 0.018122999999999997
+      }
+    ],
+    "interpretation": "Nested package scopes and parallel elapsed contributions are not additive. Per-function pass cost includes whole-module analysis performed by that invocation; no loop attribution."
+  }
+}

@@ -1,0 +1,98 @@
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  928G  884G   41G  96% /home
+1.7G	/home/mfwolffe/lanes/s269
+s269 focus3 acquired CPUs8-11 2026-10-28T19:36:51Z
+time="2026-10-28T15:36:51-04:00" level=error msg="Refreshing container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: retrieving temporary directory for container 44ed2b1e39088ccbc0e57c061764b113005b7eaf0122162425dc70a6dc2acc43: no such container"
+   Compiling wolf_driver v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_driver)
+    Finished `dev` profile [unoptimized] target(s) in 1.28s
+   Compiling wolf_driver v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.74s
+     Running unittests src/main.rs (target/debug/deps/wolf-33d57e3b86a4a2ad)
+
+running 5 tests
+test status::tests::dumb_uses_no_terminal_controls_and_quiet_silences_both_modes ... ok
+test status::tests::fast_build_and_output_reset_preserve_silence ... ok
+test status::tests::non_tty_is_silent_until_threshold_then_every_sixty_seconds ... ok
+test status::tests::override_and_option_validation ... ok
+test status::tests::tty_rewrites_and_clears_on_output_and_failure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.00s
+
+    Finished `test` profile [unoptimized] target(s) in 0.05s
+     Running tests/status_lanes.rs (target/debug/deps/status_lanes-8340b8adf4efa447)
+
+running 6 tests
+test test_command_keeps_json_stdout_and_records_each_compilation ... ok
+test non_tty_never_receives_live_controls_even_with_immediate_heartbeat ... ok
+test fast_non_tty_build_has_no_reporter_bytes ... ok
+test timing_json_is_versioned_and_cache_reuse_is_counted ... ok
+test timings_failure_and_quiet_keep_diagnostics_honest ... ok
+PASS nonTTY WOLF_STATUS_AFTER=1 heartbeat and final line
+PASS slow quiet build has zero reporter bytes
+PASS run reporter finishes before program execution
+PASS PTY success: clean terminal, 753 captured bytes
+PASS PTY dumb: clean terminal, 80 captured bytes
+PASS PTY SIGINT via 0x03: clean terminal, 51 captured bytes
+PASS PTY refusal: clean terminal, 363 captured bytes
+
+test controlling_pty_cleanup_and_slow_non_tty_heartbeat ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.52s
+
+   Compiling wolf_driver v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.14s
+     Running tests/outcome_surface.rs (target/debug/deps/outcome_surface-51f4976eb277c04f)
+
+running 1 test
+test a_fine_program_passes_on_the_default_lane ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+    Checking wolf_span v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_span)
+    Checking fnv v1.0.7
+    Checking getrandom v0.3.4
+    Checking bitflags v2.13.1
+    Checking gimli v0.33.0
+    Checking wolf_diag v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_diag)
+    Checking wolf_ast v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_ast)
+    Checking rand_core v0.9.5
+    Checking linux-raw-sys v0.12.1
+    Checking wolf_lex v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_lex)
+    Checking wolf_cimport v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_cimport)
+    Checking rustix v1.1.4
+    Checking wolf_parse v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_parse)
+    Checking wolf_sema v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_sema)
+    Checking wolf_fmt v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_fmt)
+    Checking wolf_pkg v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_pkg)
+    Checking zerocopy v0.8.56
+    Checking getrandom v0.4.3
+    Checking fastrand v2.5.0
+    Checking once_cell v1.21.4
+    Checking cranelift-codegen v0.134.3
+    Checking tempfile v3.27.0
+    Checking wait-timeout v0.2.1
+    Checking quick-error v1.2.3
+    Checking bit-vec v0.8.0
+    Checking bit-set v0.8.0
+    Checking rusty-fork v0.3.1
+    Checking num-traits v0.2.19
+    Checking rand v0.9.5
+    Checking rand_xorshift v0.4.0
+    Checking regex-syntax v0.8.11
+    Checking ppv-lite86 v0.2.21
+    Checking rand_chacha v0.9.0
+    Checking unarray v0.1.4
+    Checking proptest v1.11.0
+    Checking wolf_mem v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_mem)
+    Checking wolf_query v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_query)
+    Checking wolf_lsp v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_lsp)
+    Checking wolf_doc v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_doc)
+    Checking wolf_wir v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_wir)
+    Checking cranelift-module v0.134.3
+    Checking cranelift-frontend v0.134.3
+    Checking cranelift-object v0.134.3
+    Checking wolf_backend v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_backend)
+    Checking wolf_codegen_llvm v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_codegen_llvm)
+    Checking wolf_codegen_clif v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.36 (/home/mfwolffe/lanes/s269/wolf-lang/crates/wolf_driver)
+    Finished `dev` profile [unoptimized] target(s) in 11.58s
