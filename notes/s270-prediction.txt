@@ -1,0 +1,17 @@
+s270 prediction, before implementation, base 5adf3d91
+
+#940: a mid-end transform loses a dynamic decoder input or merges values across
+recursive calls; the unoptimized WIR remains correct. Bisect individual passes
+before assigning the cause, retain the smallest reproducing module shape.
+#948: large scratch-owned storage remains reachable from a longer-lived VM but
+has not been copied to its destination region. Small allocations may hide a
+use-after-region-free; bisect size before deciding between runtime and checker.
+#950: error display uses a union payload without the active tag's projection;
+project by tag, then format the projected typed value.
+#735: an enum-typed join temporary requests zero_of, which handles structs but
+not the enum's payload layout; synthesize a valid internal placeholder or avoid
+that placeholder without exposing uninitialized data.
+
+Each row must fail before its fix, then agree across checked, native, release,
+and lupin. Compare the corpus before/after and name all changed outcomes.
+At least two independent deliberate breaks must make the new tests red.
