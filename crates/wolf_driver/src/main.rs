@@ -401,6 +401,7 @@ fn fmt(args: &[String]) {
             let _ = std::io::stdout().write_all(&out.text);
         }
         if out.partial {
+            partials.extend(out.diagnostics);
             partials.push(partial_diag(id, &src));
         }
     }
@@ -442,12 +443,10 @@ fn fmt(args: &[String]) {
             continue;
         }
         let out = wolf_fmt::format_source(id, &src);
-        // `--check` asks one question — is the file canonical? — so a
-        // file with syntax errors whose formattable parts are already
-        // canonical passes (the corpus keeps its deliberate
-        // counter-examples without tripping CI). Write mode reports
-        // partial work per the s11 contract.
-        if out.partial && !check {
+        // Invalid source is a parser refusal in both modes (#506). Keep
+        // s11's partial formatting in write mode, but never call it success.
+        if out.partial {
+            partials.extend(out.diagnostics);
             partials.push(partial_diag(id, &src));
         }
         if out.text != src {
