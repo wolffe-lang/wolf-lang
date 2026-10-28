@@ -25635,6 +25635,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if t == types::BOOL {
             return Ok(self.b.bconst(false));
         }
+        if t == types::PTR {
+            // An inactive payload (including a str's data pointer) is
+            // never read through this variant. Keep its padding value
+            // well-typed rather than refusing the bare constructor.
+            let zero = self.b.iconst(types::I64, 0);
+            return Ok(self
+                .b
+                .ins(Opcode::PtrFromInt, &[zero], &[types::PTR], Aux::None)
+                .one());
+        }
         if t == types::F32 || t == types::F64 {
             return Ok(self.b.fconst(t, 0));
         }
