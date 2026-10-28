@@ -83,7 +83,7 @@ Non-interactive builds add no output until 30 seconds without output, then
 heartbeat every 60 seconds. `--quiet` hides this reporter, not diagnostics;
 `--timings` and `--timings=json:<file>` record where compilation time went.
 These apply to build/run/test compilation, not program execution. See the
-[CLI timing schema](docs/cli.md) for nested and parallel elapsed scopes.
+[CLI timing schema](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/cli.md) for nested and parallel elapsed scopes.
 
 ### Building from source
 
