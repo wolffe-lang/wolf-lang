@@ -1,0 +1,11 @@
+//! member: false
+// b4: push(take x) of a List built inside the block into an outer list
+fn main() {
+    var outs = List[List[byte]]()
+    region scratch {
+        var x = List[byte]()
+        for i in 0..100 { (mut x).push((i % 251) as byte) }
+        (mut outs).push(take x)
+    }
+    print("{outs.len} {outs[0].len} {outs[0][99]}")
+}

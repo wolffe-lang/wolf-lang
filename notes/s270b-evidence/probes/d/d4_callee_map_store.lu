@@ -1,0 +1,14 @@
+//! member: false
+// d4: a plain Map store of a List through a mut parameter, called in a block
+fn put(mut m: Map[int, List[int]]) {
+    m[1] = List[int]()
+}
+
+fn main() {
+    var m = Map[int, List[int]]()
+    region scratch {
+        put(mut m)
+    }
+    let v = m[1] else List[int]()
+    print("{m.len} {v.len}")
+}

@@ -1,0 +1,12 @@
+{"file": "c1_outer_list_plain_push_reuse.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 2000\n", "codes": [], "stderr": ""}
+{"file": "c1_outer_list_plain_push_reuse.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "1 1000 7777777 2000\n", "codes": [], "stderr": ""}
+{"file": "c1_outer_list_plain_push_reuse.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "1 1000 7777777 2000\n", "codes": [], "stderr": ""}
+{"file": "c1_outer_list_plain_push_reuse.lu", "machine": "lupin", "exit": 0, "verdict": null, "stdout": "//lane/probes/c/c1_outer_list_plain_push_reuse.lu: verdict=exit(0) phase_reached=run seeded=false\n1 100 99 2000\n", "stderr": ""}
+{"file": "c2_block_push_reuse.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 -1 100 99 2000\n", "codes": [], "stderr": ""}
+{"file": "c2_block_push_reuse.lu", "machine": "--native", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "c2_block_push_reuse.lu", "machine": "--release", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "c2_block_push_reuse.lu", "machine": "lupin", "exit": 0, "verdict": null, "stdout": "//lane/probes/c/c2_block_push_reuse.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `slots[0].t` reaches into `scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 30:25; the region was created here at 22:5\n"}
+{"file": "c3_callee_push_reuse.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 2000\n", "codes": [], "stderr": ""}
+{"file": "c3_callee_push_reuse.lu", "machine": "--native", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "c3_callee_push_reuse.lu", "machine": "--release", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "c3_callee_push_reuse.lu", "machine": "lupin", "exit": 0, "verdict": null, "stdout": "//lane/probes/c/c3_callee_push_reuse.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `h.slots[0].bytes` reaches into `scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 35:27; the region was created here at 27:5\n"}

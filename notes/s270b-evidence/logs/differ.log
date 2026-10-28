@@ -1,0 +1,28 @@
+s270b differ acquired block A 2026-10-28T21:28:56Z
+s270b DIFFER START 2026-10-28T21:28:56Z head=5adf3d91f75b3545ff8d38e5b6693b0b9f367a05
+differ checked exit 1 2026-10-28T21:30:30Z
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_heap.lu"}
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_heap_call.lu"}
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_plain_copy.lu"}
+differ: 1235 file(s), 3 divergence(s), 28 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 748, B executed 751, BOTH executed 748 of 1173 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ native exit 1 2026-10-28T21:32:48Z
+{"class":"Verdict","detail":"Exit(125) vs Exit(248)","file":"corpus/conc/atomic_ub_uaf.lu"}
+differ: corpus/memory/region_outer_write_push_heap.lu: /lane/scripts/proxy-wolf-B: conform-run exited nonzero
+differ: corpus/memory/region_outer_write_push_heap_call.lu: /lane/scripts/proxy-wolf-B: conform-run exited nonzero
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_plain_copy.lu"}
+{"class":"Verdict","detail":"Exit(5) vs Exit(77)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(234) vs Exit(198)","file":"corpus/memory/volatile_ub_uaf.lu"}
+differ: 1235 file(s), 6 divergence(s), 24 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 752, B executed 753, BOTH executed 752 of 1171 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ release exit 1 2026-10-28T21:36:18Z
+{"class":"Verdict","detail":"Exit(14) vs Exit(215)","file":"corpus/conc/atomic_ub_uaf.lu"}
+differ: corpus/memory/region_outer_write_push_heap.lu: /lane/scripts/proxy-wolf-B: conform-run exited nonzero
+differ: corpus/memory/region_outer_write_push_heap_call.lu: /lane/scripts/proxy-wolf-B: conform-run exited nonzero
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_plain_copy.lu"}
+{"class":"Verdict","detail":"Exit(217) vs Exit(13)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(90) vs Exit(79)","file":"corpus/memory/volatile_ub_uaf.lu"}
+differ: 1235 file(s), 6 divergence(s), 24 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 752, B executed 753, BOTH executed 752 of 1171 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+s270b DIFFER END 2026-10-28T21:36:18Z
+s270b differ released block A 2026-10-28T21:36:18Z rc=0

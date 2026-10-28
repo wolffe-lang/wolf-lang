@@ -1,0 +1,15 @@
+//! member: false
+// d6: plain pushes of heap values where nothing outlives the block stay legal:
+// into a block-local list, and outside any block into a local
+fn main() {
+    var outer = List[List[int]]()
+    (mut outer).push(List[int]())
+    var n = 0
+    region scratch {
+        var inner = List[List[int]]()
+        (mut inner).push(List[int]())
+        (mut inner[0]).push(5)
+        n = inner[0][0]
+    }
+    print("{outer.len} {n}")
+}

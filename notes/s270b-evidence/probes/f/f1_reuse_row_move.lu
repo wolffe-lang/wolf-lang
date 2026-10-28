@@ -1,0 +1,85 @@
+//! member: false
+struct Match { pos: List[int] }
+
+struct Row {
+    bytes: List[byte],
+    ranked: List[byte],
+    suffix: List[byte],
+    m: Match,
+    detail: str,
+    kind: int,
+    score: int,
+    offset: int,
+    flag: bool,
+}
+
+struct Rows {
+    items: List[Row],
+    spare: List[Row],
+}
+
+fn empty() -> Row {
+    Row { bytes: List[byte](), ranked: List[byte](), suffix: List[byte](), m: Match { pos: List[int]() },
+        detail: "", kind: 0, score: 0, offset: 0, flag: false }
+}
+
+fn reserve(mut pool: Rows, n: int) {
+    (mut pool.items).reserve(n)
+    (mut pool.spare).reserve(n)
+    while pool.items.len + pool.spare.len < n { (mut pool.spare).push(empty()) }
+}
+
+fn bytes_refill(mut dst: List[byte], src: List[byte]) {
+    (mut dst).reset()
+    (mut dst).reserve(src.len)
+    for b in src { (mut dst).push(b) }
+}
+
+fn refill_inside(mut pool: Rows, source: List[Row]) {
+    while pool.items.len > 0 {
+        let row = (mut pool.items).pop() else { assert(false); return }
+        (mut pool.spare).push(row)
+    }
+    for src in source {
+        var row = (mut pool.spare).pop() else { assert(false); return }
+        bytes_refill(mut row.bytes, src.bytes)
+        bytes_refill(mut row.ranked, src.ranked)
+        bytes_refill(mut row.suffix, src.suffix)
+        (mut row.m.pos).reset()
+        (mut row.m.pos).reserve(src.m.pos.len)
+        for pos in src.m.pos { (mut row.m.pos).push(pos) }
+        row.detail = "owned"
+        row.score = src.score
+        (mut pool.items).push(row)
+    }
+}
+
+fn refill(mut pool: Rows, n: int) {
+    reserve(mut pool, n)
+    region scratch {
+        var source = List[Row]()
+        for i in 0..n {
+            var row = empty()
+            for b in "payload".bytes() {
+                (mut row.bytes).push(b)
+                (mut row.ranked).push(b)
+                (mut row.suffix).push(b)
+            }
+            (mut row.m.pos).push(i)
+            row.score = i
+            (mut source).push(row)
+        }
+        refill_inside(mut pool, source)
+    }
+}
+
+fn main() {
+    var pool = Rows { items: List[Row](), spare: List[Row]() }
+    for _ in 0..100 {
+        refill(mut pool, 2)
+        refill(mut pool, 1)
+        assert(pool.items[0].bytes.len == 7)
+        assert(pool.items[0].bytes[0] == 112 as byte)
+    }
+    print("two-list row refill: PASS")
+}

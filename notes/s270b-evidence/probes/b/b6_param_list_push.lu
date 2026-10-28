@@ -1,0 +1,14 @@
+//! member: false
+// b6: a plain push of a List[int] element through a mut parameter, called in a block
+fn add(mut outs: List[List[int]]) {
+    (mut outs).push(List[int]())
+}
+
+fn main() {
+    var outs = List[List[int]]()
+    region scratch {
+        add(mut outs)
+        for i in 0..100 { (mut outs[0]).push(i) }
+    }
+    print("{outs.len} {outs[0].len} {outs[0][99]}")
+}

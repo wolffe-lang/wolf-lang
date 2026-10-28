@@ -1,0 +1,42 @@
+{"n": 1024, "count": 2, "machine": "wolf-trunk--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 2, "machine": "wolf-trunk--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 2, "machine": "wolf-trunk--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 2, "machine": "wolf-035--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 2, "machine": "wolf-035--native", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 2, "machine": "wolf-035--release", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 2, "machine": "lupin-0.1.58", "exit": 0, "verdict": null, "stdout": "//lane/witnesses/yew/main.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 27:1; the region was created here at 7:9\n"}
+{"n": 1024, "count": 16, "machine": "wolf-trunk--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 16, "machine": "wolf-trunk--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 16, "machine": "wolf-trunk--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 16, "machine": "wolf-035--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 16, "machine": "wolf-035--native", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 16, "machine": "wolf-035--release", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 16, "machine": "lupin-0.1.58", "exit": 0, "verdict": null, "stdout": "//lane/witnesses/yew/main.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 27:1; the region was created here at 7:9\n"}
+{"n": 1024, "count": 17, "machine": "wolf-trunk--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 17, "machine": "wolf-trunk--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 17, "machine": "wolf-trunk--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 17, "machine": "wolf-035--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 17, "machine": "wolf-035--native", "exit": 0, "verdict": "trap(assert)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 17, "machine": "wolf-035--release", "exit": 0, "verdict": "trap(assert)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 17, "machine": "lupin-0.1.58", "exit": 0, "verdict": null, "stdout": "//lane/witnesses/yew/main.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 27:1; the region was created here at 7:9\n"}
+{"n": 1024, "count": 64, "machine": "wolf-trunk--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 64, "machine": "wolf-trunk--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 64, "machine": "wolf-trunk--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 1024, "count": 64, "machine": "wolf-035--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 1024, "count": 64, "machine": "wolf-035--native", "exit": 2, "verdict": null, "stdout": null, "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"n": 1024, "count": 64, "machine": "wolf-035--release", "exit": 2, "verdict": null, "stdout": null, "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"n": 1024, "count": 64, "machine": "lupin-0.1.58", "exit": 0, "verdict": null, "stdout": "//lane/witnesses/yew/main.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 27:1; the region was created here at 7:9\n"}
+{"n": 100000, "count": 64, "machine": "wolf-trunk--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 100000, "count": 64, "machine": "wolf-trunk--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 100000, "count": 64, "machine": "wolf-trunk--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 100000, "count": 64, "machine": "wolf-035--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 100000, "count": 64, "machine": "wolf-035--native", "exit": 2, "verdict": null, "stdout": null, "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"n": 100000, "count": 64, "machine": "wolf-035--release", "exit": 2, "verdict": null, "stdout": null, "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"n": 100000, "count": 64, "machine": "lupin-0.1.58", "exit": 0, "verdict": null, "stdout": "//lane/witnesses/yew/main.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 27:1; the region was created here at 7:9\n"}
+{"n": 100000, "count": 2, "machine": "wolf-trunk--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 100000, "count": 2, "machine": "wolf-trunk--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 100000, "count": 2, "machine": "wolf-trunk--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "stderr": ""}
+{"n": 100000, "count": 2, "machine": "wolf-035--checked", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 100000, "count": 2, "machine": "wolf-035--native", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 100000, "count": 2, "machine": "wolf-035--release", "exit": 0, "verdict": "exit(0)", "stdout": "native scratch constructors survive outside region and collection\n", "stderr": ""}
+{"n": 100000, "count": 2, "machine": "lupin-0.1.58", "exit": 0, "verdict": null, "stdout": "//lane/witnesses/yew/main.lu: verdict=trap(region-fault) phase_reached=run seeded=false\n", "stderr": "  trap(region-fault): `vm.gc.slots[10].t` reaches into `native_scratch` (region #1), which was freed wholesale; the value died with the region [mem.region.intra.2] at 27:1; the region was created here at 7:9\n"}

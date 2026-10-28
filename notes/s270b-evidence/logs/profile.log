@@ -1,0 +1,50 @@
+s270b profile acquired block A 2026-10-28T20:00:14Z
+cf0c13d38479f444b69bb8356ad5709d07eff323
+-rw-r--r-- 2 ubuntu ubuntu 29532970 Oct 28 20:00 target/debug/libwolf_rt.a
+-rwxr-xr-x 2 ubuntu ubuntu 66445880 Oct 28 20:00 target/debug/wolf
+base worktree (5adf3d91)
+-rw-r--r-- 2 ubuntu ubuntu  46732526 Oct 28 20:01 target/release/libwolf_rt.a
+-rwxr-xr-x 2 ubuntu ubuntu 308133528 Oct 28 20:02 target/release/wolf
+{"n": 1024, "count": 1, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 1, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 1, "machine": "rel036--native", "verdict": "exit(0)"}
+{"n": 1024, "count": 1, "machine": "rel036--release", "verdict": "exit(0)"}
+{"n": 1024, "count": 1, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 1, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "rel036--native", "verdict": "exit(0)"}
+{"n": 1024, "count": 2, "machine": "rel036--release", "verdict": "exit(0)"}
+{"n": 1024, "count": 2, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "rel036--native", "verdict": "exit(0)"}
+{"n": 1024, "count": 16, "machine": "rel036--release", "verdict": "exit(0)"}
+{"n": 1024, "count": 16, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "rel036--native", "verdict": "trap(assert)"}
+{"n": 1024, "count": 17, "machine": "rel036--release", "verdict": "trap(assert)"}
+{"n": 1024, "count": 17, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "rel036--native", "verdict": "trap(assert)"}
+{"n": 1024, "count": 24, "machine": "rel036--release", "verdict": "trap(assert)"}
+{"n": 1024, "count": 24, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "rel036--native", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 25, "machine": "rel036--release", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 25, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "rel036--native", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 64, "machine": "rel036--release", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 64, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "dev036--release", "verdict": "trap(bounds)"}
+s270b profile released block A 2026-10-28T20:13:34Z rc=0

@@ -1,0 +1,11 @@
+//! member: false
+// b2: a plain Map store of a block-built List into an outer map
+fn main() {
+    var m = Map[int, List[byte]]()
+    region scratch {
+        m[1] = List[byte]()
+        for i in 0..100 { (mut m[1]).push((i % 251) as byte) }
+    }
+    let v = m[1] else List[byte]()
+    print("{m.len} {v.len} {v[99]}")
+}

@@ -1,0 +1,12 @@
+//! member: false
+// d2: a plain Map store of a block-built List into an outer map
+fn main() {
+    var m = Map[int, List[int]]()
+    region scratch {
+        var l = List[int]()
+        for i in 0..100 { (mut l).push(i) }
+        m[1] = l
+    }
+    let v = m[1] else List[int]()
+    print("{m.len} {v.len} {v[99]}")
+}

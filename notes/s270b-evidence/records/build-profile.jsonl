@@ -1,0 +1,42 @@
+{"n": 1024, "count": 1, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 1, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 1, "machine": "rel036--native", "verdict": "exit(0)"}
+{"n": 1024, "count": 1, "machine": "rel036--release", "verdict": "exit(0)"}
+{"n": 1024, "count": 1, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 1, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "rel036--native", "verdict": "exit(0)"}
+{"n": 1024, "count": 2, "machine": "rel036--release", "verdict": "exit(0)"}
+{"n": 1024, "count": 2, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 2, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "rel036--native", "verdict": "exit(0)"}
+{"n": 1024, "count": 16, "machine": "rel036--release", "verdict": "exit(0)"}
+{"n": 1024, "count": 16, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 16, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "rel036--native", "verdict": "trap(assert)"}
+{"n": 1024, "count": 17, "machine": "rel036--release", "verdict": "trap(assert)"}
+{"n": 1024, "count": 17, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 17, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "rel036--native", "verdict": "trap(assert)"}
+{"n": 1024, "count": 24, "machine": "rel036--release", "verdict": "trap(assert)"}
+{"n": 1024, "count": 24, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 24, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "rel036--native", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 25, "machine": "rel036--release", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 25, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 25, "machine": "dev036--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "dev035--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "dev035--release", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "rel036--native", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 64, "machine": "rel036--release", "verdict": "died: wolf conform-run: ICE: native binary died without an exit code"}
+{"n": 1024, "count": 64, "machine": "dev036--native", "verdict": "trap(bounds)"}
+{"n": 1024, "count": 64, "machine": "dev036--release", "verdict": "trap(bounds)"}

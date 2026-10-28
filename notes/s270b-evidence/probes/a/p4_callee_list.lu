@@ -1,0 +1,19 @@
+//! member: false
+// p4: the push of a bare List built in the callee into an outer List[List[byte]]
+struct Heap {
+    slots: List[List[byte]],
+}
+
+fn alloc(mut h: Heap) -> int {
+    (mut h.slots).push(List[byte]())
+    h.slots.len - 1
+}
+
+fn main() {
+    var h = Heap { slots: List[List[byte]]() }
+    region scratch {
+        let at = alloc(mut h)
+        for i in 0..100 { (mut h.slots[at]).push((i % 251) as byte) }
+    }
+    print("{h.slots.len} {h.slots[0].len} {h.slots[0][99]}")
+}

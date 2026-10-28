@@ -1,0 +1,22 @@
+//! member: false
+// c1: b3 with the region kept (a block-local list) and a second region reusing the chunk
+fn fill(n: int) -> int {
+    var junk = List[int]()
+    for i in 0..n { (mut junk).push(7777777) }
+    junk.len
+}
+
+fn main() {
+    var outs = List[List[int]]()
+    let x = List[int]()
+    var total = 0
+    region scratch {
+        (mut outs).push(x)
+        for i in 0..100 { (mut outs[0]).push(i) }
+        total += fill(1000)
+    }
+    region other {
+        total += fill(1000)
+    }
+    print("{outs.len} {outs[0].len} {outs[0][99]} {total}")
+}

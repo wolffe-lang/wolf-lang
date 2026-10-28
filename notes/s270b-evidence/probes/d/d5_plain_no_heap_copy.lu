@@ -1,0 +1,17 @@
+//! member: false
+// d5: plain pushes that copy nothing to the heap stay legal: a struct of a str and an int
+// (static bytes) and a byte, into outer lists, inside a block
+struct Doc {
+    title: str,
+    n: int,
+}
+
+fn main() {
+    var docs = List[Doc]()
+    var bytes = List[byte]()
+    region scratch {
+        (mut docs).push(Doc { title: "static", n: 1 })
+        (mut bytes).push(7 as byte)
+    }
+    print("{docs.len} {docs[0].title} {bytes[0]}")
+}

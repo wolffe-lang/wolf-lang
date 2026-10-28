@@ -1,0 +1,12 @@
+{"file": "e1_no_block_work.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 1000\n", "codes": [], "stderr": ""}
+{"file": "e1_no_block_work.lu", "machine": "--native", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "e1_no_block_work.lu", "machine": "--release", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "e1_no_block_work.lu", "machine": "lupin", "exit": 0, "verdict": "trap(region-fault)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "e2_no_reuse.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 1000\n", "codes": [], "stderr": ""}
+{"file": "e2_no_reuse.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 1000\n", "codes": [], "stderr": ""}
+{"file": "e2_no_reuse.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 1000\n", "codes": [], "stderr": ""}
+{"file": "e2_no_reuse.lu", "machine": "lupin", "exit": 0, "verdict": "trap(region-fault)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "e3_collect_reuse.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "2 100 99 1000\n", "codes": [], "stderr": ""}
+{"file": "e3_collect_reuse.lu", "machine": "--native", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "e3_collect_reuse.lu", "machine": "--release", "exit": 0, "verdict": "trap(bounds)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "e3_collect_reuse.lu", "machine": "lupin", "exit": 0, "verdict": "trap(region-fault)", "stdout": null, "codes": [], "stderr": ""}

@@ -1,0 +1,68 @@
+s270b bisect acquired block A 2026-10-28T19:57:34Z
+Bisecting: 130 revisions left to test after this (roughly 7 steps)
+[7b8dd67055dad799771a3b3862da039597d02728] Prove trailing literal pools unreachable in ABI disassembly
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT 7b8dd67055 verdict=trap(bounds)
+Bisecting: 64 revisions left to test after this (roughly 6 steps)
+[2206e2fcc0340fdda51b952e595e58c847ca2989] Record prelude gate and planted argv failures
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT 2206e2fcc0 verdict=trap(bounds)
+Bisecting: 32 revisions left to test after this (roughly 5 steps)
+[e2432ea3074d37926c3f1410b069e983165a7599] wolf_rt: the leave and the kill-ended sleep through crate-level wrappers gated as task is, so hosts without the task layer (freebsd) compile (#683)
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT e2432ea307 verdict=trap(bounds)
+Bisecting: 15 revisions left to test after this (roughly 4 steps)
+[64908bed012d70f1e8642c55ebe289ed9a79e57e] wolf_rt: the child waits leave a killed compiled task when the host returns (#683)
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT 64908bed01 verdict=trap(bounds)
+Bisecting: 7 revisions left to test after this (roughly 3 steps)
+[15a352b04059b9be07378707b7ec5773167709ed] wolf_rt: os_exec keeps a failed execve's number in os_error (ENOEXEC for a #!-less file) (#682)
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT 15a352b040 verdict=trap(bounds)
+Bisecting: 3 revisions left to test after this (roughly 2 steps)
+[6d9411979089bb456dbfcca9c729af7dea768457] wolf_mem: the checked machine's fs_copy_chunk writes what the sink takes and puts the source back by the shortfall (#642)
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT 6d94119790 verdict=trap(bounds)
+Bisecting: 1 revision left to test after this (roughly 1 step)
+[c37dde5b6cec7af157686762484d416af210ec9b] spec: [os.fs.copy] — a failed write puts the source back by the shortfall; the side by rule (#642, R-s260-1)
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT c37dde5b6c verdict=trap(bounds)
+Bisecting: 0 revisions left to test after this (roughly 0 steps)
+[a6005a8ac66e0548201e505397c89211850845a0] docs: s260 note — the prediction, before the first change
+running 'bash' '/lane/scripts/bisect-step.sh'
+BISECT a6005a8ac6 verdict=trap(bounds)
+a6005a8ac66e0548201e505397c89211850845a0 is the first bad commit
+commit a6005a8ac66e0548201e505397c89211850845a0
+Author: mfwolffe <mfwolffe@outlook.com>
+Date:   Thu Oct 22 23:12:43 2026 -0400
+
+    docs: s260 note — the prediction, before the first change
+
+ docs/s260-the-three-wrong-answers.md | 136 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 136 insertions(+)
+ create mode 100644 docs/s260-the-three-wrong-answers.md
+bisect found first bad commit
+# bad: [5adf3d91f75b3545ff8d38e5b6693b0b9f367a05] Refresh the two interface compiler-version stamps
+# good: [cf0c13d38479f444b69bb8356ad5709d07eff323] Name the interpreter outer-copy mirror debt
+git bisect start '5adf3d91f75b3545ff8d38e5b6693b0b9f367a05' 'cf0c13d38479f444b69bb8356ad5709d07eff323'
+# bad: [7b8dd67055dad799771a3b3862da039597d02728] Prove trailing literal pools unreachable in ABI disassembly
+git bisect bad 7b8dd67055dad799771a3b3862da039597d02728
+# bad: [2206e2fcc0340fdda51b952e595e58c847ca2989] Record prelude gate and planted argv failures
+git bisect bad 2206e2fcc0340fdda51b952e595e58c847ca2989
+# bad: [e2432ea3074d37926c3f1410b069e983165a7599] wolf_rt: the leave and the kill-ended sleep through crate-level wrappers gated as task is, so hosts without the task layer (freebsd) compile (#683)
+git bisect bad e2432ea3074d37926c3f1410b069e983165a7599
+# bad: [64908bed012d70f1e8642c55ebe289ed9a79e57e] wolf_rt: the child waits leave a killed compiled task when the host returns (#683)
+git bisect bad 64908bed012d70f1e8642c55ebe289ed9a79e57e
+# bad: [15a352b04059b9be07378707b7ec5773167709ed] wolf_rt: os_exec keeps a failed execve's number in os_error (ENOEXEC for a #!-less file) (#682)
+git bisect bad 15a352b04059b9be07378707b7ec5773167709ed
+# bad: [6d9411979089bb456dbfcca9c729af7dea768457] wolf_mem: the checked machine's fs_copy_chunk writes what the sink takes and puts the source back by the shortfall (#642)
+git bisect bad 6d9411979089bb456dbfcca9c729af7dea768457
+# bad: [c37dde5b6cec7af157686762484d416af210ec9b] spec: [os.fs.copy] — a failed write puts the source back by the shortfall; the side by rule (#642, R-s260-1)
+git bisect bad c37dde5b6cec7af157686762484d416af210ec9b
+# bad: [a6005a8ac66e0548201e505397c89211850845a0] docs: s260 note — the prediction, before the first change
+git bisect bad a6005a8ac66e0548201e505397c89211850845a0
+# first bad commit: [a6005a8ac66e0548201e505397c89211850845a0] docs: s260 note — the prediction, before the first change
+Previous HEAD position was a6005a8a docs: s260 note — the prediction, before the first change
+Switched to branch 's270b'
+Your branch is up to date with 'origin/s270b'.
+s270b bisect released block A 2026-10-28T19:59:28Z rc=0

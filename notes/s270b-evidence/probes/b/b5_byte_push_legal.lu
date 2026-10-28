@@ -1,0 +1,10 @@
+//! member: false
+// b5: a byte push into an outer List[byte] (s255's admitted shape: must stay legal)
+fn main() {
+    var outs = List[byte]()
+    region scratch {
+        let t = "turn"
+        for b in t.bytes() { (mut outs).push(b) }
+    }
+    print("{outs.len} {outs[3]}")
+}

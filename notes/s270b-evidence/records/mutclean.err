@@ -1,0 +1,238 @@
+fn fl_intern #0 strings: clean
+fn fl_diag_add_file #0 dc: unclean at ./fl/diag.lu:55:25 `FlDiagFile { path: copy path, src: owned }`
+fn fl_diag_emit #0 dc: unclean at ./fl/diag.lu:64:27 `FlDiagnostic { level: level, sp: sp, msg: copy msg }`
+fn fl_diag_render #0 out: clean
+fn dump_text #0 work: unclean at ./fl/dump.lu:10:71 `DumpAction { kind: 0, id: 0, text: copy text }`
+fn dump_child #0 work: unclean at ./fl/dump.lu:12:70 `DumpAction { kind: 1, id: id, text: "" }`
+fn dump_string_action #0 work: unclean at ./fl/dump.lu:14:78 `DumpAction { kind: 2, id: id, text: "" }`
+fn dump_opt #0 work: unclean at ./fl/dump.lu:17:5 `dump_child(mut work, id)`
+fn dump_kids #0 work: unclean at ./fl/dump.lu:23:27 `dump_opt(mut work, p.edges[offset + i])`
+fn dump_str #0 out: clean
+fn fl_ast_dump_node #0 out: clean
+fn fl_ast_dump #0 out: clean
+fn fl_slot_reset #0 gc: clean
+fn fl_gc_alloc #0 vm: clean
+fn fl_temp_push #0 vm: clean
+fn fl_temp_pop #0 vm: clean
+fn fl_gc_protect #0 vm: clean
+fn fl_gc_release #0 vm: clean
+fn fl_str_new #0 vm: clean
+fn fl_str_text #0 vm: clean
+fn fl_list_new #0 vm: clean
+fn fl_map_new #0 vm: clean
+fn fl_list_push #0 vm: clean
+fn fl_map_set #0 vm: clean
+fn fl_mark #0 vm: clean
+fn fl_mark_roots #0 vm: clean
+fn fl_blacken #0 vm: clean
+fn fl_copy_slot #0 gc: clean
+fn fl_remap_roots #0 vm: clean
+fn fl_gc_collect #0 vm: clean
+fn fl_native_new #0 vm: clean
+fn lex_bump #0 lx: clean
+fn lex_fail #0 dc: unclean at ./fl/lex.lu:262:5 `fl_diag_emit(mut dc, FL_DIAG_ERROR, sp, msg)`
+fn lex_digits #0 lx: clean
+fn lex_number #0 lx: clean
+fn lex_number #2 dc: unclean at ./fl/lex.lu:427:28 `lex_fail(mut dc, digits.bad, "'_' must separate digits")`
+fn lex_string #0 lx: clean
+fn lex_string #2 dc: unclean at ./fl/lex.lu:483:20 `lex_fail(mut dc, lex_span(lx, line, col, from), "unterminated string literal")`
+fn lex_string #3 strings: clean
+fn lex_motion_word #0 lx: clean
+fn lex_motion_word #2 dc: unclean at ./fl/lex.lu:636:21 `lex_string(mut lx, src, mut dc, mut strings)`
+fn lex_motion_word #3 strings: clean
+fn lex_motion #0 lx: clean
+fn lex_motion #2 dc: unclean at ./fl/lex.lu:704:20 `lex_fail(`
+fn lex_motion #3 strings: clean
+fn fl_lex_next #0 lx: clean
+fn fl_lex_next #2 dc: unclean at ./fl/lex.lu:728:37 `lex_motion(mut lx, src, mut dc, mut strings)`
+fn fl_lex_next #3 strings: clean
+fn p_advance #0 p: clean
+fn p_advance #2 dc: unclean at ./fl/parse.lu:48:17 `fl_lex_next(mut p.lx, src, mut dc, mut strings)`
+fn p_advance #3 strings: clean
+fn p_match #0 p: clean
+fn p_match #2 dc: unclean at ./fl/parse.lu:74:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_match #3 strings: clean
+fn p_error #0 p: clean
+fn p_error #1 dc: unclean at ./fl/parse.lu:83:5 `fl_diag_emit(mut dc, FL_DIAG_ERROR, sp, msg)`
+fn p_here #0 p: clean
+fn p_here #1 dc: unclean at ./fl/parse.lu:95:5 `p_error(mut p, mut dc, sp, msg)`
+fn p_expected #0 p: clean
+fn p_expected #1 dc: unclean at ./fl/parse.lu:100:5 `p_here(mut p, mut dc, "expected {what}, found '{found}'")`
+fn p_closer #0 p: clean
+fn p_closer #2 dc: unclean at ./fl/parse.lu:111:8 `p_match(mut p, src, mut dc, mut strings, kind)`
+fn p_closer #3 strings: clean
+fn p_sync #0 p: clean
+fn p_sync #2 dc: unclean at ./fl/parse.lu:148:13 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_sync #3 strings: clean
+fn p_add #0 p: clean
+fn p_nil #0 p: clean
+fn p_edges #0 p: clean
+fn p_enter #0 p: clean
+fn p_enter #1 dc: unclean at ./fl/parse.lu:177:41 `p_here(mut p, mut dc, "nesting too deep")`
+fn p_list #0 p: clean
+fn p_list #2 dc: unclean at ./fl/parse.lu:196:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_list #3 strings: clean
+fn p_map_key #0 p: clean
+fn p_map_key #2 dc: unclean at ./fl/parse.lu:220:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_map_key #3 strings: clean
+fn p_map #0 p: clean
+fn p_map #2 dc: unclean at ./fl/parse.lu:252:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_map #3 strings: clean
+fn p_params #0 p: clean
+fn p_params #2 dc: unclean at ./fl/parse.lu:281:9 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_params #3 strings: clean
+fn p_fn_expr #0 p: clean
+fn p_fn_expr #2 dc: unclean at ./fl/parse.lu:290:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_fn_expr #3 strings: clean
+fn p_primary #0 p: clean
+fn p_primary #2 dc: unclean at ./fl/parse.lu:320:9 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_primary #3 strings: clean
+fn p_postfix #0 p: clean
+fn p_postfix #2 dc: unclean at ./fl/parse.lu:357:14 `p_primary(mut p, src, mut dc, mut strings)`
+fn p_postfix #3 strings: clean
+fn p_unary #0 p: clean
+fn p_unary #2 dc: unclean at ./fl/parse.lu:412:9 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_unary #3 strings: clean
+fn p_binary #0 p: clean
+fn p_binary #2 dc: unclean at ./fl/parse.lu:433:9 `p_enter(mut p, mut dc)`
+fn p_binary #3 strings: clean
+fn p_expr #0 p: clean
+fn p_expr #2 dc: unclean at ./fl/parse.lu:450:5 `p_binary(mut p, src, mut dc, mut strings, 1)`
+fn p_expr #3 strings: clean
+fn p_one_motion #0 p: clean
+fn p_one_motion #2 dc: unclean at ./fl/parse.lu:459:9 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_one_motion #3 strings: clean
+fn p_motion_seq #0 p: clean
+fn p_motion_seq #2 dc: unclean at ./fl/parse.lu:502:13 `p_enter(mut p, mut dc)`
+fn p_motion_seq #3 strings: clean
+fn p_motion_block #0 p: clean
+fn p_motion_block #2 dc: unclean at ./fl/parse.lu:514:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_motion_block #3 strings: clean
+fn p_term #0 p: clean
+fn p_term #2 dc: unclean at ./fl/parse.lu:525:8 `p_match(mut p, src, mut dc, mut strings, FL_T_NEWLINE)`
+fn p_term #3 strings: clean
+fn p_block #0 p: clean
+fn p_block #2 dc: unclean at ./fl/parse.lu:538:9 `p_match(mut p, src, mut dc, mut strings, FL_T_LBRACE)`
+fn p_block #3 strings: clean
+fn p_block_newlines #0 p: clean
+fn p_block_newlines #2 dc: unclean at ./fl/parse.lu:570:40 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_block_newlines #3 strings: clean
+fn p_name #0 p: clean
+fn p_name #2 dc: unclean at ./fl/parse.lu:580:35 `p_expected(mut p, mut dc, what)`
+fn p_name #3 strings: clean
+fn p_if_chain #0 p: clean
+fn p_if_chain #2 dc: unclean at ./fl/parse.lu:594:9 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_if_chain #3 strings: clean
+fn p_stmt #0 p: clean
+fn p_stmt #2 dc: unclean at ./fl/parse.lu:618:9 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_stmt #3 strings: clean
+fn p_init #2 dc: unclean at ./fl/parse.lu:774:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn p_init #3 strings: clean
+fn fl_parse #2 dc: unclean at ./fl/parse.lu:785:13 `p_init(src, file_id, mut dc, mut strings)`
+fn fl_parse #3 strings: clean
+fn pl_reject #0 p: clean
+fn pl_reject #2 dc: unclean at ./fl/parse.lu:805:5 `p_here(mut p, mut dc, "pure-literal mode: '{found}' not allowed")`
+fn pl_reject #3 strings: clean
+fn pl_list #0 p: clean
+fn pl_list #2 dc: unclean at ./fl/parse.lu:813:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn pl_list #3 strings: clean
+fn pl_map #0 p: clean
+fn pl_map #2 dc: unclean at ./fl/parse.lu:832:5 `p_advance(mut p, src, mut dc, mut strings)`
+fn pl_map #3 strings: clean
+fn pl_value #0 p: clean
+fn pl_value #2 dc: unclean at ./fl/parse.lu:858:9 `p_enter(mut p, mut dc)`
+fn pl_value #3 strings: clean
+fn fl_parse_literal #2 dc: unclean at ./fl/parse.lu:910:13 `p_init(src, file_id, mut dc, mut strings)`
+fn fl_parse_literal #3 strings: clean
+fn fl_std_set_current #0 vm: clean
+fn fl_arg_type_error #0 vm: clean
+fn fl_arg_exact #0 vm: clean
+fn fl_arg_str #0 vm: clean
+fn fl_arg_int #0 vm: clean
+fn fl_arg_num #0 vm: clean
+fn fl_arg_list #0 vm: clean
+fn fl_arg_map #0 vm: clean
+fn fl_arg_fn #0 vm: clean
+fn stdmap_key #0 vm: clean
+fn stdmap_writable #0 vm: clean
+fn stdmap_collect #0 vm: clean
+fn stdmap_copy_into #0 vm: clean
+fn fl_std_map_dispatch #0 vm: clean
+fn stdstr_big #0 vm: clean
+fn stdstr_append #0 out: clean
+fn stdstr_slice #0 vm: clean
+fn stdstr_byteoff #0 vm: clean
+fn fl_split_lines #0 vm: clean
+fn stdstr_list_input #0 vm: clean
+fn stdstr_split #0 vm: clean
+fn fl_std_str_dispatch #0 vm: clean
+fn fl_suggest_reset #0 s: clean
+fn fl_suggest_add #0 s: clean
+fn suggest_put #0 out: clean
+fn fl_suggest_render #0 s: clean
+fn fl_suggest_render #2 out: clean
+fn fl_map_reindex #0 vm: clean
+fn fl_map_compact #0 vm: clean
+fn fl_map_del #0 vm: clean
+fn fl_map_clear #0 vm: clean
+fn fl_list_set #0 vm: clean
+fn fl_list_remove #0 vm: clean
+fn fl_list_clear #0 vm: clean
+fn fl_freeze #0 vm: clean
+fn fl_raise #0 vm: clean
+fn fl_vm_set_step_limit #0 vm: clean
+fn buf_append #0 b: clean
+fn buf_append_str #0 b: clean
+fn buf_push_u8 #0 b: clean
+fn intern #0 it: clean
+fn intern_bytes #0 it: clean
+fn sort_stable #0 xs: unclean at ./util/sort.lu:23:5 `list.sort_by(mut xs, less)`
+fn strmap_put #0 m: unclean at ./util/strmap.lu:45:27 `key`
+fn read #0 f: clean
+fn read_chunk #0 f: clean
+fn write #0 f: clean
+fn write_chunk #0 f: clean
+fn fstat #0 f: clean
+fn seek #0 f: clean
+fn seek_by #0 f: clean
+fn seek_end #0 f: clean
+fn tell #0 f: clean
+fn read_at #0 f: clean
+fn set_file_owner #0 f: clean
+fn truncate #0 f: clean
+fn sync #0 f: clean
+fn take_name #0 c: clean
+fn num #0 c: clean
+fn hms #0 c: clean
+fn change #0 c: clean
+fn push #0 xs: unclean at std://list/list.lu:125:19 `v`
+fn pop #0 xs: unclean at std://list/list.lu:144:5 `truncate(mut xs, n - 1)`
+fn set #0 xs: unclean at std://list/list.lu:221:5 `xs`
+fn insert #0 xs: unclean at std://list/list.lu:286:5 `xs`
+fn remove #0 xs: unclean at std://list/list.lu:311:5 `xs`
+fn swap_remove #0 xs: unclean at std://list/list.lu:343:5 `xs`
+fn swap #0 xs: unclean at std://list/list.lu:374:5 `xs`
+fn clear #0 xs: unclean at std://list/list.lu:388:5 `xs`
+fn truncate #0 xs: unclean at std://list/list.lu:413:5 `xs`
+fn reverse #0 xs: unclean at std://list/list.lu:465:5 `xs`
+fn extend #0 xs: unclean at std://list/list.lu:483:23 `y`
+fn fill #0 xs: unclean at std://list/list.lu:524:5 `xs`
+fn sort_by #0 xs: unclean at std://list/list.lu:991:5 `xs`
+fn sort_ord #0 xs: unclean at std://list/list.lu:1087:5 `xs`
+fn case_map_into #2 out: clean
+fn case_map_utf8 #2 out: clean
+fn gb_absorb #0 st: clean
+fn gb_boundary #0 st: clean
+fn pend_set #0 d: clean
+fn out_set #0 d: clean
+fn out_push #0 d: clean
+fn drop_pending #0 d: clean
+fn utf8_push #0 d: clean
+fn utf8_finish #0 d: clean
+fn utf8_encode_into #0 out: clean
+fn cluster_width_push #0 state: clean
+fn set #0 m: clean
+fn clear #0 m: unclean at std://map/map.lu:204:5 `m`
+fn extend #0 m: unclean at std://map/map.lu:221:9 `m[pair.0]`
+fn remove #0 m: clean
+fn tally #0 m: clean

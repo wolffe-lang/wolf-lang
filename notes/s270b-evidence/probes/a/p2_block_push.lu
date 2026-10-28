@@ -1,0 +1,24 @@
+//! member: false
+// p2: the same push written directly in the block
+struct Slot {
+    t: int,
+    bytes: List[byte],
+}
+
+struct Heap {
+    slots: List[Slot],
+}
+
+fn empty() -> Slot {
+    Slot { t: -1, bytes: List[byte]() }
+}
+
+fn main() {
+    var h = Heap { slots: List[Slot]() }
+    region scratch {
+        (mut h.slots).push(empty())
+        h.slots[0].t = 4
+        for i in 0..100 { (mut h.slots[0].bytes).push((i % 251) as byte) }
+    }
+    print("{h.slots.len} {h.slots[0].t} {h.slots[0].bytes.len} {h.slots[0].bytes[99]}")
+}

@@ -1,0 +1,5 @@
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_heap.lu"}
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_heap_call.lu"}
+{"class":"Verdict","detail":"Fail(\"E1010\") vs Exit(0)","file":"corpus/memory/region_outer_write_push_plain_copy.lu"}
+differ: 1235 file(s), 3 divergence(s), 28 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 748, B executed 751, BOTH executed 748 of 1173 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)

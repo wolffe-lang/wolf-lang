@@ -1,0 +1,15 @@
+//! member: false
+// d3: a plain index store of a List through a mut parameter, called in a block
+fn put(mut outs: List[List[int]]) {
+    outs[0] = List[int]()
+}
+
+fn main() {
+    var outs = List[List[int]]()
+    (mut outs).push(List[int]())
+    region scratch {
+        put(mut outs)
+        for i in 0..100 { (mut outs[0]).push(i) }
+    }
+    print("{outs.len} {outs[0].len} {outs[0][99]}")
+}

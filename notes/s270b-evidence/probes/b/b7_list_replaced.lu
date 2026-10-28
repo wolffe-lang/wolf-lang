@@ -1,0 +1,14 @@
+//! member: false
+// b7: an outer List replaced whole by a block-built List (not a push)
+struct Heap {
+    vals: List[int],
+}
+
+fn main() {
+    var h = Heap { vals: List[int]() }
+    region scratch {
+        h.vals = List[int]()
+        for i in 0..100 { (mut h.vals).push(i) }
+    }
+    print("{h.vals.len} {h.vals[99]}")
+}

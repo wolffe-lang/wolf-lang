@@ -1,0 +1,34 @@
+//! member: false
+// e1: c3 without the block's own work (no fill inside scratch)
+struct Slot {
+    t: int,
+    bytes: List[int],
+}
+
+struct Heap {
+    slots: List[Slot],
+}
+
+fn alloc(mut h: Heap) -> int {
+    (mut h.slots).push(Slot { t: -1, bytes: List[int]() })
+    h.slots.len - 1
+}
+
+fn fill(n: int) -> int {
+    var junk = List[int]()
+    for i in 0..n { (mut junk).push(7777777) }
+    junk.len
+}
+
+fn main() {
+    var h = Heap { slots: List[Slot]() }
+    var total = 0
+    region scratch {
+        let at = alloc(mut h)
+        for i in 0..100 { (mut h.slots[at].bytes).push(i) }
+    }
+    region other {
+        total += fill(1000)
+    }
+    print("{h.slots.len} {h.slots[0].bytes.len} {h.slots[0].bytes[99]} {total}")
+}

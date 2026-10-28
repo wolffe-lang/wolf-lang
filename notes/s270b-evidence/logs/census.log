@@ -1,0 +1,42 @@
+s270b census waiting for block A 2026-10-28T21:02:47Z
+s270b census acquired block A 2026-10-28T21:03:08Z
+progress 0/5824
+progress 500/5824
+progress 1000/5824
+progress 1500/5824
+progress 2000/5824
+progress 2500/5824
+progress 3000/5824
+progress 3500/5824
+progress 4000/5824
+progress 4500/5824
+progress 5000/5824
+progress 5500/5824
+files 2912; reaching the memory check (base) 1780; moved 2
+  aspen        files   31 at-mem   19 moved 0
+  boreutils    files  215 at-mem  182 moved 0
+  clef         files   41 at-mem   24 moved 0
+  cub          files  108 at-mem    3 moved 0
+  den          files  184 at-mem   73 moved 0
+  fugue        files   38 at-mem    3 moved 0
+  jobq         files    3 at-mem    3 moved 0
+  lair         files   37 at-mem   22 moved 0
+  ligature     files   41 at-mem   22 moved 0
+  lobo         files  210 at-mem   62 moved 0
+  lope         files   21 at-mem   13 moved 0
+  mk           files    9 at-mem    9 moved 0
+  muzzle       files   21 at-mem   13 moved 0
+  pack         files   23 at-mem    5 moved 0
+  pax          files  147 at-mem   77 moved 1
+  pelt         files   59 at-mem   59 moved 0
+  scent        files   45 at-mem   38 moved 0
+  spell        files   11 at-mem   11 moved 0
+  tomlq        files    8 at-mem    8 moved 0
+  trail        files    8 at-mem    0 moved 0
+  wolf-book    files  425 at-mem  256 moved 0
+  wolf-lsp     files   17 at-mem   13 moved 0
+  wolf-std     files  659 at-mem  558 moved 0
+  yew          files  551 at-mem  307 moved 1
+MOVED {"file": "/lane/census/pax/notes/px72/region-witness.lu", "base": ["pass", [], [], "mem"], "head": ["fail(E1010)", ["E1010"], [], "mem"]}
+MOVED {"file": "/lane/census/yew/notes/yw07-evidence/reuse-row-move/main.lu", "base": ["pass", [], [], "mem"], "head": ["fail(E1010)", ["E1010"], [], "mem"]}
+s270b census released block A 2026-10-28T21:28:31Z rc=0

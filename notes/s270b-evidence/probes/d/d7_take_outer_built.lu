@@ -1,0 +1,12 @@
+//! member: false
+// d7: push(take x) of an outer-built List inside a block into an outer list: the value
+// moves, no copy is made in the block, so nothing of the block is kept
+fn main() {
+    var outs = List[List[int]]()
+    var x = List[int]()
+    (mut x).push(3)
+    region scratch {
+        (mut outs).push(take x)
+    }
+    print("{outs.len} {outs[0][0]}")
+}

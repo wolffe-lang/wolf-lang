@@ -1,0 +1,28 @@
+{"file": "region_outer_write_push_copy_call.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "4 100000 101 64 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_call.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "4 100000 101 64 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_call.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "4 100000 101 64 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_call.lu", "machine": "lupin", "exit": 0, "verdict": "trap(region-fault)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_control.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 2 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_control.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 2 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_control.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 2 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_control.lu", "machine": "lupin", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 2 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_over.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 17 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_over.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 17 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_over.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 17 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_over.lu", "machine": "lupin", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 17 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_under.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 16 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_under.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 16 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_under.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 16 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_copy_under.lu", "machine": "lupin", "exit": 0, "verdict": "exit(0)", "stdout": "4 1024 19 16 4 0 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_heap.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 -1 100 99 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_heap.lu", "machine": "--native", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "region_outer_write_push_heap.lu", "machine": "--release", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "region_outer_write_push_heap.lu", "machine": "lupin", "exit": 0, "verdict": "trap(region-fault)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_heap_call.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 1000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_heap_call.lu", "machine": "--native", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "region_outer_write_push_heap_call.lu", "machine": "--release", "exit": 2, "verdict": null, "stdout": "", "stderr": "wolf conform-run: ICE: native binary died without an exit code\n"}
+{"file": "region_outer_write_push_heap_call.lu", "machine": "lupin", "exit": 0, "verdict": "trap(region-fault)", "stdout": null, "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_plain_copy.lu", "machine": "--checked", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_plain_copy.lu", "machine": "--native", "exit": 0, "verdict": "exit(0)", "stdout": "1 1000 7777777 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_plain_copy.lu", "machine": "--release", "exit": 0, "verdict": "exit(0)", "stdout": "1 1000 7777777 2000\n", "codes": [], "stderr": ""}
+{"file": "region_outer_write_push_plain_copy.lu", "machine": "lupin", "exit": 0, "verdict": "exit(0)", "stdout": "1 100 99 2000\n", "codes": [], "stderr": ""}

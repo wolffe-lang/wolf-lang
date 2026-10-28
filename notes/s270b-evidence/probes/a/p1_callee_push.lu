@@ -1,0 +1,29 @@
+//! member: false
+// p1: the push of a block-built struct holding a List, inside a callee
+struct Slot {
+    t: int,
+    bytes: List[byte],
+}
+
+struct Heap {
+    slots: List[Slot],
+}
+
+fn empty() -> Slot {
+    Slot { t: -1, bytes: List[byte]() }
+}
+
+fn alloc(mut h: Heap) -> int {
+    (mut h.slots).push(empty())
+    h.slots.len - 1
+}
+
+fn main() {
+    var h = Heap { slots: List[Slot]() }
+    region scratch {
+        let at = alloc(mut h)
+        h.slots[at].t = 4
+        for i in 0..100 { (mut h.slots[at].bytes).push((i % 251) as byte) }
+    }
+    print("{h.slots.len} {h.slots[0].t} {h.slots[0].bytes.len} {h.slots[0].bytes[99]}")
+}

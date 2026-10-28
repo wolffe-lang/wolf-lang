@@ -1,0 +1,20 @@
+//! member: false
+// b1: a plain index store of a block-built struct holding a List into an outer list
+struct Slot {
+    t: int,
+    bytes: List[byte],
+}
+
+fn empty() -> Slot {
+    Slot { t: -1, bytes: List[byte]() }
+}
+
+fn main() {
+    var slots = List[Slot]()
+    (mut slots).push(empty())
+    region scratch {
+        slots[0] = empty()
+        for i in 0..100 { (mut slots[0].bytes).push((i % 251) as byte) }
+    }
+    print("{slots.len} {slots[0].bytes.len} {slots[0].bytes[99]}")
+}

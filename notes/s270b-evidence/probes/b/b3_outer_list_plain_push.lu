@@ -1,0 +1,12 @@
+//! member: false
+// b3: a plain push of a List built OUTSIDE the block, inside it, into an outer list:
+// the push copies the element, and the copy is made in the block
+fn main() {
+    var outs = List[List[byte]]()
+    let x = List[byte]()
+    region scratch {
+        (mut outs).push(x)
+        for i in 0..100 { (mut outs[0]).push((i % 251) as byte) }
+    }
+    print("{outs.len} {outs[0].len} {outs[0][99]}")
+}

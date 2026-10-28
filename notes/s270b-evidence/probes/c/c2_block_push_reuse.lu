@@ -1,0 +1,31 @@
+//! member: false
+// c2: p2 (a block-built struct pushed plainly into an outer list) with the region kept
+// and a second region reusing the chunk
+struct Slot {
+    t: int,
+    bytes: List[int],
+}
+
+fn empty() -> Slot {
+    Slot { t: -1, bytes: List[int]() }
+}
+
+fn fill(n: int) -> int {
+    var junk = List[int]()
+    for i in 0..n { (mut junk).push(7777777) }
+    junk.len
+}
+
+fn main() {
+    var slots = List[Slot]()
+    var total = 0
+    region scratch {
+        (mut slots).push(empty())
+        for i in 0..100 { (mut slots[0].bytes).push(i) }
+        total += fill(1000)
+    }
+    region other {
+        total += fill(1000)
+    }
+    print("{slots.len} {slots[0].t} {slots[0].bytes.len} {slots[0].bytes[99]} {total}")
+}
