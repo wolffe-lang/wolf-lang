@@ -152,6 +152,7 @@ jobs:
       - run: python3 ci/link-inputs-test.py
       - run: python3 ci/release-notes-test.py
       - run: python3 ci/release-publish-test.py
+      - run: python3 ci/nightly-test.py
 
   lint-test:
     name: lint + test + corpus (linux x86-64)
