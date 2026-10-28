@@ -411,19 +411,6 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          # #984: GitHub can store the newly created draft under untagged-*.
-          # Recover only the id handed over by create, never a tag search's
-          # substitute or a differently tagged published release.
-          owned=$(gh api "repos/${GH_REPO}/releases/${RELEASE_ID}" \
-            --jq '[.id, .tag_name, .draft] | @tsv')
-          IFS=$'\t' read -r owned_id owned_tag owned_draft <<< "$owned"
-          test "$owned_id" = "$RELEASE_ID" \
-            || { echo "::error::the handed release id does not match its response" >&2; exit 1; }
-          if [ "$owned_tag" != "$tag" ]; then
-            test "$owned_draft" = true \
-              || { echo "::error::refusing to retag the published release $RELEASE_ID" >&2; exit 1; }
-            gh api --method PATCH "repos/${GH_REPO}/releases/${RELEASE_ID}" -f tag_name="$tag" > /dev/null
-          fi
           gh api --paginate "repos/${GH_REPO}/releases" \
             --jq ".[] | select(.tag_name == \"${tag}\") | \"\(.id)\t\(.draft)\t\(.assets | length)\"" \
             | tee releases.tsv
@@ -445,7 +432,7 @@ jobs:
             echo "::error::publish: $tag carries $count archives ($musl musl runtime), wanted 4 hosts and 1 musl runtime — leaving it a draft" >&2
             exit 1
           fi
-          gh api --method PATCH "repos/${GH_REPO}/releases/${RELEASE_ID}" -f tag_name="$tag" -F draft=false \
+          gh api --method PATCH "repos/${GH_REPO}/releases/${RELEASE_ID}" -F draft=false \
             --jq '"published \(.html_url) (draft=\(.draft), prerelease=\(.prerelease))"'
           # The #226 shape, asserted after the fact rather than remembered.
           shape=$(gh api --paginate "repos/${GH_REPO}/releases" \
