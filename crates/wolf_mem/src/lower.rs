@@ -8066,11 +8066,14 @@ impl<'t> Lowerer<'t> {
             // slots, #948. So the receiver holds the copy, and the
             // block's close refuses it (E1010), naming the push; `copy`
             // at the store is the repair.
-            if site_region.is_some()
+            if let Some(r) = site_region
                 && builtin_recv_early
                 && let Some((cspan, cty)) = stored_copy.take()
             {
-                let copied = self.alloc_site(cty, SiteKind::Lit, cspan);
+                // PLANT (s270b, never on the line): the copy attributed to
+                // the list's own region, where s255 put the growth — the
+                // model that admitted #948.
+                let copied = self.alloc_site_in(cty, SiteKind::Lit, cspan, r);
                 let copy_val = Val::site(copied, cspan);
                 for &place in &mut_targets {
                     if let Base::Local(l) = self.places.get(place).base {
