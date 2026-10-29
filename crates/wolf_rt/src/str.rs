@@ -620,6 +620,18 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_finish(handle: i64, out: i64) {
     }
 }
 
+/// Finish a test diagnostic into the trap report, not the program's arena.
+/// Diagnostic formatting must not turn `trap(assert)` into a region-cap trap.
+///
+/// # Safety
+/// `handle` came from `__wolf_rt_strbuf_new` and has not been finished.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_assert_buf(tag: i64, handle: i64) {
+    // SAFETY: the compiler hands over this live buffer exactly once.
+    let value = unsafe { Box::from_raw(handle as *mut String) };
+    crate::native::store_assert_detail(tag, *value);
+}
+
 // ------------------------------------------ the separator set (s84) --
 
 /// `[mem.str.ws]` — is a `White_Space` scalar encoded at the front of

@@ -211,6 +211,8 @@ pub struct TrapInfo {
     /// floor, so every runner reading a record saw `trap(assert)` and
     /// nothing else. `None` is honest-absent, never an empty string.
     pub message: Option<String>,
+    /// The already evaluated operands of a failed equality assertion.
+    pub compared: Option<(String, String)>,
 }
 
 /// The outcome of one checked execution.
@@ -641,6 +643,7 @@ fn raise(v: Value) -> Flow {
 }
 
 type E<T> = Result<T, Stop>;
+type AssertionOperands = [(Value, Option<TyId>); 2];
 
 /// What a place lookup (or a byte view) found (wolf-lang#481): the
 /// thing itself, nothing ("not a place" — the caller evaluates the
@@ -1661,6 +1664,7 @@ impl<'t> Machine<'t> {
             clause,
             span,
             message: None,
+            compared: None,
         }))
     }
 
@@ -1678,6 +1682,7 @@ impl<'t> Machine<'t> {
             clause,
             span,
             message,
+            compared: None,
         }))
     }
 
@@ -5814,6 +5819,14 @@ impl<'t> Machine<'t> {
     }
 
     fn eval_bin(&mut self, e: &'t GreenNode) -> E<Flow> {
+        self.eval_bin_capture(e, None)
+    }
+
+    fn eval_bin_capture(
+        &mut self,
+        e: &'t GreenNode,
+        compared: Option<&mut Option<AssertionOperands>>,
+    ) -> E<Flow> {
         let d = wolf_ast::BinExpr::cast(e).expect("kind");
         let op = d.op().map(|t| t.kind);
         // Short-circuit forms first.
@@ -5849,6 +5862,14 @@ impl<'t> Machine<'t> {
         {
             let l = val!(self.eval_arg(le, None));
             let r = val!(self.eval_arg(re, None));
+            if op == SyntaxKind::EqEq
+                && let Some(compared) = compared
+            {
+                *compared = Some([
+                    (l.clone(), self.ctx().expr_tys.get(&le.span).copied()),
+                    (r.clone(), self.ctx().expr_tys.get(&re.span).copied()),
+                ]);
+            }
             let out = self.op_dispatch_call(le, l, vec![r], *module, name, method, e.span)?;
             let Flow::Val(out) = out else {
                 return Ok(out);
@@ -5897,6 +5918,15 @@ impl<'t> Machine<'t> {
             }
             SyntaxKind::EqEq | SyntaxKind::NotEq => {
                 let eq = values_equal(&l, &r);
+                if !eq
+                    && op == SyntaxKind::EqEq
+                    && let Some(compared) = compared
+                {
+                    let ty = |node: Option<&GreenNode>| {
+                        node.and_then(|n| self.ctx().expr_tys.get(&n.span).copied())
+                    };
+                    *compared = Some([(l, ty(d.lhs())), (r, ty(d.rhs()))]);
+                }
                 let want = op == SyntaxKind::EqEq;
                 Ok(Flow::Val(Value::Bool(eq == want)))
             }
@@ -12263,7 +12293,12 @@ impl<'t> Machine<'t> {
                 if let Some(first) = rest.next()
                     && let Some(v) = Arg::value(first)
                 {
-                    let x = val!(self.eval(v));
+                    let mut compared = None;
+                    let mut condition = v;
+                    while condition.kind == SyntaxKind::ParenExpr && let Some(inner) = condition.nodes().next() { condition = inner; }
+                    let x = if condition.kind == SyntaxKind::BinExpr {
+                        val!(self.eval_bin_capture(condition, Some(&mut compared)))
+                    } else { val!(self.eval(v)) };
                     if !matches!(x, Value::Bool(true)) {
                         // s169: the message was ALREADY evaluated here
                         // and then discarded. Keeping it is the whole
@@ -12282,7 +12317,8 @@ impl<'t> Machine<'t> {
                                 }
                             }
                         }
-                        return self.trap_with("assert", "mem.ub.defined", e.span, message);
+                        let compared = compared.map(|[(left, lt), (right, rt)]| (self.render(&left, lt), self.render(&right, rt)));
+                        return Err(Stop::Trap(TrapInfo { kind: "assert", clause: "mem.ub.defined", span: e.span, message, compared }));
                     }
                 }
                 return Ok(Flow::Val(Value::Unit));

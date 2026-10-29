@@ -192,12 +192,71 @@ pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
     trap_with_message(kind, "")
 }
 
+thread_local! {
+    // Written only on an assertion's failing path, immediately before its
+    // trap. Taking it before containment prevents a caught proc fault from
+    // leaking its details into a later trap on the same worker.
+    static ASSERT_DETAILS: std::cell::RefCell<[Option<String>; 3]> =
+        const { std::cell::RefCell::new([None, None, None]) };
+}
+
+/// Retain one test-executable assertion detail: 0 message, 1 left, 2 right.
+/// Ordinary builds do not emit this call; it adds no environment variables
+/// or output to a passing test.
+///
+/// # Safety
+/// `ptr` must name `len` readable UTF-8 bytes for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_assert_detail(tag: i64, ptr: i64, len: i64) {
+    if !(0..3).contains(&tag) || len < 0 {
+        return;
+    }
+    let bytes = if len == 0 {
+        &[][..]
+    } else {
+        // SAFETY: compiler supplies the evaluated string's live storage.
+        unsafe { std::slice::from_raw_parts(ptr as *const u8, len as usize) }
+    };
+    store_assert_detail(tag, String::from_utf8_lossy(bytes).into_owned());
+}
+
+pub(crate) fn store_assert_detail(tag: i64, value: String) {
+    if !(0..3).contains(&tag) {
+        return;
+    }
+    ASSERT_DETAILS.with(|details| {
+        details.borrow_mut()[tag as usize] = Some(value);
+    });
+}
+
+fn take_assert_details() -> [Option<String>; 3] {
+    ASSERT_DETAILS.with(|details| std::mem::take(&mut *details.borrow_mut()))
+}
+
+fn write_assert_details(out: &mut impl std::io::Write, details: &[Option<String>; 3]) {
+    for (tag, value) in details.iter().enumerate() {
+        if let Some(value) = value {
+            // Hex is unambiguous for messages containing newlines, quotes,
+            // NULs or text resembling the trap protocol. No new dependency.
+            let _ = write!(out, "wolf-assert-{tag}: ");
+            for byte in value.as_bytes() {
+                let _ = write!(out, "{byte:02x}");
+            }
+            let _ = writeln!(out);
+        }
+    }
+}
+
 /// The ordinary contained trap path, with an optional human-readable
 /// detail on its own line, preserving the first-line conformance ABI.
 pub(crate) fn trap_with_message(kind: i32, message: &str) -> ! {
+    let assertion = take_assert_details();
     try_contain_trap(kind);
     let mut err = std::io::stderr().lock();
     write_trap_report(&mut err, kind, None);
+    if kind == trap_code::ASSERT {
+        write_assert_details(&mut err, &assertion);
+    }
     if !message.is_empty() {
         let _ = writeln!(err, "  {message}");
     }
@@ -236,6 +295,7 @@ pub unsafe extern "C" fn __wolf_rt_trap_at(
     // Containment first (D68): inside a proc the site rides the
     // reason's fault kind, not stderr — the proc dies, not the
     // process, and the harness line would misreport an outcome.
+    let assertion = take_assert_details();
     try_contain_trap(kind);
     let mut err = std::io::stderr().lock();
     if file.is_null() || file_len <= 0 {
@@ -245,6 +305,9 @@ pub unsafe extern "C" fn __wolf_rt_trap_at(
         let bytes = unsafe { core::slice::from_raw_parts(file, file_len as usize) };
         let name = String::from_utf8_lossy(bytes);
         write_trap_report(&mut err, kind, Some((&name, line as u64, col as u64)));
+    }
+    if kind == trap_code::ASSERT {
+        write_assert_details(&mut err, &assertion);
     }
     let _ = err.flush();
     drop(err);
@@ -1146,6 +1209,48 @@ mod tests {
         // And the site line never matches the kind parser's prefix.
         let site_line = sited.split(|&b| b == b'\n').nth(1).unwrap();
         assert!(!site_line.starts_with(b"wolf-trap:"));
+    }
+
+    #[test]
+    fn assertion_detail_wire_data_cannot_imitate_a_trap_line() {
+        let details = [
+            Some("x\n\"\0".to_string()),
+            Some("é".to_string()),
+            Some(String::new()),
+        ];
+        let mut wire = Vec::new();
+        write_assert_details(&mut wire, &details);
+        assert_eq!(
+            wire,
+            "wolf-assert-0: 780a2200\nwolf-assert-1: c3a9\nwolf-assert-2: \n".as_bytes()
+        );
+    }
+
+    #[test]
+    fn assertion_value_buffers_are_consumed_without_materializing_a_wolf_string() {
+        let _ = take_assert_details();
+        let buffer = crate::str::__wolf_rt_strbuf_new();
+        // SAFETY: this live buffer is used and consumed exactly once.
+        unsafe {
+            crate::str::__wolf_rt_strbuf_i64(buffer, 42, 0);
+            crate::str::__wolf_rt_assert_buf(1, buffer);
+        }
+        assert_eq!(take_assert_details(), [None, Some("42".to_string()), None]);
+    }
+
+    #[test]
+    fn assertion_details_are_taken_once_and_do_not_reach_the_next_trap() {
+        let _ = take_assert_details();
+        let message = "the failure";
+        // SAFETY: a live UTF-8 string for the entire call.
+        unsafe {
+            __wolf_rt_assert_detail(0, message.as_ptr() as i64, message.len() as i64);
+        }
+        assert_eq!(
+            take_assert_details(),
+            [Some(message.to_string()), None, None]
+        );
+        assert_eq!(take_assert_details(), [None, None, None]);
     }
 
     #[test]
