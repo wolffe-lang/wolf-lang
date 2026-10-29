@@ -1,0 +1,49 @@
+rc=0
+s270b ab631 acquired block A 2026-10-29T03:16:58Z
+s270b AB wolf-lang head=85be38f59bc5805f6c07fae4df211417490a5380 2026-10-29T03:16:58Z
+AB wolf-lang run1: copy_int: VmHWM 2024 kB at 20000 turns, 2084 kB at 40000
+AB wolf-lang run1: copy_int: VmHWM 2024 kB at 20000 turns, 1988 kB at 40000
+AB wolf-lang run1: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.02s
+AB wolf-lang run1 rc=0
+AB wolf-lang run2: copy_int: VmHWM 1924 kB at 20000 turns, 2028 kB at 40000
+AB wolf-lang run2: copy region scalar loop grew 5 B/turn (release=false), want flat (wolf-lang#612)
+AB wolf-lang run2: test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.44s
+AB wolf-lang run2 rc=101
+AB wolf-lang run3: copy_int: VmHWM 2016 kB at 20000 turns, 2076 kB at 40000
+AB wolf-lang run3: copy_int: VmHWM 1988 kB at 20000 turns, 2044 kB at 40000
+AB wolf-lang run3: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.02s
+AB wolf-lang run3 rc=0
+AB wolf-lang run4: copy_int: VmHWM 2008 kB at 20000 turns, 1988 kB at 40000
+AB wolf-lang run4: copy_int: VmHWM 2020 kB at 20000 turns, 2056 kB at 40000
+AB wolf-lang run4: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.02s
+AB wolf-lang run4 rc=0
+AB wolf-lang run5: copy_int: VmHWM 2044 kB at 20000 turns, 1960 kB at 40000
+AB wolf-lang run5: copy_int: VmHWM 1976 kB at 20000 turns, 2072 kB at 40000
+AB wolf-lang run5: copy region scalar loop grew 5 B/turn (release=true), want flat (wolf-lang#612)
+AB wolf-lang run5: test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.04s
+AB wolf-lang run5 rc=101
+s270b AB base head=d2753b48c334b844d25987be25d1d83bf1bb67dd 2026-10-29T03:17:03Z
+AB base run1: copy_int: VmHWM 2028 kB at 20000 turns, 1968 kB at 40000
+AB base run1: copy_int: VmHWM 2032 kB at 20000 turns, 1988 kB at 40000
+AB base run1: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.11s
+AB base run1 rc=0
+AB base run2: copy_int: VmHWM 2000 kB at 20000 turns, 1944 kB at 40000
+AB base run2: copy_int: VmHWM 1984 kB at 20000 turns, 2056 kB at 40000
+AB base run2: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.01s
+AB base run2 rc=0
+AB base run3: copy_int: VmHWM 2108 kB at 20000 turns, 1944 kB at 40000
+AB base run3: copy_int: VmHWM 2068 kB at 20000 turns, 2020 kB at 40000
+AB base run3: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+AB base run3 rc=0
+AB base run4: copy_int: VmHWM 2084 kB at 20000 turns, 2028 kB at 40000
+AB base run4: copy_int: VmHWM 2064 kB at 20000 turns, 2044 kB at 40000
+AB base run4: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.04s
+AB base run4 rc=0
+AB base run5: copy_int: VmHWM 2080 kB at 20000 turns, 2056 kB at 40000
+AB base run5: copy_int: VmHWM 1964 kB at 20000 turns, 1936 kB at 40000
+AB base run5: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.01s
+AB base run5 rc=0
+s270b AB DONE 2026-10-29T03:17:21Z
+s270b ab631 released block A 2026-10-29T03:17:21Z rc=0
+
+[exited with code 0]

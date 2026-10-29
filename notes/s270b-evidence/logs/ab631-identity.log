@@ -1,0 +1,15 @@
+# s270b: scripts/ab631-identity.py, hasu block A, 2026-10-29T03:18:48Z-03:18:49Z
+# (console output of `container.sh ab631-id /lane/scripts/py-inner.sh ab631-identity.py`, copied verbatim)
+head native build rc=0 sha256=60d929cc7a0f88251689f6fecc3a5192af61df94d331985a563aafabd1e84e1a
+head release build rc=0 sha256=065201a1ab53997cd2df7b7543784d6f5aad3f4454438b7d099725277147343c
+head regions-dump sha256=40781706f40fc1a76dda4252fc9afca4dca20f003cd71c2b0f728f2c1e1a11e5
+trunk native build rc=0 sha256=60d929cc7a0f88251689f6fecc3a5192af61df94d331985a563aafabd1e84e1a
+trunk release build rc=0 sha256=065201a1ab53997cd2df7b7543784d6f5aad3f4454438b7d099725277147343c
+trunk regions-dump sha256=40781706f40fc1a76dda4252fc9afca4dca20f003cd71c2b0f728f2c1e1a11e5
+# both dumps, identical; `step`:
+regions fn step
+  ambient caller (implicit parameter)
+  param st -> own (generalized)
+  region scratch @547..554 (scope) [promoted -> stack; create/free elided]
+  param-data St @505..507 -> own (generalized)
+  call-alloc str @565..573 -> region scratch

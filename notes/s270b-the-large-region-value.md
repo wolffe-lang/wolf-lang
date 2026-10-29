@@ -271,7 +271,51 @@ new `wolf_lex` token-stream files, 7 new `wolf_parse` declaration files, and 7 a
 it)`) between `region_outer_write_map.lu` and `region_outer_write_refused.lu`; no other line of any
 snapshot moved. One commit, `0fcc8634`.
 
-**Second run, at `0fcc8634`:** TBD.
+**Second run, at `0fcc8634` (red, kept):** 01:29Z–02:06Z (`logs/gauntlet-0fcc8634.log`, trimmed).
+Every step through `test`, `corpus`, `bench-gates` (ir-volume 694 recorded, 730 measured, 36 new,
+0 regressed), `spec-extract`, `conformance` and `print-gate` green; the one red, `diag-catalog`:
+"docs/diagnostics.md OUT OF SYNC". The catalogue lists, per code, the fixture snapshots that show
+it, and the new `wolf_lex` snapshots of four rows name E1010. `cargo xtask diag-catalog` in the
+container changed one line of `docs/diagnostics.md` — E1010's `Fixtures:` list gains
+`corpus_snapshots__memory__region_outer_write_push_heap.snap`, `…_push_heap_call.snap`,
+`…_push_plain_copy.snap` and `…_push_copy_control.snap` (whose header says "it is E1010 now"); no
+diagnostic text and no other code moved. Committed alone (`85be38f5`); `diag-catalog --check` alone
+at that head: exit 0, "192 codes (34 warnings), all with fixtures, catalogs in sync".
+
+**Third run, at `85be38f5` (red at the known flake):** 02:16Z–02:45Z (`logs/gauntlet-85be38f5.log`,
+trimmed). build, dist-rt, clef, ligature, fmt, fmt-fixpoint, clippy and rt-none green; `test` red at
+one row, `region_copyout_lanes::a_loop_keeping_a_scalar_is_flat` — "copy region scalar loop grew 5
+B/turn (release=true), want flat" (`copy_int: VmHWM 1952 kB at 20000 turns, 2048 kB at 40000`):
+wolf-lang#631, open, "the 4 B/turn bound sits inside VmHWM noise under xtask ci's load". Every other
+test binary in the step green; the ten `lane_exit` "panicked" lines above it are the expected panics
+of passing `should panic` tests (`a_conform_run_ice_fails`, `a_mid_end_ice_fails`, … all `ok`). The
+steps after `test` did not run at this content. The A/B on #631 below, and a `--no-fail-fast` run at
+the final head, queued.
+
+**The A/B on #631** (`logs/ab631.log`, `scripts/ab631-inner.sh`; hasu block A, 03:16Z–03:17Z, the
+gauntlet's env): the row alone (`cargo test --locked -q -p wolf_driver --test region_copyout_lanes
+a_loop_keeping_a_scalar_is_flat -- --exact --nocapture`), five times at the head `85be38f5` and five
+at trunk `d2753b48`. B/turn = max(0, VmHWM@40000 − VmHWM@20000) × 1024 / 20000, the bound < 4; each
+run does `release=false` then `release=true` and stops at the first leg over the bound:
+
+| run | head, release=false | head, release=true | trunk, release=false | trunk, release=true |
+|---|---|---|---|---|
+| 1 | 2024→2084 kB: 3.1 | 2024→1988: 0.0 | 2028→1968: 0.0 | 2032→1988: 0.0 |
+| 2 | 1924→2028: **5.3 red** | not reached | 2000→1944: 0.0 | 1984→2056: 3.7 |
+| 3 | 2016→2076: 3.1 | 1988→2044: 2.9 | 2108→1944: 0.0 | 2068→2020: 0.0 |
+| 4 | 2008→1988: 0.0 | 2020→2056: 1.8 | 2084→2028: 0.0 | 2064→2044: 0.0 |
+| 5 | 2044→1960: 0.0 | 1976→2072: **4.9 red** | 2080→2056: 0.0 | 1964→1936: 0.0 |
+
+Head 2 of 5 red, trunk 0 of 5 — and the two compilers build this row's witness to byte-identical
+binaries on both tiers (native sha256 `60d929cc…e84e1a`, release `065201a1…47343c` from each) with
+the same region dump (`step`'s `region scratch` promoted to the stack, create/free elided;
+`logs/ab631-identity.log`): the program contains no plain push of a heap value, so this lane's rule
+never fires in it. The split is the instrument, a single ~100 kB VmHWM step between two samples
+reading as 5 B/turn. Commented on wolf-lang#631 with the table and the commands (issuecomment
+6486950279). Then every `cargo xtask ci` step at the final head without stopping at a red
+(`xtask ci` has no `--no-fail-fast`; `scripts/nff-inner.sh` runs its 23 steps' own `cargo` commands
+in its order, `test` as `cargo test --workspace --no-fail-fast`, and records each exit), detached and
+not waited on; its pid, log and marker are in the hand-back, and the merge is `tier full`'s.
 
 **Which tree each step ran on.** chain2's move to the pushed head printed git's refusal (lines 4–17
 of `logs/chain2.log`): the hasu clone still held my working copies of `crates/wolf_mem/src/lower.rs`
@@ -369,5 +413,10 @@ Checklist:
 - [x] Differ over the corpus, three tiers: only the new refusals move (section 7).
 - [x] Downstream census: two moves, both this bug as reported before (section 7).
 - [x] `cargo test --workspace --no-fail-fast` at `822b236c`: exactly the three snapshot binaries red.
-- [ ] Full gauntlet at `0fcc8634`: TBD.
+- [x] Gauntlet at `0fcc8634`: one red, `diag-catalog` (the new fixtures unlisted), fixed alone in
+      `85be38f5`; the step alone green there.
+- [x] Gauntlet at `85be38f5`: red only at wolf-lang#631's `a_loop_keeping_a_scalar_is_flat`
+      (5 B/turn); A/B 5 + 5 runs commented on #631, identical binaries from head and trunk.
+- [ ] Every `xtask ci` step at the final head, not stopping at a red (`scripts/nff-inner.sh`): detached, not waited on; the
+      merge is `tier full`'s.
 - [x] README read, current. No spec edit; no issue filed or closed; no label.
