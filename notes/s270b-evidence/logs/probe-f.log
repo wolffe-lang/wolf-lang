@@ -1,0 +1,12 @@
+s270b probe-f acquired block A 2026-10-28T23:29:53Z
+f1_reuse_row_move.lu                     mut-clean: fn reserve #0 pool: unclean at /lane/probes/f/f1_reuse_row_move.lu:29:71 `empty()`; fn bytes_refill #0 dst: clean; fn refill_inside #0 pool: unclean at /lane/probes/f/f1_reuse_row_move.lu:41:31 `row`; fn refill #0 pool: unclean at /lane/probes/f/f1_reuse_row_move.lu:58:5 `reserve(mut pool, n)`
+f1_reuse_row_move.lu                     --checked  exit=0 fail(E1010) codes=['E1010'] out=[] note: to keep the value, allocate it where it must live: build it outside the region block, or |      aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { … |      }`); widening the region block to cover every use also works. When the block's own value |      is what 
+f1_reuse_row_move.lu                     --native   exit=0 fail(E1010) codes=['E1010'] out=[] note: to keep the value, allocate it where it must live: build it outside the region block, or |      aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { … |      }`); widening the region block to cover every use also works. When the block's own value |      is what 
+f1_reuse_row_move.lu                     --release  exit=0 fail(E1010) codes=['E1010'] out=[] note: to keep the value, allocate it where it must live: build it outside the region block, or |      aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { … |      }`); widening the region block to cover every use also works. When the block's own value |      is what 
+f1_reuse_row_move.lu                     lupin      exit=0 exit(0) codes=[] out=[two-list row refill: PASS] 
+f2_reuse_row_move_take.lu                mut-clean: fn reserve #0 pool: unclean at /lane/probes/f/f2_reuse_row_move_take.lu:29:71 `empty()`; fn bytes_refill #0 dst: clean; fn refill_inside #0 pool: clean; fn refill #0 pool: unclean at /lane/probes/f/f2_reuse_row_move_take.lu:58:5 `reserve(mut pool, n)`
+f2_reuse_row_move_take.lu                --checked  exit=0 exit(0) codes=[] out=[two-list row refill: PASS] 
+f2_reuse_row_move_take.lu                --native   exit=0 exit(0) codes=[] out=[two-list row refill: PASS] 
+f2_reuse_row_move_take.lu                --release  exit=0 exit(0) codes=[] out=[two-list row refill: PASS] 
+f2_reuse_row_move_take.lu                lupin      exit=0 exit(0) codes=[] out=[two-list row refill: PASS] 
+s270b probe-f released block A 2026-10-28T23:29:54Z rc=0

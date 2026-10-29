@@ -1,0 +1,1178 @@
+corpus: corpus/comptime/align_of_layout.lu [phase: resolve] conforms: abi.layout.query, abi.native.layout, comptime.layout
+corpus: corpus/comptime/assert_static.lu [phase: resolve] conforms: comptime.assert, comptime.reflect
+corpus: corpus/comptime/budget_zero.lu [phase: resolve] conforms: comptime.budget
+corpus: corpus/comptime/depth_spiral.lu [phase: resolve] conforms: comptime.budget, comptime.budget.depth
+corpus: corpus/comptime/derive_eq.lu [phase: wir] conforms: comptime.reflect, comptime.derive
+corpus: corpus/comptime/fold_reaches_lane.lu [phase: run] conforms: comptime.fn, comptime.types_as_values
+corpus: corpus/comptime/fuel_loop.lu [phase: resolve] conforms: comptime.budget, comptime.budget.fuel
+corpus: corpus/comptime/heap_flood.lu [phase: resolve] conforms: comptime.budget, comptime.budget.heap
+corpus: corpus/comptime/layout_query_repr_c.lu [phase: run] conforms: abi.layout.query, abi.layout.c, abi.layout.packed, abi.layout.align, comptime.layout
+corpus: corpus/comptime/norm_linear.lu [phase: mem] conforms: comptime.const_generics, comptime.norm
+corpus: corpus/comptime/norm_witness.lu [phase: resolve] conforms: comptime.const_generics, comptime.norm.witness
+corpus: corpus/comptime/offset_of_layout.lu [phase: resolve] conforms: abi.layout.query, abi.native.layout, comptime.layout
+corpus: corpus/comptime/overflow_i32.lu [phase: resolve] conforms: comptime.arith, arith.checked
+corpus: corpus/comptime/reflect_fields.lu [phase: wir] conforms: comptime.reflect, comptime.types_as_values
+corpus: corpus/comptime/runtime_arg.lu [phase: resolve] conforms: comptime.fn, comptime.known
+corpus: corpus/comptime/sandbox_chdir.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.env, os.fs.chdir
+corpus: corpus/comptime/sandbox_clock.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.clock
+corpus: corpus/comptime/sandbox_env.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.env
+corpus: corpus/comptime/sandbox_env_unset.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.env, os.env.unset
+corpus: corpus/comptime/sandbox_exec.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.exec
+corpus: corpus/comptime/sandbox_ffi.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.ffi
+corpus: corpus/comptime/sandbox_fs.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.fs
+corpus: corpus/comptime/sandbox_io.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.io
+corpus: corpus/comptime/sandbox_isatty.lu [phase: resolve] conforms: comptime.sandbox, os.fs.isatty
+corpus: corpus/comptime/sandbox_net.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.net
+corpus: corpus/comptime/sandbox_net_socket.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.net
+corpus: corpus/comptime/sandbox_os_exec.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.exec
+corpus: corpus/comptime/sandbox_os_random.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.random
+corpus: corpus/comptime/sandbox_pipe.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.pipe
+corpus: corpus/comptime/sandbox_random.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.random
+corpus: corpus/comptime/sandbox_set_mode.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.fs, os.fs.mode
+corpus: corpus/comptime/sandbox_spawn_fds.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.fds
+corpus: corpus/comptime/sandbox_umask.lu [phase: resolve] conforms: comptime.sandbox, comptime.sandbox.env, os.fs.umask
+corpus: corpus/comptime/shift_overflow.lu [phase: resolve] conforms: type.int.shift, comptime.arith
+corpus: corpus/comptime/shift_value.lu [phase: run] conforms: type.int.shift, comptime.arith
+corpus: corpus/comptime/size_of_layout.lu [phase: resolve] conforms: comptime.reflect, comptime.layout
+corpus: corpus/comptime.lu [phase: run] conforms: comptime.fn, comptime.types_as_values
+corpus: corpus/conc/atomic_counter.lu [phase: run] conforms: conc.mm.atomic.raw, conc.mm.atomic.raw.3, conc.task.scope
+corpus: corpus/conc/atomic_fence.lu [phase: run] conforms: conc.mm.fence
+corpus: corpus/conc/atomic_order_misuse.lu [phase: resolve] conforms: conc.mm.atomic.order, conc.mm.atomic.raw.2, conc.mm.fence
+corpus: corpus/conc/atomic_orders.lu [phase: run] conforms: conc.mm.atomic.order, conc.mm.atomic.raw.2, conc.mm.atomic.raw.5
+corpus: corpus/conc/atomic_outside_unsafe.lu [phase: typecheck] conforms: conc.mm.atomic.raw, conc.mm.fence, mem.unsafe.scope
+corpus: corpus/conc/atomic_pointee.lu [phase: resolve] conforms: conc.mm.atomic.raw.1
+corpus: corpus/conc/atomic_race_plain.lu [phase: wir] conforms: conc.mm.race.1, conc.mm.atomic.raw
+corpus: corpus/conc/atomic_ub_misaligned.lu [phase: wir] conforms: conc.mm.atomic.raw.4, mem.unsafe.raw.4, mem.ub
+corpus: corpus/conc/atomic_ub_uaf.lu [phase: wir] conforms: conc.mm.atomic.raw.5, mem.ub
+corpus: corpus/conc/atomic_widths.lu [phase: run] conforms: conc.mm.atomic.raw, conc.mm.atomic.raw.1, conc.mm.atomic.raw.5
+corpus: corpus/conc/cancel_sibling.lu [phase: run] conforms: conc.task.fail, conc.cancel.points, conc.cancel.defer
+corpus: corpus/conc/capture_mut_arg.lu [phase: resolve] conforms: conc.task.spawn, mem.tier0.mode.mut
+corpus: corpus/conc/capture_mut_lend.lu [phase: resolve] conforms: conc.task.spawn
+corpus: corpus/conc/capture_write_assign.lu [phase: resolve] conforms: conc.task.spawn
+corpus: corpus/conc/chan_closed_row.lu [phase: run] conforms: conc.chan.close, type.interp.row
+corpus: corpus/conc/chan_default_rendezvous.lu [phase: run] conforms: conc.chan.default, conc.chan.buf
+corpus: corpus/conc/chan_drain_after_inclusive_loop.lu [phase: run] conforms: conc.chan.close, mem.iter.range
+corpus: corpus/conc/chan_param_for.lu [phase: run] conforms: conc.chan.close, conc.chan.type, conc.proc.exit
+corpus: corpus/conc/chan_payload_escape.lu [phase: typecheck] conforms: conc.chan.payload
+corpus: corpus/conc/chan_payload_escape_proc.lu [phase: typecheck] conforms: mem.region.proc, conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_payload_proc_param.lu [phase: run] conforms: mem.region.proc, conc.chan.payload, conc.chan.imm
+corpus: corpus/conc/chan_root_task.lu [phase: run] conforms: conc.chan.buf, conc.chan.close, conc.chan.payload
+corpus: corpus/conc/chan_send_closed_row.lu [phase: run] conforms: conc.chan.close, type.unit.consume, type.interp.row
+corpus: corpus/conc/chan_sent_arg_bound.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_enum.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_for.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_legal.lu [phase: run] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_legal_tasks.lu [phase: run] conforms: conc.chan.payload, mem.region.escape, conc.proc.arg
+corpus: corpus/conc/chan_sent_arg_nested.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_proc.lu [phase: typecheck] conforms: mem.region.proc, conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_proc_site.lu [phase: typecheck] conforms: mem.region.proc, conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_scope.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_select.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_spawn.lu [phase: typecheck] conforms: conc.proc.arg, conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_struct.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_sent_arg_tuple.lu [phase: typecheck] conforms: conc.chan.payload, mem.region.escape
+corpus: corpus/conc/chan_struct_payload.lu [phase: run] conforms: conc.chan.payload, conc.chan.close
+corpus: corpus/conc/chan_unsendable.lu [phase: resolve] conforms: conc.chan.type
+corpus: corpus/conc/freeze_proc_snapshot.lu [phase: run] conforms: conc.proc.arg, mem.region.freeze.1, conc.chan.imm
+corpus: corpus/conc/freeze_publish.lu [phase: run] conforms: conc.mm.hb.freeze, mem.region.freeze.1
+corpus: corpus/conc/message_passing.lu [phase: run] conforms: conc.mm.hb.chan, conc.mm.hb.move, conc.chan.move, conc.task.scope
+corpus: corpus/conc/par_capture_write.lu [phase: resolve] conforms: conc.task.par.capture, conc.task.spawn
+corpus: corpus/conc/par_fail_reraises.lu [phase: run] conforms: conc.task.par.fail, conc.task.fail
+corpus: corpus/conc/par_order.lu [phase: run] conforms: conc.task.par, conc.task.par.order, conc.task.par.chunk
+corpus: corpus/conc/proc_cancel_defers.lu [phase: run] conforms: conc.proc.cancel, conc.cancel.defer
+corpus: corpus/conc/proc_cap_fault_join.lu [phase: run] conforms: mem.region.cap.3, conc.proc.exit, conc.proc.1, conc.proc.kill
+corpus: corpus/conc/proc_cross_module/main.lu [phase: run] conforms: conc.proc.exit, mem.region.cap.3, mod.dir
+corpus: corpus/conc/proc_join_param.lu [phase: run] conforms: conc.proc.handle, conc.proc.join
+corpus: corpus/conc/proc_join_value.lu [phase: run] conforms: conc.proc.join, conc.proc.exit, conc.proc.handle
+corpus: corpus/conc/proc_kill_defers.lu [phase: run] conforms: conc.proc.kill, conc.proc.exit
+corpus: corpus/conc/proc_link.lu [phase: run] conforms: conc.proc.link.pair, conc.proc.kill
+corpus: corpus/conc/proc_link_root.lu [phase: run] conforms: conc.proc.link.pair, conc.proc.root
+corpus: corpus/conc/proc_link_root_death.lu [phase: run] conforms: conc.proc.root, conc.proc.link.pair, conf.directive.check
+corpus: corpus/conc/proc_must_join_legal.lu [phase: run] conforms: conc.proc.arg, conc.proc.join, mem.region.escape
+corpus: corpus/conc/proc_spawn_loop.lu [phase: run] conforms: conc.proc.root, conc.task.root
+corpus: corpus/conc/reason_interp.lu [phase: run] conforms: type.interp.reason, conc.proc.exit
+corpus: corpus/conc/select_seeded.lu [phase: run] conforms: conc.select.ready, conc.select.fair, conc.det.events
+corpus: corpus/conc/select_single_arm_loop.lu [phase: run] conforms: conc.select.ready, conc.task.scope
+corpus: corpus/conc/select_two_timeouts.lu [phase: run] conforms: conc.select.timeout, conc.select.ready
+corpus: corpus/conc/spawn_cluster_split.lu [phase: run] conforms: conc.task.spawn, conc.task.scope, conc.chan.buf
+corpus: corpus/conc/spawn_fanout_loop.lu [phase: run] conforms: conc.task.spawn, conc.task.scope, conc.task.join, conc.chan.buf
+corpus: corpus/conc/spawn_tail_send_raised_row.lu [phase: run] conforms: type.unit.consume, conc.task.fail, conc.chan.close
+corpus: corpus/conc/store_buffer.lu [phase: resolve] conforms: conc.task.spawn, conc.mm.advice
+corpus: corpus/conc/when_multi.lu [phase: run] conforms: conc.mm.hb.mutex, conc.when.order, conc.when.nodeadlock, conc.when.body
+corpus: corpus/conc/when_nested.lu [phase: resolve] conforms: conc.when.nonest, conc.when.nodeadlock
+corpus: corpus/ct/branch_secret.lu [phase: mem] conforms: ct.taint.sink
+corpus: corpus/ct/callind_secret.lu [phase: mem] conforms: ct.taint.sink
+corpus: corpus/ct/checked_secret.lu [phase: mem] conforms: ct.taint.sink
+corpus: corpus/ct/divmod_secret.lu [phase: mem] conforms: ct.taint.sink
+corpus: corpus/ct/index_secret.lu [phase: mem] conforms: ct.taint.sink
+corpus: corpus/ct/membrane.lu [phase: mem] conforms: ct.taint.membrane
+corpus: corpus/ct/public_len.lu [phase: run] conforms: ct.attr.public
+corpus: corpus/ct/public_typo.lu [phase: resolve] conforms: ct.attr.public
+corpus: corpus/entry_no_return.lu [phase: run] conforms: gram.item.fn
+corpus: corpus/errors.lu [phase: resolve] conforms: err.union, err.rows, err.propagate, err.errdefer, err.else
+corpus: corpus/faults/assert_fails.lu [phase: run] conforms: mem.ub.defined
+corpus: corpus/faults/assert_msg_effect_fails.lu [phase: run] conforms: conf.trap.assert
+corpus: corpus/faults/assert_msg_holds.lu [phase: run] conforms: mem.ub.defined
+corpus: corpus/faults/assert_msg_name.lu [phase: run] conforms: conf.trap.assert
+corpus: corpus/faults/assert_msg_name_fails.lu [phase: run] conforms: conf.trap.assert
+corpus: corpus/faults/assert_msg_try.lu [phase: run] conforms: conf.trap.assert, err.propagate
+corpus: corpus/faults/bounds_slice.lu [phase: run] conforms: mem.ub.defined
+corpus: corpus/faults/byte_view_slice_reversed.lu [phase: run] conforms: mem.list.slice, mem.str.view.lend, mem.ub.defined
+corpus: corpus/faults/cast_float_nan_trap.lu [phase: run] conforms: type.numlit.cast.trunc, arith.checked
+corpus: corpus/faults/cast_float_overflow_trap.lu [phase: run] conforms: type.numlit.cast.trunc, arith.checked
+corpus: corpus/faults/cast_float_to_int_truncate.lu [phase: run] conforms: type.numlit.cast.trunc
+corpus: corpus/faults/cast_narrow_sign_trap.lu [phase: run] conforms: type.numlit.cast.narrow, arith.checked
+corpus: corpus/faults/cast_narrow_unsigned_to_signed_trap.lu [phase: run] conforms: type.numlit.cast.narrow, arith.checked
+corpus: corpus/faults/cast_narrow_width_trap.lu [phase: run] conforms: type.numlit.cast.narrow, arith.checked
+corpus: corpus/faults/char_cast_negative_trap.lu [phase: run] conforms: type.char.cast, mem.ub.defined
+corpus: corpus/faults/char_cast_range_trap.lu [phase: run] conforms: type.char.cast, mem.ub.defined
+corpus: corpus/faults/char_cast_surrogate_trap.lu [phase: run] conforms: type.char.cast, mem.ub.defined
+corpus: corpus/faults/div_zero_rem.lu [phase: run] conforms: mem.ub.defined
+corpus: corpus/faults/exclusivity_nested_path.lu [phase: typecheck] conforms: mem.tier0.excl.1, mem.tier0.excl.2, mem.model.path.disjoint
+corpus: corpus/faults/index_origin_min_overflow.lu [phase: run] conforms: gram.expr.index.origin
+corpus: corpus/faults/index_origin_zero.lu [phase: run] conforms: gram.expr.index.origin, mem.ub.defined
+corpus: corpus/faults/int_shift_count_negative.lu [phase: run] conforms: type.int.shift
+corpus: corpus/faults/int_shift_left_overflow.lu [phase: run] conforms: type.int.shift
+corpus: corpus/faults/int_shift_left_past_width.lu [phase: run] conforms: type.int.shift
+corpus: corpus/faults/int_shift_left_sign_bit.lu [phase: run] conforms: type.int.shift
+corpus: corpus/faults/int_truth_neg_u64_trap.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/faults/int_truth_neg_u8_trap.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/faults/int_truth_u64_add_trap.lu [phase: run] conforms: type.numlit.value
+corpus: corpus/faults/int_truth_u64_cast_trap.lu [phase: run] conforms: type.numlit.cast.narrow
+corpus: corpus/faults/int_truth_uint_sub_trap.lu [phase: run] conforms: type.numlit.value
+corpus: corpus/faults/int_truth_wrap_div_zero.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/faults/int_truth_wrap_rem_zero_signed.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/faults/list_slice_oob.lu [phase: run] conforms: mem.list.slice, mem.ub.defined
+corpus: corpus/faults/list_slice_reversed.lu [phase: run] conforms: mem.list.slice, mem.ub.defined
+corpus: corpus/faults/overflow_add.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_call_result.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_elem_read.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_elem_write.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_field_read.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_interp_operand.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_list_pop_i32.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/overflow_list_pop_i64.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/faults/region_cap_breach.lu [phase: run] conforms: mem.region.cap.1, mem.region.account.1
+corpus: corpus/faults/repeat_negative.lu [phase: run] conforms: mem.str.repeat, conf.trap.map
+corpus: corpus/faults/stack_overflow.lu [phase: wir] conforms: conf.trap.stack, conf.trap.exit
+corpus: corpus/faults/trap_skips_root_defers.lu [phase: run] conforms: conf.trap.exit, mem.model.order
+corpus: corpus/faults/use_after_move_field.lu [phase: typecheck] conforms: mem.tier0.move.1, mem.tier0.move.2, mem.model.path.disjoint
+corpus: corpus/faults/wrap_high_as_i32.lu [phase: run] conforms: type.numlit.cast.wrap, arith.wrapping
+corpus: corpus/faults/wrap_top_bit_as_int.lu [phase: run] conforms: type.numlit.cast.wrap, arith.wrapping
+corpus: corpus/ffi.lu [phase: resolve] conforms: ffi.import_c, ffi.extern_export, unsafe.raw, unsafe.asm
+corpus: corpus/fs/bytes_dirs.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/fs/change_rows.lu [phase: run] conforms: os.fs.mode, os.fs.create.mode, os.fs.symlink, os.fs.times, os.fs.truncate, os.fs.umask, os.fs.error, err.union
+corpus: corpus/fs/copy_chunk.lu [phase: run] conforms: os.fs.copy, os.fs.std, err.union, err.propagate
+corpus: corpus/fs/copy_chunk_dev_full.lu [phase: run] conforms: os.fs.copy, os.fs.error, err.union
+corpus: corpus/fs/copy_chunk_failed_write.lu [phase: run] conforms: os.fs.copy, os.fs.error, err.union
+corpus: corpus/fs/error_row.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/fs/fstat.lu [phase: run] conforms: os.fs.fstat, err.union
+corpus: corpus/fs/hard_link.lu [phase: run] conforms: os.fs.link, os.fs.error, err.union
+corpus: corpus/fs/mode_symlink.lu [phase: run] conforms: os.fs.mode, os.fs.create.mode, os.fs.symlink, os.fs.stat, os.fs.readlink, err.union
+corpus: corpus/fs/open_nonblock.lu [phase: run] conforms: os.fs.open, os.fs.fstat, err.union, err.propagate
+corpus: corpus/fs/os_error.lu [phase: run] conforms: os.fs.error, err.union, err.propagate
+corpus: corpus/fs/read_at.lu [phase: run] conforms: os.fs.read_at, os.fs.tell, err.union, err.propagate
+corpus: corpus/fs/remove_dir_refused.lu [phase: run] conforms: os.fs.remove
+corpus: corpus/fs/roundtrip.lu [phase: run] conforms: err.union
+corpus: corpus/fs/seek_tell.lu [phase: run] conforms: os.fs.seek, os.fs.tell, os.fs.std, err.union, err.propagate
+corpus: corpus/fs/set_times.lu [phase: run] conforms: os.fs.times, os.fs.stat, os.fs.error, err.union
+corpus: corpus/fs/std_write_bytes.lu [phase: run] conforms: os.fs.std, err.union, err.propagate
+corpus: corpus/fs/truncate.lu [phase: run] conforms: os.fs.truncate, os.fs.error, err.union
+corpus: corpus/generics/box_method.lu [phase: run] conforms: generics.mono, generics.impl
+corpus: corpus/generics/explicit_apply.lu [phase: run] conforms: generics.mono, generics.brackets, generics.apply.explicit
+corpus: corpus/generics/explicit_apply_arity.lu [phase: resolve] conforms: generics.apply.explicit
+corpus: corpus/generics/first_of_list.lu [phase: run] conforms: generics.mono, generics.brackets
+corpus: corpus/generics/hundred_shapes.lu [phase: run] conforms: generics.mono, generics.mono.dedup
+corpus: corpus/generics/list_imported_elem/main.lu [phase: run] conforms: generics.mono, mod.use.pub
+corpus: corpus/generics/list_struct_elem.lu [phase: run] conforms: generics.mono
+corpus: corpus/generics/list_wrapping_elem.lu [phase: run] conforms: arith.wrapping
+corpus: corpus/generics/pair_of.lu [phase: run] conforms: generics.mono, generics.nominal
+corpus: corpus/generics/two_instances.lu [phase: run] conforms: generics.mono, generics.mono.dedup-key
+corpus: corpus/generics/two_level_raise.lu [phase: run] conforms: generics.mono, generics.row-tail, err.rows
+corpus: corpus/grammar/attr_contract_unimplemented.lu [phase: resolve] conforms: gram.item.attr
+corpus: corpus/grammar/attr_implemented_set.lu [phase: run] conforms: gram.item.attr, gram.attr.index, abi.layout.c
+corpus: corpus/grammar/attr_misplaced.lu [phase: resolve] conforms: gram.item.attr
+corpus: corpus/grammar/attr_repr_bogus.lu [phase: resolve] conforms: gram.item.attr
+corpus: corpus/grammar/attr_repr_unimplemented.lu [phase: resolve] conforms: gram.item.attr, abi.layout.c
+corpus: corpus/grammar/attr_repr_unlayable.lu [phase: resolve] conforms: gram.item.attr, abi.layout.align, abi.layout.packed
+corpus: corpus/grammar/attr_section.lu [phase: resolve] conforms: gram.item.attr, abi.link.section
+corpus: corpus/grammar/attr_thread_local.lu [phase: resolve] conforms: gram.item.attr
+corpus: corpus/grammar/attr_unknown.lu [phase: resolve] conforms: gram.item.attr
+corpus: corpus/grammar/bang_errunion.lu [phase: run] conforms: gram.amb.bang
+corpus: corpus/grammar/bang_not.lu [phase: run] conforms: gram.amb.bang
+corpus: corpus/grammar/bom_at_start.lu [phase: run] conforms: gram.lex.source
+corpus: corpus/grammar/brackets_generic_call.lu [phase: run] conforms: gram.amb.brackets, generics.apply.explicit
+corpus: corpus/grammar/brackets_index.lu [phase: resolve] conforms: gram.amb.brackets
+corpus: corpus/grammar/cfg_predicate_unknown.lu [phase: resolve] conforms: gram.item.attr.cfg
+corpus: corpus/grammar/cfg_target_arch.lu [phase: run] conforms: gram.item.attr.cfg
+corpus: corpus/grammar/cfg_target_freestanding.lu [phase: run] conforms: gram.item.attr.cfg
+corpus: corpus/grammar/cfg_target_unknown.lu [phase: resolve] conforms: gram.item.attr.cfg
+corpus: corpus/grammar/char_uni_seven_digits.lu [phase: none] conforms: gram.lex.char
+corpus: corpus/grammar/closure_extent.lu [phase: resolve] conforms: gram.amb.closure
+corpus: corpus/grammar/closure_params_no_separator.lu [phase: lex] conforms: gram.expr.closure
+corpus: corpus/grammar/defer_loop_turn.lu [phase: run] conforms: mem.model.order
+corpus: corpus/grammar/else_chain.lu [phase: run] conforms: gram.amb.else, gram.lex.newline
+corpus: corpus/grammar/else_default.lu [phase: run] conforms: gram.amb.else, type.interp.row
+corpus: corpus/grammar/else_default_newline.lu [phase: run] conforms: gram.amb.else, gram.lex.newline
+corpus: corpus/grammar/extern_abi_interrupt.lu [phase: resolve] conforms: abi.c.seams
+corpus: corpus/grammar/if_brace_next_line.lu [phase: lex] conforms: gram.lex.newline, gram.fmt.brace
+corpus: corpus/grammar/if_then_arm.lu [phase: run] conforms: gram.expr.if, gram.pat
+corpus: corpus/grammar/if_then_block.lu [phase: run] conforms: gram.expr.if, gram.fmt.if
+corpus: corpus/grammar/if_then_chain.lu [phase: run] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_ident.lu [phase: run] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_let.lu [phase: run] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_let_body.lu [phase: lex] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_member.lu [phase: run] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_missing.lu [phase: lex] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_mixed.lu [phase: lex] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_paren_default.lu [phase: run] conforms: gram.expr.if, gram.amb.else
+corpus: corpus/grammar/if_then_stmt.lu [phase: run] conforms: gram.expr.if
+corpus: corpus/grammar/if_then_width.lu [phase: run] conforms: gram.expr.if, gram.fmt.if
+corpus: corpus/grammar/index_origin_bad.lu [phase: resolve] conforms: gram.attr.index
+corpus: corpus/grammar/index_origin_closure.lu [phase: run] conforms: gram.attr.index, gram.expr.index.origin
+corpus: corpus/grammar/index_origin_file.lu [phase: run] conforms: gram.attr.index, gram.expr.index.origin
+corpus: corpus/grammar/index_origin_misplaced.lu [phase: lex] conforms: gram.attr.index
+corpus: corpus/grammar/index_origin_scopes.lu [phase: run] conforms: gram.attr.index, gram.expr.index.origin
+corpus: corpus/grammar/intdot_exponent.lu [phase: resolve] conforms: gram.amb.intdot
+corpus: corpus/grammar/intdot_member.lu [phase: resolve] conforms: gram.amb.intdot
+corpus: corpus/grammar/intdot_range.lu [phase: run] conforms: gram.amb.intdot
+corpus: corpus/grammar/interp_fmtcolon.lu [phase: mem] conforms: gram.amb.fmtcolon, type.interp.union
+corpus: corpus/grammar/interp_nested.lu [phase: run] conforms: gram.amb.fmtcolon, gram.lex.str
+corpus: corpus/grammar/let_group.lu [phase: run] conforms: gram.item.let
+corpus: corpus/grammar/let_group_bare_tuple.lu [phase: lex] conforms: gram.item.let
+corpus: corpus/grammar/let_group_destructure.lu [phase: run] conforms: gram.item.let
+corpus: corpus/grammar/let_group_one_init.lu [phase: lex] conforms: gram.item.let
+corpus: corpus/grammar/list_lit_arg.lu [phase: run] conforms: gram.expr.list, type.list.lit
+corpus: corpus/grammar/list_lit_empty.lu [phase: run] conforms: gram.expr.list, type.list.lit
+corpus: corpus/grammar/list_lit_index.lu [phase: run] conforms: gram.expr.list, gram.amb.brackets
+corpus: corpus/grammar/list_lit_let.lu [phase: run] conforms: gram.expr.list, type.list.lit
+corpus: corpus/grammar/list_lit_mixed.lu [phase: resolve] conforms: gram.expr.list, type.list.lit
+corpus: corpus/grammar/list_lit_multiline.lu [phase: run] conforms: gram.expr.list, gram.fmt.list
+corpus: corpus/grammar/list_lit_nested.lu [phase: run] conforms: gram.expr.list, type.list.lit
+corpus: corpus/grammar/list_lit_untyped_empty.lu [phase: resolve] conforms: gram.expr.list, type.list.lit
+corpus: corpus/grammar/match_arm_at_binding.lu [phase: run] conforms: gram.pat, gram.pat.struct
+corpus: corpus/grammar/match_arm_deep_tree.lu [phase: run] conforms: gram.pat
+corpus: corpus/grammar/match_arm_or_inside_product.lu [phase: run] conforms: gram.pat
+corpus: corpus/grammar/match_arm_or_over_product.lu [phase: mem] conforms: gram.pat
+corpus: corpus/grammar/match_arm_product_nested.lu [phase: run] conforms: gram.pat, gram.pat.struct
+corpus: corpus/grammar/match_arm_str_in_product.lu [phase: run] conforms: gram.pat
+corpus: corpus/grammar/match_nullary_variant.lu [phase: run] conforms: gram.pat.nullary, gram.pat
+corpus: corpus/grammar/match_range.lu [phase: run] conforms: gram.pat.range
+corpus: corpus/grammar/match_range_char.lu [phase: run] conforms: gram.pat.range, type.char.order
+corpus: corpus/grammar/match_range_open.lu [phase: lex] conforms: gram.pat.range
+corpus: corpus/grammar/match_switch.lu [phase: run] conforms: gram.expr.flow, gram.pat
+corpus: corpus/grammar/multiline_bad_escape.lu [phase: none] conforms: gram.lex.str.escape, gram.lex.str.multi
+corpus: corpus/grammar/multiline_close_shares_line.lu [phase: none] conforms: gram.lex.str.multi
+corpus: corpus/grammar/multiline_mixed_margin.lu [phase: none] conforms: gram.lex.str.multi
+corpus: corpus/grammar/multiline_open_shares_line.lu [phase: none] conforms: gram.lex.str.multi
+corpus: corpus/grammar/multiline_short_margin.lu [phase: none] conforms: gram.lex.str.multi
+corpus: corpus/grammar/newline_leading.lu [phase: lex] conforms: gram.amb.newline, gram.lex.newline
+corpus: corpus/grammar/newline_trailing.lu [phase: run] conforms: gram.amb.newline, gram.lex.newline
+corpus: corpus/grammar/range_bare.lu [phase: lex] conforms: gram.expr.primary
+corpus: corpus/grammar/range_header_inclusive_max.lu [phase: run] conforms: mem.iter.range, type.range.value
+corpus: corpus/grammar/range_type_char.lu [phase: run] conforms: type.range, type.char
+corpus: corpus/grammar/range_type_inclusive.lu [phase: run] conforms: type.range, mem.iter.range
+corpus: corpus/grammar/range_type_overflow.lu [phase: run] conforms: type.range, mem.iter.range
+corpus: corpus/grammar/range_type_param.lu [phase: run] conforms: type.range, mem.iter.range
+corpus: corpus/grammar/range_type_return.lu [phase: run] conforms: type.range, mem.iter.range, mem.iter.for
+corpus: corpus/grammar/range_value_wide_iter.lu [phase: run] conforms: type.range, mem.iter.range
+corpus: corpus/grammar/receiver_moded.lu [phase: lex] conforms: gram.expr.primary
+corpus: corpus/grammar/semicolon.lu [phase: lex] conforms: gram.lex.newline
+corpus: corpus/grammar/shebang.lu [phase: run] conforms: gram.lex.shebang
+corpus: corpus/grammar/str_bare_brace.lu [phase: none] conforms: gram.lex.str.multi, gram.lex.source
+corpus: corpus/grammar/str_dollar_brace.lu [phase: none] conforms: gram.lex.str.escape
+corpus: corpus/grammar/str_uni_seven_digits.lu [phase: none] conforms: gram.lex.str.escape
+corpus: corpus/grammar/struct_literal_no_separator.lu [phase: lex] conforms: gram.expr.primary
+corpus: corpus/grammar/struct_pattern_match_arm.lu [phase: run] conforms: gram.pat.struct
+corpus: corpus/grammar/struct_pattern_missing_field.lu [phase: resolve] conforms: gram.pat.struct
+corpus: corpus/grammar/struct_pattern_no_separator.lu [phase: lex] conforms: gram.pat.struct
+corpus: corpus/grammar/struct_pattern_rest_bare.lu [phase: lex] conforms: gram.pat.struct
+corpus: corpus/grammar/struct_pattern_unknown_field.lu [phase: resolve] conforms: gram.pat.struct
+corpus: corpus/grammar/structlit_cond.lu [phase: lex] conforms: gram.amb.structlit
+corpus: corpus/grammar/structlit_paren.lu [phase: run] conforms: gram.amb.structlit
+corpus: corpus/grammar/tuple_pattern_match_arm.lu [phase: run] conforms: gram.pat, gram.expr.flow
+corpus: corpus/grammar/tuple_pattern_no_separator.lu [phase: lex] conforms: gram.pat
+corpus: corpus/grammar/type_position_keyword.lu [phase: lex] conforms: gram.type.start, gram.type
+corpus: corpus/grammar/when_reserved.lu [phase: lex] conforms: gram.amb.when
+corpus: corpus/hello.lu [phase: run] conforms: str.interp
+corpus: corpus/io/eprint.lu [phase: run] conforms: str.interp
+corpus: corpus/json/dup_count_distinct.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/dup_kind.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/dup_last_wins.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/dup_nested.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/dup_path.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/dup_render.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/dup_thrice.lu [phase: run] conforms: os.json.dup
+corpus: corpus/json/query.lu [phase: run] conforms: err.union
+corpus: corpus/json/rows.lu [phase: run] conforms: err.union
+corpus: corpus/kernels/churn_b3.lu [phase: run] conforms: mem.region.create.1, arith.checked
+corpus: corpus/kernels/ct_cswap.lu [phase: run] conforms: ct.attr.fn, ct.taint.prop
+corpus: corpus/kernels/ct_tag_compare.lu [phase: run] conforms: ct.attr.fn, ct.taint.prop, ct.taint.declassify
+corpus: corpus/kernels/guarded_stencil.lu [phase: run] conforms: arith.checked
+corpus: corpus/kernels/hot_counter.lu [phase: run] conforms: arith.checked
+corpus: corpus/kernels/hot_header.lu [phase: run] conforms: mem.region.create.1, arith.checked
+corpus: corpus/kernels/hot_header_alias.lu [phase: run] conforms: arith.checked
+corpus: corpus/kernels/hot_scale_versioned.lu [phase: run] conforms: arith.checked
+corpus: corpus/kernels/hot_sum_reduce.lu [phase: run] conforms: arith.checked, mem.ub.defined
+corpus: corpus/kernels/lshr_top_bits.lu [phase: run] conforms: arith.wrapping
+corpus: corpus/kernels/sha256_block.lu [phase: run] conforms: arith.wrapping
+corpus: corpus/kernels/walk_twice.lu [phase: run] conforms: arith.checked
+corpus: corpus/kernels/wrap_lshr_fold.lu [phase: run] conforms: type.int.shift
+corpus: corpus/link/module_c.lu [phase: run] conforms: abi.c.import
+corpus: corpus/lints/allow_item.lu [phase: run] conforms: diag.level.attr
+corpus: corpus/lints/allow_nothing.lu [phase: run] conforms: diag.level.attr
+corpus: corpus/lints/allow_unknown_code.lu [phase: run] conforms: diag.level.attr
+corpus: corpus/lints/ancestor_import/main.lu [phase: run] conforms: diag.sev.warn, mod.dir
+corpus: corpus/lints/as_view_consuming.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/assume_reassigned.lu [phase: run] conforms: diag.sev.warn, mem.unsafe.raw.2
+corpus: corpus/lints/binder_capitalized.lu [phase: run] conforms: diag.sev.warn, gram.pat
+corpus: corpus/lints/discarded_result.lu [phase: run] conforms: diag.sev.warn, err.rows
+corpus: corpus/lints/else_arithmetic.lu [phase: run] conforms: diag.sev.warn, gram.amb.else
+corpus: corpus/lints/else_comparison.lu [phase: run] conforms: diag.sev.warn, err.else
+corpus: corpus/lints/float_zero_minus.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/get_prefix.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/get_without_row.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/index_origin_get.lu [phase: run] conforms: gram.expr.index.origin
+corpus: corpus/lints/match_str_arm_unreachable.lu [phase: run] conforms: str.views
+corpus: corpus/lints/mut_in_interp.lu [phase: run] conforms: diag.sev.warn, str.interp
+corpus: corpus/lints/mut_param_unwritten.lu [phase: run] conforms: diag.sev.warn, mem.tier0.mode.mut
+corpus: corpus/lints/narrowing_literal.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/one_item_module/main.lu [phase: run] conforms: diag.sev.warn, mod.dir
+corpus: corpus/lints/pkg_item_unused/main.lu [phase: run] conforms: diag.sev.warn, mod.vis.pkg
+corpus: corpus/lints/predicate_shape.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/prefix_statement.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/pub_undocumented.lu [phase: run] conforms: diag.sev.warn, mod.vis.pub
+corpus: corpus/lints/raw_interp_braces.lu [phase: run] conforms: diag.sev.warn, gram.lex.str, gram.lex.str.raw
+corpus: corpus/lints/region_call_allocates.lu [phase: run] conforms: diag.sev.warn, mem.region.create.1, mem.region.create.3
+corpus: corpus/lints/region_never_allocates.lu [phase: run] conforms: diag.sev.warn, mem.region.create.1
+corpus: corpus/lints/safety_comment_missing.lu [phase: run] conforms: mem.boundary.doc
+corpus: corpus/lints/shadow_prelude.lu [phase: run] conforms: diag.sev.warn
+corpus: corpus/lints/shadow_prelude_call.lu [phase: run] conforms: conf.resolve.ambient, diag.sev.warn
+corpus: corpus/lints/shadow_prelude_local.lu [phase: run] conforms: conf.resolve.ambient, diag.sev.warn, diag.level.attr
+corpus: corpus/lints/tag_case_payload.lu [phase: run] conforms: diag.sev.warn, err.rows
+corpus: corpus/lints/tag_name_collision.lu [phase: run] conforms: diag.sev.warn, err.rows
+corpus: corpus/lints/take_returned.lu [phase: run] conforms: diag.sev.warn, mem.tier0.mode.take
+corpus: corpus/membrane/export_called.lu [phase: run] conforms: abi.c.export, abi.c.seams
+corpus: corpus/membrane/export_child.lu [phase: run] conforms: abi.c.export
+corpus: corpus/membrane/extern_let_image.lu [phase: run] conforms: abi.link.extern, mem.unsafe.raw.1
+corpus: corpus/membrane/extern_let_not_ptr.lu [phase: resolve] conforms: abi.link.extern
+corpus: corpus/membrane/extern_libc.lu [phase: run] conforms: abi.c.import, mem.unsafe.sig, abi.c.types
+corpus: corpus/membrane/variadic_declarations.lu [phase: wir] conforms: abi.c.variadic.syntax, gram.item.fn, gram.item.attr.cfg
+corpus: corpus/membrane/variadic_position.lu [phase: lex] conforms: abi.c.variadic.syntax
+corpus: corpus/memory/borrow_escape.lu [phase: resolve] conforms: mem.tier0.borrow.1
+corpus: corpus/memory/byte_list_ledger.lu [phase: run] conforms: type.byte, mem.region.account.1, mem.region.account.2
+corpus: corpus/memory/byte_producers_ledger.lu [phase: run] conforms: type.byte, mem.region.account.1, mem.region.account.2, err.union, err.propagate
+corpus: corpus/memory/byte_view_escape.lu [phase: typecheck] conforms: mem.str.view.lend
+corpus: corpus/memory/bytes_scan.lu [phase: run] conforms: mem.list.bytes, err.union
+corpus: corpus/memory/carried_quotient_nested.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/carried_quotient_pair.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/checked_unsigned.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/closure_borrow_write.lu [phase: typecheck] conforms: mem.tier0.borrow.1, mem.tier0.borrow.2
+corpus: corpus/memory/closure_capture_mut.lu [phase: mem] conforms: mem.tier0.borrow.2, mem.tier0.mode.mut
+corpus: corpus/memory/closure_capture_write.lu [phase: mem] conforms: mem.tier0.borrow.2, mem.model.value
+corpus: corpus/memory/closure_cluster_split.lu [phase: run] conforms: mem.model.value, abi.native.closure
+corpus: corpus/memory/closure_escape_refused.lu [phase: wir] conforms: mem.model.value, mem.tier0.borrow.1, abi.native.closure, type.fn.value
+corpus: corpus/memory/closure_kill_list.lu [phase: run] conforms: mem.model.order, mem.model.alloc
+corpus: corpus/memory/closure_region_capture.lu [phase: mem] conforms: mem.prov.region, mem.region.open.2
+corpus: corpus/memory/closure_value_paths.lu [phase: run] conforms: mem.model.value, mem.tier0.borrow.1, abi.native.closure
+corpus: corpus/memory/consumed_walk_charges_nothing.lu [phase: run] conforms: mem.str.view, mem.region.account.1, type.byte
+corpus: corpus/memory/copy_independent.lu [phase: run] conforms: mem.tier0.move.3, type.map
+corpus: corpus/memory/ctl_index_else_once.lu [phase: run] conforms: mem.model.order, mem.model.place
+corpus: corpus/memory/ctl_index_return_break_once.lu [phase: run] conforms: mem.model.order, mem.model.place
+corpus: corpus/memory/ctl_index_try_once.lu [phase: run] conforms: mem.model.order, mem.model.place
+corpus: corpus/memory/ctl_index_try_once_receivers.lu [phase: run] conforms: mem.model.order, mem.model.place
+corpus: corpus/memory/ctl_nested_index_try_once.lu [phase: run] conforms: mem.model.order, mem.model.place
+corpus: corpus/memory/ctl_slice_endpoints.lu [phase: run] conforms: mem.list.slice, mem.model.order
+corpus: corpus/memory/ctl_slice_endpoints_call.lu [phase: run] conforms: mem.list.slice, mem.model.order
+corpus: corpus/memory/ctl_slice_endpoints_indexed_base.lu [phase: run] conforms: mem.list.slice, mem.model.order
+corpus: corpus/memory/ctl_slice_endpoints_nested.lu [phase: run] conforms: mem.list.slice, mem.model.order
+corpus: corpus/memory/ctl_slice_endpoints_str.lu [phase: run] conforms: str.slice, mem.model.order
+corpus: corpus/memory/ctl_slice_try_once.lu [phase: run] conforms: mem.model.order, mem.list.slice
+corpus: corpus/memory/ctl_store_index_try_once.lu [phase: run] conforms: mem.model.order, mem.model.place.rhs, mem.model.place
+corpus: corpus/memory/ctl_store_order.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order
+corpus: corpus/memory/ctl_store_order_captured.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order
+corpus: corpus/memory/ctl_store_order_compound.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order
+corpus: corpus/memory/ctl_store_order_map.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order, type.map
+corpus: corpus/memory/ctl_store_order_nested.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order
+corpus: corpus/memory/ctl_store_order_nested_index.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order
+corpus: corpus/memory/ctl_store_order_raw.lu [phase: run] conforms: mem.model.place.rhs, mem.model.order, mem.unsafe.scope
+corpus: corpus/memory/defer_order.lu [phase: run] conforms: mem.shared.drop.1
+corpus: corpus/memory/destructure_bind.lu [phase: run] conforms: gram.item.let, mem.tier0.move.1
+corpus: corpus/memory/destructure_partial_live.lu [phase: run] conforms: gram.item.let, mem.tier0.move.2
+corpus: corpus/memory/destructure_partial_move.lu [phase: typecheck] conforms: mem.tier0.move.2, gram.item.let
+corpus: corpus/memory/distinct_container_moves.lu [phase: typecheck] conforms: mem.tier0.move.3, mem.tier0.move.2
+corpus: corpus/memory/distinct_copy_scalar.lu [phase: run] conforms: mem.tier0.move.3
+corpus: corpus/memory/div_zero.lu [phase: run] conforms: mem.ub.defined
+corpus: corpus/memory/elem_char_bool_key_revive.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.4
+corpus: corpus/memory/elem_claim_whole_read.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_const_dyn_loan.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.borrow, mem.dyn.unsize
+corpus: corpus/memory/elem_const_field_mut_pair.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.path.disjoint
+corpus: corpus/memory/elem_const_field_of_elem.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_const_iter_mut.lu [phase: run] conforms: mem.model.place.elem, mem.iter.excl
+corpus: corpus/memory/elem_const_move_heap.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_const_mut_pair.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.2
+corpus: corpus/memory/elem_const_nested_call.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_const_nested_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_const_read_after_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_const_read_while_take.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.mode.take
+corpus: corpus/memory/elem_const_store_no_revive_heap.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+corpus: corpus/memory/elem_const_store_no_revive_int.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+corpus: corpus/memory/elem_const_store_revives.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.4
+corpus: corpus/memory/elem_const_swap.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.2
+corpus: corpus/memory/elem_const_swap_heap.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.2
+corpus: corpus/memory/elem_const_take_while_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.mode.take
+corpus: corpus/memory/elem_dyn_dyn_loan.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.borrow, mem.dyn.unsize
+corpus: corpus/memory/elem_dyn_iter_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.iter.excl
+corpus: corpus/memory/elem_dyn_move_const_read.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_dyn_mut_pair.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_dyn_nested_call.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_dyn_proofs_legs.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.4
+corpus: corpus/memory/elem_dyn_read_after_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.4, mem.model.order
+corpus: corpus/memory/elem_dyn_store_no_revive_heap.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+corpus: corpus/memory/elem_dyn_store_no_revive_int.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+corpus: corpus/memory/elem_dyn_take_while_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.mode.take
+corpus: corpus/memory/elem_header_methods_after_move.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_header_methods_after_move_map.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_header_methods_after_move_pool.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_header_methods_under_claim.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_key_move_map.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_key_reassigned_no_revive.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+corpus: corpus/memory/elem_len_after_move.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_loop_covers_const.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_loop_inclusive_covers_const.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_loop_induction_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_loop_induction_written_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_loop_nonliteral_range_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_member_read_after_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_member_read_under_claims.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/elem_move_one_place.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.2, mem.model.place
+corpus: corpus/memory/elem_move_same_const_read.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_offset_mut_pair.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_negative_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_nonliteral_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_other_local.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_rebound_call_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_rebound_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_vs_literal_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_offset_zero_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_pool_handle_revive.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.4
+corpus: corpus/memory/elem_pool_handles_one_place.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.shared.handle
+corpus: corpus/memory/elem_prefix_mut_pair.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.path.disjoint
+corpus: corpus/memory/elem_same_const_mut.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.excl.1
+corpus: corpus/memory/elem_same_index_revive.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.4, mem.region.edge.elem
+corpus: corpus/memory/elem_str_key_revive.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.move.4
+corpus: corpus/memory/elem_sym_reassigned_no_revive.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+corpus: corpus/memory/elem_tuple_pos_move.lu [phase: run] conforms: mem.model.place.elem, mem.model.place, mem.tier0.move.2
+corpus: corpus/memory/elem_tuple_pos_mut.lu [phase: run] conforms: mem.model.place.elem, mem.tier0.excl.2, mem.model.path.disjoint
+corpus: corpus/memory/elem_whole_read_get_after_move.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_whole_read_named_count_after_move.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_whole_read_pop_after_move.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_whole_read_push_after_move.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_whole_read_self_after_move.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/elem_whole_read_slice_after_move.lu [phase: typecheck] conforms: mem.model.place.elem, mem.tier0.move.2
+corpus: corpus/memory/enum_union_copy.lu [phase: run] conforms: abi.native.enum, mem.tier0.move.3
+corpus: corpus/memory/enum_union_str_escape.lu [phase: typecheck] conforms: mem.region.edge, abi.native.enum
+corpus: corpus/memory/enum_union_take.lu [phase: run] conforms: abi.native.enum, mem.tier0.mode.take
+corpus: corpus/memory/excl_disjoint_ok.lu [phase: run] conforms: mem.tier0.excl.2, mem.model.path.disjoint
+corpus: corpus/memory/excl_overlap.lu [phase: typecheck] conforms: mem.tier0.excl.1, mem.tier0.excl.2
+corpus: corpus/memory/exclusivity.lu [phase: run] conforms: mem.tier0.excl.2, mem.tier0.excl.3, mem.tier0.move.1, mem.tier0.move.4
+corpus: corpus/memory/extern_c_outside_unsafe.lu [phase: typecheck] conforms: abi.c.import, mem.unsafe.scope
+corpus: corpus/memory/field_shorthand_closure.lu [phase: typecheck] conforms: gram.expr.primary, gram.expr.closure, mem.tier0.move.1
+corpus: corpus/memory/field_shorthand_closure_borrow.lu [phase: typecheck] conforms: gram.expr.primary, gram.expr.closure, mem.tier0.borrow.1
+corpus: corpus/memory/field_shorthand_copy.lu [phase: run] conforms: gram.expr.primary, mem.tier0.move.3
+corpus: corpus/memory/field_shorthand_mixed.lu [phase: typecheck] conforms: gram.expr.primary, mem.tier0.move.1, mem.tier0.move.2
+corpus: corpus/memory/field_shorthand_mixed_runs.lu [phase: run] conforms: gram.expr.primary, mem.tier0.move.1
+corpus: corpus/memory/field_shorthand_moves.lu [phase: typecheck] conforms: gram.expr.primary, mem.tier0.move.1, mem.tier0.move.2
+corpus: corpus/memory/field_shorthand_nested.lu [phase: typecheck] conforms: gram.expr.primary, mem.tier0.move.1, mem.tier0.move.2
+corpus: corpus/memory/field_shorthand_nested_bound.lu [phase: typecheck] conforms: gram.expr.primary, mem.tier0.move.1, mem.tier0.move.2
+corpus: corpus/memory/field_shorthand_nested_runs.lu [phase: run] conforms: gram.expr.primary, mem.tier0.move.1
+corpus: corpus/memory/field_shorthand_return_mut.lu [phase: typecheck] conforms: gram.expr.primary, mem.tier0.mode.mut, mem.tier0.move.1
+corpus: corpus/memory/field_shorthand_return_take.lu [phase: run] conforms: gram.expr.primary, mem.tier0.move.1
+corpus: corpus/memory/field_shorthand_task.lu [phase: typecheck] conforms: gram.expr.primary, conc.task.spawn, mem.tier0.move.1
+corpus: corpus/memory/foreign_root_aliasing.lu [phase: run] conforms: mem.region.intra
+corpus: corpus/memory/handle_stale.lu [phase: run] conforms: mem.shared.handle.2
+corpus: corpus/memory/index_store_copies_list.lu [phase: run] conforms: mem.region.edge.elem, mem.tier0.move.3
+corpus: corpus/memory/index_store_copies_map.lu [phase: run] conforms: mem.region.edge.elem, mem.tier0.move.3, type.map
+corpus: corpus/memory/index_store_copy_elem.lu [phase: run] conforms: mem.region.edge.elem, mem.tier0.move.3
+corpus: corpus/memory/index_store_read_param.lu [phase: run] conforms: mem.region.edge.elem, mem.tier0.mode.read
+corpus: corpus/memory/index_store_take_list.lu [phase: typecheck] conforms: mem.region.edge.elem, mem.tier0.move.2, gram.expr.assign
+corpus: corpus/memory/index_store_take_map.lu [phase: typecheck] conforms: mem.region.edge.elem, mem.tier0.move.2, gram.expr.assign
+corpus: corpus/memory/index_store_take_read_param.lu [phase: typecheck] conforms: mem.region.edge.elem, mem.tier0.mode.read, gram.expr.assign
+corpus: corpus/memory/list_elem_assign.lu [phase: run] conforms: mem.region.intra
+corpus: corpus/memory/list_elem_copy_loop.lu [phase: run] conforms: mem.tier0.move.1
+corpus: corpus/memory/list_mixed_width_struct.lu [phase: run] conforms: mem.model.value
+corpus: corpus/memory/list_mutate_while_iter.lu [phase: typecheck] conforms: mem.iter.excl.1, mem.iter.excl.2
+corpus: corpus/memory/list_pop_empty.lu [phase: run] conforms: mem.list.pop, type.interp.union
+corpus: corpus/memory/list_reserve.lu [phase: run] conforms: type.list.reserve, mem.region.account.1
+corpus: corpus/memory/list_reset.lu [phase: run] conforms: type.list.reset, mem.region.account.1
+corpus: corpus/memory/list_session_struct.lu [phase: run] conforms: mem.model.value
+corpus: corpus/memory/list_slice.lu [phase: run] conforms: mem.list.slice, gram.amb.brackets
+corpus: corpus/memory/list_slice_edges.lu [phase: run] conforms: mem.list.slice
+corpus: corpus/memory/list_slice_inline_owned.lu [phase: run] conforms: mem.list.slice
+corpus: corpus/memory/list_slice_owned_call.lu [phase: run] conforms: mem.list.slice
+corpus: corpus/memory/map_absent_else.lu [phase: run] conforms: mem.map.absent, type.interp.union
+corpus: corpus/memory/map_char_bool_keys.lu [phase: run] conforms: type.map.key
+corpus: corpus/memory/map_count.lu [phase: run] conforms: type.map, mem.map.absent
+corpus: corpus/memory/map_int_keys.lu [phase: run] conforms: type.map.key, mem.map.absent
+corpus: corpus/memory/map_remove.lu [phase: run] conforms: type.map, mem.map.absent
+corpus: corpus/memory/map_set_generic.lu [phase: run] conforms: mem.region.edge.elem
+corpus: corpus/memory/map_std_keys.lu [phase: run] conforms: type.map.key, mem.map.absent
+corpus: corpus/memory/match_arm_whole_move.lu [phase: typecheck] conforms: mem.tier0.move.2
+corpus: corpus/memory/mode_missing_mut.lu [phase: typecheck] conforms: mem.tier0.mode.mut
+corpus: corpus/memory/move_field_siblings_ok.lu [phase: run] conforms: mem.tier0.move.1, mem.model.path.disjoint
+corpus: corpus/memory/move_field_use_after.lu [phase: typecheck] conforms: mem.tier0.move.2
+corpus: corpus/memory/move_ok.lu [phase: run] conforms: mem.tier0.move.1, mem.tier0.move.3, mem.tier0.move.4
+corpus: corpus/memory/move_use_after.lu [phase: typecheck] conforms: mem.tier0.move.2
+corpus: corpus/memory/mut_arg_element.lu [phase: run] conforms: mem.tier0.mode.mut, mem.model.place, gram.expr.index.origin
+corpus: corpus/memory/mut_arg_temporary.lu [phase: typecheck] conforms: mem.tier0.mode.mut
+corpus: corpus/memory/mut_claim_arg_block_move.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order
+corpus: corpus/memory/mut_claim_arg_block_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/mut_claim_cond_write.lu [phase: run] conforms: mem.tier0.excl.1
+corpus: corpus/memory/mut_claim_if_else.lu [phase: run] conforms: mem.tier0.excl.1
+corpus: corpus/memory/mut_claim_if_no_else.lu [phase: run] conforms: mem.tier0.excl.1
+corpus: corpus/memory/mut_claim_match_arms.lu [phase: run] conforms: mem.tier0.excl.1
+corpus: corpus/memory/mut_claim_nested_copy_read.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+corpus: corpus/memory/mut_claim_nested_disjoint_reads.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem, mem.model.path.disjoint
+corpus: corpus/memory/mut_claim_nested_get.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+corpus: corpus/memory/mut_claim_nested_header.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+corpus: corpus/memory/mut_claim_nested_map.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/mut_claim_nested_read_elem.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order, mem.model.place.elem
+corpus: corpus/memory/mut_claim_nested_read_whole.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/mut_claim_operand_read.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/mut_claim_two_phase_reads.lu [phase: run] conforms: mem.tier0.excl.4, mem.model.order, mem.model.place.elem
+corpus: corpus/memory/mut_elem_excl.lu [phase: run] conforms: mem.tier0.excl.1, mem.model.place.elem, mem.model.path.disjoint
+corpus: corpus/memory/mut_elem_nested_call.lu [phase: typecheck] conforms: mem.tier0.excl.1, mem.model.order, mem.model.place
+corpus: corpus/memory/mut_param_aggregate_store.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.move
+corpus: corpus/memory/mut_param_field_lend.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.excl.2
+corpus: corpus/memory/mut_param_moveout_elem.lu [phase: typecheck] conforms: mem.tier0.mode.mut, mem.tier0.move.1, mem.model.place.elem
+corpus: corpus/memory/mut_param_moveout_field.lu [phase: typecheck] conforms: mem.tier0.mode.mut, mem.tier0.move.1, mem.model.path.disjoint
+corpus: corpus/memory/mut_param_moveout_map.lu [phase: typecheck] conforms: mem.tier0.mode.mut, mem.tier0.move.1, mem.model.place.elem
+corpus: corpus/memory/mut_param_moveout_one_path.lu [phase: typecheck] conforms: mem.tier0.mode.mut, mem.tier0.move.1
+corpus: corpus/memory/mut_param_moveout_whole.lu [phase: typecheck] conforms: mem.tier0.mode.mut, mem.tier0.move.1
+corpus: corpus/memory/mut_param_restore_elem.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.move.4, mem.model.place.elem
+corpus: corpus/memory/mut_param_restore_field.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.move.4, mem.model.path.disjoint
+corpus: corpus/memory/mut_param_restore_map.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.move.4, mem.model.place.elem
+corpus: corpus/memory/mut_param_restore_whole.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.move.4
+corpus: corpus/memory/mut_place_nested.lu [phase: run] conforms: mem.tier0.mode.mut, mem.model.place, gram.expr.assign
+corpus: corpus/memory/mut_read_overlap.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.path.disjoint
+corpus: corpus/memory/mut_two_fields_one_region.lu [phase: run] conforms: mem.tier0.excl.1, mem.tier0.excl.2, mem.model.path.disjoint
+corpus: corpus/memory/nested_fn_mut_moveout.lu [phase: typecheck] conforms: mem.tier0.mode.mut, mem.tier0.move.1
+corpus: corpus/memory/nested_fn_mut_omitted.lu [phase: typecheck] conforms: mem.tier0.mode.mut, gram.item.fn
+corpus: corpus/memory/nested_fn_mut_param.lu [phase: run] conforms: mem.tier0.mode.mut, mem.tier0.mode.take, gram.item.fn
+corpus: corpus/memory/nested_fn_read_param_return.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.excl.1, gram.item.fn
+corpus: corpus/memory/nested_fn_read_param_write.lu [phase: typecheck] conforms: mem.tier0.mode.read, gram.item.fn
+corpus: corpus/memory/oob_bounds.lu [phase: run] conforms: mem.ub.defined, conf.trap.report
+corpus: corpus/memory/packed_field_lend.lu [phase: resolve] conforms: abi.layout.packed
+corpus: corpus/memory/packed_field_raw_read.lu [phase: run] conforms: mem.unsafe.raw.4, abi.layout.packed
+corpus: corpus/memory/packed_fields_at_offset_of.lu [phase: run] conforms: abi.layout.query, abi.layout.packed, mem.unsafe.raw.1
+corpus: corpus/memory/pool_accessors.lu [phase: run] conforms: mem.shared.handle.1, mem.shared.handle.2
+corpus: corpus/memory/pool_place_write.lu [phase: run] conforms: mem.shared.handle.1, mem.shared.handle.2, mem.shared.handle.3
+corpus: corpus/memory/prov_addr_with_addr.lu [phase: run] conforms: mem.prov.expose
+corpus: corpus/memory/prov_cast_round_trip.lu [phase: run] conforms: mem.prov.expose, mem.unsafe.raw.1
+corpus: corpus/memory/prov_expose_round_trip.lu [phase: run] conforms: mem.prov.expose
+corpus: corpus/memory/prov_holy_grail.lu [phase: run] conforms: mem.tier0.mode.read, mem.ub, mem.prov.tag
+corpus: corpus/memory/prov_is_null.lu [phase: run] conforms: mem.prov.expose, mem.unsafe.raw.1
+corpus: corpus/memory/prov_narrow_cast.lu [phase: run] conforms: mem.prov.expose, type.numlit.cast.narrow
+corpus: corpus/memory/prov_narrow_cast_trap.lu [phase: run] conforms: mem.prov.expose, type.numlit.cast.narrow
+corpus: corpus/memory/prov_two_phase.lu [phase: run] conforms: mem.prov.state, mem.prov.tag
+corpus: corpus/memory/push_copies_element.lu [phase: run] conforms: mem.region.edge.elem, mem.tier0.move.3
+corpus: corpus/memory/push_grow_guarded_index.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/push_grow_nested_guarded_index.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/push_take_moves.lu [phase: typecheck] conforms: mem.region.edge.elem, mem.tier0.move.2
+corpus: corpus/memory/raw_aligned_control.lu [phase: run] conforms: mem.unsafe.raw.4, mem.unsafe.raw.1
+corpus: corpus/memory/raw_compound_assign.lu [phase: run] conforms: mem.unsafe.raw.1, gram.expr.assign
+corpus: corpus/memory/raw_deref.lu [phase: run] conforms: mem.prov.expose, mem.unsafe.raw.1, gram.expr.assign
+corpus: corpus/memory/raw_deref_signed.lu [phase: run] conforms: mem.prov.expose, mem.unsafe.raw.1
+corpus: corpus/memory/raw_field_store.lu [phase: run] conforms: mem.unsafe.raw.1, mem.unsafe.raw.5, abi.layout.c
+corpus: corpus/memory/raw_field_store_compound.lu [phase: run] conforms: mem.unsafe.raw.5, mem.model.place.rhs, abi.layout.c
+corpus: corpus/memory/raw_field_store_nested.lu [phase: run] conforms: mem.unsafe.raw.5, abi.layout.c
+corpus: corpus/memory/raw_field_store_outside_unsafe.lu [phase: typecheck] conforms: mem.unsafe.raw.1, mem.unsafe.raw.5, mem.unsafe.scope, mem.codes
+corpus: corpus/memory/raw_field_store_packed.lu [phase: run] conforms: mem.unsafe.raw.4, mem.unsafe.raw.5, abi.layout.packed
+corpus: corpus/memory/raw_lshr_top_bits.lu [phase: run] conforms: mem.unsafe.raw.1, mem.unsafe.scope
+corpus: corpus/memory/raw_ptr_mut_param.lu [phase: run] conforms: mem.unsafe.sig, mem.unsafe.raw.1
+corpus: corpus/memory/raw_ptr_private_sig.lu [phase: run] conforms: mem.unsafe.sig
+corpus: corpus/memory/raw_repr_align_layout.lu [phase: run] conforms: abi.layout.align, abi.layout.packed, abi.layout.c, mem.unsafe.raw.1
+corpus: corpus/memory/raw_repr_c_layout.lu [phase: run] conforms: abi.layout.c, mem.unsafe.raw.1
+corpus: corpus/memory/raw_repr_packed_layout.lu [phase: run] conforms: abi.layout.packed, abi.layout.c, mem.unsafe.raw.1
+corpus: corpus/memory/raw_store_call_writes.lu [phase: run] conforms: mem.unsafe.raw.1, mem.unsafe.scope
+corpus: corpus/memory/raw_ub_misaligned_repr_c_field.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub, abi.layout.c
+corpus: corpus/memory/raw_ub_misaligned_repr_c_field_store.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.unsafe.raw.5, mem.ub, abi.layout.c
+corpus: corpus/memory/raw_ub_misaligned_u16_read.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub
+corpus: corpus/memory/raw_ub_misaligned_u16_write.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub
+corpus: corpus/memory/raw_ub_misaligned_u32_read.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub
+corpus: corpus/memory/raw_ub_misaligned_u32_write.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub
+corpus: corpus/memory/raw_ub_misaligned_u64_read.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub
+corpus: corpus/memory/raw_ub_misaligned_u64_write.lu [phase: wir] conforms: mem.unsafe.raw.4, mem.ub
+corpus: corpus/memory/read_lend_frame.lu [phase: run] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_lend_value_semantics.lu [phase: run] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_param_escape_field.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_param_escape_generic.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_param_escape_local.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_param_escape_mut.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.mode.mut, mem.tier0.excl.1
+corpus: corpus/memory/read_param_escape_static.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_param_field_rebound.lu [phase: typecheck] conforms: mem.tier0.move.1, mem.tier0.mode.read, mem.tier0.move.2
+corpus: corpus/memory/read_param_indexed_caller.lu [phase: run] conforms: mem.tier0.mode.read
+corpus: corpus/memory/read_param_move_legal.lu [phase: run] conforms: mem.tier0.mode.read, mem.tier0.excl.1, mem.tier0.move.3
+corpus: corpus/memory/read_param_rebind_take.lu [phase: typecheck] conforms: mem.tier0.mode.read
+corpus: corpus/memory/read_param_rebind_write.lu [phase: typecheck] conforms: mem.tier0.mode.read
+corpus: corpus/memory/read_param_return.lu [phase: typecheck] conforms: mem.tier0.mode.read, mem.tier0.excl.1
+corpus: corpus/memory/read_param_take.lu [phase: typecheck] conforms: mem.tier0.mode.read
+corpus: corpus/memory/read_param_write.lu [phase: typecheck] conforms: mem.tier0.mode.read
+corpus: corpus/memory/recv_claim_arg_closure.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_elem_move.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_elem_whole_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_elem_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_field_move.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_field_prefix_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_field_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_lend.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_move.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_reads.lu [phase: run] conforms: mem.tier0.excl.4, mem.tier0.excl.3, mem.model.order, mem.model.place.elem
+corpus: corpus/memory/recv_claim_arg_reclaim.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_reclaim_call.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_reclaim_nested.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_view_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_claim_arg_write.lu [phase: typecheck] conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_callee_view_write.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_elem.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_field_recv.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_list_field.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_nested_field.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_outside_write.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_relend.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_two_fields.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/recv_view_arg_two_view_third.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+corpus: corpus/memory/region_ambient_ok.lu [phase: run] conforms: mem.region.create.3, mem.region.intra.2
+corpus: corpus/memory/region_bytes_query.lu [phase: run] conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+corpus: corpus/memory/region_bytes_value.lu [phase: run] conforms: mem.region.account.1, mem.region.create.3
+corpus: corpus/memory/region_cap_boundary.lu [phase: run] conforms: mem.region.cap.1, mem.region.cap.2, mem.region.account.1
+corpus: corpus/memory/region_conflict_params.lu [phase: typecheck] conforms: mem.region.edge, mem.region.create.3
+corpus: corpus/memory/region_container_freeze_ok.lu [phase: run] conforms: mem.region.create.3, mem.region.freeze.1, mem.region.freeze.2
+corpus: corpus/memory/region_container_reclaim.lu [phase: run] conforms: mem.region.create.3, mem.region.intra.2
+corpus: corpus/memory/region_copy_index_store.lu [phase: typecheck] conforms: mem.region.escape, mem.region.edge.elem, mem.tier0.move.3
+corpus: corpus/memory/region_copy_shares_str.lu [phase: run] conforms: mem.region.outer-write, mem.region.escape, mem.tier0.move.3
+corpus: corpus/memory/region_copyout_binding.lu [phase: typecheck] conforms: mem.region.copyout, mem.region.escape
+corpus: corpus/memory/region_copyout_closure.lu [phase: typecheck] conforms: mem.region.copyout
+corpus: corpus/memory/region_copyout_exits.lu [phase: run] conforms: mem.region.copyout, mem.region.intra.2
+corpus: corpus/memory/region_copyout_handle.lu [phase: typecheck] conforms: mem.region.copyout
+corpus: corpus/memory/region_copyout_loop.lu [phase: run] conforms: mem.region.copyout, mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_copyout_map.lu [phase: run] conforms: mem.region.copyout
+corpus: corpus/memory/region_copyout_raw_ub.lu [phase: wir] conforms: mem.region.copyout, mem.prov.region, mem.ub
+corpus: corpus/memory/region_copyout_return.lu [phase: typecheck] conforms: mem.region.copyout, mem.region.escape
+corpus: corpus/memory/region_copyout_struct.lu [phase: run] conforms: mem.region.copyout
+corpus: corpus/memory/region_escape_container.lu [phase: typecheck] conforms: mem.region.intra.2, mem.region.create.3
+corpus: corpus/memory/region_escape_local.lu [phase: typecheck] conforms: mem.region.intra.2
+corpus: corpus/memory/region_freeze_ok.lu [phase: run] conforms: mem.region.freeze.1, mem.region.freeze.2, mem.region.create.1
+corpus: corpus/memory/region_freeze_open.lu [phase: typecheck] conforms: mem.region.freeze.3, mem.region.freeze.1
+corpus: corpus/memory/region_freeze_write.lu [phase: typecheck] conforms: mem.region.freeze.1
+corpus: corpus/memory/region_infer_list_builder.lu [phase: run] conforms: mem.region.create.3, mem.region.intra.2, mem.region.promote.1
+corpus: corpus/memory/region_infer_request_handler.lu [phase: run] conforms: mem.region.create.1, mem.region.create.3, mem.region.intra.2
+corpus: corpus/memory/region_infer_tree_transform.lu [phase: run] conforms: mem.region.create.3, mem.model.alloc
+corpus: corpus/memory/region_iso_edge_ok.lu [phase: resolve] conforms: mem.region.edge.iso, mem.region.freeze.1, mem.region.edge.imm
+corpus: corpus/memory/region_kept_arg_closure.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_field.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_generic.lu [phase: typecheck] conforms: mem.region.escape, mem.region.edge.elem
+corpus: corpus/memory/region_kept_arg_legal.lu [phase: run] conforms: mem.region.escape, mem.region.create.3, mem.region.copyout
+corpus: corpus/memory/region_kept_arg_map.lu [phase: typecheck] conforms: mem.region.escape, mem.region.edge.elem
+corpus: corpus/memory/region_kept_arg_method.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_module/main.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_read_struct.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_recv.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_take.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_arg_two_mut.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_result_method.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_kept_result_read.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_move_while_open.lu [phase: typecheck] conforms: mem.region.open.1, mem.region.freeze.3
+corpus: corpus/memory/region_multiopen_ok.lu [phase: run] conforms: mem.region.multiopen, mem.region.open.2, mem.region.create.2
+corpus: corpus/memory/region_multiopen_swap.lu [phase: run] conforms: mem.region.multiopen, mem.region.intra.1
+corpus: corpus/memory/region_multiopen_values_ok.lu [phase: run] conforms: mem.region.multiopen, mem.region.open.2, mem.region.create.2
+corpus: corpus/memory/region_net_read_charged.lu [phase: run] conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+corpus: corpus/memory/region_net_read_return.lu [phase: typecheck] conforms: mem.region.escape, mem.region.account.1, mem.region.intra.2
+corpus: corpus/memory/region_open_ancestor.lu [phase: typecheck] conforms: mem.region.multiopen, mem.region.edge.iso
+corpus: corpus/memory/region_os_cwd_charged.lu [phase: run] conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+corpus: corpus/memory/region_os_cwd_return.lu [phase: typecheck] conforms: mem.region.escape, mem.region.account.1, mem.region.intra.2
+corpus: corpus/memory/region_outer_write_call.lu [phase: run] conforms: mem.region.outer-write, mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_outer_write_call_refused.lu [phase: typecheck] conforms: mem.region.outer-write, mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_outer_write_charged.lu [phase: run] conforms: mem.region.outer-write, mem.region.account.1, mem.region.account.2
+corpus: corpus/memory/region_outer_write_field.lu [phase: run] conforms: mem.region.outer-write, mem.region.copyout, mem.tier0.mode.mut
+corpus: corpus/memory/region_outer_write_index.lu [phase: run] conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.copyout
+corpus: corpus/memory/region_outer_write_map.lu [phase: run] conforms: mem.region.outer-write, mem.region.copyout, mem.region.escape
+corpus: corpus/memory/region_outer_write_push_copy_call.lu [phase: run] conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.create.3
+corpus: corpus/memory/region_outer_write_push_copy_control.lu [phase: run] conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.create.3
+corpus: corpus/memory/region_outer_write_push_copy_over.lu [phase: run] conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.create.3
+corpus: corpus/memory/region_outer_write_push_copy_under.lu [phase: run] conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.create.3
+corpus: corpus/memory/region_outer_write_push_heap.lu [phase: typecheck] conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem
+corpus: corpus/memory/region_outer_write_push_heap_call.lu [phase: typecheck] conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem, mem.region.create.3
+corpus: corpus/memory/region_outer_write_push_plain_copy.lu [phase: typecheck] conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem, mem.tier0.move.3
+corpus: corpus/memory/region_outer_write_refused.lu [phase: typecheck] conforms: mem.region.outer-write, mem.region.escape
+corpus: corpus/memory/region_outer_write_refused_field.lu [phase: typecheck] conforms: mem.region.outer-write, mem.region.edge
+corpus: corpus/memory/region_outer_write_reset.lu [phase: run] conforms: mem.region.outer-write, type.list.reset, mem.region.create.3
+corpus: corpus/memory/region_outer_write_scalar.lu [phase: run] conforms: mem.region.outer-write, mem.region.scalar, mem.region.create.3
+corpus: corpus/memory/region_outer_write_str_push.lu [phase: run] conforms: mem.region.outer-write, mem.region.escape, mem.region.copyout
+corpus: corpus/memory/region_outer_write_struct.lu [phase: run] conforms: mem.region.outer-write, mem.region.copyout, mem.region.edge.elem
+corpus: corpus/memory/region_scalar_freeze.lu [phase: run] conforms: mem.region.scalar, mem.region.freeze.1
+corpus: corpus/memory/region_scalar_list_mut.lu [phase: typecheck] conforms: mem.region.scalar, mem.region.escape, mem.tier0.mode.mut, mem.region.outer-write
+corpus: corpus/memory/region_scalar_list_store.lu [phase: typecheck] conforms: mem.region.scalar, mem.region.edge
+corpus: corpus/memory/region_scalar_mut.lu [phase: run] conforms: mem.region.scalar, mem.tier0.mode.mut, mem.region.escape
+corpus: corpus/memory/region_scalar_store.lu [phase: run] conforms: mem.region.scalar, mem.region.edge, mem.tier0.move.3
+corpus: corpus/memory/region_scalar_str_escape.lu [phase: typecheck] conforms: mem.region.scalar, mem.region.escape
+corpus: corpus/memory/region_scalar_value.lu [phase: run] conforms: mem.region.scalar, mem.region.escape, mem.model.alloc
+corpus: corpus/memory/region_str_call_block_value.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_str_call_held.lu [phase: typecheck] conforms: mem.region.escape, mem.region.create.3
+corpus: corpus/memory/region_str_call_index_store.lu [phase: run] conforms: mem.region.outer-write, mem.region.escape, mem.region.edge.elem
+corpus: corpus/memory/region_str_call_inside.lu [phase: run] conforms: mem.region.escape
+corpus: corpus/memory/region_str_call_static.lu [phase: run] conforms: mem.region.escape
+corpus: corpus/memory/region_str_call_view.lu [phase: typecheck] conforms: mem.region.escape
+corpus: corpus/memory/region_str_charged.lu [phase: run] conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+corpus: corpus/memory/region_str_concat_return.lu [phase: typecheck] conforms: mem.region.escape, type.str.concat, mem.region.intra.2
+corpus: corpus/memory/region_str_concat_send.lu [phase: typecheck] conforms: mem.region.escape, conc.chan.payload, type.str.concat
+corpus: corpus/memory/region_str_copy_return.lu [phase: typecheck] conforms: mem.region.escape, mem.tier0.move.3
+corpus: corpus/memory/region_str_elem_call_held.lu [phase: typecheck] conforms: mem.region.escape
+corpus: corpus/memory/region_str_field_return.lu [phase: typecheck] conforms: mem.region.escape, mem.region.intra.2
+corpus: corpus/memory/region_str_from_utf8_return.lu [phase: typecheck] conforms: mem.region.escape, mem.region.account.1, mem.region.intra.2
+corpus: corpus/memory/region_str_list_for_held.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_producers_charged.lu [phase: run] conforms: mem.region.account.1, mem.region.escape
+corpus: corpus/memory/region_str_repeat_return.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view, mem.region.intra.2
+corpus: corpus/memory/region_str_view_for_copy.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view, mem.tier0.move.3
+corpus: corpus/memory/region_str_view_for_held.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_inside.lu [phase: run] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_lines.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_nested.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_place.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_return.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_split.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_value.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_for_words.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_inside.lu [phase: run] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_str_view_return.lu [phase: typecheck] conforms: mem.region.escape, mem.str.view
+corpus: corpus/memory/region_transfer_open.lu [phase: typecheck] conforms: mem.region.freeze.3, mem.region.open.1
+corpus: corpus/memory/region_unit_tail_call.lu [phase: run] conforms: mem.region.intra.2, err.else
+corpus: corpus/memory/region_value_container.lu [phase: mem] conforms: mem.region.edge.iso, mem.prov.region
+corpus: corpus/memory/region_value_elem.lu [phase: mem] conforms: mem.prov.region, mem.region.intra.1
+corpus: corpus/memory/region_value_pass.lu [phase: run] conforms: mem.region.create.3, mem.region.open.2
+corpus: corpus/memory/region_value_return.lu [phase: run] conforms: mem.region.create.2, mem.prov.region
+corpus: corpus/memory/shared_cycle.lu [phase: typecheck] conforms: mem.shared.rc.2
+corpus: corpus/memory/shared_ok.lu [phase: mem] conforms: mem.shared.rc.1, mem.shared.rc.3
+corpus: corpus/memory/static_const_let.lu [phase: run] conforms: mem.static, mem.static.1, mem.static.3
+corpus: corpus/memory/static_init_cycle.lu [phase: resolve] conforms: mem.static.3, comptime
+corpus: corpus/memory/static_init_not_comptime.lu [phase: resolve] conforms: mem.static.3, comptime
+corpus: corpus/memory/static_list_let.lu [phase: mem] conforms: mem.static.3
+corpus: corpus/memory/static_qualified/main.lu [phase: run] conforms: mem.static, mem.static.1, mem.static.4
+corpus: corpus/memory/static_qualified_let/main.lu [phase: run] conforms: mem.static, mem.static.1, mem.static.4
+corpus: corpus/memory/static_qualified_var/main.lu [phase: run] conforms: mem.static, mem.static.2, mem.static.4
+corpus: corpus/memory/static_qualified_var_outside_unsafe/main.lu [phase: typecheck] conforms: mem.static.2, mem.static.4, mem.unsafe.scope, mem.codes
+corpus: corpus/memory/static_str_literals.lu [phase: run] conforms: mem.static.3, gram.lex.str.multi, gram.lex.str.raw, gram.lex.str.escape
+corpus: corpus/memory/static_var.lu [phase: run] conforms: mem.static, mem.static.2, mem.static.3, mem.unsafe.scope
+corpus: corpus/memory/static_var_call_deep.lu [phase: run] conforms: mem.static, mem.static.2, mem.unsafe.scope
+corpus: corpus/memory/static_var_call_writes.lu [phase: run] conforms: mem.static, mem.static.2, mem.unsafe.scope
+corpus: corpus/memory/static_var_outside_unsafe.lu [phase: typecheck] conforms: mem.static.2, mem.unsafe.scope, mem.codes
+corpus: corpus/memory/static_wrapping.lu [phase: run] conforms: mem.static.3, mem.static.1, mem.static.2
+corpus: corpus/memory/store_rhs_first_list.lu [phase: run] conforms: mem.model.place.rhs
+corpus: corpus/memory/store_rhs_first_map.lu [phase: run] conforms: mem.model.place.rhs, type.map
+corpus: corpus/memory/store_rhs_first_pool.lu [phase: run] conforms: mem.model.place.rhs, mem.shared.handle.1
+corpus: corpus/memory/struct_destructure_partial_live.lu [phase: run] conforms: gram.pat.struct, mem.tier0.move.2
+corpus: corpus/memory/struct_destructure_partial_move.lu [phase: typecheck] conforms: gram.pat.struct, mem.tier0.move.2
+corpus: corpus/memory/struct_pattern_binder.lu [phase: run] conforms: gram.pat.struct, gram.item.let, mem.tier0.move.2
+corpus: corpus/memory/unsafe_assume_malformed.lu [phase: typecheck] conforms: mem.unsafe.raw.2
+corpus: corpus/memory/unsafe_c_alloc_native.lu [phase: run] conforms: abi.c.seams, mem.unsafe.scope
+corpus: corpus/memory/unsafe_creation_not_use.lu [phase: run] conforms: mem.prov.tag, mem.prov.state, mem.unsafe.raw.1
+corpus: corpus/memory/unsafe_door_borrow.lu [phase: mem] conforms: mem.unsafe.door, mem.prov.region
+corpus: corpus/memory/unsafe_door_misuse.lu [phase: typecheck] conforms: mem.unsafe.door
+corpus: corpus/memory/unsafe_noalias.lu [phase: run] conforms: mem.unsafe.raw.1, mem.unsafe.raw.2
+corpus: corpus/memory/unsafe_raw_outside.lu [phase: typecheck] conforms: mem.unsafe.scope, mem.codes
+corpus: corpus/memory/unsafe_sig.lu [phase: typecheck] conforms: mem.unsafe.scope, mem.unsafe.sig
+corpus: corpus/memory/unsafe_trusted.lu [phase: wir] conforms: mem.boundary.trusted, mem.unsafe.scope
+corpus: corpus/memory/unsafe_ub_uaf.lu [phase: wir] conforms: mem.ub, mem.prov.region
+corpus: corpus/memory/versioned_loop_cross_module/main.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/versioned_loop_inlined_root.lu [phase: run] conforms: arith.checked
+corpus: corpus/memory/view_set_norm.lu [phase: run] conforms: mem.tier0.excl.3, mem.tier0.mode.mut
+corpus: corpus/memory/view_set_violation.lu [phase: typecheck] conforms: mem.tier0.excl.3
+corpus: corpus/memory/volatile_outside_unsafe.lu [phase: typecheck] conforms: mem.unsafe.volatile, mem.unsafe.scope, mem.codes
+corpus: corpus/memory/volatile_pointee_bool.lu [phase: resolve] conforms: mem.unsafe.volatile.1, mem.codes
+corpus: corpus/memory/volatile_pointee_int.lu [phase: resolve] conforms: mem.unsafe.volatile.1, mem.codes
+corpus: corpus/memory/volatile_ub_misaligned.lu [phase: wir] conforms: mem.unsafe.volatile.3, mem.ub
+corpus: corpus/memory/volatile_ub_uaf.lu [phase: wir] conforms: mem.unsafe.volatile.3, mem.ub, mem.prov.region
+corpus: corpus/memory/volatile_widths.lu [phase: run] conforms: mem.unsafe.volatile, mem.unsafe.volatile.1, mem.unsafe.volatile.3
+corpus: corpus/methods/comb_map_filter_fold.lu [phase: run] conforms: type.method.resolve, type.comb.set, type.comb.eager
+corpus: corpus/methods/comb_sort_enumerate_zip.lu [phase: run] conforms: type.method.resolve, type.comb.set
+corpus: corpus/methods/comb_sorted_ord.lu [phase: run] conforms: type.comb.set, type.trait.op
+corpus: corpus/methods/home_range_str_map.lu [phase: run] conforms: type.method.home, type.comb.set
+corpus: corpus/methods/method_is_free_call.lu [phase: run] conforms: type.method.resolve
+corpus: corpus/methods/method_non_std_receiver.lu [phase: resolve] conforms: type.method.home
+corpus: corpus/methods/method_take.lu [phase: resolve] conforms: type.method.take
+corpus: corpus/methods/method_unknown.lu [phase: resolve] conforms: type.method.resolve
+corpus: corpus/methods/method_wrong_arity.lu [phase: resolve] conforms: type.method.resolve
+corpus: corpus/methods/method_wrong_receiver.lu [phase: resolve] conforms: type.method.resolve, type.comb.set
+corpus: corpus/methods/wordcount_par.lu [phase: run] conforms: conc.task.par, conc.task.par.order, type.comb.set
+corpus: corpus/methods/wordcount_serial.lu [phase: run] conforms: type.comb.set, mem.map.absent
+corpus: corpus/net/accept_posture.lu [phase: run] conforms: os.net.accept, os.net.nodelay, os.net.io, err.union, err.propagate
+corpus: corpus/net/accept_race.lu [phase: run] conforms: os.net.accept, os.proc.inherit, err.union, err.propagate
+corpus: corpus/net/byte_roundtrip.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/net/echo_bytes.lu [phase: run] conforms: type.byte, err.union, err.propagate
+corpus: corpus/net/echo_roundtrip.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/net/inherit_listener.lu [phase: run] conforms: os.proc.inherit, os.net.listen.opts, err.union, err.propagate
+corpus: corpus/net/line_reader_bytes.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/net/nodelay.lu [phase: run] conforms: os.net.nodelay, err.union, err.propagate
+corpus: corpus/net/peer_close_after_serve.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/net/read_deadline.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/net/refused_row.lu [phase: run] conforms: err.union, err.propagate
+corpus: corpus/net/reuse_port.lu [phase: run] conforms: os.net.listen.opts, err.union, err.propagate
+corpus: corpus/net/spawn_accept.lu [phase: run] conforms: conc.task.spawn, conc.task.scope, err.union, err.propagate
+corpus: corpus/net/syscall_first.lu [phase: run] conforms: os.net.io, os.net.wait, err.union, err.propagate
+corpus: corpus/net/unix_echo.lu [phase: run] conforms: os.net.unix, err.union, err.propagate
+corpus: corpus/net/wait_readiness.lu [phase: run] conforms: os.net.wait, err.union, err.propagate
+corpus: corpus/net/writev_gather.lu [phase: run] conforms: os.net.writev, err.union, err.propagate
+corpus: corpus/net/writev_head_gather.lu [phase: run] conforms: os.net.writev.head, mem.str.view.lend, err.union, err.propagate
+corpus: corpus/os/arg0.lu [phase: run] conforms: os.env.argv, os.host.sigs
+corpus: corpus/os/args_bytes.lu [phase: run] conforms: os.env.argv, os.host.sigs, type.byte
+corpus: corpus/os/args_cwd.lu [phase: run] conforms: err.union
+corpus: corpus/os/chdir_relative.lu [phase: run] conforms: os.fs.chdir, os.fs.path, err.union, err.propagate
+corpus: corpus/os/core_limit_rows.lu [phase: run] conforms: os.proc.core, err.union
+corpus: corpus/os/cpus.lu [phase: run] conforms: os.cpus, err.union, err.propagate
+corpus: corpus/os/env_roundtrip.lu [phase: run] conforms: err.union
+corpus: corpus/os/env_unset.lu [phase: run] conforms: os.env.unset, err.union
+corpus: corpus/os/exec_rows.lu [phase: run] conforms: os.proc.exec, err.union
+corpus: corpus/os/exit_code.lu [phase: run] conforms: err.union
+corpus: corpus/os/group_rows.lu [phase: run] conforms: os.signal.send.group, os.signal.send.all, os.term.group, os.signal.host, os.signal.text, err.union
+corpus: corpus/os/ids_read.lu [phase: run] conforms: os.proc.ids, err.union
+corpus: corpus/os/ids_rows.lu [phase: run] conforms: os.proc.ids.set, os.fs.owner, os.fs.error, err.union
+corpus: corpus/os/job_poll_rows.lu [phase: run] conforms: os.proc.poll, err.union
+corpus: corpus/os/job_rows.lu [phase: run] conforms: os.proc.job, os.proc.status, os.signal.poll, os.signal.disp, err.union
+corpus: corpus/os/pipe_round_trip.lu [phase: run] conforms: os.proc.pipe, os.fs.isatty, err.union, err.propagate
+corpus: corpus/os/random_differs.lu [phase: run] conforms: os.random, os.random.fill, os.random.checked
+corpus: corpus/os/random_edges.lu [phase: run] conforms: os.random.fill
+corpus: corpus/os/random_negative_trap.lu [phase: run] conforms: os.random.fill, os.random.trap, conf.trap.map
+corpus: corpus/os/signal_loopback.lu [phase: run] conforms: os.signal.listen, os.signal.wait, os.signal.raise
+corpus: corpus/os/signal_one_rows.lu [phase: run] conforms: os.signal.disp.one, os.signal.exit, err.union
+corpus: corpus/os/signal_reserved_rows.lu [phase: run] conforms: os.signal.host.reserved, os.signal.disp.one, os.signal.exit, os.signal.host
+corpus: corpus/os/signal_shell_rows.lu [phase: run] conforms: os.signal.set, os.signal.poll, os.signal.disp, os.signal.send, os.signal.number, os.proc.self, err.union
+corpus: corpus/os/signal_supervisor.lu [phase: run] conforms: os.signal.listen, os.signal.wait, conc.task.spawn, conc.task.scope
+corpus: corpus/os/spawn_fds_rows.lu [phase: run] conforms: os.proc.fds, err.union
+corpus: corpus/os/spawn_rows.lu [phase: run] conforms: err.union
+corpus: corpus/os/term_editor_rows.lu [phase: run] conforms: os.signal.wait.fd, os.signal.set, os.term.mode, err.union
+corpus: corpus/os/umask.lu [phase: run] conforms: os.fs.umask, err.union
+corpus: corpus/overflow.lu [phase: run] conforms: arith.checked, arith.wrapping, mem.ub.defined
+corpus: corpus/procs.lu [phase: run] conforms: task.scope, task.channel, task.select, proc.spawn, proc.monitor, sync.when
+corpus: corpus/projects/count.lu [phase: run] conforms: str.views, err.union, err.propagate
+corpus: corpus/projects/count_dir.lu [phase: run] conforms: str.views, err.union, err.propagate
+corpus: corpus/projects/rpn.lu [phase: run] conforms: str.views, err.union, err.propagate
+corpus: corpus/projects/wordtree.lu [phase: run] conforms: str.views, mem.str.order
+corpus: corpus/regions.lu [phase: run] conforms: mem.region.create.1, mem.region.create.3, mem.region.freeze.1, mem.region.intra.1, mem.shared.handle.1
+corpus: corpus/resolve/bare_sibling/pair.lu [phase: run] conforms: conf.directive.standalone, mod.dir
+corpus: corpus/resolve/broken_sibling/entry.lu [phase: parse] conforms: conf.directive.standalone
+corpus: corpus/resolve/cycle/main.lu [phase: parse] conforms: mod.cycle
+corpus: corpus/resolve/dup_bare/clash.lu [phase: parse] conforms: conf.directive.standalone, mod.dup
+corpus: corpus/resolve/dupdef/main.lu [phase: parse] conforms: mod.dup
+corpus: corpus/resolve/forward/main.lu [phase: run] conforms: mod.forward
+corpus: corpus/resolve/leaf_twins/main.lu [phase: run] conforms: gram.item.use
+corpus: corpus/resolve/pkgvis/main.lu [phase: run] conforms: mod.vis.pkg
+corpus: corpus/resolve/plain_subdir/main.lu [phase: run] conforms: conf.directive.standalone, mod.dir, mod.use.pub
+corpus: corpus/resolve/private/main.lu [phase: parse] conforms: mod.vis.private
+corpus: corpus/resolve/same_name/main.lu [phase: run] conforms: mod.dir, mod.use.pub
+corpus: corpus/resolve/sibling_diag/main.lu [phase: parse] conforms: mod.dup, proto.record.diag
+corpus: corpus/resolve/standalone_pair/left.lu [phase: run] conforms: conf.directive.standalone, conf.directive.member
+corpus: corpus/resolve/standalone_pair/right.lu [phase: run] conforms: conf.directive.standalone, conf.directive.member
+corpus: corpus/resolve/two_mod/main.lu [phase: run] conforms: mod.dir, mod.use.pub
+corpus: corpus/resolve/unused/main.lu [phase: parse] conforms: mod.use.unused
+corpus: corpus/rows/coarsen.lu [phase: wir] conforms: err.rows, err.rows.coarsen
+corpus: corpus/rows/cross_module_arms/main.lu [phase: run] conforms: err.rows, err.union, err.propagate
+corpus: corpus/rows/ctor_arg_qualified/main.lu [phase: run] conforms: gram.amb.brackets
+corpus: corpus/rows/defer_else_handles.lu [phase: run] conforms: type.row.defer, err.else, err.errdefer, mem.model.order
+corpus: corpus/rows/else_fallback_bound_slice.lu [phase: run] conforms: gram.amb.else, mem.str.view
+corpus: corpus/rows/else_fallback_paren_slice.lu [phase: run] conforms: gram.amb.else, mem.str.view
+corpus: corpus/rows/else_fallback_range_refused.lu [phase: resolve] conforms: gram.amb.else
+corpus: corpus/rows/else_own_failure.lu [phase: run] conforms: type.row.else, err.else, err.propagate
+corpus: corpus/rows/else_return_tag.lu [phase: run] conforms: type.row.else, err.else
+corpus: corpus/rows/else_tag_payload.lu [phase: run] conforms: err.union, err.rows, err.else
+corpus: corpus/rows/else_try_block.lu [phase: run] conforms: type.row.else, err.else, err.propagate, err.errdefer
+corpus: corpus/rows/else_try_call_arg.lu [phase: run] conforms: type.row.else, err.else, err.propagate
+corpus: corpus/rows/else_try_handler.lu [phase: run] conforms: type.row.else, err.else, err.propagate
+corpus: corpus/rows/else_try_index.lu [phase: run] conforms: type.row.else, err.else, err.propagate
+corpus: corpus/rows/else_try_nested_else.lu [phase: run] conforms: type.row.else, err.else, err.propagate
+corpus: corpus/rows/errdefer_block_loop_break.lu [phase: run] conforms: mem.model.order, err.errdefer, type.row.else
+corpus: corpus/rows/errdefer_block_nested.lu [phase: run] conforms: mem.model.order, err.errdefer, type.row.else
+corpus: corpus/rows/errdefer_block_row.lu [phase: run] conforms: mem.model.order, err.errdefer, type.row.else
+corpus: corpus/rows/errdefer_fn_tail_control.lu [phase: run] conforms: mem.model.order, err.errdefer
+corpus: corpus/rows/error_alias_ident.lu [phase: run] conforms: gram.item.error, gram.inv.ctx
+corpus: corpus/rows/error_alias_qualified/main.lu [phase: run] conforms: type.err.alias, type.err.alias.qualified, type.err.alias.transparent
+corpus: corpus/rows/error_alias_row.lu [phase: run] conforms: gram.item.error, type.err.alias
+corpus: corpus/rows/error_alias_transparent.lu [phase: run] conforms: gram.item.error, type.err.alias
+corpus: corpus/rows/error_alias_union.lu [phase: run] conforms: gram.item.error, type.err.alias, gram.type.row.flatten
+corpus: corpus/rows/eu_bind_empty_row.lu [phase: run] conforms: type.interp.union, err.union
+corpus: corpus/rows/eu_bind_empty_row_handled.lu [phase: run] conforms: type.row.match, type.row.else, err.union, err.rows
+corpus: corpus/rows/eu_bind_empty_row_unit.lu [phase: run] conforms: type.interp.union, err.union
+corpus: corpus/rows/eu_main_err_exit.lu [phase: run] conforms: abi.err.repr, err.union
+corpus: corpus/rows/first_list_literal_sum.lu [phase: run] conforms: proto.record.first, gram.expr.list
+corpus: corpus/rows/handler_diverge_call.lu [phase: run] conforms: err.union, err.rows
+corpus: corpus/rows/handler_diverge_trap.lu [phase: run] conforms: err.union, err.rows, conf.trap.set
+corpus: corpus/rows/handler_match_tags.lu [phase: run] conforms: err.union, err.rows
+corpus: corpus/rows/hof_tail.lu [phase: run] conforms: err.rows, err.rows.tail
+corpus: corpus/rows/inferred_private.lu [phase: run] conforms: err.rows, err.rows.inferred
+corpus: corpus/rows/iter_diverging_else_bound.lu [phase: run] conforms: err.union, err.else, err.propagate
+corpus: corpus/rows/match_range_empty.lu [phase: resolve] conforms: gram.pat.range
+corpus: corpus/rows/match_row_bare_tag.lu [phase: run] conforms: type.row.match, type.row.operand, err.union, err.rows
+corpus: corpus/rows/match_row_else_control.lu [phase: run] conforms: type.row.match, type.row.else, err.union, err.rows
+corpus: corpus/rows/match_row_nested.lu [phase: run] conforms: type.row.match, gram.pat.nullary, err.union, err.rows
+corpus: corpus/rows/match_row_payload_tag.lu [phase: run] conforms: type.row.match, gram.pat, err.union, err.rows
+corpus: corpus/rows/match_row_try_scrutinee.lu [phase: run] conforms: type.row.match, type.row.else, err.union, err.propagate
+corpus: corpus/rows/match_row_wild_each_half.lu [phase: run] conforms: type.row.match, err.union, err.rows
+corpus: corpus/rows/negative/ctor_arg_unresolved.lu [phase: resolve] conforms: gram.amb.brackets
+corpus: corpus/rows/negative/dup_tags.lu [phase: resolve] conforms: err.rows
+corpus: corpus/rows/negative/errdefer_infallible.lu [phase: resolve] conforms: err.errdefer
+corpus: corpus/rows/negative/error_alias_cycle.lu [phase: resolve] conforms: gram.item.error, type.err.alias
+corpus: corpus/rows/negative/error_alias_open.lu [phase: lex] conforms: gram.item.error, type.err.alias
+corpus: corpus/rows/negative/error_alias_private/main.lu [phase: resolve] conforms: type.err.alias.qualified
+corpus: corpus/rows/negative/first_boundary_before_lex.lu [phase: lex] conforms: proto.record.first, gram.lex.str
+corpus: corpus/rows/negative/first_keyword_pattern.lu [phase: lex] conforms: proto.record.first, gram.pat
+corpus: corpus/rows/negative/first_parse_before_lex.lu [phase: lex] conforms: proto.record.first, gram.pat
+corpus: corpus/rows/negative/first_parse_before_resolve.lu [phase: lex] conforms: proto.record.first, gram.pat
+corpus: corpus/rows/negative/first_same_offset_lex.lu [phase: none] conforms: proto.record.first, gram.lex.str
+corpus: corpus/rows/negative/first_stray_backtick.lu [phase: none] conforms: proto.record.first, gram.lex
+corpus: corpus/rows/negative/handler_uncovered.lu [phase: resolve] conforms: err.rows, err.else
+corpus: corpus/rows/negative/match_row_missing_tag.lu [phase: resolve] conforms: type.row.match, ty.match.exhaustive
+corpus: corpus/rows/negative/match_row_missing_value.lu [phase: resolve] conforms: type.row.match, ty.match.exhaustive
+corpus: corpus/rows/negative/match_row_tag_variant_collision.lu [phase: resolve] conforms: type.row.match
+corpus: corpus/rows/negative/missing_tag.lu [phase: resolve] conforms: err.rows, err.propagate
+corpus: corpus/rows/negative/nested_row_conflict.lu [phase: resolve] conforms: gram.type.row.flatten, err.rows
+corpus: corpus/rows/negative/open_into_closed.lu [phase: resolve] conforms: err.rows.open
+corpus: corpus/rows/negative/payload_mismatch.lu [phase: resolve] conforms: err.rows
+corpus: corpus/rows/negative/pub_inferred.lu [phase: resolve] conforms: err.rows.inferred
+corpus: corpus/rows/negative/row_operand_add.lu [phase: resolve] conforms: type.row.operand, gram.type.row, type.interp.union
+corpus: corpus/rows/negative/row_operand_compare.lu [phase: resolve] conforms: type.row.operand, gram.type.row, type.interp.union
+corpus: corpus/rows/negative/row_operand_member.lu [phase: resolve] conforms: type.row.operand, gram.type.row
+corpus: corpus/rows/negative/row_operand_method.lu [phase: resolve] conforms: type.row.operand, gram.type.row
+corpus: corpus/rows/negative/row_operand_rhs.lu [phase: resolve] conforms: type.row.operand, gram.type.row
+corpus: corpus/rows/negative/tag_undeclared_arg.lu [phase: parse] conforms: gram.expr.tagident, err.rows
+corpus: corpus/rows/negative/try_in_defer.lu [phase: resolve] conforms: type.row.defer, err.propagate, err.errdefer
+corpus: corpus/rows/negative/try_in_defer_block.lu [phase: resolve] conforms: type.row.defer, err.propagate, err.errdefer
+corpus: corpus/rows/negative/try_in_errdefer.lu [phase: resolve] conforms: type.row.defer, err.propagate, err.errdefer
+corpus: corpus/rows/nested_row_merge_payload.lu [phase: run] conforms: gram.type.row.flatten, err.rows, err.union
+corpus: corpus/rows/nested_row_param.lu [phase: run] conforms: gram.type.row, gram.type.row.flatten, err.union
+corpus: corpus/rows/nested_row_return.lu [phase: run] conforms: gram.type.row, gram.type.row.flatten, err.union
+corpus: corpus/rows/open_row_growth.lu [phase: run] conforms: err.rows.open
+corpus: corpus/rows/propagate/main.lu [phase: run] conforms: err.rows, err.propagate, err.union
+corpus: corpus/rows/qmark_defer.lu [phase: run] conforms: err.propagate, err.errdefer, mem.model.order
+corpus: corpus/rows/raised_call_arg_position.lu [phase: run] conforms: err.union, err.rows, err.else
+corpus: corpus/rows/row_member_handled.lu [phase: run] conforms: type.row.operand, type.row.else, gram.type.row
+corpus: corpus/rows/row_union_payloads.lu [phase: run] conforms: abi.native.enum, err.rows, type.row.match
+corpus: corpus/rows/tag_arg_position.lu [phase: run] conforms: gram.expr.tagident, err.union, err.rows
+corpus: corpus/rows/tag_let_position.lu [phase: run] conforms: gram.expr.tagident, err.union, err.rows
+corpus: corpus/rows/tag_shadow_local.lu [phase: run] conforms: gram.expr.tagident, err.union, diag.sev.warn
+corpus: corpus/rows/to_int_parse.lu [phase: run] conforms: err.union, err.propagate, abi.err.repr, mem.str.to_int
+corpus: corpus/rows/unit_discard_fallible_body_stmt.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_if_value.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_raise_stmts.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_raise_unit_fn.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_return_operand.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_tail_if.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_tail_if_chain.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_tail_if_closure.lu [phase: run] conforms: type.unit.context, type.unit.discard, type.closure.return, diag.sev.warn
+corpus: corpus/rows/unit_discard_tail_if_leaves.lu [phase: run] conforms: type.unit.context, type.unit.discard, err.rows
+corpus: corpus/rows/unit_discard_tail_if_value_row.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/rows/unit_discard_try_leaves.lu [phase: run] conforms: type.unit.context, type.unit.discard, err.rows
+corpus: corpus/rows/unit_discard_unit_main.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/strings/boundary_battery.lu [phase: run] conforms: mem.str.get, str.views
+corpus: corpus/strings/builtin_methods.lu [phase: run] conforms: str.slice, str.views, mem.str.get, mem.str.order
+corpus: corpus/strings/byte_view.lu [phase: run] conforms: str.views, mem.str.get
+corpus: corpus/strings/byte_view_lend.lu [phase: run] conforms: mem.str.view.lend, mem.str.view, str.views
+corpus: corpus/strings/byte_view_slice_lent.lu [phase: run] conforms: mem.list.slice, mem.str.view.lend, mem.str.view
+corpus: corpus/strings/bytes_roundtrip.lu [phase: run] conforms: type.byte, type.byte.cast, type.byte.op, str.views
+corpus: corpus/strings/bytes_view_walk.lu [phase: run] conforms: exec.checked.budget, mem.str.view
+corpus: corpus/strings/char_battery.lu [phase: run] conforms: type.char, type.char.cast, mem.str.chars
+corpus: corpus/strings/char_index_fail.lu [phase: resolve] conforms: str.slice
+corpus: corpus/strings/char_interp.lu [phase: run] conforms: type.char.interp
+corpus: corpus/strings/char_order.lu [phase: run] conforms: type.char.order
+corpus: corpus/strings/chars_walk.lu [phase: run] conforms: mem.str.chars, mem.str.get, type.char.cast
+corpus: corpus/strings/concat_int_str.lu [phase: resolve] conforms: type.str.concat.mix
+corpus: corpus/strings/concat_mix_char.lu [phase: run] conforms: type.str.concat, type.str.concat.cost
+corpus: corpus/strings/concat_mix_int.lu [phase: resolve] conforms: type.str.concat.mix
+corpus: corpus/strings/concat_plus.lu [phase: run] conforms: type.str.concat, type.str.concat.cost
+corpus: corpus/strings/dollar_brace_escape.lu [phase: run] conforms: gram.lex.str.escape
+corpus: corpus/strings/empty_needle.lu [phase: run] conforms: mem.str.empty
+corpus: corpus/strings/end_relative_get.lu [phase: run] conforms: mem.str.get
+corpus: corpus/strings/equality_lanes.lu [phase: run] conforms: str.views, mem.str.order
+corpus: corpus/strings/float_format.lu [phase: run] conforms: str.interp, type.interp.spec
+corpus: corpus/strings/format_spec_full.lu [phase: run] conforms: str.interp, type.interp.spec
+corpus: corpus/strings/format_spec_malformed.lu [phase: resolve] conforms: str.interp, type.interp.spec
+corpus: corpus/strings/format_spec_mismatch.lu [phase: resolve] conforms: str.interp, type.interp.spec
+corpus: corpus/strings/format_spec_width.lu [phase: run] conforms: str.interp, type.interp.spec
+corpus: corpus/strings/from_utf8_border.lu [phase: run] conforms: str.views, mem.str.get
+corpus: corpus/strings/interp_value_position.lu [phase: run] conforms: str.interp
+corpus: corpus/strings/interp_values.lu [phase: run] conforms: type.interp.value, type.interp.agg, type.interp.row, type.interp.union, err.union, err.else
+corpus: corpus/strings/match_str_const_scrutinee.lu [phase: run] conforms: str.views
+corpus: corpus/strings/match_str_dispatch.lu [phase: run] conforms: str.views
+corpus: corpus/strings/multiline_escapes.lu [phase: run] conforms: gram.lex.str.multi, gram.lex.str.escape
+corpus: corpus/strings/raw_fences.lu [phase: run] conforms: gram.lex.str.raw
+corpus: corpus/strings/slice_boundary_sweep.lu [phase: run] conforms: str.slice, mem.str.get
+corpus: corpus/strings/slice_oob_trap.lu [phase: run] conforms: str.slice, mem.ub.defined
+corpus: corpus/strings/split_clause.lu [phase: run] conforms: str.views, mem.str.ws, mem.str.words, mem.str.lines, mem.str.split, mem.str.view
+corpus: corpus/strings/str_uni_leading_zeros.lu [phase: run] conforms: gram.lex.str.escape
+corpus: corpus/strings/to_int.lu [phase: run] conforms: err.union, err.else, mem.str.ws, mem.str.parse, mem.str.to_int
+corpus: corpus/strings/trim_cutset_refused.lu [phase: resolve] conforms: mem.str.ws
+corpus: corpus/strings.lu [phase: resolve] conforms: str.multiline, str.slice, str.views, str.regex_literal, str.interp
+corpus: corpus/test/assert_test.lu [phase: wir] conforms: test.discovery, test.assert
+corpus: corpus/test/conc_schedules_test.lu [phase: run] conforms: test.discovery, conc.select.fair, conc.det.events, sched.stable
+corpus: corpus/time/monotonic.lu [phase: run] conforms: err.union
+corpus: corpus/traits/adapter_distinct/main.lu [phase: wir] conforms: ty.trait.adapter
+corpus: corpus/traits/assoc_rewrite.lu [phase: wir] conforms: ty.trait.assoc.rewrite
+corpus: corpus/traits/bound_literal_default.lu [phase: run] conforms: type.numlit.default, type.trait.op
+corpus: corpus/traits/call_unmet_bound.lu [phase: resolve] conforms: generics.golden.call-site
+corpus: corpus/traits/coherence_orphan/main.lu [phase: resolve] conforms: ty.trait.coherence.orphan
+corpus: corpus/traits/coherence_overlap.lu [phase: resolve] conforms: ty.trait.coherence.overlap
+corpus: corpus/traits/coherence_uncovered.lu [phase: resolve] conforms: ty.trait.coherence.uncovered
+corpus: corpus/traits/dyn_assoc_escape.lu [phase: resolve] conforms: ty.trait.dyn.assoc-escape
+corpus: corpus/traits/dyn_generic_method.lu [phase: resolve] conforms: ty.trait.dyn.generic-method
+corpus: corpus/traits/dyn_ok.lu [phase: run] conforms: ty.trait.dyn.safe, ty.trait.dyn.dispatch, ty.dyn.unsize
+corpus: corpus/traits/dyn_self_position.lu [phase: resolve] conforms: ty.trait.dyn.self-position
+corpus: corpus/traits/dyn_temp_refused.lu [phase: resolve] conforms: ty.dyn.unsize.place
+corpus: corpus/traits/golden_arith.lu [phase: resolve] conforms: generics.golden.def-site
+corpus: corpus/traits/golden_eq.lu [phase: resolve] conforms: generics.golden.def-site
+corpus: corpus/traits/golden_missing_bound.lu [phase: resolve] conforms: generics.golden.def-site
+corpus: corpus/traits/op_eq_imported/main.lu [phase: run] conforms: type.trait.op
+corpus: corpus/traits/op_eq_inverting.lu [phase: run] conforms: type.trait.op
+corpus: corpus/traits/op_eq_item_import/main.lu [phase: run] conforms: type.trait.op, mod.use.unused
+corpus: corpus/traits/op_eq_no_trait.lu [phase: resolve] conforms: type.trait.op
+corpus: corpus/traits/op_hetero_add.lu [phase: resolve] conforms: type.trait.op
+corpus: corpus/traits/op_missing_impl.lu [phase: resolve] conforms: type.trait.op
+corpus: corpus/traits/op_money.lu [phase: run] conforms: type.trait.op
+corpus: corpus/traits/op_ord_struct.lu [phase: run] conforms: type.trait.op
+corpus: corpus/traits/op_total_num.lu [phase: run] conforms: type.trait.op, type.trait.op.alias
+corpus: corpus/traits/prim_impl.lu [phase: run] conforms: ty.trait.qualified-call, ty.impl.prim
+corpus: corpus/traits/prim_impl_orphan/main.lu [phase: resolve] conforms: ty.trait.coherence, ty.impl.prim
+corpus: corpus/traits/show_bound.lu [phase: wir] conforms: generics.golden.checked, ty.trait.qualified-call
+corpus: corpus/typecheck/ambiguous.lu [phase: resolve] conforms: arith.literal.default
+corpus: corpus/typecheck/arg_count.lu [phase: resolve] conforms: ty.call.arity
+corpus: corpus/typecheck/arg_vs_return.lu [phase: resolve] conforms: ty.mismatch.fn_value
+corpus: corpus/typecheck/bool_cmp.lu [phase: run] conforms: arith.cmp.bool
+corpus: corpus/typecheck/byte_casts.lu [phase: run] conforms: type.byte, type.byte.cast, type.byte.op, type.byte.interp
+corpus: corpus/typecheck/byte_elem_arith_fail.lu [phase: resolve] conforms: type.byte, type.byte.cast
+corpus: corpus/typecheck/byte_narrow_fail.lu [phase: resolve] conforms: type.byte, type.byte.cast
+corpus: corpus/typecheck/byte_shapes.lu [phase: run] conforms: type.byte, type.byte.op, type.byte.interp
+corpus: corpus/typecheck/cast_bad.lu [phase: resolve] conforms: ty.cast.closed-set
+corpus: corpus/typecheck/cast_int_to_float.lu [phase: run] conforms: type.numlit.cast.widen
+corpus: corpus/typecheck/cast_narrow_in_range.lu [phase: run] conforms: type.numlit.cast.narrow
+corpus: corpus/typecheck/cast_narrow_wrapping_truncates.lu [phase: run] conforms: type.numlit.cast.narrow, type.numlit.cast.wrap
+corpus: corpus/typecheck/cast_set.lu [phase: run] conforms: ty.cast.closed-set, ty.trait.adapter
+corpus: corpus/typecheck/closure_captured_closure/main.lu [phase: run] conforms: abi.native.closure.object
+corpus: corpus/typecheck/closure_entry_to_module/main.lu [phase: run] conforms: abi.native.closure.object
+corpus: corpus/typecheck/closure_inlined_one_liner/main.lu [phase: run] conforms: abi.native.closure.object
+corpus: corpus/typecheck/closure_module_to_entry/main.lu [phase: run] conforms: abi.native.closure.object
+corpus: corpus/typecheck/closure_module_to_module/main.lu [phase: run] conforms: abi.native.closure.object
+corpus: corpus/typecheck/closure_param_call.lu [phase: run] conforms: type.fn.value
+corpus: corpus/typecheck/closure_return.lu [phase: run] conforms: type.closure.return
+corpus: corpus/typecheck/coerce_no_widening.lu [phase: resolve] conforms: ty.coerce.no-widening
+corpus: corpus/typecheck/enum_union_three.lu [phase: run] conforms: abi.native.enum, ty.match.exhaustive
+corpus: corpus/typecheck/enum_union_tree.lu [phase: run] conforms: abi.native.enum, ty.match.exhaustive
+corpus: corpus/typecheck/enum_union_two.lu [phase: run] conforms: abi.native.enum, ty.match.exhaustive
+corpus: corpus/typecheck/field_typo.lu [phase: resolve] conforms: ty.field.unknown
+corpus: corpus/typecheck/float_nan_cmp.lu [phase: run] conforms: arith.cmp.float
+corpus: corpus/typecheck/float_rem.lu [phase: run] conforms: type.float.rem, type.trait.op
+corpus: corpus/typecheck/fn_never_extern.lu [phase: run] conforms: type.fn.never, abi.link.extern, abi.c.types
+corpus: corpus/typecheck/fn_never_handler_arm.lu [phase: run] conforms: type.fn.never, type.fn.ret
+corpus: corpus/typecheck/fn_never_reaches_end.lu [phase: resolve] conforms: type.fn.never, type.fn.ret
+corpus: corpus/typecheck/fn_never_return.lu [phase: resolve] conforms: type.fn.never, type.fn.ret
+corpus: corpus/typecheck/fn_never_trap.lu [phase: run] conforms: type.fn.never, conf.trap.assert
+corpus: corpus/typecheck/fn_param_shadows_import/main.lu [phase: run] conforms: conf.resolve.ambient, type.fn.value
+corpus: corpus/typecheck/fn_param_shadows_item.lu [phase: run] conforms: conf.resolve.ambient, type.fn.value
+corpus: corpus/typecheck/fn_value_captured_int.lu [phase: run] conforms: type.fn.value, abi.native.closure
+corpus: corpus/typecheck/fn_value_captured_var_write.lu [phase: typecheck] conforms: type.fn.value, mem.tier0.borrow.2
+corpus: corpus/typecheck/fn_value_capturing.lu [phase: run] conforms: type.fn.value, abi.native.closure
+corpus: corpus/typecheck/fn_value_import/main.lu [phase: run] conforms: ty.fn.value.qualified
+corpus: corpus/typecheck/fn_value_two_file_module/main.lu [phase: run] conforms: abi.native.closure.object
+corpus: corpus/typecheck/generic_bind_once.lu [phase: resolve] conforms: type.generic.bind, gram.item.fn
+corpus: corpus/typecheck/generic_bind_scalar.lu [phase: resolve] conforms: type.generic.bind, gram.item.fn
+corpus: corpus/typecheck/if_branch.lu [phase: resolve] conforms: ty.mismatch.branches
+corpus: corpus/typecheck/int_not_byte.lu [phase: run] conforms: type.int.not, type.byte.op
+corpus: corpus/typecheck/int_not_float.lu [phase: resolve] conforms: type.int.not
+corpus: corpus/typecheck/int_not_mask.lu [phase: run] conforms: type.int.not, type.numlit.adopt
+corpus: corpus/typecheck/int_not_signed.lu [phase: run] conforms: type.int.not
+corpus: corpus/typecheck/int_not_tilde.lu [phase: none] conforms: type.int.not, gram.expr.prec
+corpus: corpus/typecheck/int_shift_value.lu [phase: run] conforms: type.int.shift
+corpus: corpus/typecheck/int_truth_signed_print.lu [phase: run] conforms: type.interp.value, type.interp.spec
+corpus: corpus/typecheck/int_truth_u64_arith.lu [phase: run] conforms: type.interp.value, type.numlit.value
+corpus: corpus/typecheck/int_truth_u64_cast.lu [phase: run] conforms: type.numlit.cast.narrow, type.numlit.cast.wrap, type.numlit.cast.trunc
+corpus: corpus/typecheck/int_truth_u64_not.lu [phase: run] conforms: type.int.not, type.interp.value
+corpus: corpus/typecheck/int_truth_unsigned_print.lu [phase: run] conforms: type.interp.value, type.interp.spec
+corpus: corpus/typecheck/int_truth_wrap_div_signed.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/typecheck/int_truth_wrap_div_unsigned.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/typecheck/int_truth_wrap_mul_wide.lu [phase: run] conforms: type.interp.value
+corpus: corpus/typecheck/int_truth_wrap_neg.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/typecheck/int_truth_wrap_signed.lu [phase: run] conforms: type.interp.value, type.numlit.cast.narrow
+corpus: corpus/typecheck/int_truth_wrap_unsigned.lu [phase: run] conforms: type.interp.value, type.interp.spec
+corpus: corpus/typecheck/interp_spec_on_union.lu [phase: resolve] conforms: type.interp.union
+corpus: corpus/typecheck/let_compound_assign.lu [phase: parse] conforms: gram.item.let
+corpus: corpus/typecheck/let_field_assign.lu [phase: parse] conforms: gram.item.let
+corpus: corpus/typecheck/let_reassign.lu [phase: parse] conforms: gram.item.let
+corpus: corpus/typecheck/let_shadow_var_ok.lu [phase: run] conforms: gram.item.let
+corpus: corpus/typecheck/list_lit_elem_i32.lu [phase: run] conforms: type.list.lit.elem, type.numlit.default
+corpus: corpus/typecheck/list_lit_elem_unfit.lu [phase: resolve] conforms: type.list.lit.elem, type.numlit.default
+corpus: corpus/typecheck/list_tuple_elem.lu [phase: run] conforms: gram.amb.brackets, generics.brackets
+corpus: corpus/typecheck/main_returns_str.lu [phase: resolve] conforms: gram.item.fn
+corpus: corpus/typecheck/main_unit_row.lu [phase: run] conforms: gram.item.fn
+corpus: corpus/typecheck/map_compound_absent.lu [phase: resolve] conforms: mem.map.absent
+corpus: corpus/typecheck/map_struct_key.lu [phase: resolve] conforms: type.map.key
+corpus: corpus/typecheck/match_arm_product_nonexhaustive.lu [phase: resolve] conforms: ty.match.exhaustive, gram.pat.struct
+corpus: corpus/typecheck/match_arm_product_unreachable.lu [phase: run] conforms: ty.match.reachable, gram.pat.struct
+corpus: corpus/typecheck/match_chain_reuse.lu [phase: run] conforms: ty.match.exhaustive
+corpus: corpus/typecheck/match_exhaustive.lu [phase: run] conforms: ty.match.exhaustive, err.rows
+corpus: corpus/typecheck/match_guard_const.lu [phase: run] conforms: ty.match.exhaustive
+corpus: corpus/typecheck/match_missing.lu [phase: resolve] conforms: ty.match.exhaustive
+corpus: corpus/typecheck/match_narrow_scrutinee.lu [phase: run] conforms: ty.match.exhaustive, arith.checked
+corpus: corpus/typecheck/match_str_nonexhaustive.lu [phase: resolve] conforms: str.views
+corpus: corpus/typecheck/match_unreachable.lu [phase: run] conforms: ty.match.reachable
+corpus: corpus/typecheck/method_ambiguous.lu [phase: resolve] conforms: ty.method.ambiguous
+corpus: corpus/typecheck/method_home_no_std.lu [phase: resolve] conforms: type.method.root
+corpus: corpus/typecheck/method_inherent.lu [phase: wir] conforms: ty.method.order, ty.trait.qualified-call
+corpus: corpus/typecheck/method_scope/main.lu [phase: resolve] conforms: ty.method.trait-scope
+corpus: corpus/typecheck/nested_fn_capture.lu [phase: resolve] conforms: gram.item.fn
+corpus: corpus/typecheck/nested_fn_value.lu [phase: run] conforms: gram.item.fn, ty.fn.value.qualified
+corpus: corpus/typecheck/numlit_ambiguity_named.lu [phase: resolve] conforms: type.numlit.ambig
+corpus: corpus/typecheck/numlit_annotation_float.lu [phase: run] conforms: type.numlit.adopt
+corpus: corpus/typecheck/numlit_arith_through.lu [phase: run] conforms: type.numlit.propagate
+corpus: corpus/typecheck/numlit_binding_literal.lu [phase: resolve] conforms: type.numlit.default, type.numlit.propagate, type.numlit.value
+corpus: corpus/typecheck/numlit_binding_literal_call.lu [phase: resolve] conforms: type.numlit.default, type.numlit.propagate, type.numlit.value
+corpus: corpus/typecheck/numlit_binding_literal_term.lu [phase: resolve] conforms: type.numlit.default, type.numlit.propagate
+corpus: corpus/typecheck/numlit_binding_value_later_use.lu [phase: run] conforms: type.numlit.default, type.numlit.value
+corpus: corpus/typecheck/numlit_c2f.lu [phase: run] conforms: type.numlit.adopt, type.numlit.propagate
+corpus: corpus/typecheck/numlit_compare_adopts.lu [phase: run] conforms: type.numlit.adopt, type.numlit.propagate
+corpus: corpus/typecheck/numlit_div_float.lu [phase: run] conforms: type.numlit.propagate
+corpus: corpus/typecheck/numlit_div_int.lu [phase: run] conforms: type.numlit.default
+corpus: corpus/typecheck/numlit_extremes.lu [phase: run] conforms: type.numlit.default, type.numlit.value
+corpus: corpus/typecheck/numlit_fit.lu [phase: resolve] conforms: type.numlit.default
+corpus: corpus/typecheck/numlit_float_to_int_refused.lu [phase: resolve] conforms: type.numlit.adopt
+corpus: corpus/typecheck/numlit_list_element_width.lu [phase: run] conforms: type.numlit.value, arith.checked
+corpus: corpus/typecheck/numlit_radix.lu [phase: run] conforms: type.numlit.value
+corpus: corpus/typecheck/numlit_u64_edge.lu [phase: run] conforms: type.numlit.value
+corpus: corpus/typecheck/numlit_value_refused.lu [phase: resolve] conforms: type.numlit.value
+corpus: corpus/typecheck/numlit_wrapping_countdown.lu [phase: run] conforms: type.numlit.value, type.int.shift
+corpus: corpus/typecheck/pattern_shape.lu [phase: resolve] conforms: ty.pattern.shape
+corpus: corpus/typecheck/receiver_bare_mut.lu [phase: resolve] conforms: ty.method.receiver-mode, mem.tier0.mode.mut
+corpus: corpus/typecheck/receiver_bare_mut_param.lu [phase: resolve] conforms: ty.method.receiver-mode, mem.tier0.mode.mut
+corpus: corpus/typecheck/receiver_modes.lu [phase: run] conforms: ty.method.receiver-mode, mem.tier0.mode.mut, mem.tier0.mode.take
+corpus: corpus/typecheck/refutable_let.lu [phase: resolve] conforms: ty.pattern.irrefutable
+corpus: corpus/typecheck/str_slice_assign.lu [phase: resolve] conforms: mem.str.imm, mem.str.view
+corpus: corpus/typecheck/straight_line_as_char.lu [phase: run] conforms: type.char.cast
+corpus: corpus/typecheck/straight_line_as_narrow.lu [phase: run] conforms: type.numlit.cast.narrow
+corpus: corpus/typecheck/straight_line_as_sign.lu [phase: run] conforms: type.numlit.cast.narrow
+corpus: corpus/typecheck/straight_line_shl_assign.lu [phase: run] conforms: type.int.shift
+corpus: corpus/typecheck/straight_line_shl_const.lu [phase: run] conforms: type.int.shift
+corpus: corpus/typecheck/straight_line_shr_var.lu [phase: run] conforms: type.int.shift
+corpus: corpus/typecheck/straight_line_str_eq.lu [phase: run] conforms: mem.str.order
+corpus: corpus/typecheck/straight_line_str_order.lu [phase: run] conforms: mem.str.order
+corpus: corpus/typecheck/straight_line_wrap_div.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/typecheck/straight_line_wrap_rem.lu [phase: run] conforms: type.wrap.div
+corpus: corpus/typecheck/tail_declared_str.lu [phase: resolve] conforms: type.fn.ret, gram.expr.block, gram.expr.tagident
+corpus: corpus/typecheck/tail_declared_union.lu [phase: resolve] conforms: type.fn.ret, gram.expr.block, gram.expr.tagident
+corpus: corpus/typecheck/trait_default.lu [phase: wir] conforms: ty.trait.default-body
+corpus: corpus/typecheck/unit_context_discard.lu [phase: run] conforms: type.unit.context, type.unit.discard, type.unit.consume, diag.sev.warn
+corpus: corpus/typecheck/unit_tail_value_discard.lu [phase: run] conforms: type.unit.context, type.unit.discard, diag.sev.warn
+corpus: corpus/typecheck/variant_bare_value.lu [phase: resolve] conforms: gram.expr.variant, gram.expr.tagident
+corpus: corpus/typecheck/variant_value/main.lu [phase: run] conforms: ty.enum.variant.value, ty.method.order
+corpus: corpus/typecheck/wrap_as_int_in_range.lu [phase: run] conforms: type.numlit.cast.wrap, arith.wrapping
+corpus: corpus/typecheck/wrap_narrow_cast.lu [phase: run] conforms: arith.wrapping
+corpus: corpus/wordcount.lu [phase: resolve] conforms: str.interp, str.views, err.union, err.propagate, task.par, generics.brackets, mem.map.absent
+corpus: corpus/memory/region_outer_write_push_heap.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_heap_call.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_plain_copy.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: 1235 file(s), 3 bad — phase ledger enforced via conform-run
+corpus: fail-pin ledger: 382 rule(s) the compiler enforces, 3 forward pin(s) it does not implement yet

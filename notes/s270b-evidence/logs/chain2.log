@@ -1,0 +1,19 @@
+s270b CHAIN2 pid 618224 start 2026-10-28T22:17:15Z
+s270b CHAIN2 plant exit 0 2026-10-28T23:29:53Z
+s270b CHAIN2 probe-f exit 0 2026-10-28T23:29:54Z
+error: Your local changes to the following files would be overwritten by checkout:
+	crates/wolf_driver/tests/region_outer_write_lanes.rs
+	crates/wolf_mem/src/lower.rs
+Please commit your changes or stash them before you switch branches.
+error: The following untracked working tree files would be overwritten by checkout:
+	corpus/memory/region_outer_write_push_copy_call.lu
+	corpus/memory/region_outer_write_push_copy_control.lu
+	corpus/memory/region_outer_write_push_copy_over.lu
+	corpus/memory/region_outer_write_push_copy_under.lu
+	corpus/memory/region_outer_write_push_heap.lu
+	corpus/memory/region_outer_write_push_heap_call.lu
+	corpus/memory/region_outer_write_push_plain_copy.lu
+Please move or remove them before you switch branches.
+Aborting
+s270b CHAIN2 clone at 822b236cc2c05b8f859e6d5a989f53ce60311ad0 (want 822b236cc2c05b8f859e6d5a989f53ce60311ad0) status:
+s270b CHAIN2 gauntlet exit 1 2026-10-29T00:05:17Z

@@ -1,0 +1,217 @@
+s270b GAUNTLET JOB pid 3152543 start 2026-10-28T23:29:55Z head 822b236cc2c05b8f859e6d5a989f53ce60311ad0
+s270b gauntlet acquired block A 2026-10-28T23:29:55Z
+s270b GAUNTLET START 2026-10-28T23:29:55Z head=822b236cc2c05b8f859e6d5a989f53ce60311ad0
+SigBlk:	0000000000380000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	0-5
+pid1 uid: 0
+self uid: 1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+x86_64-unknown-linux-gnu
+x86_64-unknown-linux-musl
+x86_64-unknown-none
+/usr/bin/strace
+
+== STEP build 2026-10-28T23:29:56Z
+   Compiling wolf_mem v0.2.36 (/lane/wolf-lang/crates/wolf_mem)
+   Compiling wolf_wir v0.2.36 (/lane/wolf-lang/crates/wolf_wir)
+   Compiling wolf_backend v0.2.36 (/lane/wolf-lang/crates/wolf_backend)
+   Compiling wolf_codegen_clif v0.2.36 (/lane/wolf-lang/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.36 (/lane/wolf-lang/crates/wolf_codegen_llvm)
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `dev` profile [unoptimized] target(s) in 8.53s
+== STEP build EXIT 0 2026-10-28T23:30:05Z
+
+== STEP dist-rt 2026-10-28T23:30:05Z
+dist-rt: RUSTFLAGS=-C target-feature=+crt-static -C relocation-model=static -C strip=symbols -C link-arg=-Wl,--build-id=none --remap-path-prefix=/lane/wolf-lang=/wolf-lang --remap-path-prefix=/lane/wolf-lang/target/dist-rt=/target --remap-path-prefix=/lane/cargo=/cargo
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.24
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.36 (/lane/wolf-lang/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling shlex v2.0.1
+   Compiling cfg-if v1.0.4
+   Compiling find-msvc-tools v0.1.10
+   Compiling stable_deref_trait v1.2.1
+   Compiling crossbeam-epoch v0.9.20
+   Compiling hashbrown v0.17.1
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.36 (/lane/wolf-lang/crates/wolf_diag)
+   Compiling crossbeam-deque v0.8.7
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling cpufeatures v0.3.0
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling wolf_lex v0.2.36 (/lane/wolf-lang/crates/wolf_lex)
+   Compiling smallvec v1.15.2
+   Compiling cranelift-srcgen v0.134.3
+   Compiling blake3 v1.8.6
+   Compiling rayon-core v1.13.0
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling wolf_ast v0.2.36 (/lane/wolf-lang/crates/wolf_ast)
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling zerofrom v0.1.8
+   Compiling libm v0.2.16
+   Compiling wolf_parse v0.2.36 (/lane/wolf-lang/crates/wolf_parse)
+   Compiling yoke v0.8.3
+   Compiling either v1.17.0
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling indexmap v2.14.0
+   Compiling zerovec v0.11.6
+   Compiling tinystr v0.8.3
+   Compiling rayon v1.12.0
+   Compiling cranelift-isle v0.134.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling utf8_iter v1.0.4
+   Compiling heck v0.5.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling fnv v1.0.7
+   Compiling log v0.4.33
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.189
+   Compiling hashbrown v0.16.1
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling icu_properties_data v2.2.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling icu_collections v2.2.0
+   Compiling wolf_sema v0.2.36 (/lane/wolf-lang/crates/wolf_sema)
+   Compiling gimli v0.33.0
+   Compiling icu_provider v2.2.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling memchr v2.8.3
+   Compiling target-lexicon v0.13.5
+   Compiling allocator-api2 v0.2.21
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling arbitrary v1.4.2
+   Compiling serde v1.0.229
+   Compiling rustc-hash v2.1.3
+   Compiling zmij v1.0.23
+   Compiling cranelift-control v0.134.3
+   Compiling cranelift-codegen v0.134.3
+   Compiling regalloc2 v0.15.2
+   Compiling icu_properties v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling icu_normalizer v2.2.0
+   Compiling serde_derive v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling anyhow v1.0.104
+   Compiling crc32fast v1.5.0
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.36 (/lane/wolf-lang/crates/wolf_mem)
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+     --> crates/wolf_mem/src/ubcheck.rs:16796:40
+      |
+16796 |                 ts.tv_sec = s as libc::time_t;
+      |                                        ^^^^^^
+      |
+      = note: `#[warn(deprecated)]` on by default
+
+   Compiling percent-encoding v2.3.2
+   Compiling itoa v1.0.18
+   Compiling object v0.39.1
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/lane/wolf-lang/crates/wolf_fmt)
+   Compiling wolf_query v0.2.36 (/lane/wolf-lang/crates/wolf_query)
+   Compiling wolf_wir v0.2.36 (/lane/wolf-lang/crates/wolf_wir)
+   Compiling url v2.5.8
+   Compiling wolf_rt v0.2.36 (/lane/wolf-lang/crates/wolf_rt)
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+   --> crates/wolf_rt/src/fs_change.rs:275:40
+    |
+275 |                 ts.tv_sec = s as libc::time_t;
+    |                                        ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+   Compiling wolf_backend v0.2.36 (/lane/wolf-lang/crates/wolf_backend)
+   Compiling serde_repr v0.1.21
+   Compiling wolf_cimport v0.2.36 (/lane/wolf-lang/crates/wolf_cimport)
+   Compiling crossbeam-channel v0.5.16
+   Compiling cranelift-module v0.134.3
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+warning: `wolf_rt` (lib) generated 1 warning
+   Compiling cranelift-object v0.134.3
+   Compiling lsp-server v0.10.0
+   Compiling cranelift-frontend v0.134.3
+   Compiling wolf_codegen_clif v0.2.36 (/lane/wolf-lang/crates/wolf_codegen_clif)
+   Compiling wolf_lsp v0.2.36 (/lane/wolf-lang/crates/wolf_lsp)
+   Compiling wolf_codegen_llvm v0.2.36 (/lane/wolf-lang/crates/wolf_codegen_llvm)
+   Compiling wolf_pkg v0.2.36 (/lane/wolf-lang/crates/wolf_pkg)
+warning: `wolf_mem` (lib) generated 1 warning
+   Compiling wolf_doc v0.2.36 (/lane/wolf-lang/crates/wolf_doc)
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 53s
+dist-rt: 2283 undefined symbol(s), none of open64, fstat64, stat64, lseek64
+dist-rt: target/dist/wolf-rt-0.2.36-x86_64-unknown-linux-musl.tar.gz
+dist-rt: libwolf_rt.a sha256 6892dac8a6e211f12c6823c0f19497d820a47fdbfe7fb569cd967acf86461aad (46700882 bytes)
+dist-rt: wolf-rt-0.2.36-x86_64-unknown-linux-musl.tar.gz sha256 59ed75e50500f1f53c59c3237415e52b599dac492c783f9e793cb6372f44e3d0
+dist-rt: the release body's section is target/dist/wolf-rt-0.2.36-x86_64-unknown-linux-musl.notes.md
+== STEP dist-rt EXIT 0 2026-10-28T23:32:00Z
+6892dac8a6e211f12c6823c0f19497d820a47fdbfe7fb569cd967acf86461aad  /lane/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+6892dac8a6e211f12c6823c0f19497d820a47fdbfe7fb569cd967acf86461aad  /lane/wolf-lang/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+
+== STEP clef 2026-10-28T23:32:00Z
+Cloning into '/lane/wolf-lang/target/test-clef'...
+HEAD is now at 996a3cc Record the final strict assembler gauntlet
+wolf: 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a verified twice
+lupin: ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc verified twice
+d63bbcf45f1f319ce173c0efff734c17e8bc26e794170aa391ff8ca2ebe6456c  /lane/wolf-lang/target/test-clef/target/clef
+d63bbcf45f1f319ce173c0efff734c17e8bc26e794170aa391ff8ca2ebe6456c  /lane/wolf-lang/target/test-clef/target/clef
+== STEP clef EXIT 0 2026-10-28T23:33:00Z
+
+== STEP ligature 2026-10-28T23:33:00Z
+Cloning into '/lane/wolf-lang/target/test-ligature'...
+HEAD is now at 3f20641 Record final source gate and same-input provenance control
+af5a2d3a82831b51451070e0f7504b99afeed08a67f24972857b4a0984602ce7  /lane/wolf-lang/target/test-ligature/target/ligature
+af5a2d3a82831b51451070e0f7504b99afeed08a67f24972857b4a0984602ce7  /lane/wolf-lang/target/test-ligature/target/ligature
+== STEP ligature EXIT 0 2026-10-28T23:33:06Z
+
+== STEP xtask-ci 2026-10-28T23:33:06Z
+== xtask ci: fmt
+== xtask ci: fmt-fixpoint
+fmt-fixpoint: 1313 file(s) formatted twice — 1235 corpus, 55 std (wolf-std 78b9d3cbc4), 23 fmt regressions, 0 named — every one a fixed point
+== xtask ci: clippy
+    Checking wolf_mem v0.2.36 (/lane/wolf-lang/crates/wolf_mem)
+[... lines 191-7139 elided: the passing steps; the full log is /home/mfwolffe/lanes/s270b/logs/gauntlet.log on hasu as of 2026-10-29T00:05Z ...]
+
+thread 'corpus_token_streams' (339736) panicked at /lane/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/insta-1.48.0/src/runtime.rs:719:13:
+snapshot assertion for 'memory__region_outer_write_push_copy_call' failed in line 41
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p wolf_lex --test corpus_snapshots`
+"half"
+────────────┴───────────────────────────────────────────────────────────────────
+To update snapshots run `cargo insta review`
+Stopped on the first failure. Run `cargo insta test` to run all snapshots.
+test corpus_token_streams ... FAILED
+
+failures:
+
+failures:
+    corpus_token_streams
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+xtask ci: step `test` failed
+== STEP xtask-ci EXIT 1 2026-10-29T00:05:16Z
+
+XTASK_CI_EXIT 1
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_copy_call.snap.new
+s270b GAUNTLET END 2026-10-29T00:05:16Z exit=1
+s270b gauntlet released block A 2026-10-29T00:05:17Z rc=1
+s270b GAUNTLET JOB end 2026-10-29T00:05:17Z exit 1

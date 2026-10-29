@@ -1,0 +1,47 @@
+s270b plant acquired block A 2026-10-28T23:28:31Z
+s270b PLANT 2026-10-28T23:28:32Z head=7abecf49cfe710a838292326d9c6869a6dcc7407
+7abecf49 PLANT (s270b, do not merge): mint a plain push's copy in the list's own region
+dc9eee84 Describe s270b under Unreleased in the CHANGELOG
+e03dbbd7 region_outer_write_lanes: the #948 rows on every machine, lupin's column pinned
+PLANT rustfmt rc=0
+PLANT outer-write rc=101
+thread 'a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store' (2003) panicked at crates/wolf_driver/tests/region_outer_write_lanes.rs:233:9:
+test a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store ... FAILED
+test a_copied_str_pushed_into_an_outer_list_is_materialized_there ... ok
+test a_copied_struct_holding_a_list_and_a_str_is_deep_copied_into_the_outer_region ... ok
+test a_field_copied_through_a_mut_parameter_lands_in_the_entry_ambient ... ok
+test a_map_store_copies_its_key_and_value_into_the_map_region ... ok
+test a_plain_field_store_of_a_block_value_is_refused_naming_copy ... ok
+test a_clean_callee_runs_inside_the_turn_region ... ok
+thread 'a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy' (4865) panicked at crates/wolf_driver/tests/region_outer_write_lanes.rs:233:9:
+test a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy ... FAILED
+thread 'a_plain_push_copies_an_outer_list_into_the_block_and_is_refused' (4863) panicked at crates/wolf_driver/tests/region_outer_write_lanes.rs:233:9:
+test a_plain_push_copies_an_outer_list_into_the_block_and_is_refused ... FAILED
+test a_plain_str_push_into_an_outer_list_is_refused_naming_copy ... ok
+test an_index_store_with_copy_materializes_the_element ... ok
+test a_scalar_store_and_push_into_an_outer_value_keep_nothing_of_the_block ... ok
+test an_unclean_callee_is_refused_naming_its_store ... ok
+test list_reserve_grows_the_capacity_and_nothing_else ... ok
+test list_reset_empties_and_keeps_the_buffer ... ok
+test the_copy_pin_names_only_the_measured_release_records ... ok
+test the_ledger_charges_the_copies_to_the_outer_region ... ok
+test reset_then_pushes_rebuild_a_long_lived_list_inside_the_turn ... ok
+test the_repaired_heap_answers_just_over_the_threshold ... ok
+test the_repaired_heap_answers_just_under_the_threshold ... ok
+test the_repaired_heap_answers_the_issues_one_kib_control ... ok
+test the_rewritten_stand_in_still_refuses_and_names_the_callee ... ok
+test the_turn_region_runs_flat_on_the_native_tier ... ok
+test the_turn_region_runs_flat_on_the_release_tier ... ok
+test the_repaired_allocator_called_in_the_block_answers_at_the_issues_size ... ok
+test result: FAILED. 22 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.74s
+PLANT corpus rc=1
+corpus: corpus/memory/region_outer_write_push_heap.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_heap_call.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_plain_copy.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_heap.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_heap_call.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: corpus/memory/region_outer_write_push_plain_copy.lu: header claims phase `typecheck` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+corpus: 1235 file(s), 3 bad — phase ledger enforced via conform-run
+corpus: fail-pin ledger: 382 rule(s) the compiler enforces, 3 forward pin(s) it does not implement yet
+s270b PLANT DONE 2026-10-28T23:29:53Z
+s270b plant released block A 2026-10-28T23:29:53Z rc=0

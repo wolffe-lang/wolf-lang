@@ -1,0 +1,61 @@
+   Compiling wolf_driver v0.2.36 (/lane/plant/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.26s
+     Running tests/region_outer_write_lanes.rs (target/debug/deps/region_outer_write_lanes-ae1784001129ad00)
+
+running 25 tests
+
+thread 'a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store' (2003) panicked at crates/wolf_driver/tests/region_outer_write_lanes.rs:233:9:
+assertion `left == right` failed: memory/region_outer_write_push_heap_call.lu on --checked: yew's heap at its smallest: the plain push copies the slot in the block, so alloc's parameter is not ambient-clean
+  left: "exit(0)"
+ right: "fail(E1010)"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store ... FAILED
+test a_copied_str_pushed_into_an_outer_list_is_materialized_there ... ok
+test a_copied_struct_holding_a_list_and_a_str_is_deep_copied_into_the_outer_region ... ok
+test a_field_copied_through_a_mut_parameter_lands_in_the_entry_ambient ... ok
+test a_map_store_copies_its_key_and_value_into_the_map_region ... ok
+test a_plain_field_store_of_a_block_value_is_refused_naming_copy ... ok
+test a_clean_callee_runs_inside_the_turn_region ... ok
+
+thread 'a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy' (4865) panicked at crates/wolf_driver/tests/region_outer_write_lanes.rs:233:9:
+assertion `left == right` failed: memory/region_outer_write_push_heap.lu on --checked: the same store in the block: the slot's List header is the block's
+  left: "exit(0)"
+ right: "fail(E1010)"
+test a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy ... FAILED
+
+thread 'a_plain_push_copies_an_outer_list_into_the_block_and_is_refused' (4863) panicked at crates/wolf_driver/tests/region_outer_write_lanes.rs:233:9:
+assertion `left == right` failed: memory/region_outer_write_push_plain_copy.lu on --checked: x is built outside the block, but the push's copy of it is made inside: native and release read the next region's list through the freed header
+  left: "exit(0)"
+ right: "fail(E1010)"
+test a_plain_push_copies_an_outer_list_into_the_block_and_is_refused ... FAILED
+test a_plain_str_push_into_an_outer_list_is_refused_naming_copy ... ok
+test an_index_store_with_copy_materializes_the_element ... ok
+test a_scalar_store_and_push_into_an_outer_value_keep_nothing_of_the_block ... ok
+test an_unclean_callee_is_refused_naming_its_store ... ok
+test list_reserve_grows_the_capacity_and_nothing_else ... ok
+test list_reset_empties_and_keeps_the_buffer ... ok
+test the_copy_pin_names_only_the_measured_release_records ... ok
+test the_ledger_charges_the_copies_to_the_outer_region ... ok
+test reset_then_pushes_rebuild_a_long_lived_list_inside_the_turn ... ok
+test the_repaired_heap_answers_just_over_the_threshold ... ok
+test the_repaired_heap_answers_just_under_the_threshold ... ok
+test the_repaired_heap_answers_the_issues_one_kib_control ... ok
+test the_rewritten_stand_in_still_refuses_and_names_the_callee ... ok
+REPORT outer-write native region: 100000 turns 3168 KB, 200000 turns 3168 KB, 0 B a turn
+REPORT outer-write native none: 100000 turns 4908 KB, 200000 turns 8080 KB, 32 B a turn
+test the_turn_region_runs_flat_on_the_native_tier ... ok
+REPORT outer-write release region: 100000 turns 3168 KB, 200000 turns 3168 KB, 0 B a turn
+REPORT outer-write release none: 100000 turns 5060 KB, 200000 turns 8284 KB, 33 B a turn
+test the_turn_region_runs_flat_on_the_release_tier ... ok
+test the_repaired_allocator_called_in_the_block_answers_at_the_issues_size ... ok
+
+failures:
+
+failures:
+    a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store
+    a_plain_push_copies_an_outer_list_into_the_block_and_is_refused
+    a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy
+
+test result: FAILED. 22 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.74s
+
+error: test failed, to rerun pass `-p wolf_driver --test region_outer_write_lanes`
