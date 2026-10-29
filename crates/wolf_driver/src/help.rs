@@ -146,7 +146,7 @@ exit code is the program's.",
         summary: "discover and run `*_test.lu` files",
         usage: &[
             "test [<dir>|<file.lu>]… [--std-root <dir>] [--deny-warnings]",
-            "[--error-limit=N] [--json] [--nocapture] [--no-native-fallback]",
+            "[--error-limit=N] [--json] [--nocapture] [--no-native-fallback] [--native|--release]",
             "[-q|--quiet] [--timings|--timings=json:<file>]",
         ],
         about: "\
@@ -160,7 +160,14 @@ compiler rejected the file, so it never ran) or `unsupported` (the
 checked machine refused a construct). Exit codes: 0 every test passed,
 1 any row was not `ok`, 2 a usage or environment error.
 
-Tests run on the checked machine. A `main` test it refuses (a budget, a
+Tests run on the checked machine by default. `--native` and `--release`
+select a compiled tier for every test, including `test_*` functions;
+they cannot combine with scheduling flags or `--no-native-fallback`.
+Assertion failures print their message and site after `FAILED`, and an
+equality condition prints both already-evaluated values. `--json` keeps
+these in the optional `assertion` object; passing output is unchanged.
+
+A `main` test the checked machine refuses (a budget, a
 construct outside its surface) runs once natively instead, and its row
 says so: `ok [native: step budget exhausted]`, counted in the summary
 (`N passed, M of them native`) and still a pass; `--no-native-fallback`
@@ -180,7 +187,9 @@ its test event stream; timing JSON goes only to the requested file.",
         about: "\
 Files and directories (recursing into `*.lu`) are rewritten in place;
 `-` formats stdin to stdout; `--check` rewrites nothing and exits
-nonzero listing what is not canonical. There are no other options,
+nonzero listing what is not canonical. Both modes report parser errors
+and exit nonzero on invalid source; write mode can still format clean
+parts of a damaged file. There are no other options,
 deliberately (D34): the style is fixed by the specification, not
 configured per project.",
     },
@@ -193,7 +202,9 @@ configured per project.",
 Dry-run by default: it lists every edit it would make and exits 1, so
 nothing is rewritten behind your back. `--apply` performs them. Only
 suggestions the compiler marked machine-applicable are candidates —
-one that needs a human eye is reported and left alone.",
+one that needs a human eye is reported with its site and left alone.
+The exit is nonzero while the file does not compile, including after
+`--apply`: writing an edit is not a successful recheck.",
     },
     Cmd {
         name: "doc",
