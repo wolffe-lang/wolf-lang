@@ -11,8 +11,7 @@ fn a_lend_refusal_keeps_exit_four_and_has_a_code_and_site() {
     sources.add(file, "lend.lu", src.as_bytes());
     let lo = src.rfind("view").unwrap() as u32;
     let span = wolf_span::Span::new(file, lo, lo + 4);
-    let reason =
-        "a lent `bytes()` view in a value position (bind it with `let` to materialize, s89)";
+    let reason = "a lent `bytes()` view in a value position (bind it with `let` to materialize)";
     if std::env::var_os(CHILD).is_some() {
         report_build_stop(
             "build",

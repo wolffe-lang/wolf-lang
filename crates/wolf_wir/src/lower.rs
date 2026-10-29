@@ -5803,7 +5803,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // path a `Lendable` body can take.
                     Some(LocalBind::BytesView { .. }) => Err(refuse(
                         "a lent `bytes()` view in a value position (bind it with `let` \
-                         to materialize, s89)",
+                         to materialize)",
                         e.span,
                     )),
                     // s73: a `when` payload read — through the held
@@ -7497,7 +7497,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Some(LocalBind::BytesView { .. }) => {
                 return Err(refuse(
                     "a lent `bytes()` view captured by a task (bind it with `let` \
-                     to materialize, s89)",
+                     to materialize)",
                     span,
                 ));
             }

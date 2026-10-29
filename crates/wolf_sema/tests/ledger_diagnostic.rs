@@ -11,8 +11,7 @@ fn lent_value_refusal_has_a_reviewed_source_site_and_fix_pattern() {
     let mut sources = Sources::new();
     sources.add(file, "lend.lu", src.as_bytes());
     let lo = src.rfind("view").unwrap() as u32;
-    let construct =
-        "a lent `bytes()` view in a value position (bind it with `let` to materialize, s89)";
+    let construct = "a lent `bytes()` view in a value position (bind it with `let` to materialize)";
     let diag = wolf_sema::ledger_diagnostic(construct, Span::new(file, lo, lo + 4)).unwrap();
     assert_eq!(diag.code.as_str(), "E1016");
     insta::assert_snapshot!(
@@ -21,7 +20,7 @@ fn lent_value_refusal_has_a_reviewed_source_site_and_fix_pattern() {
     );
     for construct in [
         "assignment to a lent `bytes()` view (a byte view is read-only)",
-        "a lent `bytes()` view captured by a task (bind it with `let` to materialize, s89)",
+        "a lent `bytes()` view captured by a task (bind it with `let` to materialize)",
     ] {
         assert!(wolf_sema::ledger_diagnostic(construct, Span::new(file, lo, lo + 4)).is_some());
     }
