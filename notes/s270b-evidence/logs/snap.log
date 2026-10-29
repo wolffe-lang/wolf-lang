@@ -1,0 +1,45 @@
+s270b snap acquired block A 2026-10-29T01:26:20Z
+s270b SNAP 2026-10-29T01:26:20Z head=0ffb09a8a5c1d63ebb197b25eff6195b8ae9701e
+SNAP write wolf_lex/corpus_snapshots rc=0
+SNAP write wolf_parse/corpus_decls rc=0
+SNAP write wolf_wir/lower_corpus rc=0
+--- changed paths
+ M crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_copy_call.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_copy_control.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_copy_over.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_copy_under.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_heap.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_heap_call.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_push_plain_copy.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_copy_call.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_copy_control.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_copy_over.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_copy_under.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_heap.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_heap_call.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__memory__region_outer_write_push_plain_copy.snap
+--- tracked diff
+diff --git a/crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap b/crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap
+index 38528682..c0f68217 100644
+--- a/crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap
++++ b/crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap
+@@ -703,6 +703,13 @@ memory/region_outer_write_charged.lu: lowers
+ memory/region_outer_write_field.lu: lowers
+ memory/region_outer_write_index.lu: lowers
+ memory/region_outer_write_map.lu: lowers
++memory/region_outer_write_push_copy_call.lu: lowers
++memory/region_outer_write_push_copy_control.lu: lowers
++memory/region_outer_write_push_copy_over.lu: lowers
++memory/region_outer_write_push_copy_under.lu: lowers
++memory/region_outer_write_push_heap.lu: not mem-clean (pre-wir rungs own it)
++memory/region_outer_write_push_heap_call.lu: not mem-clean (pre-wir rungs own it)
++memory/region_outer_write_push_plain_copy.lu: not mem-clean (pre-wir rungs own it)
+ memory/region_outer_write_refused.lu: not mem-clean (pre-wir rungs own it)
+ memory/region_outer_write_refused_field.lu: not mem-clean (pre-wir rungs own it)
+ memory/region_outer_write_reset.lu: lowers
+SNAP check wolf_lex/corpus_snapshots rc=0
+SNAP check wolf_parse/corpus_decls rc=0
+SNAP check wolf_wir/lower_corpus rc=0
+s270b SNAP DONE 2026-10-29T01:27:03Z
+s270b snap released block A 2026-10-29T01:27:03Z rc=0
