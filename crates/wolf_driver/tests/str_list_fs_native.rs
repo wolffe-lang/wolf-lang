@@ -852,6 +852,10 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s261 (#899, #406): the name and all byte arguments.
         "__wolf_rt_env_arg0",
         "__wolf_rt_env_args_bytes",
+        // s271 (#970, #958): a failing test assertion's message and
+        // compared values, retained for the trap report.
+        "__wolf_rt_assert_buf",
+        "__wolf_rt_assert_detail",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -862,7 +866,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        255,
+        257,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
