@@ -18,7 +18,15 @@ s270's and the other lanes' containers printed a line a minute), in rootless pod
 `--memory 12g --pids-limit 16384 --ulimit nproc=32768:32768`, a foreign pid 1 (`--init`, the test
 command dropped to uid 1000) and r41's disposition-neutral taskset shim. No `CARGO_TARGET_DIR`
 outside a checkout; `CARGO_INCREMENTAL=0`. Git and `gh` on the Mac worktree only. Nothing of the
-maintainer's touched. No attribution trailers.
+maintainer's touched. No attribution trailers. One slip, named: resolving the rebase's
+`CHANGELOG.md` conflict I ran a short Python heredoc inside a compound Bash call on the Mac (the
+brief says files by the Write tool); it touched that one file, and the result is the commit
+`1b197c3e`.
+
+**Footprint: cross-cutting**, as lane-audit's path map reads the diff — not for `wolf_mem` (no
+rule names it) but for `crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap`,
+whose `crates/wolf_wir/` prefix the map files under codegen. No `wolf_wir` source changed; the
+seven added lines are the corpus ledger's. The orchestrator labels `full-matrix`.
 
 ## Inputs, verified
 
@@ -43,7 +51,7 @@ maintainer's touched. No attribution trailers.
 
 ## Prediction
 
-Committed before the first change as `cead26d0` (`notes/s270b-evidence/prediction.txt`): not a
+Committed before the first change as `3b6defb9` (`cead26d0` before the rebase onto `d2753b48`) (`notes/s270b-evidence/prediction.txt`): not a
 large-value path, not a byte threshold, but the memory check — s255 put a builtin `push`'s call
 site in the list's own region, and nothing stood for the element the push stores, the copy
 wolf-lang#385 makes in the ambient region. Hits and misses at the end.
@@ -132,7 +140,7 @@ judged ambient-clean.
 
 ## 4. The fix
 
-`wolf_mem/src/lower.rs` (`51113ec0`): a builtin store's element passed plainly (not `take`, not a
+`wolf_mem/src/lower.rs` (`80ab360d`): a builtin store's element passed plainly (not `take`, not a
 `copy` aimed at an outer container) whose copy reaches the heap — `copy_reaches_heap`, the mirror of
 `wolf_wir`'s predicate `deep_copy_in` asks — gives the receiver a second site, minted in the AMBIENT
 region and held beside s255's growth site. The block's close then refuses it (E1010 naming the
@@ -177,8 +185,9 @@ mirror).
 
 ## 6. The plant
 
-Branch `s270b-plant-copy-in-list-region`, draft PR #994, built off the line: the code head `dc9eee84`
-plus one deliberate break the fix never contains (`7abecf49`) — the copy a plain `push` makes is
+Branch `s270b-plant-copy-in-list-region`, draft PR #994, built off the line: first the code head
+`dc9eee84` plus one deliberate break the fix never contains (`7abecf49`) — the copy a plain `push`
+makes is
 minted in the list's own region, where s255 put the growth, instead of the ambient region: the model
 that admitted #948. Run locally on hasu block A at `7abecf49` (`logs/plant.log`,
 `logs/plant-outer-write.log`, `logs/plant-corpus.log`), red by name:
@@ -193,7 +202,10 @@ that admitted #948. Run locally on hasu block A at `7abecf49` (`logs/plant.log`,
   `_push_plain_copy.lu`: "header claims phase `typecheck` but deepest passing phase is `wir`".
 - rustfmt clean, so the plant's red is the rows', not a format step's.
 
-The plant's CI run: TBD (read once).
+GitHub made no pull_request run for `7abecf49`: built on the pre-rebase line, it conflicted with
+trunk's `CHANGELOG.md`. The plant was rebuilt as the same one-hunk break on the rebased code head
+`0fcc8634` (`80fe4534`, force-pushed with lease); its CI run, read once at 2026-10-29T01:31Z: `40800792876`
+(pull_request, `in_progress`). Not waited on.
 
 ## 7. The differ and the census
 
@@ -236,7 +248,7 @@ or aspen file.
 
 ## 8. The gauntlet
 
-**First run, at `822b236c` (red, kept):** chain2 on hasu block A, 2026-10-28T23:29Z–00:05Z
+**First run, at the pre-rebase head `822b236c` (red, kept):** chain2 on hasu block A, 2026-10-28T23:29Z–00:05Z
 (`logs/chain2.log`, `logs/gauntlet-822b236c.log`, trimmed to the header and the failure). build,
 dist-rt, clef and ligature green; `cargo xtask ci` exit 1 at `test`: `wolf_lex`
 `corpus_snapshots::corpus_token_streams` — "snapshot assertion for
@@ -247,8 +259,19 @@ snapshot. Every suite that walks the corpus snapshots each row (`wolf_lex` `corp
 (`logs/ws-test-822b236c.log`, 2026-10-29T00:44Z–01:15Z): **exactly three red binaries** —
 `-p wolf_lex --test corpus_snapshots`, `-p wolf_parse --test corpus_decls`, `-p wolf_wir --test
 lower_corpus` (`corpus_lowering_ledger`, whose diff is the seven rows' seven lines and nothing
-else) — and every other test binary green (339 `test result: ok`). TBD: the snapshots, generated
-after the rebase onto s270's merge, and the gauntlet at that head.
+else) — and every other test binary green (339 `test result: ok`).
+
+**The rebase and the snapshots.** s270 (#992) merged as trunk `d2753b48`; the line was rebased onto
+it once (one conflict, `CHANGELOG.md`'s Unreleased list: trunk's entry kept, s270b's after it; trunk
+touched no `wolf_mem` file). At the rebased head `0ffb09a8`, in the container, insta wrote the
+seven rows' snapshots (`INSTA_UPDATE=always`) and a second pass read them back with
+`INSTA_UPDATE=no`, all three suites green (`logs/snap.log`). The diff is exactly the seven rows: 7
+new `wolf_lex` token-stream files, 7 new `wolf_parse` declaration files, and 7 added lines in
+`lower_corpus__corpus_lowering_ledger.snap` (four `lowers`, three `not mem-clean (pre-wir rungs own
+it)`) between `region_outer_write_map.lu` and `region_outer_write_refused.lu`; no other line of any
+snapshot moved. One commit, `0fcc8634`.
+
+**Second run, at `0fcc8634`:** TBD.
 
 **Which tree each step ran on.** chain2's move to the pushed head printed git's refusal (lines 4–17
 of `logs/chain2.log`): the hasu clone still held my working copies of `crates/wolf_mem/src/lower.rs`
@@ -298,7 +321,7 @@ noise of the order the copies and the commits were made in.
 
 All under `notes/s270b-evidence/` unless named.
 
-- `prediction.txt` — the prediction, committed `cead26d0` before the first change.
+- `prediction.txt` — the prediction, committed `3b6defb9` (`cead26d0` pre-rebase) before the first change.
 - `records/repro-1.jsonl`, `logs/repro-1.log` — yew's witness on all four machines at trunk and on
   wolf 0.2.35, six (bytes, elements) pairs.
 - `records/sweep-1024.jsonl` — the list-length sweep on native, 0.2.35 and the base.
@@ -321,4 +344,30 @@ All under `notes/s270b-evidence/` unless named.
 
 ## Done-when
 
-TBD
+Commits on trunk `d2753b48`:
+
+- `3b6defb9` the prediction, before the first change
+- `80ab360d` wolf_mem: hold the copy a plain push makes in the ambient region (the fix)
+- `ebe90339` corpus: the three refusals; `3becd0c6` corpus: the four run rows
+- `681babfe` region_outer_write_lanes: the seven rows on every machine, lupin's column pinned
+- `1b197c3e` CHANGELOG, Unreleased
+- `4b7a904a`, `75b18245`, `7009d4a6` evidence; `bba9d9fc`, `c416337c`, `0ffb09a8` and the closing
+  note commit(s): this note
+- `0fcc8634` the seven rows' snapshots in the three corpus-walking suites
+
+Checklist:
+
+- [x] Reproduced on all four machines at trunk `5adf3d91` and on wolf 0.2.35 (section 1).
+- [x] Threshold bisected: none in bytes; the list's 16/17 (and 24/25) at 0.2.35; trunk's `bounds`
+      is the dev build's runtime (section 2).
+- [x] Reduced outside yew, with what it needed (section 2); the machine that is wrong decided from
+      `[mem.region.outer-write]`, `[mem.region.edge.elem]`, `[mem.region.escape]` (section 3).
+- [x] Fixed at its cause in `wolf_mem` (section 4); yew's witness E1010, its one-word repair runs.
+- [x] Rows: the reduced program, both sides of the threshold, the 1 KiB control, the issue's size,
+      on checked, native, release and lupin (section 5).
+- [x] Plant red locally by name (section 6); draft PR #994, its run read once.
+- [x] Differ over the corpus, three tiers: only the new refusals move (section 7).
+- [x] Downstream census: two moves, both this bug as reported before (section 7).
+- [x] `cargo test --workspace --no-fail-fast` at `822b236c`: exactly the three snapshot binaries red.
+- [ ] Full gauntlet at `0fcc8634`: TBD.
+- [x] README read, current. No spec edit; no issue filed or closed; no label.
