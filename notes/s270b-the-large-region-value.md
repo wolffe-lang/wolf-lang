@@ -13,8 +13,8 @@ runtime, codegen, loader, CI or pin change: the fix is one rule in `wolf_mem`, t
 every compiling machine shares. No merge, tag, release, label, issue filed or closed. No third-party
 source read: yew is the maintainer's own (read-only, a fresh clone at `bf7ab4a3`); the runtime and
 compiler read are this repo's. Builds and runs on hasu block A only, every run under
-`flock /home/mfwolffe/lanes/hasu-block-A.lock` taken per run (no lock held idle; one wait of
-TBD behind s270's gauntlet, printed every minute), in rootless podman with `localhost/r41-toolchain:1`,
+`flock /home/mfwolffe/lanes/hasu-block-A.lock` taken per run (no lock held idle; every wait behind
+s270's and the other lanes' containers printed a line a minute), in rootless podman with `localhost/r41-toolchain:1`,
 `--memory 12g --pids-limit 16384 --ulimit nproc=32768:32768`, a foreign pid 1 (`--init`, the test
 command dropped to uid 1000) and r41's disposition-neutral taskset shim. No `CARGO_TARGET_DIR`
 outside a checkout; `CARGO_INCREMENTAL=0`. Git and `gh` on the Mac worktree only. Nothing of the
@@ -177,7 +177,23 @@ mirror).
 
 ## 6. The plant
 
-TBD
+Branch `s270b-plant-copy-in-list-region`, draft PR #994, built off the line: the code head `dc9eee84`
+plus one deliberate break the fix never contains (`7abecf49`) — the copy a plain `push` makes is
+minted in the list's own region, where s255 put the growth, instead of the ambient region: the model
+that admitted #948. Run locally on hasu block A at `7abecf49` (`logs/plant.log`,
+`logs/plant-outer-write.log`, `logs/plant-corpus.log`), red by name:
+
+- `region_outer_write_lanes`: `test result: FAILED. 22 passed; 3 failed` — exactly the three #948
+  refusals, each at `region_outer_write_lanes.rs:233` "`… on --checked`" (the row's verdict is not
+  `fail(E1010)`): `a_callee_pushing_a_slot_it_builds_into_the_heap_is_refused_naming_its_store`,
+  `a_plain_push_of_a_block_built_slot_into_an_outer_list_is_refused_naming_copy`,
+  `a_plain_push_copies_an_outer_list_into_the_block_and_is_refused`. The four run rows and every
+  s255 row stay green.
+- `cargo xtask corpus`: `3 bad` — `memory/region_outer_write_push_heap.lu`, `_push_heap_call.lu` and
+  `_push_plain_copy.lu`: "header claims phase `typecheck` but deepest passing phase is `wir`".
+- rustfmt clean, so the plant's red is the rows', not a format step's.
+
+The plant's CI run: TBD (read once).
 
 ## 7. The differ and the census
 
@@ -210,14 +226,43 @@ this bug reported downstream before**:
   #919 blamed `reserve()` inside the region; the runtime grows a list in its birth region, and what
   put the rows' lists in the block is `(mut pool.spare).push(row)` and `(mut pool.items).push(row)`
   — two plain pushes of a `Row` in `refill_inside`, called inside `region scratch { }`. Same cause.
-  TBD: the `take` repair measured (`probes/f/`).
+  The repair is `take` at those two pushes (`probes/f/f2_reuse_row_move_take.lu`): no copy, so the
+  rows' lists stay where the pool made them; at the head `refill_inside`'s `pool` is clean and the
+  program prints `two-list row refill: PASS` on checked, native, release and lupin
+  (`records/probe-f-head.jsonl`), while the unrepaired `f1` is E1010 on the three compilers.
 
 Nothing else moved in any repository: no wolf-std module, no boreutils utility, no lobo, pelt, scent
 or aspen file.
 
 ## 8. The gauntlet
 
-TBD
+**First run, at `822b236c` (red, kept):** chain2 on hasu block A, 2026-10-28T23:29Z–00:05Z
+(`logs/chain2.log`, `logs/gauntlet-822b236c.log`, trimmed to the header and the failure). build,
+dist-rt, clef and ligature green; `cargo xtask ci` exit 1 at `test`: `wolf_lex`
+`corpus_snapshots::corpus_token_streams` — "snapshot assertion for
+'memory__region_outer_write_push_copy_call' failed", a new corpus row with no token-stream
+snapshot. Every suite that walks the corpus snapshots each row (`wolf_lex` `corpus_snapshots`,
+`wolf_parse` `corpus_decls`, `wolf_wir` `lower_corpus`'s ledger); the seven rows had none. Then
+`cargo test --workspace --no-fail-fast` once at `822b236c` with `INSTA_UPDATE=no`
+(`logs/ws-test-822b236c.log`, 2026-10-29T00:44Z–01:15Z): **exactly three red binaries** —
+`-p wolf_lex --test corpus_snapshots`, `-p wolf_parse --test corpus_decls`, `-p wolf_wir --test
+lower_corpus` (`corpus_lowering_ledger`, whose diff is the seven rows' seven lines and nothing
+else) — and every other test binary green (339 `test result: ok`). TBD: the snapshots, generated
+after the rebase onto s270's merge, and the gauntlet at that head.
+
+**Which tree each step ran on.** chain2's move to the pushed head printed git's refusal (lines 4–17
+of `logs/chain2.log`): the hasu clone still held my working copies of `crates/wolf_mem/src/lower.rs`
+and `crates/wolf_driver/tests/region_outer_write_lanes.rs` (modified) and the seven corpus rows
+(untracked), copied there by `scp` for the focused checks before they were committed, so
+`git checkout -B s270b FETCH_HEAD` aborted. The next commands did the move: `git reset --hard
+FETCH_HEAD` (the branch was already `s270b`) replaced those nine paths with the committed bytes —
+the same bytes: `lower.rs` and the test hashed `84c3c97d…` and `b087d5d0…` on both machines before
+the commits, and the four run rows were committed from the copies `wolf fmt` wrote on hasu — and
+`git clean -fdq -e target` left nothing untracked. The script then checked the head (`822b236c`,
+the wanted sha) and printed an empty `git status`; the gauntlet's own header repeats both. The plant
+ran in its own clone (`/home/mfwolffe/lanes/s270b/plant`, `7abecf49`), and probe-f used the head
+compiler built from those same bytes, before the move. No step ran on a wrong tree; the refusal is
+noise of the order the copies and the commits were made in.
 
 ## Hits and misses
 
@@ -237,12 +282,17 @@ TBD
 ## Issues (none filed or closed here)
 
 - wolf-lang#948: this PR is its fix; the orchestrator closes it on the merge.
+- wolf-lang#919: the same cause (section 7); its witness is E1010 at the head and runs on every
+  machine with `push(take row)`. Recommended: close it with #948 after the merge, citing this note.
 - To file, wolf-interp: lupin 0.1.58 traps `region-fault` on `push(copy …)` through a `mut`
   parameter (`region_outer_write_push_copy_call.lu`, and yew's repaired witness): the clause makes
   that copy in the list's own region. And it runs `region_outer_write_push_plain_copy.lu` to exit(0)
   where the clause refuses the store (the push's copy is made in the block).
-- To file, yew: the scratch witness is E1010 now (G54); the repair is `push(copy fl_empty_slot())` in
-  `fl_gc_alloc`, with a census of yew's other region blocks below.
+- To file, yew: the scratch witnesses (`scratch-once`, `scratch-escape`) are E1010 now (G54); the
+  repair is `push(copy fl_empty_slot())` at `fl/gc.lu:123-124`. G50's `reuse-row-move` likewise
+  (`push(take row)`, #919). No other yew file moved in the census.
+- pax: px72's `region-witness.lu` is refused now, as its header asked; nothing to file beyond
+  telling px72's follow-on (its note asked for "verify and file separately").
 
 ## Evidence index
 
@@ -259,7 +309,14 @@ All under `notes/s270b-evidence/` unless named.
 - `probes/{a,b,c,d,e}/`, `records/probe-*.jsonl` — every probe on four machines (pre-fix files
   carry lupin's text record; later ones its JSON).
 - `records/rows2-{base,head}.jsonl` — the seven rows on the base and the head.
-- `records/yew-head.jsonl`, `records/yew-copy.jsonl` — the witness at the head, and repaired.
+- `records/yew-head.jsonl`, `records/yew-copy.jsonl`, `logs/yew-copy2.log` — the witness at the
+  head, and repaired, at seven sizes on the head, the base and 0.2.35.
+- `logs/census.log`, `records/census-heads.txt` — the downstream census (the full per-file record,
+  1.1 MB, stays on hasu: `/home/mfwolffe/lanes/s270b/records/census.jsonl`).
+- `logs/differ*.log`, `records/differ-*.exit` — the corpus control on three tiers.
+- `probes/f/`, `records/probe-f-head.jsonl`, `logs/probe-f.log` — #919's witness and its `take` repair.
+- `logs/plant*.log` — the plant's local red run; `logs/chain2.log`, `logs/gauntlet-822b236c.log` —
+  the first gauntlet (red at the missing snapshots).
 - `scripts/` — every script that produced the above, as run.
 
 ## Done-when
