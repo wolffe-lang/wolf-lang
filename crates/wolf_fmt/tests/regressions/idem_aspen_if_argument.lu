@@ -1,0 +1,24 @@
+// aspen#4, note section 6: a multi-line if as out.s's second argument.
+fn report() {
+    if options.duflag {
+        out.s(
+            mut target.o,
+            if options.humanflag || options.siflag {
+                " used in "
+            } else {
+                " bytes used in "
+            },
+        )
+    }
+}
+
+fn bare_argument() {
+    out.s(
+        mut target.o,
+        if options.humanflag || options.siflag {
+            "a long used-in label which cannot fit the call's remaining line"
+        } else {
+            "a long bytes-used-in label which must not move the receiver on pass two"
+        },
+    )
+}
