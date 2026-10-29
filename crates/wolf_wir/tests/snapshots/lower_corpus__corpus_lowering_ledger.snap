@@ -553,12 +553,14 @@ memory/mut_param_moveout_field.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_moveout_map.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_moveout_one_path.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_moveout_whole.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_replaced.lu: lowers
 memory/mut_param_restore_elem.lu: lowers
 memory/mut_param_restore_field.lu: lowers
 memory/mut_param_restore_map.lu: lowers
 memory/mut_param_restore_whole.lu: lowers
 memory/mut_place_nested.lu: lowers
 memory/mut_read_overlap.lu: lowers
+memory/mut_relay_push.lu: lowers
 memory/mut_two_fields_one_region.lu: lowers
 memory/nested_fn_mut_moveout.lu: not mem-clean (pre-wir rungs own it)
 memory/nested_fn_mut_omitted.lu: not mem-clean (pre-wir rungs own it)
@@ -913,6 +915,7 @@ rows/match_row_nested.lu: lowers
 rows/match_row_payload_tag.lu: lowers
 rows/match_row_try_scrutinee.lu: lowers
 rows/match_row_wild_each_half.lu: lowers
+rows/mixed_payload_display.lu: lowers
 rows/negative/ctor_arg_unresolved.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
@@ -1058,6 +1061,7 @@ typecheck/closure_module_to_module/main.lu: lowers
 typecheck/closure_param_call.lu: lowers
 typecheck/closure_return.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
+typecheck/enum_str_bare_choice.lu: lowers
 typecheck/enum_union_three.lu: lowers
 typecheck/enum_union_tree.lu: lowers
 typecheck/enum_union_two.lu: lowers
