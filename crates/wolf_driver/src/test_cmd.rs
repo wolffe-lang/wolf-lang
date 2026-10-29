@@ -177,6 +177,11 @@ impl Assertion {
                 }
             }
         }
+        // Deliberate plant: restore the trap-only assertion report.
+        result.message = None;
+        result.site = None;
+        result.left = None;
+        result.right = None;
         Some(result)
     }
 
