@@ -41,9 +41,11 @@ fn every_parser_counterexample_refuses_with_its_parser_codes() {
             .unwrap();
         let err = String::from_utf8_lossy(&out.stderr);
         assert_eq!(out.status.code(), Some(1), "{}: {err}", file.display());
+        // A pinned code can also appear in the source header shown by W0301.
+        // Require the error heading, not just that text somewhere in stderr.
         for d in errors {
             assert!(
-                err.contains(d.code.as_str()),
+                err.contains(&format!("error[{}]", d.code)),
                 "{}: missing {}: {err}",
                 file.display(),
                 d.code
@@ -79,7 +81,10 @@ fn parser_refusals_keep_their_codes_in_check_and_write_modes() {
             let out = cmd.arg(&path).output().unwrap();
             let err = String::from_utf8_lossy(&out.stderr);
             assert_eq!(out.status.code(), Some(1), "{file}, check={check}: {err}");
-            assert!(err.contains(code), "{file}, check={check}: {err}");
+            assert!(
+                err.contains(&format!("error[{code}]")),
+                "{file}, check={check}: {err}"
+            );
             assert!(
                 err.contains(file),
                 "the parser's site must be present: {err}"
