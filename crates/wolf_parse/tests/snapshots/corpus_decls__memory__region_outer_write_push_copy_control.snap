@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1173..1223 name=Val fields=3
+StructDecl 1225..1296 name=Slot fields=3
+StructDecl 1298..1366 name=Heap fields=3
+FnDecl 1368..1449 name=empty body=Block
+FnDecl 1451..1955 name=collect body=Block
+FnDecl 1957..2083 name=churn body=Block
+FnDecl 2085..2905 name=main body=Block

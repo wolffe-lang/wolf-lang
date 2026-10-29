@@ -703,6 +703,13 @@ memory/region_outer_write_charged.lu: lowers
 memory/region_outer_write_field.lu: lowers
 memory/region_outer_write_index.lu: lowers
 memory/region_outer_write_map.lu: lowers
+memory/region_outer_write_push_copy_call.lu: lowers
+memory/region_outer_write_push_copy_control.lu: lowers
+memory/region_outer_write_push_copy_over.lu: lowers
+memory/region_outer_write_push_copy_under.lu: lowers
+memory/region_outer_write_push_heap.lu: not mem-clean (pre-wir rungs own it)
+memory/region_outer_write_push_heap_call.lu: not mem-clean (pre-wir rungs own it)
+memory/region_outer_write_push_plain_copy.lu: not mem-clean (pre-wir rungs own it)
 memory/region_outer_write_refused.lu: not mem-clean (pre-wir rungs own it)
 memory/region_outer_write_refused_field.lu: not mem-clean (pre-wir rungs own it)
 memory/region_outer_write_reset.lu: lowers
