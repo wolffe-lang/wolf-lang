@@ -953,6 +953,8 @@ struct BuildOpts {
     /// test` never do — a record is reproducible from the file and the
     /// flags alone.
     manifest_target: bool,
+    /// An isolated test function selected as the executable's entry.
+    test_entry: Option<String>,
     /// Explicit as-shaped assembler; otherwise WOLF_AS then the legacy driver.
     assembler: Option<PathBuf>,
     /// Explicit cc-shaped linker; otherwise WOLF_LD then the platform path.
@@ -979,6 +981,7 @@ impl BuildOpts {
             error_limit: 0,
             target: None,
             manifest_target: false,
+            test_entry: None,
             assembler: None,
             linker: None,
         }
@@ -1335,7 +1338,11 @@ fn compile_native_inner(
     }
     drop(phase_progress);
     phase_progress = wolf_span::progress::span("package", &progress_unit, "WIR lowering", "");
-    let build = wolf_wir::lower_package(&res.package, &tc);
+    let build = wolf_wir::lower_package_with_assertion_details(
+        &res.package,
+        &tc,
+        opts.test_entry.is_some() && !target.is_freestanding(),
+    );
     if let Some(nyc) = build.not_yet.first() {
         return Err(BuildStop::Refused {
             phase: "mem",
@@ -1344,6 +1351,44 @@ fn compile_native_inner(
         });
     }
     let mut module = build.module;
+    if let Some(entry) = opts.test_entry.as_deref().filter(|name| *name != "main") {
+        if !module.funcs.iter().any(|(_, f)| f.name == entry) {
+            return Err(BuildStop::Refused {
+                phase: "mem",
+                reason: format!("no compiled test entry `{entry}`"),
+                span: None,
+            });
+        }
+        let mut saved = "__wolf_test.saved_main".to_string();
+        while module.funcs.iter().any(|(_, f)| f.name == saved) {
+            saved.push('_');
+        }
+        // Rename references too: a test file's own main remains an ordinary
+        // callable function, not an accidental entry or a dangling import.
+        let rename = |name: &mut String| {
+            if name.as_str() == "main" {
+                *name = saved.clone();
+            } else if name.as_str() == entry {
+                *name = "main".to_string();
+            }
+        };
+        // Update every symbolic reference, including function-pointer data.
+        for id in module.funcs.keys() {
+            let f = &mut module.funcs[id];
+            rename(&mut f.name);
+            for id in f.ext_funcs.keys() {
+                rename(&mut f.ext_funcs[id].name);
+            }
+        }
+        for (name, _) in &mut module.decls {
+            rename(name);
+        }
+        for data in &mut module.data {
+            for name in &mut data.funcs {
+                rename(name);
+            }
+        }
+    }
     if let Err(e) = wolf_wir::verify_module(&module) {
         eprintln!("wolf build: ICE: lowered WIR failed verification\n{e}");
         std::process::exit(2);
@@ -2874,6 +2919,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         error_limit: DEFAULT_ERROR_LIMIT,
         target: None,
         manifest_target: true,
+        test_entry: None,
         assembler: None,
         linker: None,
     };

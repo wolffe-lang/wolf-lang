@@ -54,7 +54,20 @@ rejects unknown *events*.
   been a red row.
 - `detail` (string): the verdict. `exit(N)`, `trap(kind)`,
   `ub(mem.ub)`, a refusal construct, or `does not compile`. A verdict a
-  native run gave ends ` [native]` (see `native`).
+  native run gave ends ` [native]` (see `native`). Explicit `--native`
+  and `--release` runs mark their tier here too; they are not fallbacks.
+- `assertion` (object, optional): present for a failed assertion. Its
+  `message`, `site`, `left` and `right` keys are strings or `null` when
+  absent. `site` is `file:line:col`, with 1-based coordinates; an inlined
+  release assertion can name its caller's site. An equality condition
+  (`assert(left == right)`, including an `assert_eq` helper written in
+  that form) retains the two already-evaluated values without evaluating
+  either operand again. Comparand formatting uses reporter storage, not
+  the program's region budget. Messages retain newlines and quotes as JSON
+  string data. The default checked machine, native tests and release
+  tests carry the same object; passing test events do not gain it.
+  These diagnostics do not add a new `assert_eq` builtin or infer values
+  from arbitrary helper-function names.
 - `native` (string, optional; s250, wolf-lang#817): present when the
   checked machine refused a `main` test and the verdict is the one
   native run that stood in for it; the value is the checked machine's
@@ -81,6 +94,17 @@ rejects unknown *events*.
   gave. It counts toward nothing else: the exit status is the one the
   run would have without it (reporting, not a new failure). The human
   summary says `N passed, M of them native` when it is nonzero.
+
+## Compiled test tiers
+
+The default remains the checked machine with the existing native fallback.
+`--native` and `--release` explicitly compile and run each discovered test
+function in isolation, including a `test_*` function in a file with its
+own `main`. They cannot combine with `--schedules`, `--replay` or
+`--no-native-fallback`; such combinations exit 2. A tier unavailable on
+the host remains an explicit failure or refusal, never a checked pass.
+Extra assertion-reporting code is emitted only for test executables;
+ordinary builds and freestanding trap hooks keep their previous ABI.
 
 ## `--nocapture`
 

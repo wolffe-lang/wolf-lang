@@ -7,8 +7,9 @@
 //! directory for files ending `_test.lu` (a file argument is taken
 //! as-is) — no registration, no life-before-main (D32). Inside a test
 //! file, every top-level zero-parameter `fn test_*` is one test, run
-//! in **declaration order**, each in a fresh checked machine
-//! (per-test isolation: nothing survives between tests). A test file
+//! in **declaration order**, each in a fresh checked machine by default.
+//! `--native`/`--release` select a compiled executable per test function;
+//! no state survives between tests on either path. A test file
 //! with no `test_*` functions but a `main` runs black-box as one test
 //! named `main`. In-language `test "name" { … }` blocks are the
 //! contract's other half; they need grammar and land with the
@@ -60,10 +61,11 @@
 //! Honesty note (s73 updates the s39 posture): under `--schedules`
 //! and decimal `--replay`, MAIN-SHAPED tests compile natively and run
 //! per seed with `WOLF_SCHED_SEED` set — the seed genuinely reaches
-//! the runtime scheduler's PRNG (X12 end to end). `test_*` fns still
-//! execute on the checked machine (serial, seed-blind) until the
-//! native multi-test harness lands; packed `w1-`/`ev:` replays await
-//! the det-engine runtime build (both recorded, tier named).
+//! the runtime scheduler's PRNG (X12 end to end). In that default mode,
+//! `test_*` fns execute on the checked machine (serial, seed-blind).
+//! Explicit `--native`/`--release` run each function on a compiled tier,
+//! without schedule exploration; packed `w1-`/`ev:` replays still await
+//! the det-engine runtime build.
 //!
 //! # Machine output (`--json`, wolf-test/0)
 //!
@@ -103,6 +105,103 @@ impl Status {
             Status::Fail => "fail",
             Status::Rejected => "rejected",
             Status::Unsupported => "unsupported",
+        }
+    }
+}
+
+/// Assertion details are additive failure data; passing events stay identical.
+struct Assertion {
+    message: Option<String>,
+    site: Option<String>,
+    left: Option<String>,
+    right: Option<String>,
+}
+
+impl Assertion {
+    fn from_outcome(out: &ubcheck::RunOutcome, sources: &Sources, detail: &str) -> Option<Self> {
+        if !detail.contains("trap(assert)") {
+            return None;
+        }
+        let mut result = Self {
+            message: None,
+            site: None,
+            left: None,
+            right: None,
+        };
+        if let Verdict::Trap(t) = &out.verdict {
+            result.message = t.message.clone();
+            if let Some((left, right)) = &t.compared {
+                result.left = Some(left.clone());
+                result.right = Some(right.clone());
+            }
+            if let (Some(file), Some((line, col))) = (
+                sources.file_name(t.span.file),
+                sources.line_col(t.span.file, t.span.lo),
+            ) {
+                result.site = Some(format!("{file}:{line}:{col}"));
+            }
+        } else {
+            if !out
+                .stderr
+                .lines()
+                .any(|line| line.ends_with("wolf-trap: assert"))
+            {
+                return None;
+            }
+            for line in out.stderr.lines() {
+                if let Some(site) = line.strip_prefix("  at ") {
+                    result.site = Some(site.to_string());
+                }
+                for (tag, dest) in [
+                    (0, &mut result.message),
+                    (1, &mut result.left),
+                    (2, &mut result.right),
+                ] {
+                    if let Some(hex) = line.strip_prefix(&format!("wolf-assert-{tag}: ")) {
+                        let decoded: Option<Vec<u8>> = hex
+                            .as_bytes()
+                            .chunks(2)
+                            .map(|p| {
+                                if p.len() != 2 {
+                                    return None;
+                                }
+                                Some(
+                                    (char::from(p[0]).to_digit(16)? * 16
+                                        + char::from(p[1]).to_digit(16)?)
+                                        as u8,
+                                )
+                            })
+                            .collect();
+                        *dest = decoded.and_then(|b| String::from_utf8(b).ok());
+                    }
+                }
+            }
+        }
+        Some(result)
+    }
+
+    fn json(&self) -> serde_json::Value {
+        serde_json::json!({"message": self.message, "site": self.site, "left": self.left, "right": self.right})
+    }
+
+    fn print(&self) {
+        if let Some(site) = &self.site {
+            println!("  at {site}");
+        }
+        for (label, value) in [
+            ("message", &self.message),
+            ("left", &self.left),
+            ("right", &self.right),
+        ] {
+            if let Some(value) = value {
+                for (i, line) in value.split('\n').enumerate() {
+                    if i == 0 {
+                        println!("  {label}: {line}");
+                    } else {
+                        println!("    {line}");
+                    }
+                }
+            }
         }
     }
 }
@@ -165,6 +264,7 @@ pub fn test_cmd(args: &[String]) {
     // s250 (wolf-lang#817): a `main` the checked machine refuses fails
     // (`unsupported`) instead of running natively.
     let mut no_native_fallback = false;
+    let mut compiled_tier = None;
     let mut lints = LintLevels::new();
     // #75, s169: `wolf test` honours `--error-limit`. `build` and `run`
     // have capped their reports since s63 and this surface did not, so
@@ -193,6 +293,12 @@ pub fn test_cmd(args: &[String]) {
             json = true;
         } else if a == "--nocapture" {
             nocapture = true;
+        } else if a == "--native" || a == "--release" {
+            let release = a == "--release";
+            if compiled_tier.is_some_and(|previous| previous != release) {
+                fail("--native and --release are exclusive");
+            }
+            compiled_tier = Some(release);
         } else if a == "--no-native-fallback" {
             no_native_fallback = true;
         } else if a == "--no-doc" {
@@ -263,7 +369,7 @@ pub fn test_cmd(args: &[String]) {
             fail(&format!(
                 "unknown flag `{a}` (usage: wolf test [<dir>|<file.lu>]… \
                  [--filter=SUBSTR] [--fail-fast] [--list] [--json] [--nocapture] \
-                 [--no-native-fallback] [--schedules=N] \
+                 [--no-native-fallback] [--native|--release] [--schedules=N] \
                  [--replay=<seed|w1-token|ev:stream>] [--chaos] \
                  [--allow|--warn|--deny <sel>] [--deny-warnings] [--std-root <dir>])"
             ));
@@ -274,6 +380,11 @@ pub fn test_cmd(args: &[String]) {
     }
     if paths.is_empty() {
         paths.push(".".to_string());
+    }
+    if compiled_tier.is_some() && (schedules.is_some() || replay.is_some() || no_native_fallback) {
+        fail(
+            "--native/--release select a compiled tier; do not combine with --schedules, --replay or --no-native-fallback",
+        );
     }
     if schedules.is_some() && replay.is_some() {
         fail("--schedules and --replay are exclusive: explore first, then replay a finding");
@@ -595,6 +706,24 @@ pub fn test_cmd(args: &[String]) {
                     "a test fn with parameters (only zero-parameter tests run)".to_string(),
                     None,
                 )
+            } else if let Some(release) = compiled_tier {
+                match native_test_runs(file, std_root.as_deref(), &[None], echo, release, name) {
+                    Ok(runs) => {
+                        let (_, status, detail, stdout, stderr) =
+                            runs.into_iter().next().expect("one compiled test");
+                        let tier = if release { "release" } else { "native" };
+                        (
+                            status,
+                            format!("{detail} [{tier}]"),
+                            Some(ubcheck::RunOutcome {
+                                verdict: Verdict::Exit(0),
+                                stdout,
+                                stderr,
+                            }),
+                        )
+                    }
+                    Err((status, detail)) => (status, detail, None),
+                }
             } else if name == "main"
                 && (schedules.is_some()
                     || replay
@@ -769,11 +898,17 @@ pub fn test_cmd(args: &[String]) {
                     tally.unexplored += 1;
                 }
             }
+            let assertion = out
+                .as_ref()
+                .and_then(|out| Assertion::from_outcome(out, &sources, &detail));
             if json {
                 let mut ev = serde_json::json!({
                     "schema": "wolf-test/0", "event": "test", "file": display,
                     "name": name, "status": status.as_str(), "detail": detail,
                 });
+                if let Some(assertion) = &assertion {
+                    ev["assertion"] = assertion.json();
+                }
                 // s250 (wolf-lang#817): the refusal a native verdict
                 // stands in for; `detail` keeps its `[native]` mark.
                 if let Some(reason) = &native {
@@ -814,6 +949,9 @@ pub fn test_cmd(args: &[String]) {
                         println!("test {qualified} ... unsupported ({detail})")
                     }
                 }
+                if let Some(assertion) = &assertion {
+                    assertion.print();
+                }
                 // Under `--nocapture` the output was shown as it ran.
                 if status != Status::Pass
                     && !nocapture
@@ -822,7 +960,18 @@ pub fn test_cmd(args: &[String]) {
                     for line in out.stdout.lines() {
                         println!("  stdout: {line}");
                     }
-                    for line in out.stderr.lines() {
+                    let stderr = if assertion.is_some() && matches!(&out.verdict, Verdict::Exit(_))
+                    {
+                        // The native trap record is represented above. Retain
+                        // the program's own stderr without echoing hex payloads.
+                        out.stderr
+                            .rsplit_once("wolf-trap: assert\n")
+                            .map(|(before, _)| before)
+                            .unwrap_or(&out.stderr)
+                    } else {
+                        &out.stderr
+                    };
+                    for line in stderr.lines() {
                         println!("  stderr: {line}");
                     }
                 }
@@ -1121,6 +1270,18 @@ fn native_schedule_runs(
     seeds: &[Option<u64>],
     echo: Echo,
 ) -> Result<Vec<(Option<u64>, Status, String, String, String)>, (Status, String)> {
+    native_test_runs(file, std_root, seeds, echo, false, "main")
+}
+
+#[allow(clippy::type_complexity)]
+fn native_test_runs(
+    file: &std::path::Path,
+    std_root: Option<&std::path::Path>,
+    seeds: &[Option<u64>],
+    echo: Echo,
+    release: bool,
+    entry: &str,
+) -> Result<Vec<(Option<u64>, Status, String, String, String)>, (Status, String)> {
     let dir = std::env::temp_dir().join(format!(
         "wolf-test-native-{}-{}",
         std::process::id(),
@@ -1139,7 +1300,11 @@ fn native_schedule_runs(
         std_root,
         &exe,
         &mut scratch,
-        &crate::BuildOpts::ephemeral(),
+        &crate::BuildOpts {
+            release,
+            test_entry: Some(entry.to_string()),
+            ..crate::BuildOpts::ephemeral()
+        },
         None,
     );
     let out = match compiled {
@@ -1159,11 +1324,13 @@ fn native_schedule_runs(
                     Ok(o) => {
                         let stdout = String::from_utf8_lossy(&o.stdout).into_owned();
                         let stderr = String::from_utf8_lossy(&o.stderr).into_owned();
-                        let trap_kind = stderr.lines().find_map(|l| {
-                            l.trim()
-                                .strip_prefix("wolf-trap:")
-                                .map(|k| k.trim().to_string())
-                        });
+                        let trap_kind = stderr
+                            .lines()
+                            .filter_map(|line| {
+                                line.rsplit_once("wolf-trap:")
+                                    .map(|(_, kind)| kind.trim().to_string())
+                            })
+                            .next_back();
                         let (status, detail) = match (o.status.code(), trap_kind) {
                             (Some(code), Some(kind)) if code == wolf_rt::native::TRAP_EXIT_CODE => {
                                 (Status::Fail, format!("trap({kind})"))

@@ -224,7 +224,9 @@ pub use ir::{
     Aux, Block, BlockCall, CtContract, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst,
     InstData, Mode, Module, Param, SigData, SigId, Value, ValueData, ValueDef,
 };
-pub use lower::{Build, SurveyReason, lower_package, lower_package_survey};
+pub use lower::{
+    Build, SurveyReason, lower_package, lower_package_survey, lower_package_with_assertion_details,
+};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
 pub use print::{block_order, print_module, print_selected, print_statics};

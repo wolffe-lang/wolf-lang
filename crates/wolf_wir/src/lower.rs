@@ -65,6 +65,13 @@ use crate::ops::{FloatCc, ForeignRole, IntCc, Opcode, TrapKind};
 use crate::types::{self, RegionId, TypeId};
 
 type R<T> = Result<T, NotYet>;
+type AssertionOperands = [(Value, TyId, Span); 2];
+
+/// Package-wide facts needed by every body and specialization.
+struct LoweringContext<'t> {
+    byteviews: Lender<'t>,
+    assertion_details: bool,
+}
 
 /// The result of lowering one package.
 pub struct Build {
@@ -103,7 +110,14 @@ pub struct SurveyReason {
 /// on `tc.not_yet`/`mem` cleanliness for the rung verdict — this
 /// function lowers whatever is lowerable and refuses the rest.
 pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
-    lower_package_impl(pkg, tc, None)
+    lower_package_impl(pkg, tc, None, false)
+}
+
+/// Lower test executables with assertion details for their trap reporter.
+/// Ordinary builds and freestanding trap hooks keep their existing
+/// evaluation and allocation behavior, without test-reporting calls.
+pub fn lower_package_with_assertion_details(pkg: &Package, tc: &Typecheck, enabled: bool) -> Build {
+    lower_package_impl(pkg, tc, None, enabled)
 }
 
 /// [`lower_package`] with the survey lens on (the c19 closeout's
@@ -121,7 +135,7 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
 /// `cargo xtask peel` drives that over the corpus.
 pub fn lower_package_survey(pkg: &Package, tc: &Typecheck) -> (Build, Vec<SurveyReason>) {
     let mut reasons = Vec::new();
-    let build = lower_package_impl(pkg, tc, Some(&mut reasons));
+    let build = lower_package_impl(pkg, tc, Some(&mut reasons), false);
     (build, reasons)
 }
 
@@ -129,6 +143,7 @@ fn lower_package_impl(
     pkg: &Package,
     tc: &Typecheck,
     mut survey: Option<&mut Vec<SurveyReason>>,
+    assertion_details: bool,
 ) -> Build {
     let mut module = Module::new();
     let mut not_yet = Vec::new();
@@ -183,7 +198,10 @@ fn lower_package_impl(
     // `wolf_mem::byteview` is the single authority, and since
     // wolf-lang#387 retired W1004 this lowering is its only consumer
     // (see this crate's Cargo comment).
-    let lender = Lender::new(pkg, &tc.sigs);
+    let lender = LoweringContext {
+        byteviews: Lender::new(pkg, &tc.sigs),
+        assertion_details,
+    };
     // s89: free-function bodies by their qualified WIR name, so a view
     // specialization requested at a call site can find the body to
     // lower a second time.
@@ -714,7 +732,7 @@ fn lower_body(
     fns: &HashMap<&str, Vec<(usize, &FnSig)>>,
     module: &mut Module,
     sig_cache: &mut HashMap<String, SigId>,
-    lender: &Lender<'_>,
+    lender: &LoweringContext<'_>,
     key: &SpecKey,
     bindings: &[(String, Bound)],
     specs: &mut Vec<SpecRequest>,
@@ -1142,7 +1160,7 @@ fn lower_task_body<'t>(
     module: &mut Module,
     task: &PendingTask<'t>,
     pending: &mut Vec<PendingTask<'t>>,
-    lender: &'t Lender<'t>,
+    lender: &'t LoweringContext<'t>,
     specs: &mut Vec<SpecRequest>,
     dyn_shims: &mut Vec<DynShim>,
     statics: &Statics,
@@ -1393,7 +1411,7 @@ fn lower_copy_body<'t>(
     module: &mut Module,
     task: &PendingTask<'t>,
     pending: &mut Vec<PendingTask<'t>>,
-    lender: &'t Lender<'t>,
+    lender: &'t LoweringContext<'t>,
     specs: &mut Vec<SpecRequest>,
     dyn_shims: &mut Vec<DynShim>,
     statics: &Statics,
@@ -3748,7 +3766,7 @@ struct Lowerer<'t, 'b, 'm> {
     /// lists may share a buffer.
     foreign: Option<(RegionId, RegionId)>,
     /// s89: the shared byte-view lend verdicts (`wolf_mem::byteview`).
-    lender: &'t Lender<'t>,
+    lender: &'t LoweringContext<'t>,
     /// s89: view specializations this body's call sites demanded, drained
     /// to fixpoint by [`lower_package`].
     pending_specs: &'b mut Vec<SpecRequest>,
@@ -9209,6 +9227,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     }
 
     fn lower_bin(&mut self, e: &'t GreenNode) -> R<Flow> {
+        self.lower_bin_capture(e, None)
+    }
+
+    fn lower_bin_capture(
+        &mut self,
+        e: &'t GreenNode,
+        compared: Option<&mut Option<AssertionOperands>>,
+    ) -> R<Flow> {
         let d = wolf_ast::BinExpr::cast(e).expect("kind");
         let op = d.op().map(|t| t.kind);
         if matches!(op, Some(SyntaxKind::AmpAmp | SyntaxKind::PipePipe)) {
@@ -9229,7 +9255,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let (Some(l), Some(r)) = (d.lhs(), d.rhs()) else {
                 return Err(refuse("operator dispatch on a missing operand", e.span));
             };
-            let v = flow_val!(self.lower_trait_call_exprs(vec![l, r], *module, name, method, e));
+            let capture = if op == SyntaxKind::EqEq {
+                compared
+            } else {
+                None
+            };
+            let v = flow_val!(self.lower_trait_call_exprs_capture(
+                vec![l, r],
+                *module,
+                name,
+                method,
+                e,
+                capture
+            ));
             let Some(v) = v else {
                 return Err(refuse("a unit-typed operator dispatch", e.span));
             };
@@ -9249,6 +9287,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(op) = op else {
             return Ok(Flow::Val(Some(a)));
         };
+        if op == SyntaxKind::EqEq
+            && let Some(compared) = compared
+            && let (Some(l), Some(r)) = (d.lhs(), d.rhs())
+            && let (Some(lt), Some(rt)) = (self.expr_sema_ty(l.span), self.expr_sema_ty(r.span))
+        {
+            *compared = Some([(a, lt, l.span), (bv, rt, r.span)]);
+        }
         match op {
             SyntaxKind::Plus
             | SyntaxKind::Minus
@@ -11119,7 +11164,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             if i >= 32 || a.mode().is_some() {
                 continue;
             }
-            if self.view_src(vexpr).is_some() && self.lender.param(callee_sig, i) == Lend::Lendable
+            if self.view_src(vexpr).is_some()
+                && self.lender.byteviews.param(callee_sig, i) == Lend::Lendable
             {
                 view_mask |= 1u32 << i;
             }
@@ -11628,6 +11674,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         method: &'t str,
         e: &'t GreenNode,
     ) -> R<Flow> {
+        self.lower_trait_call_exprs_capture(args, tmodule, tname, method, e, None)
+    }
+
+    fn lower_trait_call_exprs_capture(
+        &mut self,
+        args: Vec<&'t GreenNode>,
+        tmodule: usize,
+        tname: &'t str,
+        method: &'t str,
+        e: &'t GreenNode,
+        compared: Option<&mut Option<AssertionOperands>>,
+    ) -> R<Flow> {
         let tr = wolf_sema::traits::TraitRef {
             module: tmodule,
             name: tname.to_string(),
@@ -11736,6 +11794,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 return Err(refuse("unit-typed arguments", vexpr.span));
             };
             vals.push(v);
+        }
+        if let Some(compared) = compared
+            && args.len() == 2
+            && let (Some(lt), Some(rt)) = (
+                self.expr_sema_ty(args[0].span),
+                self.expr_sema_ty(args[1].span),
+            )
+        {
+            *compared = Some([(vals[0], lt, args[0].span), (vals[1], rt, args[1].span)]);
         }
         let callee_name = if bindings.is_empty() {
             base_name
@@ -25685,7 +25752,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(vexpr) = Arg::value(first) else {
             return Ok(Flow::Val(None));
         };
-        let v = flow_val!(self.lower_expr(vexpr));
+        let mut compared = None;
+        let mut condition = vexpr;
+        while condition.kind == SyntaxKind::ParenExpr
+            && let Some(inner) = condition.nodes().next()
+        {
+            condition = inner;
+        }
+        let v = if self.lender.assertion_details
+            && condition.kind == SyntaxKind::BinExpr
+            && !self.folds.contains_key(&condition.span)
+            && !self.folds.contains_key(&vexpr.span)
+        {
+            flow_val!(self.lower_bin_capture(condition, Some(&mut compared)))
+        } else {
+            flow_val!(self.lower_expr(vexpr))
+        };
         let Some(v) = v else {
             return Err(refuse("assert of a valueless expression", vexpr.span));
         };
@@ -25695,7 +25777,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             Some(false) => {
                 self.b.stats.fold += 1;
-                if self.lower_assert_message(&msg)? {
+                if self.lower_assert_message(&msg, compared.as_ref())? {
                     self.b.ins_trap(TrapKind::Assert);
                 }
                 return Ok(Flow::Diverged);
@@ -25706,7 +25788,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.ins_br(v, cont, &[], trap_bb, &[]);
                 self.b.seal_block(trap_bb);
                 self.b.switch_to_block(trap_bb);
-                if self.lower_assert_message(&msg)? {
+                if self.lower_assert_message(&msg, compared.as_ref())? {
                     self.b.ins_trap(TrapKind::Assert);
                 }
                 self.b.seal_block(cont);
@@ -25716,32 +25798,54 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(None))
     }
 
-    /// The failing path's message: evaluated for its effects, the value
-    /// dropped (`[conf.trap.assert]`). `false` when the evaluation
-    /// itself left the path (a `?` that propagated, a trap inside it),
-    /// so no `trap` follows a terminator.
-    /// A literal, or a string with no holes, has no effects, so
-    /// dropping it is its evaluation and it emits nothing. The trap
-    /// block dominates nothing after it, so whatever the message
-    /// computes lives in a GVN scope of its own: the continuation must
-    /// never reuse a value defined only on the failing path.
-    fn lower_assert_message(&mut self, msg: &[&'t GreenNode]) -> R<bool> {
+    /// The failing path's message and equality operands. The message is
+    /// evaluated only here, once; hosted traps retain its value for the
+    /// reporter. Freestanding traps keep effect evaluation without adding
+    /// a hosted reporting dependency. `false` means the message itself
+    /// left the path, so no trap follows a terminator. This cold block
+    /// dominates no continuation: all formatting stays in its own GVN scope.
+    fn lower_assert_message(
+        &mut self,
+        msg: &[&'t GreenNode],
+        compared: Option<&AssertionOperands>,
+    ) -> R<bool> {
         self.b.gvn_push_scope();
-        let r = self.lower_assert_message_in(msg);
+        let r = self.lower_assert_message_in(msg, compared);
         self.b.gvn_pop_scope();
         r
     }
 
-    fn lower_assert_message_in(&mut self, msg: &[&'t GreenNode]) -> R<bool> {
+    fn lower_assert_message_in(
+        &mut self,
+        msg: &[&'t GreenNode],
+        compared: Option<&AssertionOperands>,
+    ) -> R<bool> {
         for &m in msg {
             let constant = m.kind == SyntaxKind::LiteralExpr
                 || (m.kind == SyntaxKind::StringExpr && m.nodes().next().is_none());
-            if constant {
+            if constant && !self.lender.assertion_details {
                 continue;
             }
             match self.lower_expr(m)? {
+                Flow::Val(Some(value)) if self.lender.assertion_details => {
+                    let (ptr, len) = self.str_parts(value);
+                    let tag = self.b.iconst(types::I64, 0);
+                    self.rt_call("__wolf_rt_assert_detail", &[tag, ptr, len], None);
+                }
                 Flow::Val(_) => {}
                 Flow::Diverged => return Ok(false),
+            }
+        }
+        if let Some(compared) = compared {
+            for (i, &(value, ty, span)) in compared.iter().enumerate() {
+                let buf = self
+                    .rt_call("__wolf_rt_strbuf_new", &[], Some(types::PTR))
+                    .expect("assert value buffer");
+                self.emit_value(Sink::Buf(buf), Some(value), self.table, ty, 0, span)?;
+                let tag = self.b.iconst(types::I64, i as i64 + 1);
+                // Consume the host-side buffer directly: finishing it into
+                // the user's ambient arena could breach that region's cap.
+                self.rt_call("__wolf_rt_assert_buf", &[tag, buf], None);
             }
         }
         Ok(true)
