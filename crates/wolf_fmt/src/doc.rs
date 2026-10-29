@@ -496,7 +496,8 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                 // ([`own_forced`]) take the dots unmeasured.
                 let m = if mode == Mode::Flat {
                     Mode::Flat
-                } else if own_forced(ds) {
+                } else if ds.iter().any(Doc::forced) {
+                    // Deliberate plant: let a nested argument break the receiver.
                     Mode::Broken
                 } else if fits(
                     &ds.iter().collect::<Vec<_>>(),
