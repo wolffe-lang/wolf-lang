@@ -15348,7 +15348,11 @@ mod checked_surface {
                 s
             };
             set(&mut w, 1, s.f_bsize as i64);
-            let frag = if s.f_frsize == 0 { s.f_bsize } else { s.f_frsize };
+            let frag = if s.f_frsize == 0 {
+                s.f_bsize
+            } else {
+                s.f_frsize
+            };
             set(&mut w, 2, frag as i64);
             set(&mut w, 3, s.f_blocks as u64 as i64);
             set(&mut w, 4, s.f_bfree as u64 as i64);
@@ -15370,7 +15374,11 @@ mod checked_surface {
             set(&mut w, 10, s.f_type as u64 as i64);
             // SAFETY: fsid_t is two C ints, read as such.
             let h: [i32; 2] = unsafe { std::ptr::read((&raw const s.f_fsid).cast()) };
-            set(&mut w, 11, ((u64::from(h[0] as u32) << 32) | u64::from(h[1] as u32)) as i64);
+            set(
+                &mut w,
+                11,
+                ((u64::from(h[0] as u32) << 32) | u64::from(h[1] as u32)) as i64,
+            );
         }
         #[cfg(target_vendor = "apple")]
         {
@@ -15407,7 +15415,11 @@ mod checked_surface {
             set(&mut w, 10, i64::from(s.f_type));
             // SAFETY: fsid_t is two 32-bit ints, read as such.
             let h: [i32; 2] = unsafe { std::ptr::read((&raw const s.f_fsid).cast()) };
-            set(&mut w, 11, ((u64::from(h[0] as u32) << 32) | u64::from(h[1] as u32)) as i64);
+            set(
+                &mut w,
+                11,
+                ((u64::from(h[0] as u32) << 32) | u64::from(h[1] as u32)) as i64,
+            );
         }
         #[cfg(all(
             unix,
@@ -15467,8 +15479,7 @@ mod checked_surface {
             let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
             let (mut avail, mut total, mut free) = (0u64, 0u64, 0u64);
             // SAFETY: a NUL-terminated wide path and three out words we own.
-            if unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, &mut total, &mut free) }
-                == 0
+            if unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, &mut total, &mut free) } == 0
             {
                 return Err(std::io::Error::last_os_error());
             }

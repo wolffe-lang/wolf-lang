@@ -109,7 +109,11 @@ mod sys {
         r.set(word::BLOCK_SIZE, s.f_bsize as i64);
         // statfs(2): "f_frsize: fragment size (since Linux 2.6)"; a kernel
         // that leaves it 0 counts in `f_bsize` units (statvfs's rule).
-        let frag = if s.f_frsize == 0 { s.f_bsize } else { s.f_frsize };
+        let frag = if s.f_frsize == 0 {
+            s.f_bsize
+        } else {
+            s.f_frsize
+        };
         r.set(word::FRAGMENT_SIZE, frag as i64);
         r.set(word::BLOCKS, u(s.f_blocks as u64));
         r.set(word::FREE, u(s.f_bfree as u64));
@@ -262,8 +266,7 @@ mod sys {
         let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
         let (mut avail, mut total, mut free) = (0u64, 0u64, 0u64);
         // SAFETY: a NUL-terminated wide path and three out words we own.
-        if unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, &mut total, &mut free) } == 0
-        {
+        if unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, &mut total, &mut free) } == 0 {
             return Err(std::io::Error::last_os_error());
         }
         let mut r = Rec::new();
@@ -309,7 +312,13 @@ mod tests {
     fn the_record_of_the_current_directory() {
         let r = record(".").expect("the current directory has a file system");
         let have = r[word::HAVE];
-        for i in [word::HAVE, word::FRAGMENT_SIZE, word::BLOCKS, word::FREE, word::AVAILABLE] {
+        for i in [
+            word::HAVE,
+            word::FRAGMENT_SIZE,
+            word::BLOCKS,
+            word::FREE,
+            word::AVAILABLE,
+        ] {
             assert_ne!(have & (1 << i), 0, "word {i} answered: {r:?}");
         }
         assert!(r[word::FRAGMENT_SIZE] > 0, "{r:?}");
