@@ -1,0 +1,599 @@
+s272: building at 192c3e65 in /Users/mfwolffe/lanes/s272/build
+s272: 17:58:05 mac build lock held by fg04 pid 58522; waiting
+s272: 17:58:35 mac build lock held by fg04 pid 58522; waiting
+s272: 17:59:05 mac build lock held by fg04 pid 58522; waiting
+s272: 17:59:35 mac build lock held by fg04 pid 58522; waiting
+s272: 18:00:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:00:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:01:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:01:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:02:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:02:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:03:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:03:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:04:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:04:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:05:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:05:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:06:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:06:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:07:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:07:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:08:05 mac build lock held by wl75 pid 38045; waiting
+s272: 18:08:35 mac build lock held by wl75 pid 38045; waiting
+s272: 18:09:05 mac build lock held by fg04 pid 50767; waiting
+s272: 18:09:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:10:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:10:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:11:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:11:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:12:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:12:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:13:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:13:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:14:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:14:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:15:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:15:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:16:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:16:36 mac build lock held by fg04 pid 50767; waiting
+s272: 18:17:06 mac build lock held by fg04 pid 50767; waiting
+s272: 18:17:36 mac build lock held by fg04 pid 50767; waiting
+s272: lock taken, 10042 MiB free; running: /Users/mfwolffe/lanes/s272/mac-job4.sh
+head c064e151c046aca06c142d421a6e21817929f1ad 2026-11-01T23:18:06Z rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin: lupin 0.1.58 (wolf-interp, reference interpreter at pin a5378e3)
+== STEP build 23:18:06
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
+END build exit=0
+== STEP cargo-fmt 23:18:07
+END cargo-fmt exit=0
+== STEP editor-calls 23:18:08
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.46s
+     Running tests/editor_calls_lanes.rs (target/debug/deps/editor_calls_lanes-b49fbeffeb7f92d2)
+
+running 7 tests
+test only_measured_realpath_boundaries_are_pinned ... ok
+== checked on restore_rows.lu: exit(0)
+bit25=invalid negative=invalid forged=io file=io lf=io
+
+REPORT checked restore_rows.lu: bit25=invalid negative=invalid forged=io file=io lf=io
+== checked on realpath.lu: exit(0)
+file=rp/a/f
+dir_slash=rp/a
+dot_dot=rp/a/f
+missing=not_found
+under_file=io
+empty=not_found
+dot=.
+tmp=/private/tmp
+links=made
+link=rp/a/b
+link_dot_dot=rp/a
+dangling=not_found
+loop=io
+
+REPORT checked realpath.lu: file=rp/a/f
+dir_slash=rp/a
+dot_dot=rp/a/f
+missing=not_found
+under_file=io
+empty=not_found
+dot=.
+tmp=/private/tmp
+links=made
+link=rp/a/b
+link_dot_dot=rp/a
+dangling=not_found
+loop=io
+== native on realpath.lu: exit Some(0)
+file=rp/a/f
+dir_slash=rp/a
+dot_dot=rp/a/f
+missing=not_found
+under_file=io
+empty=not_found
+dot=.
+tmp=/private/tmp
+links=made
+link=rp/a/b
+link_dot_dot=rp/a
+dangling=not_found
+loop=io
+
+REPORT native realpath.lu: file=rp/a/f
+dir_slash=rp/a
+dot_dot=rp/a/f
+missing=not_found
+under_file=io
+empty=not_found
+dot=.
+tmp=/private/tmp
+links=made
+link=rp/a/b
+link_dot_dot=rp/a
+dangling=not_found
+loop=io
+== native on restore_rows.lu: exit Some(0)
+bit25=invalid negative=invalid forged=io file=io lf=io
+
+REPORT native restore_rows.lu: bit25=invalid negative=invalid forged=io file=io lf=io
+== release on realpath.lu: exit Some(0)
+file=rp/a/f
+dir_slash=rp/a
+dot_dot=rp/a/f
+missing=not_found
+under_file=io
+empty=not_found
+dot=.
+tmp=/private/tmp
+links=made
+link=rp/a/b
+link_dot_dot=rp/a
+dangling=not_found
+loop=io
+
+REPORT release realpath.lu: file=rp/a/f
+dir_slash=rp/a
+dot_dot=rp/a/f
+missing=not_found
+under_file=io
+empty=not_found
+dot=.
+tmp=/private/tmp
+links=made
+link=rp/a/b
+link_dot_dot=rp/a
+dangling=not_found
+loop=io
+== lupin 0.1.58 on realpath.lu: unsupported `fs_realpath("/tmp")` resolves outside the working directory — `..` applied and symlinks followed, as the host would (`[os.fs.path.domain]`); this machine serves the fs tier over REAL files inside its own tree and declines the rest by name rather than observing it
+
+PINNED lupin 0.1.58 6240efe served-tree boundary: `fs_realpath("/tmp")` resolves outside the working directory — `..` applied and symlinks followed, as the host would (`[os.fs.path.domain]`); this machine serves the fs tier over REAL files inside its own tree and declines the rest by name rather than observing it
+REPORT realpath rows: "file=rp/a/f\ndir_slash=rp/a\ndot_dot=rp/a/f\nmissing=not_found\nunder_file=io\nempty=not_found\ndot=.\ntmp=/private/tmp\nlinks=made\nlink=rp/a/b\nlink_dot_dot=rp/a\ndangling=not_found\nloop=io\n"
+test the_canonical_path_on_every_machine ... ok
+== release on restore_rows.lu: exit Some(0)
+bit25=invalid negative=invalid forged=io file=io lf=io
+
+REPORT release restore_rows.lu: bit25=invalid negative=invalid forged=io file=io lf=io
+== lupin 0.1.58 on restore_rows.lu: exit(0) 
+bit25=invalid negative=invalid forged=io file=io lf=invalid
+
+REPORT PINNED pre-RAW_LF lupin 0.1.58 on restore_rows.lu: bit25=invalid negative=invalid forged=io file=io lf=invalid (wolf-interp#315)
+test the_restore_rows_on_every_machine ... ok
+== checked on sync_rows.lu: exit(0)
+written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+
+REPORT checked sync_rows.lu: written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+== native on sync_rows.lu: exit Some(0)
+written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+
+REPORT native sync_rows.lu: written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+REPORT save checked: 11 boundaries ["open tmp excl=1", "write tmp 6", "write tmp 6", "write tmp 6", "write tmp 6", "sync tmp fullfsync", "close tmp", "rename tmp target", "open dir excl=0", "sync dir fullfsync", "close dir"]; s248-save sync_ns=3398083 sync_dir_ns=3706541
+PASS the checked save at each of 11 boundaries
+REPORT save native: 13 boundaries ["open tmp excl=1", "write tmp 6", "write tmp 6", "write tmp 6", "write tmp 6", "dup tmp", "sync tmp fullfsync", "close tmp", "close tmp", "rename tmp target", "open dir excl=0", "sync dir fullfsync", "close dir"]; s248-save sync_ns=4052791 sync_dir_ns=3529750
+PASS the native save at each of 13 boundaries
+== release on sync_rows.lu: exit Some(0)
+written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+
+REPORT release sync_rows.lu: written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+== lupin 0.1.58 on sync_rows.lu: exit(0) 
+written=ok
+excl_again=exists
+closed=io
+forged=io
+negative=io
+pipe=io
+dir_dot=ok
+dir_missing=not_found
+dir_file=invalid
+dir_empty=not_found
+again=-1
+
+REPORT sync rows: "written=ok\nexcl_again=exists\nclosed=io\nforged=io\nnegative=io\npipe=io\ndir_dot=ok\ndir_missing=not_found\ndir_file=invalid\ndir_empty=not_found\nagain=-1\n"
+test the_sync_rows_on_every_machine ... ok
+== checked on wait_fds_rows.lu: exit(0)
+empty=io send_only=io past_table=io below=invalid far_below=invalid
+
+REPORT checked wait_fds_rows.lu: empty=io send_only=io past_table=io below=invalid far_below=invalid
+REPORT save release: 13 boundaries ["open tmp excl=1", "write tmp 6", "write tmp 6", "write tmp 6", "write tmp 6", "dup tmp", "sync tmp fullfsync", "close tmp", "close tmp", "rename tmp target", "open dir excl=0", "sync dir fullfsync", "close dir"]; s248-save sync_ns=4291541 sync_dir_ns=3539041
+PASS the release save at each of 13 boundaries
+== lupin 0.1.58 on save.lu: exit(0) 
+saved
+
+test the_save_survives_an_end_at_every_storage_boundary ... ok
+== native on wait_fds_rows.lu: exit Some(0)
+empty=io send_only=io past_table=io below=invalid far_below=invalid
+
+REPORT native wait_fds_rows.lu: empty=io send_only=io past_table=io below=invalid far_below=invalid
+== release on wait_fds_rows.lu: exit Some(0)
+empty=io send_only=io past_table=io below=invalid far_below=invalid
+
+REPORT release wait_fds_rows.lu: empty=io send_only=io past_table=io below=invalid far_below=invalid
+== lupin 0.1.58 on wait_fds_rows.lu: exit(0) 
+empty=io send_only=io past_table=io below=invalid far_below=invalid
+
+test the_wait_fds_rows_on_every_machine ... ok
+== checked on clock_ns.lu: exit(0)
+clock_ns zeros=0 of 20 behind=0 work=1199940
+
+REPORT checked clock_ns.lu: clock_ns zeros=0 of 20 behind=0 work=1199940
+== native on clock_ns.lu: exit Some(0)
+clock_ns zeros=0 of 20 behind=0 work=1199940
+
+REPORT native clock_ns.lu: clock_ns zeros=0 of 20 behind=0 work=1199940
+== release on clock_ns.lu: exit Some(0)
+clock_ns zeros=0 of 20 behind=0 work=1199940
+
+REPORT release clock_ns.lu: clock_ns zeros=0 of 20 behind=0 work=1199940
+== lupin 0.1.58 on clock_ns.lu: exit(0) 
+clock_ns zeros=0 of 20 behind=0 work=1199940
+
+test twenty_rounds_of_100_us_are_never_zero_ns ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.53s
+
+END editor-calls exit=0
+== STEP os-surface 23:18:17
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-3ceebd7f047f843e)
+
+running 8 tests
+REPORT statfs paths: ["/Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu", "/", "/tmp", "/dev", "/System/Volumes/Data"]
+== checked on statfs_words.lu: exit(0) 
+/Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu: 4095 1048576 4096 242824745 5173110 5173110 218744630 206924400 255 0 26 72057671347339290
+/: 4095 1048576 4096 242824745 5173110 5173110 207382516 206924400 255 1 26 72057675642306586
+/tmp: 4095 1048576 4096 242824745 5173110 5173110 218744630 206924400 255 0 26 72057671347339290
+/dev: 4095 512 512 430 0 0 745 0 31 0 19 8848584909908869139
+/System/Volumes/Data: 4095 1048576 4096 242824745 5173110 5173110 218744630 206924400 255 0 26 72057671347339290
+
+REPORT checked /Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu: wolf [4095, 1048576, 4096, 242824745, 5173110, 5173110, 218744630, 206924400, 255, 0, 26, 72057671347339290] as df [971298980, 20692440, 11820230, 206924400] df-before [971298980, 20692440, 11820230, 206924400] df-after [971298980, 20692440, 11820230, 206924400]
+REPORT checked /: wolf [4095, 1048576, 4096, 242824745, 5173110, 5173110, 207382516, 206924400, 255, 1, 26, 72057675642306586] as df [971298980, 20692440, 458116, 206924400] df-before [971298980, 20692440, 458116, 206924400] df-after [971298980, 20692440, 458116, 206924400]
+REPORT checked /tmp: wolf [4095, 1048576, 4096, 242824745, 5173110, 5173110, 218744630, 206924400, 255, 0, 26, 72057671347339290] as df [971298980, 20692440, 11820230, 206924400] df-before [971298980, 20692440, 11820230, 206924400] df-after [971298980, 20692440, 11820230, 206924400]
+REPORT checked /dev: wolf [4095, 512, 512, 430, 0, 0, 745, 0, 31, 0, 19, 8848584909908869139] as df [215, 0, 745, 0] df-before [215, 0, 745, 0] df-after [215, 0, 745, 0]
+REPORT checked /System/Volumes/Data: wolf [4095, 1048576, 4096, 242824745, 5173110, 5173110, 218744630, 206924400, 255, 0, 26, 72057671347339290] as df [971298980, 20692440, 11820230, 206924400] df-before [971298980, 20692440, 11820230, 206924400] df-after [971298980, 20692440, 11820230, 206924400]
+== checked onlcr=true how=set: exit Some(0), ONLCR after Some(true)
+"raw_lf_at_start=0\r\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nset_back\r\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/onlcr.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.36+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\r\nS272-EXIT=0\r\nS272-STTY\r\nspeed 9600 baud; 24 rows; 80 columns;\r\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\r\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\r\n\t-extproc\r\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\r\n\t-ignbrk brkint -inpck -ignpar -parmrk\r\noflags: opost onlcr -oxtabs -onocr -onlret\r\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\r\n\t-dtrflow -mdmbuf\r\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\r\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\r\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\r\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\r\nS272-END\r\n"
+== checked onlcr=true how=register: exit Some(0), ONLCR after Some(true)
+"raw_lf_at_start=0\r\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nregistered\r\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/onlcr.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.36+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\r\nS272-EXIT=0\r\nS272-STTY\r\nspeed 9600 baud; 24 rows; 80 columns;\r\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\r\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\r\n\t-extproc\r\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\r\n\t-ignbrk brkint -inpck -ignpar -parmrk\r\noflags: opost onlcr -oxtabs -onocr -onlret\r\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\r\n\t-dtrflow -mdmbuf\r\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\r\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\r\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\r\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\r\nS272-END\r\n"
+== checked onlcr=false how=set: exit Some(0), ONLCR after Some(false)
+"raw_lf_at_start=1\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nset_back\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/onlcr.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.36+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\nS272-EXIT=0\nS272-STTY\nspeed 9600 baud; 24 rows; 80 columns;\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\n\t-extproc\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\n\t-ignbrk brkint -inpck -ignpar -parmrk\noflags: opost -onlcr -oxtabs -onocr -onlret\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\n\t-dtrflow -mdmbuf\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\nS272-END\n"
+REPORT native /Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu: wolf [4095, 1048576, 4096, 242824745, 5171752, 5171752, 218690319, 206870080, 255, 0, 26, 72057671347339290] as df [971298980, 20687008, 11820239, 206870080] df-before [971298980, 20691436, 11820238, 206914360] df-after [971298980, 20687008, 11820239, 206870080]
+REPORT native /: wolf [4095, 1048576, 4096, 242824745, 5171752, 5171752, 207328196, 206870080, 255, 1, 26, 72057675642306586] as df [971298980, 20687008, 458116, 206870080] df-before [971298980, 20691436, 458116, 206914360] df-after [971298980, 20687008, 458116, 206870080]
+== checked onlcr=false how=register: exit Some(0), ONLCR after Some(false)
+"raw_lf_at_start=1\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nregistered\r\n{\"commit\":\"unknown\",\"diagnostics\":[],\"file\":\"/Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/onlcr.lu\",\"impl\":\"wolfgang\",\"impl_version\":\"0.2.36+dev.unknown\",\"phase_reached\":\"run\",\"protocol\":1,\"seeded\":false,\"stdout_inline\":null,\"stdout_sha256\":null,\"verdict\":\"exit(0)\",\"warnings\":[]}\nS272-EXIT=0\nS272-STTY\nspeed 9600 baud; 24 rows; 80 columns;\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\n\t-extproc\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\n\t-ignbrk brkint -inpck -ignpar -parmrk\noflags: opost -onlcr -oxtabs -onocr -onlret\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\n\t-dtrflow -mdmbuf\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\nS272-END\n"
+REPORT native /tmp: wolf [4095, 1048576, 4096, 242824745, 5171752, 5171752, 218690319, 206870080, 255, 0, 26, 72057671347339290] as df [971298980, 20687008, 11820239, 206870080] df-before [971298980, 20691436, 11820238, 206914360] df-after [971298980, 20687008, 11820239, 206870080]
+REPORT native /dev: wolf [4095, 512, 512, 431, 0, 0, 746, 0, 31, 0, 19, 8848584909908869139] as df [215, 0, 746, 0] df-before [215, 0, 745, 0] df-after [215, 0, 746, 0]
+REPORT native /System/Volumes/Data: wolf [4095, 1048576, 4096, 242824745, 5171752, 5171752, 218690319, 206870080, 255, 0, 26, 72057671347339290] as df [971298980, 20687008, 11820239, 206870080] df-before [971298980, 20691436, 11820238, 206914360] df-after [971298980, 20687008, 11820239, 206870080]
+== native onlcr=true how=set: exit Some(0), ONLCR after Some(true)
+"raw_lf_at_start=0\r\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nset_back\r\nS272-EXIT=0\r\nS272-STTY\r\nspeed 9600 baud; 24 rows; 80 columns;\r\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\r\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\r\n\t-extproc\r\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\r\n\t-ignbrk brkint -inpck -ignpar -parmrk\r\noflags: opost onlcr -oxtabs -onocr -onlret\r\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\r\n\t-dtrflow -mdmbuf\r\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\r\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\r\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\r\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\r\nS272-END\r\n"
+== native onlcr=true how=register: exit Some(0), ONLCR after Some(true)
+"raw_lf_at_start=0\r\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nregistered\r\nS272-EXIT=0\r\nS272-STTY\r\nspeed 9600 baud; 24 rows; 80 columns;\r\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\r\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\r\n\t-extproc\r\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\r\n\t-ignbrk brkint -inpck -ignpar -parmrk\r\noflags: opost onlcr -oxtabs -onocr -onlret\r\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\r\n\t-dtrflow -mdmbuf\r\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\r\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\r\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\r\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\r\nS272-END\r\n"
+== native onlcr=false how=set: exit Some(0), ONLCR after Some(false)
+"raw_lf_at_start=1\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nset_back\nS272-EXIT=0\nS272-STTY\nspeed 9600 baud; 24 rows; 80 columns;\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\n\t-extproc\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\n\t-ignbrk brkint -inpck -ignpar -parmrk\noflags: opost -onlcr -oxtabs -onocr -onlret\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\n\t-dtrflow -mdmbuf\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\nS272-END\n"
+== native onlcr=false how=register: exit Some(0), ONLCR after Some(false)
+"raw_lf_at_start=1\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nregistered\r\nS272-EXIT=0\nS272-STTY\nspeed 9600 baud; 24 rows; 80 columns;\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\n\t-extproc\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\n\t-ignbrk brkint -inpck -ignpar -parmrk\noflags: opost -onlcr -oxtabs -onocr -onlret\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\n\t-dtrflow -mdmbuf\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\nS272-END\n"
+REPORT release /Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 218689639, 206869400, 255, 0, 26, 72057671347339290] as df [971298980, 20686940, 11820239, 206869400] df-before [971298980, 20687008, 11820239, 206870080] df-after [971298980, 20686940, 11820239, 206869400]
+REPORT release /: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 207327516, 206869400, 255, 1, 26, 72057675642306586] as df [971298980, 20686940, 458116, 206869400] df-before [971298980, 20687008, 458116, 206870080] df-after [971298980, 20686940, 458116, 206869400]
+REPORT release /tmp: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 218689639, 206869400, 255, 0, 26, 72057671347339290] as df [971298980, 20686940, 11820239, 206869400] df-before [971298980, 20687008, 11820239, 206870080] df-after [971298980, 20686940, 11820239, 206869400]
+REPORT release /dev: wolf [4095, 512, 512, 432, 0, 0, 748, 0, 31, 0, 19, 8848584909908869139] as df [216, 0, 748, 0] df-before [215, 0, 746, 0] df-after [215, 0, 746, 0]
+REPORT release /System/Volumes/Data: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 218689639, 206869400, 255, 0, 26, 72057671347339290] as df [971298980, 20686940, 11820239, 206869400] df-before [971298980, 20687008, 11820239, 206870080] df-after [971298980, 20686940, 11820239, 206869400]
+release: attempt 0 outside df's reads:
+/dev: 1024-blocks wolf=216 df-before=215 df-after=215
+/dev: iused wolf=748 df-before=746 df-after=746
+REPORT release /Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 218689639, 206869400, 255, 0, 26, 72057671347339290] as df [971298980, 20686940, 11820239, 206869400] df-before [971298980, 20686940, 11820239, 206869400] df-after [971298980, 20686940, 11820239, 206869400]
+REPORT release /: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 207327516, 206869400, 255, 1, 26, 72057675642306586] as df [971298980, 20686940, 458116, 206869400] df-before [971298980, 20686940, 458116, 206869400] df-after [971298980, 20686940, 458116, 206869400]
+REPORT release /tmp: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 218689639, 206869400, 255, 0, 26, 72057671347339290] as df [971298980, 20686940, 11820239, 206869400] df-before [971298980, 20686940, 11820239, 206869400] df-after [971298980, 20686940, 11820239, 206869400]
+REPORT release /dev: wolf [4095, 512, 512, 431, 0, 0, 746, 0, 31, 0, 19, 8848584909908869139] as df [215, 0, 746, 0] df-before [215, 0, 746, 0] df-after [215, 0, 746, 0]
+REPORT release /System/Volumes/Data: wolf [4095, 1048576, 4096, 242824745, 5171735, 5171735, 218689639, 206869400, 255, 0, 26, 72057671347339290] as df [971298980, 20686940, 11820239, 206869400] df-before [971298980, 20686940, 11820239, 206869400] df-after [971298980, 20686940, 11820239, 206869400]
+test fs_statfs_matches_gnu_stat_f ... ok
+== checked on action_faults.lu: unsupported `os_signal_action_one` of a fault meaning (SEGMENT_FAULT, BUS_ERROR: the `wolf` process's own stack guard holds them; [os.signal.action.one])
+wolf conform-run --checked: unsupported — `os_signal_action_one` of a fault meaning (SEGMENT_FAULT, BUS_ERROR: the `wolf` process's own stack guard holds them; [os.signal.action.one])
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/action_faults.lu:11:13
+   |
+11 |     let a = os_signal_action_one(m) else |e| {
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+== release onlcr=true how=set: exit Some(0), ONLCR after Some(true)
+"raw_lf_at_start=0\r\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nset_back\r\nS272-EXIT=0\r\nS272-STTY\r\nspeed 9600 baud; 24 rows; 80 columns;\r\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\r\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\r\n\t-extproc\r\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\r\n\t-ignbrk brkint -inpck -ignpar -parmrk\r\noflags: opost onlcr -oxtabs -onocr -onlret\r\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\r\n\t-dtrflow -mdmbuf\r\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\r\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\r\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\r\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\r\nS272-END\r\n"
+== release onlcr=true how=register: exit Some(0), ONLCR after Some(true)
+"raw_lf_at_start=0\r\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nregistered\r\nS272-EXIT=0\r\nS272-STTY\r\nspeed 9600 baud; 24 rows; 80 columns;\r\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\r\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\r\n\t-extproc\r\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\r\n\t-ignbrk brkint -inpck -ignpar -parmrk\r\noflags: opost onlcr -oxtabs -onocr -onlret\r\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\r\n\t-dtrflow -mdmbuf\r\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\r\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\r\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\r\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\r\nS272-END\r\n"
+== release onlcr=false how=set: exit Some(0), ONLCR after Some(false)
+"raw_lf_at_start=1\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nset_back\nS272-EXIT=0\nS272-STTY\nspeed 9600 baud; 24 rows; 80 columns;\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\n\t-extproc\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\n\t-ignbrk brkint -inpck -ignpar -parmrk\noflags: opost -onlcr -oxtabs -onocr -onlret\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\n\t-dtrflow -mdmbuf\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\nS272-END\n"
+== release onlcr=false how=register: exit Some(0), ONLCR after Some(false)
+"raw_lf_at_start=1\nraw_lf_after_set=0\r\nONLCR-A\r\nONLCR-B\r\nregistered\r\nS272-EXIT=0\nS272-STTY\nspeed 9600 baud; 24 rows; 80 columns;\nlflags: icanon isig iexten echo echoe -echok echoke -echonl echoctl\n\t-echoprt -altwerase -noflsh -tostop -flusho -pendin -nokerninfo\n\t-extproc\niflags: -istrip icrnl -inlcr -igncr ixon -ixoff ixany imaxbel -iutf8\n\t-ignbrk brkint -inpck -ignpar -parmrk\noflags: opost -onlcr -oxtabs -onocr -onlret\ncflags: cread cs8 -parenb -parodd hupcl -clocal -cstopb -crtscts -dsrflow\n\t-dtrflow -mdmbuf\ncchars: discard = ^O; dsusp = ^Y; eof = ^D; eol = <undef>;\n\teol2 = <undef>; erase = ^?; intr = ^C; kill = ^U; lnext = ^V;\n\tmin = 1; quit = ^\\; reprint = ^R; start = ^Q; status = ^T;\n\tstop = ^S; susp = ^Z; time = 0; werase = ^W;\nS272-END\n"
+test onlcr_on_a_terminal_started_with_it_on_and_off ... ok
+== checked on statfs_rows.lu: exit(0) 
+words=12
+have_self: true
+space_answered: true
+free_within_total: true
+available_within_free: true
+fragment_positive: true
+a_file_reads_its_file_system: true
+missing=not_found
+missing_number_is_set: true
+success_clears_the_number: true
+
+== native on action_faults.lu: exit Some(0)
+segv=0
+segv_ignored=1
+segv_back=0
+bus=0
+bus_ignored=1
+bus_back=0
+
+== native on statfs_rows.lu: exit Some(0)
+words=12
+have_self: true
+space_answered: true
+free_within_total: true
+available_within_free: true
+fragment_positive: true
+a_file_reads_its_file_system: true
+missing=not_found
+missing_number_is_set: true
+success_clears_the_number: true
+
+== release on action_faults.lu: exit Some(0)
+segv=0
+segv_ignored=1
+segv_back=0
+bus=0
+bus_ignored=1
+bus_back=0
+
+== lupin 0.1.58 on action_faults.lu: unsupported `os_signal_action_one` does not resolve
+
+test the_fault_meanings_read_the_programs_choice ... ok
+== checked on term_lf_rows.lu: exit(0) 
+lf_bit_on_a_file=io
+lf_bit_restore_on_a_file=io
+past_lf_bit=invalid
+past_lf_bit_restore=invalid
+
+== release on statfs_rows.lu: exit Some(0)
+words=12
+have_self: true
+space_answered: true
+free_within_total: true
+available_within_free: true
+fragment_positive: true
+a_file_reads_its_file_system: true
+missing=not_found
+missing_number_is_set: true
+success_clears_the_number: true
+
+== lupin 0.1.58 on statfs_rows.lu: unsupported `fs_statfs` does not resolve
+
+test the_file_system_record_on_every_host ... ok
+== checked on priority_rows.lu: exit(0) 
+read_in_range: true
+zero=ok
+zero_kept: true
+raise=ok
+raised: true
+far_raise=ok
+at_the_top: true
+lower=denied
+lower_number=13
+lower_text=Permission denied
+
+== native on term_lf_rows.lu: exit Some(0)
+lf_bit_on_a_file=io
+lf_bit_restore_on_a_file=io
+past_lf_bit=invalid
+past_lf_bit_restore=invalid
+
+== native on priority_rows.lu: exit Some(0)
+read_in_range: true
+zero=ok
+zero_kept: true
+raise=ok
+raised: true
+far_raise=ok
+at_the_top: true
+lower=denied
+lower_number=13
+lower_text=Permission denied
+
+== release on term_lf_rows.lu: exit Some(0)
+lf_bit_on_a_file=io
+lf_bit_restore_on_a_file=io
+past_lf_bit=invalid
+past_lf_bit_restore=invalid
+
+== lupin 0.1.58 on term_lf_rows.lu: exit(0) 
+lf_bit_on_a_file=invalid
+lf_bit_restore_on_a_file=invalid
+past_lf_bit=invalid
+past_lf_bit_restore=invalid
+
+test the_mode_word_carries_onlcr_rows ... ok
+== checked on chroot_rows.lu: exit(0) 
+missing=denied
+missing_number=1
+dot=denied
+dot_number=1
+
+== release on priority_rows.lu: exit Some(0)
+read_in_range: true
+zero=ok
+zero_kept: true
+raise=ok
+raised: true
+far_raise=ok
+at_the_top: true
+lower=denied
+lower_number=13
+lower_text=Permission denied
+
+== lupin 0.1.58 on priority_rows.lu: unsupported `os_getpriority` does not resolve
+
+test the_priority_rows_on_every_host ... ok
+== checked on signal_action_rows.lu: exit(0) 
+zero=invalid
+two_bits=invalid
+past_table=invalid
+far_host_number: true
+term=0
+host_number_term=0
+kill=io
+kill_number=22
+stop=io
+stop_number=22
+nothing_moved: true
+user_ignored=1
+user_back=0
+reload_listened=2
+reload_back=0
+
+== native on chroot_rows.lu: exit Some(0)
+missing=denied
+missing_number=1
+dot=denied
+dot_number=1
+
+== native on signal_action_rows.lu: exit Some(0)
+zero=invalid
+two_bits=invalid
+past_table=invalid
+far_host_number: true
+term=0
+host_number_term=0
+kill=io
+kill_number=22
+stop=io
+stop_number=22
+nothing_moved: true
+user_ignored=1
+user_back=0
+reload_listened=2
+reload_back=0
+
+== release on chroot_rows.lu: exit Some(0)
+missing=denied
+missing_number=1
+dot=denied
+dot_number=1
+
+== lupin 0.1.58 on chroot_rows.lu: unsupported `os_chroot` does not resolve
+
+test the_root_rows_on_every_host ... ok
+== release on signal_action_rows.lu: exit Some(0)
+zero=invalid
+two_bits=invalid
+past_table=invalid
+far_host_number: true
+term=0
+host_number_term=0
+kill=io
+kill_number=22
+stop=io
+stop_number=22
+nothing_moved: true
+user_ignored=1
+user_back=0
+reload_listened=2
+reload_back=0
+
+== lupin 0.1.58 on signal_action_rows.lu: unsupported `os_signal_action_one` does not resolve
+
+test the_signal_action_rows_on_every_host ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.02s
+
+END os-surface exit=0
+== STEP term-editor-rows 23:18:23
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running tests/term_editor_lanes.rs (target/debug/deps/term_editor_lanes-1ecb0b224e356e12)
+
+running 1 test
+PASS the --checked lane on os/term_editor_rows.lu
+PASS the --native lane on os/term_editor_rows.lu
+PASS the --release lane on os/term_editor_rows.lu
+PASS lupin 0.1.58 6240efe on os/term_editor_rows.lu
+test the_terminal_rows_on_every_machine ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 2.68s
+
+END term-editor-rows exit=0
+== STEP lex-snapshots 23:18:26
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/corpus_snapshots.rs (target/debug/deps/corpus_snapshots-19e0fe04466c1aa8)
+
+running 1 test
+test corpus_token_streams ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+END lex-snapshots exit=0
+== STEP clippy-driver 23:18:27
+    Checking wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.27s
+END clippy-driver exit=0
+clean:        0 paths
+ALL rc=0 2026-11-01T23:18:28Z
+s272: END exit=0

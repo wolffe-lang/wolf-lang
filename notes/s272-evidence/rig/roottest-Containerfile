@@ -1,0 +1,7 @@
+FROM docker.io/library/ubuntu:24.04
+COPY t /t
+RUN chmod -R a+rX /t && chmod a+x /t/wolf /t/bin/*/* \
+ && useradd -m -u 4242 bore \
+ && mkdir -p /w/jail && printf 'marker\n' > /w/jail/s272-marker \
+ && chmod -R a+rX /w
+WORKDIR /w

@@ -14,3 +14,20 @@ rig/              the scripts as run: the Mac lock and build-at (copies of s273'
                   hasu container rig (copied from r41's; the taskset shim moves 0-5 lists by the block's offset),
                   the targeted head rows, roottest (build in r41-toolchain, programs COPIED into an image from
                   ubuntu:24.04, each case as a user and as root, --network none)
+nomad/mac-job2-ca9a14a1.log
+                  the regenerations (anchors, prelude.json, the corpus snapshots) and the first full targeted set
+                  (Homebrew's 1.99.1 for the tests, rustup's 1.97.1 for clippy and the checks)
+nomad/mac-job3-407ba657.log
+                  every targeted step green under 1.97.1: os_surface_lanes 8/8 (df, getconf and mount 20
+                  comparisons, the ONLCR runs), clippy -D warnings, the windows/freebsd/linux checks
+nomad/mac-job4-c064e151.log
+                  before the push: editor_calls_lanes 7/7 (lupin 0.1.58's lf= pinned, wolf-interp#315),
+                  os_surface_lanes 8/8, term_editor_rows on every machine, the lexer snapshots, clippy
+hasu/roottest-407ba657.log
+                  24 throwaway containers from ubuntu:24.04 (programs copied in, --network none, block A): chroot
+                  and the nice value as 4242 and as root, +/- SYS_NICE, on checked, native and release, beside
+                  GNU nice and chroot
+hasu/head3-407ba657-stopped.log
+                  linux (r41-toolchain, block A): fs_statfs against GNU stat -f 9.4 on ext4, overlay, tmpfs and
+                  proc, 18 comparisons equal; stopped (podman stop, 23:14:37Z) when the ONLCR harness hung in
+                  its join — the command's slave duplicates kept linux's master open; fixed at c064e151

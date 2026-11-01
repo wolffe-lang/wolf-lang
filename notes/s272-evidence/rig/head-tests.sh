@@ -13,4 +13,7 @@ step sema cargo test --locked -p wolf_sema --test prelude_names --test sandbox_s
 step drv-tables cargo test --locked -p wolf_driver --test str_list_fs_native --test freestanding_target
 step drv-cap cargo test --locked -p wolf_driver --bin wolf builtin_cap
 step lanes cargo test --locked -p wolf_driver --test os_surface_lanes -- --nocapture --test-threads=2
+step editor-calls cargo test --locked -p wolf_driver --test editor_calls_lanes -- --nocapture --test-threads=2
+step term-editor-rows cargo test --locked -p wolf_driver --test term_editor_lanes the_terminal_rows_on_every_machine -- --nocapture --exact
+step lex-snapshots cargo test --locked -p wolf_lex --test corpus_snapshots
 exit $rc_all

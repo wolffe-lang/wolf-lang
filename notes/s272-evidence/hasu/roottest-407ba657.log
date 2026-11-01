@@ -1,0 +1,155 @@
+S272 roottest waiting for block A at 2026-11-01T21:13:14Z
+S272 roottest acquired the block at 2026-11-01T23:14:37Z, cpus 0-5
+head 407ba657d6a5ff54f7d07f19e9e6088a6d375ca3
+    Finished `dev` profile [unoptimized] target(s) in 0.06s
+/lane/records/roottest/t/bin/native:
+total 8992
+drwxr-xr-x 2 ubuntu ubuntu    4096 Nov  1 23:14 .
+drwxr-xr-x 4 ubuntu ubuntu    4096 Nov  1 23:14 ..
+-rwxr-xr-x 1 ubuntu ubuntu 4577424 Nov  1 23:14 chroot_case
+-rwxr-xr-x 1 ubuntu ubuntu 4617600 Nov  1 23:14 priority_case
+
+/lane/records/roottest/t/bin/release:
+total 8980
+drwxr-xr-x 2 ubuntu ubuntu    4096 Nov  1 23:14 .
+drwxr-xr-x 4 ubuntu ubuntu    4096 Nov  1 23:14 ..
+-rwxr-xr-x 1 ubuntu ubuntu 4573896 Nov  1 23:14 chroot_case
+-rwxr-xr-x 1 ubuntu ubuntu 4614872 Nov  1 23:14 priority_case
+f835f8cf639e7c2f2768aecfec8932d3f169862780d9b6ec5755582ae615e34b  /lane/records/roottest/t/wolf
+8f2399205dfe9faa028f20a872d6063580c72b5dd4a1d73543ec4fb47a5f3c82  /lane/records/roottest/t/bin/native/chroot_case
+67ecb7f94e223d693a7378019010260f71c2ad80a2998bcbf7c6fd4654dca48c  /lane/records/roottest/t/bin/native/priority_case
+abe59d0a958fb622d7bd1d16bc61f868664b558885a54dcdd19bbbf3060e652b  /lane/records/roottest/t/bin/release/chroot_case
+0c0c26a7c6af47e643837a8424e9eff41f8de26d798f9543db9dc7c6ab9446d3  /lane/records/roottest/t/bin/release/priority_case
+END roottest-build exit=0
+f53e82cae717744921835e6e4e00bc87d2c6bb5d4f4d0770f0ad290b425df77a
+f53e82cae717744921835e6e4e00bc87d2c6bb5d4f4d0770f0ad290b425df77a
+=== case 1 as user caps=none: /t/wolf conform-run /t/fx/chroot_case.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/chroot_case.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"euid=4242\nmissing=not_found number=2\nfile=io number=20\njail=denied number=1\n","stdout_sha256":"30206312b82f2caf2d4d9caf725e9ad06906976fdc831450a2c941e5357b77f1","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 2 as user caps=none: /t/bin/native/chroot_case
+euid=4242
+missing=not_found number=2
+file=io number=20
+jail=denied number=1
+@status 0
+=== case 3 as user caps=none: /t/bin/release/chroot_case
+euid=4242
+missing=not_found number=2
+file=io number=20
+jail=denied number=1
+@status 0
+=== case 4 as user caps=none: /t/wolf conform-run /t/fx/priority_case.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/priority_case.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"start=0\nraise=ok\nraised=2\nlower=denied number=13 text=Permission denied\nafter=2\n","stdout_sha256":"b0993f4529ff5defc635510f614f335b126547ae8ab4cdd04e027cbb5bfd50b7","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 5 as user caps=none: /t/bin/native/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 6 as user caps=none: /t/bin/release/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 7 as user caps=none: sh -c nice -n -1 true; echo "gnu-nice status=$?"
+nice: cannot set niceness: Permission denied
+gnu-nice status=0
+@status 0
+=== case 8 as user caps=SYS_NICE: /t/wolf conform-run /t/fx/priority_case.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/priority_case.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"start=0\nraise=ok\nraised=2\nlower=denied number=13 text=Permission denied\nafter=2\n","stdout_sha256":"b0993f4529ff5defc635510f614f335b126547ae8ab4cdd04e027cbb5bfd50b7","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 9 as user caps=SYS_NICE: /t/bin/native/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 10 as user caps=SYS_NICE: /t/bin/release/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 11 as user caps=SYS_NICE: sh -c nice -n -1 true; echo "gnu-nice status=$?"
+nice: cannot set niceness: Permission denied
+gnu-nice status=0
+@status 0
+=== case 12 as user caps=none: sh -c chroot /w/jail /bin/true; echo "gnu-chroot status=$?"
+chroot: cannot change root directory to '/w/jail': Operation not permitted
+gnu-chroot status=125
+@status 0
+=== case 13 as root caps=none: /t/wolf conform-run /t/fx/chroot_case.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/chroot_case.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"euid=0\nmissing=not_found number=2\nfile=io number=20\njail=ok number=0\ncwd_unchanged: true\nmarker_at_root: true\nold_root_gone: true\n","stdout_sha256":"f6db39db0753ae06fdc66fca2786f172a0ccf02bcec0bf2a3a9f10e443733e3d","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 14 as root caps=none: /t/bin/native/chroot_case
+euid=0
+missing=not_found number=2
+file=io number=20
+jail=ok number=0
+cwd_unchanged: true
+marker_at_root: true
+old_root_gone: true
+@status 0
+=== case 15 as root caps=none: /t/bin/release/chroot_case
+euid=0
+missing=not_found number=2
+file=io number=20
+jail=ok number=0
+cwd_unchanged: true
+marker_at_root: true
+old_root_gone: true
+@status 0
+=== case 16 as root caps=none: /t/wolf conform-run /t/fx/priority_case.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/priority_case.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"start=0\nraise=ok\nraised=2\nlower=denied number=13 text=Permission denied\nafter=2\n","stdout_sha256":"b0993f4529ff5defc635510f614f335b126547ae8ab4cdd04e027cbb5bfd50b7","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 17 as root caps=none: /t/bin/native/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 18 as root caps=none: /t/bin/release/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 19 as root caps=none: sh -c nice -n -1 true; echo "gnu-nice status=$?"
+nice: cannot set niceness: Permission denied
+gnu-nice status=0
+@status 0
+=== case 20 as root caps=SYS_NICE: /t/wolf conform-run /t/fx/priority_case.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/priority_case.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"start=0\nraise=ok\nraised=2\nlower=denied number=13 text=Permission denied\nafter=2\n","stdout_sha256":"b0993f4529ff5defc635510f614f335b126547ae8ab4cdd04e027cbb5bfd50b7","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 21 as root caps=SYS_NICE: /t/bin/native/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 22 as root caps=SYS_NICE: /t/bin/release/priority_case
+start=0
+raise=ok
+raised=2
+lower=denied number=13 text=Permission denied
+after=2
+@status 0
+=== case 23 as root caps=SYS_NICE: sh -c nice -n -1 true; echo "gnu-nice status=$?"
+nice: cannot set niceness: Permission denied
+gnu-nice status=0
+@status 0
+=== case 24 as root caps=none: sh -c chroot /w/jail /bin/true; echo "gnu-chroot status=$?"
+chroot: failed to run command '/bin/true': No such file or directory
+gnu-chroot status=127
+@status 0
+== done 2026-11-01T23:14:48Z, 24 cases
+END roottest-run exit=0
