@@ -1476,10 +1476,21 @@ struct Machine<'t> {
     /// the birth region"), so the ledger charges pushes to the region
     /// that owns the storage, not the region open at the push site.
     list_region: Vec<usize>,
+    /// Each list's charged slots (s273, wolf-lang#943): the most
+    /// elements it has ever held, which is the storage this machine
+    /// keeps for it (`reset`, `clear` and `pop` keep the `Vec`'s
+    /// capacity). A push charges only past it — the slot below it was
+    /// charged when the list first held an element there, and
+    /// `[type.list.reset]`'s "the next pushes reuse it" is then what the
+    /// ledger says on this machine too.
+    list_charged: Vec<usize>,
     /// The map arena (s152): each map's entries in insertion order,
     /// and each map's birth region, as for lists.
     maps: Vec<Vec<(MapKey, Value)>>,
     map_region: Vec<usize>,
+    /// Each map's charged entries (s273): its high-water entry count,
+    /// the `list_charged` rule for an insert after `clear` or `remove`.
+    map_charged: Vec<usize>,
     pools: Vec<Vec<PoolSlot>>,
     /// s226: the scheduler — tasks, scopes, channels (the arena #342
     /// began), mutexes, procs, timers and the race detector's memory.
@@ -1834,6 +1845,7 @@ impl<'t> Machine<'t> {
         let bytes: u64 = items.iter().map(slot_bytes).sum();
         self.charge_region_bytes(rid, bytes, span)?;
         let id = self.lists.len();
+        self.list_charged.push(items.len());
         self.lists.push(items);
         self.list_region.push(rid);
         Ok(id)
@@ -1848,6 +1860,7 @@ impl<'t> Machine<'t> {
         let id = self.maps.len();
         self.maps.push(Vec::new());
         self.map_region.push(rid);
+        self.map_charged.push(0);
         Ok(id)
     }
 
@@ -1865,16 +1878,23 @@ impl<'t> Machine<'t> {
 
     /// `m[k] = v` (`[mem.map.absent]`): replace the bound value, or
     /// append a fresh entry — insertion order is the iteration order
-    /// `pairs()` reports.
+    /// `pairs()` reports. The entry's two slots charge only past the
+    /// map's high-water count (s273, wolf-lang#943's rule for lists):
+    /// after a `clear` or a `remove` the storage is the map's already,
+    /// as the native entry buffer keeps its capacity.
     fn map_insert(&mut self, id: usize, key: MapKey, v: Value, span: Span) -> E<()> {
         if let Some(slot) = self.maps[id].iter_mut().find(|(k, _)| *k == key) {
             slot.1 = v;
             return Ok(());
         }
-        let bytes = slot_bytes(&key.value()) + slot_bytes(&v);
-        self.charge_mem(bytes)?;
-        let rid = self.map_region.get(id).copied().unwrap_or(0);
-        self.charge_region_bytes(rid, bytes, span)?;
+        let len = self.maps[id].len();
+        if len >= self.map_charged[id] {
+            let bytes = slot_bytes(&key.value()) + slot_bytes(&v);
+            self.charge_mem(bytes)?;
+            let rid = self.map_region.get(id).copied().unwrap_or(0);
+            self.charge_region_bytes(rid, bytes, span)?;
+            self.map_charged[id] = len + 1;
+        }
         self.maps[id].push((key, v));
         Ok(())
     }
@@ -2985,9 +3005,11 @@ impl<'t> Machine<'t> {
             regions: Vec::new(),
             lists: Vec::new(),
             list_region: Vec::new(),
+            list_charged: Vec::new(),
             copy_target: None,
             maps: Vec::new(),
             map_region: Vec::new(),
+            map_charged: Vec::new(),
             pools: Vec::new(),
             sched: tasks::Sched::new(0),
             hub: None,
@@ -13006,13 +13028,24 @@ impl<'t> Machine<'t> {
                                     let x = val!(self.eval_arg(v, None));
                                     self.deep_copy(x, v.span)?
                                 };
-                                let slot = slot_bytes(&x);
-                                self.charge_mem(slot)?;
-                                // The ledger charges the BIRTH region
-                                // (s131, #187): growth stays where the
-                                // list lives, not where the push runs.
-                                let rid = self.list_region.get(id).copied().unwrap_or(0);
-                                self.charge_region_bytes(rid, slot, e.span)?;
+                                // s273 (wolf-lang#943): a slot is charged
+                                // once, the first time the list holds an
+                                // element there; a push into storage a
+                                // `reset`, `clear` or `pop` left the list
+                                // reuses it (`[type.list.reset]`: "the
+                                // next pushes reuse it") and charges
+                                // nothing, as the native buffer's does.
+                                let len = self.lists[id].len();
+                                if len >= self.list_charged[id] {
+                                    let slot = slot_bytes(&x);
+                                    self.charge_mem(slot)?;
+                                    // The ledger charges the BIRTH region
+                                    // (s131, #187): growth stays where the
+                                    // list lives, not where the push runs.
+                                    let rid = self.list_region.get(id).copied().unwrap_or(0);
+                                    self.charge_region_bytes(rid, slot, e.span)?;
+                                    self.list_charged[id] = len + 1;
+                                }
                                 self.lists[id].push(x);
                             }
                         }
@@ -13020,7 +13053,8 @@ impl<'t> Machine<'t> {
                     }
                     // s255 (wolf-lang#821, `[type.list.reset]`): the
                     // emptying that keeps the buffer — the length to 0,
-                    // the capacity kept (`Vec::clear`), no charge.
+                    // the capacity kept (`Vec::clear`), no charge; the
+                    // refill reuses the charged slots (s273, #943).
                     "reset" => {
                         self.lists[id].clear();
                         Ok(Flow::Val(Value::Unit))
