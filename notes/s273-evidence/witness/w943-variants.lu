@@ -1,0 +1,28 @@
+//! member: false
+//! s273 — #943's neighbours: the storage a list keeps after `reset`,
+//! `clear` and `pop`, refilled by `push`, read through the ledger.
+fn main() {
+    region r {
+        var xs = List[int]()
+        for i in 0..8 { (mut xs).push(i) }
+        let a = region_bytes(r)
+        for _ in 0..100 {
+            (mut xs).reset()
+            for i in 0..8 { (mut xs).push(i) }
+        }
+        let b = region_bytes(r)
+        for _ in 0..100 {
+            (mut xs).clear()
+            for i in 0..8 { (mut xs).push(i) }
+        }
+        let c = region_bytes(r)
+        for _ in 0..100 {
+            let _p = (mut xs).pop() else 0
+            (mut xs).push(7)
+        }
+        let d = region_bytes(r)
+        for i in 0..8 { (mut xs).push(i) }
+        let e = region_bytes(r)
+        print("reset={b - a} clear={c - b} pop={d - c} grow={e - d} len={xs.len}")
+    }
+}

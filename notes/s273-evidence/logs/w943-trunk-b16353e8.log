@@ -1,0 +1,6 @@
+main.lu checked: exit(0) 'before=128 after=12928 delta=12800\n'
+main.lu native: exit(0) 'before=240 after=240 delta=0\n'
+main.lu release: exit(0) 'before=240 after=240 delta=0\n'
+variants.lu checked: exit(0) 'reset=12800 clear=12800 pop=1600 grow=128 len=16\n'
+variants.lu native: exit(0) 'reset=0 clear=0 pop=0 grow=128 len=16\n'
+variants.lu release: exit(0) 'reset=0 clear=0 pop=0 grow=128 len=16\n'

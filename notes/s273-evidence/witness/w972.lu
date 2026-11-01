@@ -1,0 +1,141 @@
+//! member: false
+//! s273 — wolf-lang#972's witness, its shape kept: `main N MODE`.
+//!   issue   the issue's program: N `set`s of "0#key{i}", N `get`s
+//!   region  the same inside `region r { }`, printing `region_bytes(r)`
+//!   keys    the N interpolations alone, each length summed (no map)
+//!   intmap  N `set`s of `i` into a `Map[int, int]` (no `str` key)
+//!   list    N interpolated keys pushed onto a `List[str]` (no map)
+//!   setonly the issue's N `set`s, no `get`
+//!   index   the language's own `m[k] = i` and `m[k] else -1` (no std.map)
+//!   rindex  `index` inside `region r { }`, printing `region_bytes(r)`
+//!   rset    `setonly` inside `region r { }`, printing `region_bytes(r)`
+fn num(s: str) -> int {
+    var n = 0
+    for b in s.bytes() {
+        n = n * 10 + (b as int - 48)
+    }
+    n
+}
+
+fn main() -> !int {
+    let args = env_args()
+    let n = num(args[0])
+    let mode = args[1]
+    if mode == "issue" {
+        var m = Map[str, int]()
+        var i = 0
+        while i < n {
+            (mut m).set("0#key{i}", i)
+            i = i + 1
+        }
+        var hits = 0
+        i = 0
+        while i < n {
+            let v = m.get("0#key{i}") else -1
+            if v >= 0 { hits = hits + 1 }
+            i = i + 1
+        }
+        print("{hits}")
+    } else if mode == "region" {
+        var hits = 0
+        var bytes = 0
+        region r {
+            var m = Map[str, int]()
+            var i = 0
+            while i < n {
+                (mut m).set("0#key{i}", i)
+                i = i + 1
+            }
+            i = 0
+            while i < n {
+                let v = m.get("0#key{i}") else -1
+                if v >= 0 { hits = hits + 1 }
+                i = i + 1
+            }
+            bytes = region_bytes(r)
+        }
+        print("{hits} {bytes}")
+    } else if mode == "setonly" {
+        var m = Map[str, int]()
+        var i = 0
+        while i < n {
+            (mut m).set("0#key{i}", i)
+            i = i + 1
+        }
+        print("{m.len}")
+    } else if mode == "index" {
+        var m = Map[str, int]()
+        var i = 0
+        while i < n {
+            m["0#key{i}"] = i
+            i = i + 1
+        }
+        var hits = 0
+        i = 0
+        while i < n {
+            let v = m["0#key{i}"] else -1
+            if v >= 0 { hits = hits + 1 }
+            i = i + 1
+        }
+        print("{hits}")
+    } else if mode == "rindex" {
+        var hits = 0
+        var bytes = 0
+        region r {
+            var m = Map[str, int]()
+            var i = 0
+            while i < n {
+                m["0#key{i}"] = i
+                i = i + 1
+            }
+            i = 0
+            while i < n {
+                let v = m["0#key{i}"] else -1
+                if v >= 0 { hits = hits + 1 }
+                i = i + 1
+            }
+            bytes = region_bytes(r)
+        }
+        print("{hits} {bytes}")
+    } else if mode == "rset" {
+        var c = 0
+        var bytes = 0
+        region r {
+            var m = Map[str, int]()
+            var i = 0
+            while i < n {
+                (mut m).set("0#key{i}", i)
+                i = i + 1
+            }
+            c = m.len
+            bytes = region_bytes(r)
+        }
+        print("{c} {bytes}")
+    } else if mode == "keys" {
+        var t = 0
+        var i = 0
+        while i < n {
+            let k = "0#key{i}"
+            t = t + k.len
+            i = i + 1
+        }
+        print("{t}")
+    } else if mode == "intmap" {
+        var m = Map[int, int]()
+        var i = 0
+        while i < n {
+            m[i] = i
+            i = i + 1
+        }
+        print("{m.len}")
+    } else if mode == "list" {
+        var xs = List[str]()
+        var i = 0
+        while i < n {
+            (mut xs).push("0#key{i}")
+            i = i + 1
+        }
+        print("{xs.len}")
+    }
+    0
+}

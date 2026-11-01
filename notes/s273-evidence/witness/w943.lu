@@ -1,0 +1,16 @@
+//! member: false
+struct V { t: int, i: int, f: f64 }
+fn main() {
+    region r {
+        var xs = List[V]()
+        (mut xs).reserve(8)
+        for i in 0..8 { (mut xs).push(V { t: 2, i: i, f: 0.0 }) }
+        let before = region_bytes(r)
+        for _ in 0..100 {
+            (mut xs).reset()
+            for i in 0..8 { (mut xs).push(V { t: 2, i: i, f: 0.0 }) }
+        }
+        let after = region_bytes(r)
+        print("before={before} after={after} delta={after - before}")
+    }
+}
