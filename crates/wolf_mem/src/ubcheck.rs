@@ -15360,7 +15360,25 @@ mod checked_surface {
             set(&mut w, 6, s.f_files as u64 as i64);
             set(&mut w, 7, s.f_ffree as u64 as i64);
             set(&mut w, 8, s.f_namelen as i64);
-            let flags = s.f_flags as u64;
+            // statfs(2)'s `f_flags` follows `f_frsize`; the binding keeps it
+            // private, so it is read at that offset (`wolf_rt::statfs`'s
+            // `flags_word`, by copy).
+            let at =
+                std::mem::offset_of!(libc::statfs, f_frsize) + std::mem::size_of_val(&s.f_frsize);
+            let width = std::mem::size_of_val(&s.f_frsize);
+            let flags: u64 = if at + width > std::mem::size_of::<libc::statfs>() {
+                0
+            } else {
+                // SAFETY: inside the struct the call filled; plain bytes.
+                unsafe {
+                    let p = (&raw const s).cast::<u8>().add(at);
+                    if width == 8 {
+                        std::ptr::read_unaligned(p.cast::<u64>())
+                    } else {
+                        u64::from(std::ptr::read_unaligned(p.cast::<u32>()))
+                    }
+                }
+            };
             if flags & 0x20 != 0 {
                 let mut f = 0;
                 if flags & libc::ST_RDONLY as u64 != 0 {

@@ -94,6 +94,29 @@ pub fn record(path: &str) -> Result<[i64; word::WORDS], std::io::Error> {
 mod sys {
     use super::{Rec, id_of, u, word};
 
+    /// statfs(2)'s `f_flags`, the word that follows `f_frsize` in the
+    /// kernel's struct (glibc's and musl's alike); the `libc` binding keeps
+    /// it among its private spare words, so it is read at that offset of
+    /// the struct the call filled (zeroed first: a kernel that predates it
+    /// leaves 0, which carries no ST_VALID).
+    pub(super) fn flags_word(s: &libc::statfs) -> u64 {
+        let at = std::mem::offset_of!(libc::statfs, f_frsize) + std::mem::size_of_val(&s.f_frsize);
+        let width = std::mem::size_of_val(&s.f_frsize);
+        if at + width > std::mem::size_of::<libc::statfs>() {
+            return 0;
+        }
+        // SAFETY: `at + width` lies inside the struct, which is initialized
+        // (zeroed, then filled by the call); an unaligned read of plain bytes.
+        unsafe {
+            let p = (&raw const *s).cast::<u8>().add(at);
+            if width == 8 {
+                std::ptr::read_unaligned(p.cast::<u64>())
+            } else {
+                u64::from(std::ptr::read_unaligned(p.cast::<u32>()))
+            }
+        }
+    }
+
     pub fn record(path: &str) -> Result<[i64; word::WORDS], std::io::Error> {
         let c = std::ffi::CString::new(path)
             .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
@@ -124,7 +147,7 @@ mod sys {
         // statfs(2): `f_flags` holds the mount's flags only where the kernel
         // sets ST_VALID (0x20, since 2.6.36); otherwise the bit stays clear.
         const ST_VALID: u64 = 0x20;
-        let flags = s.f_flags as u64;
+        let flags = flags_word(&s);
         if flags & ST_VALID != 0 {
             let mut f = 0;
             if flags & libc::ST_RDONLY as u64 != 0 {
