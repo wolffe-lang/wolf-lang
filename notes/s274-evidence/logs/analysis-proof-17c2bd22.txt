@@ -1,0 +1,31 @@
+## The trunk row (cross-process VmHWM, growth_per_turn at 7332772f)
+trunk load4 native: B/turn n=110 median=0.0 p05..p95=0.0..5.8 min=0.0 max=7.8 | b-a kB n=110 median=-10 p05..p95=-100..114 min=-140 max=152 | >=4: 15
+trunk load4 release: B/turn n=95 median=0.4 p05..p95=0.0..5.4 min=0.0 max=9.4 | b-a kB n=95 median=8 p05..p95=-101..105 min=-140 max=184 | >=4: 13
+trunk load4: red 28/110 runs (25 %)
+
+## The head row (one process, smaps_rollup Anonymous + Swap)
+head load4 native: B/turn n=220 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=220 median=0 p05..p95=0..0 min=0 max=0
+head load4 release: B/turn n=220 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=220 median=0 p05..p95=0..0 min=0 max=0
+head load4: red 0/220 runs (0 %)
+head load6 native: B/turn n=50 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=50 median=0 p05..p95=0..0 min=0 max=0
+head load6 release: B/turn n=50 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=50 median=0 p05..p95=0..0 min=0 max=0
+head load6: red 0/50 runs (0 %)
+head rest4 native: B/turn n=50 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=50 median=0 p05..p95=0..0 min=0 max=0
+head rest4 release: B/turn n=50 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=50 median=0 p05..p95=0..0 min=0 max=0
+head rest4: red 0/50 runs (0 %)
+head rest6 native: B/turn n=50 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=50 median=0 p05..p95=0..0 min=0 max=0
+head rest6 release: B/turn n=50 median=0.00 p05..p95=0.00..0.00 min=0.00 max=0.00 | in-process VmHWM kB n=50 median=0 p05..p95=0..0 min=0 max=0
+head rest6: red 0/50 runs (0 %)
+plant load4 native: B/turn n=20 median=1298.84 p05..p95=1298.84..1298.84 min=1298.84 max=1298.84 | in-process VmHWM kB n=20 median=25368 p05..p95=25368..25368 min=25368 max=25368
+plant load4 release: B/turn n=0 | in-process VmHWM kB n=0
+plant load4: red 20/20 runs (100 %)
+plant load6 native: B/turn n=4 median=1298.84 p05..p95=1298.84..1298.84 min=1298.84 max=1298.84 | in-process VmHWM kB n=4 median=25368 p05..p95=25368..25368 min=25368 max=25368
+plant load6 release: B/turn n=0 | in-process VmHWM kB n=0
+plant load6: red 4/4 runs (100 %)
+plant rest4 native: B/turn n=4 median=1298.84 p05..p95=1298.84..1298.84 min=1298.84 max=1298.84 | in-process VmHWM kB n=4 median=25368 p05..p95=25368..25368 min=25368 max=25368
+plant rest4 release: B/turn n=0 | in-process VmHWM kB n=0
+plant rest4: red 4/4 runs (100 %)
+plant rest6 native: B/turn n=4 median=1298.84 p05..p95=1298.84..1298.84 min=1298.84 max=1298.84 | in-process VmHWM kB n=4 median=25368 p05..p95=25368..25368 min=25368 max=25368
+plant rest6 release: B/turn n=0 | in-process VmHWM kB n=0
+plant rest6: red 4/4 runs (100 %)
+
