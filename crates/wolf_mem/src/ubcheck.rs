@@ -7357,6 +7357,23 @@ impl<'t> Machine<'t> {
             // `fs_lstat` answers the link itself. `wolf_rt::fs`'s
             // `__wolf_rt_fs_stat_record`, word for word
             // (`fs_stat_record`, below).
+            // s272 (#686, `[os.fs.statfs]`): the twelve words of the file system
+            // that holds a path, the path resolved against the machine's own
+            // working directory — `wolf_rt::statfs::record`, word for word
+            // (`checked_surface::statfs_record`).
+            "fs_statfs" => {
+                let Some(path) = path_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let rec = match checked_surface::statfs_record(&path) {
+                    Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(r) => r,
+                };
+                self.charge_mem(8 * rec.len() as u64)?;
+                let items: Vec<Value> = rec.into_iter().map(Value::Int).collect();
+                let id = self.mint_list(items, span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
             "fs_stat" | "fs_lstat" => {
                 let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
@@ -10627,6 +10644,68 @@ impl<'t> Machine<'t> {
                 Ok(()) => Ok(Flow::Val(Value::Unit)),
                 Err(t) => Ok(tag(t)),
             },
+            // s272 (#921, `[os.proc.chroot]`; R-s272-11): the `wolf` process's
+            // own root, the path resolved against the machine's working
+            // directory. The runtime's working directory is the process's
+            // own and is left where it is; the machine's is its own record,
+            // so before the change the process is moved to it, and after it
+            // a relative path goes to the process's directory as natively
+            // (it may lie outside the new root).
+            "os_chroot" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let target = resolve_in(&self.cwd, path);
+                match checked_surface::chroot(&target, self.cwd.as_deref()) {
+                    Ok(()) => {
+                        self.cwd = None;
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s272 (#922, `[os.proc.priority]`): the `wolf` process's own nice
+            // value (on linux the machine's thread's, as for every machine).
+            "os_getpriority" => match checked_surface::priority() {
+                Some(p) => Ok(Flow::Val(Value::Int(p))),
+                None => Ok(tag("unsupported")),
+            },
+            "os_setpriority" => {
+                let Some(delta) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                match checked_surface::set_priority(delta) {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s272 (#975, `[os.signal.action.one]`; R-s272-11): the runtime's
+            // order — the sending shape (`invalid`), the host (windows
+            // `unsupported`), then the `wolf` process's own GET. The fault
+            // meanings are refused by name (the process's own stack guard, as
+            // `os_signal_ignore_one` refuses them), and BROKEN_PIPE is read
+            // from the inherited record until the program sets it.
+            "os_signal_action_one" => {
+                let Some(m) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let sig = match checked_sig::host_signal(m, false) {
+                    Ok(sig) => sig,
+                    Err(t) => return Ok(tag(t)),
+                };
+                if checked_sig::is_fault(sig) {
+                    return self.refuse(
+                        "`os_signal_action_one` of a fault meaning (SEGMENT_FAULT, BUS_ERROR: \
+                         the `wolf` process's own stack guard holds them; \
+                         [os.signal.action.one])",
+                        span,
+                    );
+                }
+                match checked_sig::action_one(sig, self.signal_touched & 2048 == 0) {
+                    Ok(a) => Ok(Flow::Val(Value::Int(a))),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
             // s241 (#741, `[os.signal.text]`): the C library's words.
             "os_signal_text" => {
                 let Some(m) = int_arg(0) else {
@@ -12205,6 +12284,8 @@ impl<'t> Machine<'t> {
             // s218 (#625, #626): the full record by path, the link's
             // target, the typed listing.
             | "fs_stat" | "fs_lstat" | "fs_read_link" | "fs_read_dir_entries"
+            // s272 (#686): the file system's record.
+            | "fs_statfs"
             // s199 (#426): the handle's offset.
             | "fs_seek" | "fs_tell" | "fs_read_at"
             // s200 (#417): the fused chunk copy.
@@ -12311,6 +12392,9 @@ impl<'t> Machine<'t> {
             // s253 (#811, #819): the core limit, its set, the end with no
             // core; the OS and the architecture.
             | "os_core_limit" | "os_set_core_limit" | "os_core_off" | "os_name" | "os_arch"
+            // s272 (#921, #922, #975): the root, the nice value and its set,
+            // one meaning's action.
+            | "os_chroot" | "os_getpriority" | "os_setpriority" | "os_signal_action_one"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
             // s200 (#411, #407): the byte scan, and the task's host code.
@@ -12343,8 +12427,11 @@ impl<'t> Machine<'t> {
                     }
                     // s260 (#682): the spawn family and the exec keep the
                     // program step's host number, as the fs family does.
+                    //
+                    // s272 (#921, #922, #975): so do the change of root, the
+                    // nice value's set and the action query (`[os.fs.error]`).
                     n @ ("os_spawn" | "os_spawn_with" | "os_spawn_fds" | "os_spawn_job"
-                    | "os_exec") => {
+                    | "os_exec" | "os_chroot" | "os_setpriority" | "os_signal_action_one") => {
                         FS_HOST_ERROR.with(|c| c.set(0));
                         let r = self.os_builtin(n, argv, e.span);
                         self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
@@ -15007,7 +15094,8 @@ pub fn record_inherited_sigpipe(ignored: bool) {
 /// canonical=1 echo=2 signals=4, vmin in bits 8..15, vtime in 16..23.
 /// s234 (#719): flow=8 (`IXON`) and extended=16 (`IEXTEN`) join them.
 // s248 (#802): bits 5..7 — RAW_CR, RAW_OUTPUT, STRIP8 — are fields.
-const TERM_MODE_VALID: i64 = 255 | 0xFF00 | 0xFF_0000;
+// s272 (#976): bit 24 — RAW_LF, `ONLCR` cleared — is one too.
+const TERM_MODE_VALID: i64 = 255 | 0xFF00 | 0xFF_0000 | 1 << 24;
 
 /// s219 (#622): the checked machine's REAL signal arming. A listened
 /// meaning's handler sets its bit in `PENDING` (an atomic `fetch_or`,
@@ -15229,6 +15317,259 @@ mod checked_host {
         {
             Err("unsupported")
         }
+    }
+}
+
+/// s272 (wolf-lang#686, #921, #922): the checked machine's file-system
+/// record, change of root and nice value — HAND MIRRORS of
+/// `wolf_rt::statfs` and `wolf_rt::procattr` (D15 keeps the runtime out of
+/// this crate's reach), each the host's own call for the `wolf` process the
+/// program runs as.
+mod checked_surface {
+    /// `wolf_rt::statfs::record`, word for word (`[os.fs.statfs]`): twelve
+    /// words, the `have` word first.
+    pub(super) fn statfs_record(path: &str) -> Result<[i64; 12], std::io::Error> {
+        let mut w = [0i64; 12];
+        w[0] = 1;
+        let set = |w: &mut [i64; 12], i: usize, v: i64| {
+            w[i] = v;
+            w[0] |= 1 << i;
+        };
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            let c = std::ffi::CString::new(path)
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+            // SAFETY: a zeroed statfs the call fills; a NUL-terminated path.
+            let s = unsafe {
+                let mut s: libc::statfs = std::mem::zeroed();
+                if libc::statfs(c.as_ptr(), &mut s) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                s
+            };
+            set(&mut w, 1, s.f_bsize as i64);
+            let frag = if s.f_frsize == 0 { s.f_bsize } else { s.f_frsize };
+            set(&mut w, 2, frag as i64);
+            set(&mut w, 3, s.f_blocks as u64 as i64);
+            set(&mut w, 4, s.f_bfree as u64 as i64);
+            set(&mut w, 5, s.f_bavail as u64 as i64);
+            set(&mut w, 6, s.f_files as u64 as i64);
+            set(&mut w, 7, s.f_ffree as u64 as i64);
+            set(&mut w, 8, s.f_namelen as i64);
+            let flags = s.f_flags as u64;
+            if flags & 0x20 != 0 {
+                let mut f = 0;
+                if flags & libc::ST_RDONLY as u64 != 0 {
+                    f |= 1;
+                }
+                if flags & libc::ST_NOSUID as u64 != 0 {
+                    f |= 2;
+                }
+                set(&mut w, 9, f);
+            }
+            set(&mut w, 10, s.f_type as u64 as i64);
+            // SAFETY: fsid_t is two C ints, read as such.
+            let h: [i32; 2] = unsafe { std::ptr::read((&raw const s.f_fsid).cast()) };
+            set(&mut w, 11, ((u64::from(h[0] as u32) << 32) | u64::from(h[1] as u32)) as i64);
+        }
+        #[cfg(target_vendor = "apple")]
+        {
+            let c = std::ffi::CString::new(path)
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+            // SAFETY: a zeroed statfs the call fills; a NUL-terminated path.
+            let s = unsafe {
+                let mut s: libc::statfs = std::mem::zeroed();
+                if libc::statfs(c.as_ptr(), &mut s) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                s
+            };
+            set(&mut w, 1, i64::from(s.f_iosize));
+            set(&mut w, 2, i64::from(s.f_bsize));
+            set(&mut w, 3, s.f_blocks as i64);
+            set(&mut w, 4, s.f_bfree as i64);
+            set(&mut w, 5, s.f_bavail as i64);
+            set(&mut w, 6, s.f_files as i64);
+            set(&mut w, 7, s.f_ffree as i64);
+            // SAFETY: a NUL-terminated path; a plain query.
+            let n = unsafe { libc::pathconf(c.as_ptr(), libc::_PC_NAME_MAX) };
+            if n > 0 {
+                set(&mut w, 8, n as i64);
+            }
+            let mut f = 0;
+            if u64::from(s.f_flags) & libc::MNT_RDONLY as u64 != 0 {
+                f |= 1;
+            }
+            if u64::from(s.f_flags) & libc::MNT_NOSUID as u64 != 0 {
+                f |= 2;
+            }
+            set(&mut w, 9, f);
+            set(&mut w, 10, i64::from(s.f_type));
+            // SAFETY: fsid_t is two 32-bit ints, read as such.
+            let h: [i32; 2] = unsafe { std::ptr::read((&raw const s.f_fsid).cast()) };
+            set(&mut w, 11, ((u64::from(h[0] as u32) << 32) | u64::from(h[1] as u32)) as i64);
+        }
+        #[cfg(all(
+            unix,
+            not(any(target_os = "linux", target_os = "android", target_vendor = "apple"))
+        ))]
+        {
+            let c = std::ffi::CString::new(path)
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+            // SAFETY: a zeroed statvfs the call fills; a NUL-terminated path.
+            let s = unsafe {
+                let mut s: libc::statvfs = std::mem::zeroed();
+                if libc::statvfs(c.as_ptr(), &mut s) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                s
+            };
+            set(&mut w, 1, s.f_bsize as i64);
+            set(&mut w, 2, s.f_frsize as i64);
+            set(&mut w, 3, s.f_blocks as u64 as i64);
+            set(&mut w, 4, s.f_bfree as u64 as i64);
+            set(&mut w, 5, s.f_bavail as u64 as i64);
+            set(&mut w, 6, s.f_files as u64 as i64);
+            set(&mut w, 7, s.f_ffree as u64 as i64);
+            set(&mut w, 8, s.f_namemax as i64);
+            let mut f = 0;
+            if s.f_flag as u64 & libc::ST_RDONLY as u64 != 0 {
+                f |= 1;
+            }
+            if s.f_flag as u64 & libc::ST_NOSUID as u64 != 0 {
+                f |= 2;
+            }
+            set(&mut w, 9, f);
+            set(&mut w, 11, s.f_fsid as u64 as i64);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt as _;
+            #[link(name = "kernel32")]
+            unsafe extern "system" {
+                fn GetDiskFreeSpaceExW(
+                    dir: *const u16,
+                    avail_to_caller: *mut u64,
+                    total: *mut u64,
+                    total_free: *mut u64,
+                ) -> i32;
+            }
+            let p = std::path::Path::new(path);
+            let md = std::fs::metadata(p)?;
+            let dir = if md.is_dir() {
+                p.to_path_buf()
+            } else {
+                match p.parent() {
+                    Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
+                    _ => std::path::PathBuf::from("."),
+                }
+            };
+            let wide: Vec<u16> = dir.as_os_str().encode_wide().chain([0]).collect();
+            let (mut avail, mut total, mut free) = (0u64, 0u64, 0u64);
+            // SAFETY: a NUL-terminated wide path and three out words we own.
+            if unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut avail, &mut total, &mut free) }
+                == 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            set(&mut w, 2, 1);
+            set(&mut w, 3, total as i64);
+            set(&mut w, 4, free as i64);
+            set(&mut w, 5, avail as i64);
+        }
+        Ok(w)
+    }
+
+    /// `wolf_rt::procattr`'s map of a refusal: `denied`, `not_found`,
+    /// else `io`, the number noted.
+    #[cfg(unix)]
+    fn refusal(e: &std::io::Error) -> &'static str {
+        super::fs_host_error(e);
+        match e.kind() {
+            std::io::ErrorKind::NotFound => "not_found",
+            std::io::ErrorKind::PermissionDenied => "denied",
+            _ => "io",
+        }
+    }
+
+    /// `chroot(2)` for the `wolf` process, after moving it to the machine's
+    /// working directory `cwd` (when the program changed it), so a
+    /// relative path after the change goes where it goes natively.
+    pub(super) fn chroot(target: &str, cwd: Option<&std::path::Path>) -> Result<(), &'static str> {
+        #[cfg(unix)]
+        {
+            let Ok(c) = std::ffi::CString::new(target) else {
+                return Err("io");
+            };
+            if let Some(d) = cwd {
+                std::env::set_current_dir(d).map_err(|e| refusal(&e))?;
+            }
+            // SAFETY: a NUL-terminated path this call owns.
+            if unsafe { libc::chroot(c.as_ptr()) } == 0 {
+                return Ok(());
+            }
+            Err(refusal(&std::io::Error::last_os_error()))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (target, cwd);
+            Err("unsupported")
+        }
+    }
+
+    /// The nice value (`getpriority(PRIO_PROCESS, 0)`, errno read: -1 is a
+    /// value); `None` on windows.
+    pub(super) fn priority() -> Option<i64> {
+        #[cfg(unix)]
+        {
+            // errno cleared, the call made, errno read: a -1 with errno 0 is
+            // the value -1.
+            // SAFETY: the call takes constants; errno is this thread's.
+            unsafe {
+                *errno_slot() = 0;
+                let p = libc::getpriority(libc::PRIO_PROCESS, 0);
+                if p == -1 && *errno_slot() != 0 {
+                    return None;
+                }
+                Some(i64::from(p))
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            None
+        }
+    }
+
+    /// `wolf_rt::procattr::set_priority`: the value read, the delta added
+    /// (saturating), clamped to `[PRIO_MIN, PRIO_MAX]`, set.
+    pub(super) fn set_priority(delta: i64) -> Result<(), &'static str> {
+        #[cfg(unix)]
+        {
+            let now = priority().ok_or("io")?;
+            let want = now
+                .saturating_add(delta)
+                .clamp(i64::from(libc::PRIO_MIN), i64::from(libc::PRIO_MAX))
+                as libc::c_int;
+            // SAFETY: setpriority with constants and an int in range.
+            if unsafe { libc::setpriority(libc::PRIO_PROCESS, 0, want) } == 0 {
+                return Ok(());
+            }
+            Err(refusal(&std::io::Error::last_os_error()))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = delta;
+            Err("unsupported")
+        }
+    }
+
+    #[cfg(all(unix, target_os = "linux"))]
+    unsafe fn errno_slot() -> *mut libc::c_int {
+        unsafe { libc::__errno_location() }
+    }
+    #[cfg(all(unix, not(target_os = "linux")))]
+    unsafe fn errno_slot() -> *mut libc::c_int {
+        unsafe { libc::__error() }
     }
 }
 
@@ -15960,6 +16301,54 @@ mod checked_sig {
     /// on linux the kernel's real-time signals from 32 up to the C
     /// library's first (`SIGRTMIN()`) are the C library's own; none
     /// elsewhere.
+    /// s272 (#975): whether `sig` is one of the two fault meanings' signals
+    /// (the `wolf` process's own stack guard's); none on windows.
+    pub(super) fn is_fault(sig: i32) -> bool {
+        #[cfg(unix)]
+        {
+            sig == libc::SIGSEGV || sig == libc::SIGBUS
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = sig;
+            false
+        }
+    }
+
+    /// s272 (#975, `[os.signal.action.one]`): `sig`'s action read and never
+    /// changed (`sigaction` with no new action) — 0 default, 1 ignored, 2
+    /// another handler — `SIGPIPE` from the `wolf` process's inherited
+    /// record while `pipe_from_record` (`ignored`'s rule); the host's
+    /// refusal of the GET `io`, its number noted.
+    pub(super) fn action_one(sig: i32, pipe_from_record: bool) -> Result<i64, &'static str> {
+        #[cfg(unix)]
+        {
+            if sig == libc::SIGPIPE && pipe_from_record {
+                return Ok(i64::from(INHERITED_PIPE.load(Ordering::SeqCst) == 1));
+            }
+            // SAFETY: a read-only sigaction query into a zeroed struct.
+            unsafe {
+                let mut old: libc::sigaction = std::mem::zeroed();
+                if libc::sigaction(sig, std::ptr::null(), &mut old) != 0 {
+                    super::fs_host_error(&std::io::Error::last_os_error());
+                    return Err("io");
+                }
+                Ok(if old.sa_sigaction == libc::SIG_DFL {
+                    0
+                } else if old.sa_sigaction == libc::SIG_IGN {
+                    1
+                } else {
+                    2
+                })
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (sig, pipe_from_record);
+            Err("unsupported")
+        }
+    }
+
     pub(super) fn reserved(sig: i32) -> bool {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         {
@@ -16580,6 +16969,10 @@ mod checked_term {
         if t.c_iflag & libc::ISTRIP != 0 {
             m |= 128;
         }
+        // s272 (#976): RAW_LF (ONLCR clear), the runtime's bit 24.
+        if t.c_oflag & libc::ONLCR == 0 {
+            m |= 1 << 24;
+        }
         m |= i64::from(t.c_cc[libc::VMIN]) << 8;
         m |= i64::from(t.c_cc[libc::VTIME]) << 16;
         Ok(m)
@@ -16625,6 +17018,12 @@ mod checked_term {
             t.c_iflag |= libc::ISTRIP;
         } else {
             t.c_iflag &= !libc::ISTRIP;
+        }
+        // s272 (#976): RAW_LF clears ONLCR, the runtime's bit 24.
+        if m & 1 << 24 != 0 {
+            t.c_oflag &= !libc::ONLCR;
+        } else {
+            t.c_oflag |= libc::ONLCR;
         }
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
