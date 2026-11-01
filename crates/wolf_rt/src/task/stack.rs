@@ -666,6 +666,15 @@ pub fn sent_fault_ignored(sig: libc::c_int) -> bool {
     sent_flag(sig).is_some_and(|f| f.load(SeqCst))
 }
 
+/// s272 (wolf-lang#975, `[os.signal.action.one]`; R-s272-9): whether `h`,
+/// a disposition a `sigaction` GET read, is this runtime's own guard
+/// reporter — the handler the program never chose, behind which the
+/// program's choice for a SENT fault is [`sent_fault_ignored`].
+pub fn guard_holds(h: libc::sighandler_t) -> bool {
+    h == overflow_handler as extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)
+        as usize
+}
+
 /// s246 (`[os.signal.disp]`'s rule across `exec`): the signals of the
 /// fault meanings this program ignores, which a child or an exec'd image
 /// must start with ignored — the handler that tells a sent one from a

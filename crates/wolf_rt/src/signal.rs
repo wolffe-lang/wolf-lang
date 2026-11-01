@@ -1600,6 +1600,41 @@ mod sys {
         std::process::exit(128 + sig)
     }
 
+    /// s272 (wolf-lang#975, `[os.signal.action.one]`; R-s272-8, R-s272-9):
+    /// ONE meaning's action, read and never changed — `sigaction` with a
+    /// null new action, so no disposition and no mask moves. The meaning
+    /// is the SENDING shape ([`host_signal`]: one bit of the table or `-N`,
+    /// never 0); `KILL`, `STOP` and the C library's own numbers are asked
+    /// of the host, whose refusal of the GET is `IO` with its number beside
+    /// the row (Darwin: `EINVAL` on KILL and STOP; glibc: on 32 and 33).
+    /// `Ok`: 0 the default, 1 ignored, 2 another handler — a listen's
+    /// trampoline among them; the stack guard's reporter on `SIGSEGV` or
+    /// `SIGBUS` answers the program's choice for a sent one (1 ignored,
+    /// else 0), never 2. Codes are `os::proc_code`'s.
+    pub fn action_one(m: i64) -> Result<i64, i64> {
+        use crate::os::proc_code;
+        crate::fs::os_error_clear();
+        let sig = host_signal(m, false)?;
+        // SAFETY: a read-only sigaction query into a zeroed struct.
+        let h = unsafe {
+            let mut old: libc::sigaction = std::mem::zeroed();
+            if libc::sigaction(sig, std::ptr::null(), &mut old) != 0 {
+                crate::fs::os_error_record(&std::io::Error::last_os_error());
+                return Err(proc_code::IO);
+            }
+            old.sa_sigaction
+        };
+        Ok(if h == libc::SIG_DFL {
+            0
+        } else if h == libc::SIG_IGN {
+            1
+        } else if (sig == libc::SIGSEGV || sig == libc::SIGBUS) && crate::task::guard_holds(h) {
+            i64::from(crate::task::sent_fault_ignored(sig))
+        } else {
+            2
+        })
+    }
+
     /// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
     /// signal is ignored now — `sigaction` with a null new action reads
     /// the disposition and changes nothing.
@@ -2181,6 +2216,14 @@ mod sys {
             Err(c) => c,
         }
     }
+
+    /// s272 (`[os.signal.action.one]`): no dispositions to read on windows
+    /// — `unsupported` after the shape (0 is `invalid`).
+    pub fn action_one(m: i64) -> Result<i64, i64> {
+        crate::fs::os_error_clear();
+        host_signal(m, false)?;
+        Err(crate::os::proc_code::UNSUPPORTED)
+    }
 }
 
 /// `os_signal_listen(set)` — register interest in a set of meanings,
@@ -2498,6 +2541,14 @@ pub fn exit_signal(m: i64) -> i64 {
     sys::exit_signal(m)
 }
 
+/// s272 (#975, `[os.signal.action.one]`): one meaning's action in the
+/// sending shape, read and never changed — `Ok(0)` default, `Ok(1)`
+/// ignored, `Ok(2)` another handler; `Err` an `os::proc_code` (6 invalid,
+/// 5 unsupported, 4 io with the host's number in `os_error()`).
+pub fn action_one(m: i64) -> Result<i64, i64> {
+    sys::action_one(m)
+}
+
 /// The signal numbers of the meanings in `set`, for a child's hook
 /// (s219's spawn `defaults`); 0 slots are unused. Empty on windows.
 #[cfg(unix)]
@@ -2573,6 +2624,17 @@ pub extern "C" fn __wolf_rt_os_signal_ignore_one(m: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_default_one(m: i64) -> i64 {
     set_disposition_one(m, Disp::Default)
+}
+
+/// `os_signal_action_one(meaning: int) -> int ! {invalid, io,
+/// unsupported}` (s272) — the action (0, 1 or 2), or the negated
+/// `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_action_one(m: i64) -> i64 {
+    match action_one(m) {
+        Ok(a) => a,
+        Err(c) => -c,
+    }
 }
 
 /// `os_exit_signal(meaning: int) -> () ! {invalid, unsupported}` (s246)
@@ -3801,5 +3863,29 @@ mod tests {
                 "the poke's byte moved too"
             );
         });
+    }
+
+    /// s272 (#975): the action query's shape rows (0, two bits, past the
+    /// table: `invalid`), and KILL's answer — linux reads the default,
+    /// Darwin refuses the GET (`io`, EINVAL beside it); nothing moves.
+    #[cfg(unix)]
+    #[test]
+    fn the_action_query_reads_and_refuses_by_shape() {
+        use crate::os::proc_code;
+        assert_eq!(action_one(0), Err(proc_code::INVALID));
+        assert_eq!(action_one(3), Err(proc_code::INVALID));
+        assert_eq!(action_one(1 << 28), Err(proc_code::INVALID));
+        assert_eq!(action_one(-1_099_511_627_776), Err(proc_code::INVALID));
+        let before = ignored();
+        let kill = action_one(meaning::KILL);
+        #[cfg(target_os = "linux")]
+        assert_eq!(kill, Ok(0));
+        #[cfg(target_vendor = "apple")]
+        {
+            assert_eq!(kill, Err(proc_code::IO));
+            assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::EINVAL));
+        }
+        let _ = kill;
+        assert_eq!(ignored(), before, "a query moves no disposition");
     }
 }
