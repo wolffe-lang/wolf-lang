@@ -133,6 +133,26 @@ if probe:
         for stat, xs in sorted(groups[key].items()):
             print(f"    {stat}: {dist(xs)}")
     print()
+    # The mechanism: how much each reading differs from PROCESS to process at the same
+    # turn (20,000), for the flat witness. VmHWM = smaps Rss = Anonymous + file-backed.
+    print("## Across processes at turn 20,000, the flat witness (kB): what the noise is made of")
+    across = collections.defaultdict(lambda: collections.defaultdict(list))
+    for (label, rig, v, tier, m), byn in probe.items():
+        if v != "flat":
+            continue
+        for n, (marks, _, _) in byn.items():
+            if 20000 in marks and None not in marks[20000]:
+                hwm, rss, srss, anon, swap = marks[20000]
+                a2 = across[(label, rig, tier)]
+                a2["VmHWM"].append(hwm)
+                a2["smaps Rss"].append(srss)
+                a2["Anonymous"].append(anon)
+                a2["file-backed (Rss - Anonymous)"].append(srss - anon)
+    for key in sorted(across):
+        print(" ".join(key))
+        for stat, xs in across[key].items():
+            print(f"    {stat}: {dist(xs, '{:.0f}')} spread={max(xs) - min(xs)}")
+    print()
 
 if head:
     print("## The head row (one process, smaps_rollup Anonymous + Swap)")
