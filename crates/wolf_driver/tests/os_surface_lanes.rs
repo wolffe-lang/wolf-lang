@@ -35,7 +35,7 @@
 //!
 //! **lupin 0.1.58**, the pairing, predates every new name: each is pinned
 //! here by version, exactly as measured ("does not resolve"); a newer lupin
-//! is held to the mirror (wolf-interp's issue, filed by this lane).
+//! is held to the mirror (wolf-interp#315, filed by this lane).
 
 mod lane_exit;
 mod test_cpus;
@@ -446,7 +446,7 @@ fn the_mode_word_carries_onlcr_rows() {
         declared_stdout(&entry)
     };
     // lupin 0.1.58 answers the rows with its own shape, in which bit 24 is
-    // not a mode bit (measured on nomad): the mirror is wolf-interp's issue.
+    // not a mode bit (measured on nomad): the mirror is wolf-interp#315.
     every_lane_answers_on_the_host(
         &entry,
         &dir,
