@@ -1,0 +1,1044 @@
+s273: building at 2cfe5413 in /Users/mfwolffe/lanes/s273/build-2cfe5413
+s273: lock taken, 10381 MiB free; running: /Users/mfwolffe/lanes/s273/steps.sh fmt build clippy-touched t-pairswalk t-lanes t-mem t-wir t-driver-region corpus conformance differ lane-coverage
+=== fmt: cargo fmt --all --check
+END fmt exit=0
+=== build: cargo build -j4 -p wolf_driver -p wolf_rt
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.17.1
+   Compiling cfg-if v1.0.4
+   Compiling find-msvc-tools v0.1.10
+   Compiling stable_deref_trait v1.2.1
+   Compiling shlex v2.0.1
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling blake3 v1.8.6
+   Compiling crossbeam-deque v0.8.7
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_lex)
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling zerofrom v0.1.8
+   Compiling cranelift-srcgen v0.134.3
+   Compiling smallvec v1.15.2
+   Compiling arrayvec v0.7.8
+   Compiling yoke v0.8.3
+   Compiling arrayref v0.3.9
+   Compiling rayon-core v1.13.0
+   Compiling constant_time_eq v0.4.2
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling zerovec v0.11.6
+   Compiling wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_parse)
+   Compiling either v1.17.0
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling indexmap v2.14.0
+   Compiling rayon v1.12.0
+   Compiling tinystr v0.8.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling cranelift-isle v0.134.3
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_sema)
+   Compiling fnv v1.0.7
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling serde_core v1.0.229
+   Compiling heck v0.5.0
+   Compiling hashbrown v0.16.1
+   Compiling libc v0.2.189
+   Compiling utf8_iter v1.0.4
+   Compiling icu_normalizer_data v2.2.0
+   Compiling log v0.4.33
+   Compiling icu_properties_data v2.2.0
+   Compiling gimli v0.33.0
+   Compiling icu_collections v2.2.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling icu_provider v2.2.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling target-lexicon v0.13.5
+   Compiling memchr v2.8.3
+   Compiling allocator-api2 v0.2.21
+   Compiling cranelift-codegen v0.134.3
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling rustc-hash v2.1.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling arbitrary v1.4.2
+   Compiling cranelift-control v0.134.3
+   Compiling regalloc2 v0.15.2
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling serde_derive v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling crc32fast v1.5.0
+   Compiling anyhow v1.0.104
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_mem)
+   Compiling itoa v1.0.18
+   Compiling object v0.39.1
+   Compiling percent-encoding v2.3.2
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_fmt)
+   Compiling wolf_query v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_query)
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_wir)
+   Compiling url v2.5.8
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_rt)
+   Compiling wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_backend)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling lsp-server v0.10.0
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_cimport)
+   Compiling wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_pkg)
+   Compiling wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_lsp)
+   Compiling wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_codegen_llvm)
+   Compiling wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_doc)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 23.68s
+END build exit=0
+=== clippy-touched: cargo clippy -j4 -p wolf_mem -p wolf_wir -p wolf_driver --all-targets -- -D warnings
+    Checking cfg-if v1.0.4
+    Checking wolf_span v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_span)
+    Checking crossbeam-utils v0.8.22
+    Checking unicode-ident v1.0.24
+    Checking libc v0.2.189
+    Checking constant_time_eq v0.4.2
+    Checking arrayref v0.3.9
+    Checking wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_diag)
+    Checking arrayvec v0.7.8
+    Checking crossbeam-epoch v0.9.20
+    Checking blake3 v1.8.6
+    Checking wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_lex)
+    Checking wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_ast)
+    Checking crossbeam-deque v0.8.7
+    Checking either v1.17.0
+    Checking rayon-core v1.13.0
+    Checking foldhash v0.2.0
+   Compiling proc-macro2 v1.0.107
+    Checking hashbrown v0.17.1
+    Checking rayon v1.12.0
+    Checking wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_parse)
+   Compiling quote v1.0.47
+    Checking stable_deref_trait v1.2.1
+    Checking smallvec v1.15.2
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+    Checking libm v0.2.16
+    Checking wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_sema)
+    Checking litemap v0.8.2
+    Checking writeable v0.6.3
+    Checking wasmtime-internal-core v47.0.3
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+    Checking fnv v1.0.7
+    Checking log v0.4.33
+    Checking hashbrown v0.16.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+    Checking zerofrom v0.1.8
+    Checking utf8_iter v1.0.4
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling cranelift-codegen-meta v0.134.3
+    Checking yoke v0.8.3
+    Checking gimli v0.33.0
+    Checking zerovec v0.11.6
+    Checking tinystr v0.8.3
+    Checking wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_mem)
+    Checking icu_locale_core v2.2.0
+    Checking potential_utf v0.1.5
+    Checking zerotrie v0.2.4
+    Checking icu_collections v2.2.0
+    Checking icu_provider v2.2.0
+    Checking cranelift-bitset v0.134.3
+    Checking memchr v2.8.3
+    Checking allocator-api2 v0.2.21
+   Compiling cranelift-codegen v0.134.3
+    Checking bumpalo v3.20.3
+    Checking cranelift-entity v0.134.3
+    Checking serde_core v1.0.229
+    Checking icu_properties_data v2.2.0
+    Checking icu_normalizer_data v2.2.0
+    Checking arbitrary v1.4.2
+    Checking rustc-hash v2.1.3
+    Checking regalloc2 v0.15.2
+    Checking cranelift-control v0.134.3
+    Checking icu_normalizer v2.2.0
+    Checking icu_properties v2.2.0
+    Checking cranelift-bforest v0.134.3
+    Checking cranelift-assembler-x64 v0.134.3
+    Checking target-lexicon v0.13.5
+   Compiling serde_derive v1.0.229
+    Checking wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_wir)
+    Checking serde v1.0.229
+    Checking idna_adapter v1.2.2
+    Checking zmij v1.0.23
+    Checking percent-encoding v2.3.2
+    Checking itoa v1.0.18
+    Checking serde_json v1.0.151
+    Checking form_urlencoded v1.2.2
+    Checking idna v1.1.0
+    Checking anyhow v1.0.104
+    Checking crc32fast v1.5.0
+    Checking wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_fmt)
+    Checking wolf_query v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_query)
+    Checking wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_backend)
+    Checking object v0.39.1
+    Checking url v2.5.8
+   Compiling serde_repr v0.1.21
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_rt)
+    Checking crossbeam-channel v0.5.16
+    Checking bitflags v1.3.2
+    Checking lsp-types v0.95.1
+    Checking lsp-server v0.10.0
+    Checking wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_cimport)
+    Checking wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_codegen_llvm)
+    Checking wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_pkg)
+    Checking wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_doc)
+   Compiling getrandom v0.4.3
+   Compiling rustix v1.1.4
+    Checking errno v0.3.14
+    Checking bitflags v2.13.1
+    Checking once_cell v1.21.4
+    Checking fastrand v2.5.0
+    Checking console v0.16.4
+    Checking similar v2.7.0
+    Checking tempfile v3.27.0
+    Checking insta v1.48.0
+    Checking wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_lsp)
+    Checking cranelift-module v0.134.3
+    Checking cranelift-frontend v0.134.3
+    Checking cranelift-object v0.134.3
+    Checking wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.10s
+END clippy-touched exit=0
+=== t-pairswalk: cargo test -j4 -p wolf_mem --test pairswalk
+   Compiling errno v0.3.14
+   Compiling bitflags v2.13.1
+   Compiling getrandom v0.4.3
+   Compiling once_cell v1.21.4
+   Compiling fastrand v2.5.0
+   Compiling console v0.16.4
+   Compiling rustix v1.1.4
+   Compiling similar v2.7.0
+   Compiling tempfile v3.27.0
+   Compiling insta v1.48.0
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_mem)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.27s
+     Running tests/pairswalk.rs (target/debug/deps/pairswalk-57861b4305358a68)
+
+running 3 tests
+test every_other_iterable_materializes ... ok
+test a_body_that_never_names_the_map_walks_its_entries ... ok
+test a_body_that_names_the_map_materializes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END t-pairswalk exit=0
+=== t-lanes: cargo test -j4 -p wolf_driver --test map_pairs_walk_lanes -- --test-threads=1 --nocapture
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running tests/map_pairs_walk_lanes.rs (target/debug/deps/map_pairs_walk_lanes-c252555c047a67c2)
+
+running 7 tests
+test a_refilled_container_charges_only_past_its_storage_on_every_machine ... REPORT reuse_ledger --checked: exit(0) "true true true true true true true 1616\n"
+REPORT reuse_ledger --native: exit(0) "true true true true true true true 1616\n"
+REPORT reuse_ledger --release: exit(0) "true true true true true true true 1616\n"
+ok
+test a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine ... REPORT memory/list_reset_reuse_ledger.lu --checked: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu --native: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu --release: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu lupin 0.1.58 6240efe: exit(0) "8 false true\n"
+ok
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively ... REPORT mapwalk native: 2000 entries 2097152 B, 4000 entries 2260992 B, 81 B an entry
+REPORT mapwalk release: 2000 entries 2113536 B, 4000 entries 2277376 B, 81 B an entry
+ok
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine ... REPORT mapwalk checked: 500 entries 15925248 B, 1000 entries 16285696 B, 720 B an entry
+ok
+test a_walk_that_never_names_its_map_charges_nothing_on_every_machine ... REPORT memory/map_pairs_walk_view.lu --checked: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu --native: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu --release: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu lupin 0.1.58 6240efe: exit(0) "64 201600 7 true true\n"
+ok
+test a_walk_whose_body_writes_the_map_sees_its_snapshot_on_every_machine ... REPORT memory/map_pairs_walk_snapshot.lu --checked: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --native: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --release: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu lupin 0.1.58 6240efe: exit(0) "abc 6 3 20 4\n"
+ok
+test the_refill_pin_names_only_the_measured_release_record ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.79s
+
+END t-lanes exit=0
+=== t-mem: cargo test -j4 -p wolf_mem
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_mem)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.77s
+     Running unittests src/lib.rs (target/debug/deps/wolf_mem-33926ca5c2b2b7e3)
+
+running 32 tests
+test json::tests::numbers_render_as_source ... ok
+test json::tests::rfc_smoke ... ok
+test json::tests::escapes_and_surrogates ... ok
+test json::tests::container_get_renders_json ... ok
+test json::tests::depth_limit_is_a_parse_error ... ok
+test json::tests::paths_and_kinds ... ok
+test json::tests::duplicate_names_are_last_wins ... ok
+test loans::tests::nll_case_1_last_use_before_mutation ... ok
+test json::tests::is18_probe_shapes_are_pinned ... ok
+test loans::tests::nll_case_3_polonius_conditional_escape_accepted ... ok
+test loans::tests::nll_case_2_branch_local_loan ... ok
+test loans::tests::write_while_loan_needed_rejected ... ok
+test loans::tests::overwrite_kills_loan ... ok
+test loans::tests::two_phase_reserved_reads_ok_active_reads_conflict ... ok
+test loans::tests::loop_fixpoint_deterministic ... ok
+test place::tests::a_member_never_meets_an_element_under_a_claim ... ok
+test loans::tests::shared_shared_ok_unique_over_shared_rejected ... ok
+test place::tests::an_element_is_not_a_member ... ok
+test place::tests::claims_separate_literals_and_nothing_else ... ok
+test place::tests::covers_is_prefix_only ... ok
+test place::tests::covers_must_is_item_three ... ok
+test place::tests::disjoint_fields_do_not_overlap ... ok
+test place::tests::keys_display_by_value ... ok
+test place::tests::literals_are_distinct_by_value_for_moves ... ok
+test place::tests::opaque_matches_every_index_at_its_step ... ok
+test json::tests::duplicate_names_in_a_wide_object ... ok
+test place::tests::prefixes_overlap_both_ways ... ok
+test place::tests::r1_separates_offsets_of_one_stable_local ... ok
+test place::tests::r2_separates_a_loop_index_from_a_literal_outside_its_range ... ok
+test regions::tests::direct_param_param_merge_is_the_annotation_case ... ok
+test regions::tests::params_absorb_rigids_but_rigids_never_merge ... ok
+test regions::tests::scope_regions_stay_distinct ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/byteview.rs (target/debug/deps/byteview-e58077a045bad31b)
+
+running 26 tests
+test a_take_parameter_is_never_a_lend ... ok
+test a_non_byte_list_is_never_a_lend ... ok
+test binding_the_parameter_to_a_local_materializes ... ok
+test a_re_lend_into_a_lendable_parameter_is_lendable ... ok
+test a_local_rebinding_of_the_name_materializes ... ok
+test a_copy_of_the_parameter_is_lendable ... ok
+test an_assignment_away_escapes ... ok
+test a_copy_handed_to_a_reader_is_lendable ... ok
+test a_branch_tail_escapes ... ok
+test a_builtin_consumer_materializes ... ok
+test an_explicit_return_escapes ... ok
+test a_mut_parameter_is_never_a_lend ... ok
+test an_index_expression_over_the_view_is_still_lendable ... ok
+test a_transitive_escape_is_an_escape ... ok
+test a_recursive_walk_that_escapes_still_escapes ... ok
+test a_self_recursive_walk_is_lendable ... ok
+test a_re_lend_into_an_opaque_parameter_materializes ... ok
+test a_mutually_recursive_walk_is_lendable ... ok
+test indexing_is_lendable ... ok
+test iteration_is_lendable ... ok
+test the_len_field_is_lendable ... ok
+test the_len_field_is_the_only_field_a_view_has ... ok
+test returning_the_parameter_escapes ... ok
+test two_parameters_lend_independently ... ok
+test the_query_family_is_lendable ... ok
+test eight_of_nine_std_bytes_functions_lend ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/cfg_dumps.rs (target/debug/deps/cfg_dumps-348c1a8157e072d2)
+
+running 28 tests
+test dump_is_deterministic ... ok
+test dump_move_use_after ... ok
+test dump_exclusivity_acceptance_file ... ok
+test dump_handle_pool ... ok
+test dump_defer_order ... ok
+test dump_exclusivity_nested_path ... ok
+test dump_unsafe_noalias ... ok
+test dump_excl_disjoint_ok ... ok
+test facts_shared_rc ... ok
+test dump_regions_acceptance_file ... ok
+test facts_move_use_after ... ok
+test dump_excl_overlap ... ok
+test dump_unsafe_door_borrow ... ok
+test facts_exclusivity_acceptance_file ... ok
+test facts_regions_acceptance_file ... ok
+test dump_shared_rc ... ok
+test facts_handle_pool ... ok
+test dump_view_set_norm ... ok
+test dump_use_after_move_field ... ok
+test facts_unsafe_door_borrow ... ok
+test facts_unsafe_creation_not_use ... ok
+test facts_unsafe_noalias ... ok
+test regions_dump_list_builder ... ok
+test regions_dump_request_handler ... ok
+test regions_dump_tree_transform ... ok
+test regions_facts_request_handler ... ok
+test regions_dump_is_deterministic ... ok
+test fuzz::checker_never_panics_and_is_deterministic ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/checked_tasks.rs (target/debug/deps/checked_tasks-8c2f22f8a8148950)
+
+running 10 tests
+test os_exit_on_a_task_exits_the_run ... ok
+test a_trap_inside_a_proc_is_a_fault_at_the_join ... ok
+test a_ub_finding_inside_a_proc_ends_the_run ... ok
+test a_trap_in_a_task_reraises_at_the_scopes_exit ... ok
+test module_state_written_by_two_tasks_is_a_race ... ok
+test module_state_written_across_two_joined_scopes_is_ordered ... ok
+test a_scope_task_allocates_in_the_root_region ... ok
+test a_par_workers_region_is_transferred_to_the_pars_region ... ok
+test a_seed_selects_the_schedule ... ok
+test a_budget_exhausted_in_a_task_is_the_runs_refusal ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/container_depth.rs (target/debug/deps/container_depth-08edf6211ae7266c)
+
+running 4 tests
+test list_pop_to_empty_misses ... ok
+test list_clear ... ok
+test pool_observability ... ok
+test list_recoverable_reads ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/exec_env_checked.rs (target/debug/deps/exec_env_checked-bd07fbde308cd6bc)
+
+running 2 tests
+test exec_rows_that_return_keep_the_record ... ok
+test env_unset_drops_the_name_from_env_vars ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/io_fs.rs (target/debug/deps/io_fs-bb8669e0684b9b0d)
+
+running 21 tests
+test eprint_writes_the_stderr_channel ... ok
+test eprint_honors_format_specs ... ok
+test fs_missing_file_takes_the_else_path ... ok
+test fs_error_row_propagates_out_of_main ... ok
+test fs_append_mode_does_not_read_the_file ... ok
+test fs_rename_moves_without_reading ... ok
+test fs_read_at_end_is_the_eof_row ... ok
+test fs_utf8_failure_is_the_utf8_row ... ok
+test read_line_consumes_lines_then_eof ... ok
+test os_exe_names_an_existing_file ... ok
+test read_line_default_stdin_is_empty ... ok
+test fs_exists_is_total ... ok
+test fs_write_read_roundtrip ... ok
+test fs_read_after_close_is_the_io_row ... ok
+test fs_fstat_reads_the_open_handle ... ok
+test fs_handles_open_write_read_close ... ok
+test fs_read_dir_is_sorted_and_lists_names ... ok
+test fs_open_mode_covers_the_set_and_its_rows ... ok
+test fs_byte_io_carries_what_text_io_refuses ... ok
+test fs_dirs_and_metadata_say_what_exists ... ok
+test fs_new_rows_carry_their_tags ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/mem_diagnostics.rs (target/debug/deps/mem_diagnostics-7c08e73906dc9c8f)
+
+running 144 tests
+test a_bound_bytes_list_is_not_a_lend ... ok
+test clean_copy_read_after_mut_arg ... ok
+test clean_r3_a_pool_handle_local_revives ... ok
+test a_copy_at_a_store_into_an_outer_value_materializes ... ok
+test clean_a_store_revives_the_literal_it_names_and_the_whole_revives_all ... ok
+test a_member_read_under_an_element_claim_stays_silent ... ok
+test clean_iso_edge_then_open_after_close ... ok
+test clean_freeze_then_read_forever ... ok
+test clean_disjoint_and_earlier_reads_beside_a_claim ... ok
+test clean_frozen_return_and_imm_edge ... ok
+test built_strs_in_the_ambient_region_stay_silent ... ok
+test a_read_only_lend_stays_silent ... ok
+test clean_handle_backedge ... ok
+test clean_distinct_literals_and_the_header_after_an_element_move ... ok
+test clean_in_redirect_outlives_scratch ... ok
+test clean_pool_two_phase ... ok
+test clean_mut_param_stored_back_before_every_return ... ok
+test clean_list_mut_receiver_len_and_index ... ok
+test clean_weak_backedge ... ok
+test clean_str_from_a_view_builtin_is_no_site ... ok
+test clean_shared_clone_drop ... ok
+test clean_sibling_multiopen ... ok
+test copy_read_before_mut_stays_silent ... ok
+test clean_r3_a_str_key_local_revives ... ok
+test clean_r3_same_local_index_revives ... ok
+test clean_write_after_a_dyn_pairs_last_use ... ok
+test clean_region_scratch_and_defaults ... ok
+test e1001_a_whole_move_is_not_revived_by_one_element_store ... ok
+test e1001_a_run_time_index_may_be_the_moved_element ... ok
+test clean_unsafe_tier_surface ... ok
+test e1001_field_granular_partial_move ... ok
+test e1001_branch_sensitive_move ... ok
+test clean_str_built_in_the_spawner_and_handed_to_a_proc ... ok
+test e1001_mut_param_moveout_on_an_early_return ... ok
+test e1001_mut_param_used_after_move_reports_once ... ok
+test e1001_mut_param_moveout_on_the_error_edge ... ok
+test clean_reads_and_disjoint_writes_beside_a_mut_receiver ... ok
+test e1001_tuple_destructure_moves_elements ... ok
+test clean_two_phase_reads_of_a_claimed_place ... ok
+test e1001_r3_does_not_carry_across_loop_iterations ... ok
+test e1001_reinit_revives_and_partial_reinit_leaves_residue ... ok
+test e1001_use_in_defer_after_move ... ok
+test e1001_read_param_field_rebound ... ok
+test e1001_whole_value_move ... ok
+test e1002_a_loop_index_the_body_writes ... ok
+test e1002_a_run_time_index_beside_an_element_lend ... ok
+test e1002_an_index_written_between_the_claims ... ok
+test e1002_disjoint_fields_stay_silent ... ok
+test e1002_a_nested_call_claims_a_run_time_index ... ok
+test e1002_nested_call_claims_a_spilled_bases_prefix ... ok
+test e1002_prefix_overlap_mut_mut ... ok
+test e1001_whole_read_methods_after_a_moved_part ... ok
+test e1002_read_param_carried_out ... ok
+test e1002_read_while_mut ... ok
+test e1002_nested_call_claims_inside_a_mut_arg ... ok
+test e1002_read_param_returned ... ok
+test e1002_take_while_mut ... ok
+test e1002_the_whole_container_read_under_an_element_claim ... ok
+test e1002_write_under_a_dyn_pair ... ok
+test e1005_freeze_while_open ... ok
+test e1004_cross_region_store ... ok
+test e1005_move_while_open ... ok
+test e1004_param_param_store ... ok
+test e1006_direct_strong_cycle ... ok
+test e1006_cycle_through_list ... ok
+test e1002_a_mut_receiver_written_moved_or_claimed_in_its_own_arguments ... ok
+test e1006_two_type_cycle ... ok
+test e1002_writes_and_moves_inside_a_later_arguments_claim ... ok
+test e1001_r3_over_a_copy_key_does_not_hold_after_the_key_is_written ... ok
+test e1007_take_where_mut ... ok
+test e1007_extra_mut ... ok
+test e1007_missing_take ... ok
+test e1007_missing_mut ... ok
+test e1009_mut_temporary ... ok
+test e1008_view_set_violation ... ok
+test e1010_a_callee_may_send_what_it_builds_in_the_caller_s_region ... ok
+test e1010_a_callee_may_send_its_argument ... ok
+test e1010_a_callee_may_keep_its_argument_in_a_mut_argument ... ok
+test e1010_a_closure_that_captured_a_channel_is_called ... ok
+test e1010_a_closure_that_captured_a_channel_is_returned ... ok
+test e1010_a_closure_that_captured_a_channel_is_handed_to_a_callee ... ok
+test e1010_a_copy_bound_inside_the_block_still_shares_its_strs ... ok
+test e1001_r3_does_not_hold_after_the_index_is_written ... ok
+test e1010_a_helper_that_leaves_a_proc_running_with_its_caller_s_region ... ok
+test e1010_a_map_store_keeps_its_key ... ok
+test e1010_a_kept_aggregate_argument_has_no_fix_it ... ok
+test e1010_a_spawn_argument_built_in_a_region_block ... ok
+test e1010_a_helper_that_leaves_a_proc_running_with_its_parameter ... ok
+test e1010_region_block_value_escapes ... ok
+test e1010_a_sent_argument_under_in_has_a_fix_it ... ok
+test e1010_a_struct_payload_and_a_channel_inside_a_struct ... ok
+test e1010_a_proc_s_helper_may_send_what_the_proc_built ... ok
+test e1010_region_built_str_by_interpolation_held_outside ... ok
+test e1010_region_built_str_by_append_held_outside ... ok
+test e1010_region_built_str_is_the_block_value ... ok
+test e1010_no_summary_names_a_closure_or_a_fn_value ... ok
+test e1010_a_spawn_argument_beside_a_channel ... ok
+test e1010_region_local_outlives_free ... ok
+test e1011_open_child_of_open_owner ... ok
+test e1010_str_field_read_out_of_a_region_local_struct ... ok
+test e1010_str_from_a_materializing_builtin ... ok
+test e1010_str_built_in_a_proc_and_sent ... ok
+test e1012_reopen_frozen_region ... ok
+test e1012_write_through_frozen ... ok
+test e1013_move_while_iterating ... ok
+test e1013_push_while_iterating ... ok
+test e1013_reassign_while_iterating ... ok
+test e1001_mut_param_moveout_at_return ... ok
+test e1014_read_self_method_write ... ok
+test e1014_mut_lend_of_read_param ... ok
+test e1014_write_through_read_param_projection ... ok
+test e1014_whole_reassign_and_compound ... ok
+test e1301_atomic_outside_unsafe ... ok
+test e1301_provenance_op_and_cast_outside_unsafe ... ok
+test e1301_module_var_outside_unsafe ... ok
+test e1302_private_struct_field_is_allowed ... ok
+test e1014_read_param_through_a_rebinding ... ok
+test e1301_raw_ops_outside_unsafe ... ok
+test e1301_volatile_outside_unsafe ... ok
+test e1304_assume_needs_pointers ... ok
+test e1305_door_misuse ... ok
+test e1302_private_and_membrane_signatures_are_allowed ... ok
+test e1302_ptr_in_signature ... ok
+test iterate_then_mutate_stays_silent ... ok
+test moves_ok_stays_silent ... ok
+test nested_call_on_a_disjoint_place_stays_silent ... ok
+test nested_read_iteration_stays_silent ... ok
+test read_param_reads_stay_silent ... ok
+test w1001_region_never_allocates ... ok
+test two_phase_copy_read_into_mut_call_stays_silent ... ok
+test nested_fn_parameters_carry_their_modes ... ok
+test two_literal_element_lends_stay_silent ... ok
+test element_claims_per_leg_stay_silent ... ok
+test view_set_litmus_stays_silent ... ok
+test w1004_lent_view_returned ... ok
+test spawn_arguments_that_outlive_the_frame_stay_silent ... ok
+test kept_arguments_that_cannot_dangle_stay_silent ... ok
+test offsets_and_loop_indices_stay_silent_in_one_call ... ok
+test w1301_unsafe_block_without_safety_comment ... ok
+test header_methods_beside_a_moved_or_claimed_element_stay_silent ... ok
+test w1004_lent_view_relent_into_an_escape ... ok
+test read_param_moves_that_stay_legal ... ok
+test procs_waited_for_on_every_path_stay_silent ... ok
+test sent_arguments_that_cannot_dangle_stay_silent ... ok
+
+test result: ok. 144 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/net.rs (target/debug/deps/net-a5d1afccc17505d8)
+
+running 18 tests
+test write_bytes_takes_a_byte_list_since_s136 ... ok
+test accept_deadline_fires_clears_and_recovers ... ok
+test deadline_after_a_reset_close_arms_and_the_reply_is_readable ... ok
+test adoption_and_an_inherit_set_refuse_with_the_construct_named ... ok
+test listen_with_options_and_rows ... ok
+test forged_and_closed_fds_are_the_io_row ... ok
+test deadline_on_a_forged_fd_is_the_io_row ... ok
+test peer_close_is_the_closed_row ... ok
+test read_deadline_against_a_silent_peer_is_the_timeout_row ... ok
+test nodelay_toggles_and_its_rows ... ok
+test read_zero_max_is_empty ... ok
+test refused_row_handles_and_propagates ... ok
+test wait_names_the_socket_that_spoke ... ok
+test writev_gathers_parts_in_order ... ok
+test unix_echo_rows_and_cleanup ... ok
+test invalid_utf8_from_a_foreign_peer_is_the_utf8_row ... ok
+test byte_roundtrip_carries_binary ... ok
+test echo_roundtrip_over_loopback ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests/os_time_json.rs (target/debug/deps/os_time_json-f880344ee32d6c84)
+
+running 23 tests
+test os_exit_masks_to_the_process_range ... ok
+test json_valid_answers_rfc8259 ... ok
+test env_args_default_is_empty ... ok
+test os_random_negative_count_traps_assert ... ok
+test env_set_invalid_name_is_a_row ... ok
+test json_type_and_len ... ok
+test env_set_get_roundtrip_in_the_overlay ... ok
+test env_get_missing_is_a_row ... ok
+test json_get_walks_paths ... ok
+test os_exit_stops_with_the_code_and_skips_the_rest ... ok
+test json_rows_parse_missing_kind ... ok
+test cwd_is_nonempty ... ok
+test json_escapes_decode ... ok
+test unix_ms_is_after_2020 ... ok
+test env_vars_sees_the_overlay_sorted ... ok
+test spawn_empty_argv_is_not_found ... ok
+test kill_then_wait_is_the_signal_row ... ok
+test os_random_two_draws_differ_and_are_bytes ... ok
+test wait_on_a_forged_handle_is_io ... ok
+test spawn_missing_program_is_not_found ... ok
+test monotonic_now_and_sleep ... ok
+test spawn_wait_exit_code_and_double_wait ... ok
+test os_random_zero_and_large_lengths ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests/pairswalk.rs (target/debug/deps/pairswalk-57861b4305358a68)
+
+running 3 tests
+test a_body_that_never_names_the_map_walks_its_entries ... ok
+test every_other_iterable_materializes ... ok
+test a_body_that_names_the_map_materializes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/read_views.rs (target/debug/deps/read_views-67eebd6f576e6bc0)
+
+running 6 tests
+test borrowed_header_methods_do_not_read_moved_elements ... ok
+test indexed_read_still_moves_inside_its_activation ... ok
+test copied_container_is_not_a_read_view ... ok
+test indexed_read_rebound_root_survives ... ok
+test indexed_read_different_source_spans_name_the_same_place ... ok
+test indexed_read_caller_survives ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/str_builtins.rs (target/debug/deps/str_builtins-8b40a36a91e97aa3)
+
+running 36 tests
+test a_format_spec_on_a_composite_hole_refuses ... ok
+test format_spec_str_precision_respects_boundaries ... ok
+test format_spec_computed_still_refuses ... ok
+test double_braces_are_literal ... ok
+test format_spec_fill_align_width ... ok
+test float_arithmetic_is_ieee ... ok
+test inclusive_slice ... ok
+test empty_needle_is_defined ... ok
+test format_spec_floats_evaluate ... ok
+test format_spec_sign_zero_and_bases ... ok
+test get_is_the_recoverable_slice ... ok
+test find_returns_byte_offsets ... ok
+test case_count_repeat_replace ... ok
+test affix_probes ... ok
+test from_utf8_round_trips_the_byte_view ... ok
+test a_list_returned_from_a_call_indexes_as_a_temporary ... ok
+test interp_preserves_utf8 ... ok
+test multiline_with_holes_refuses ... ok
+test indexing_a_byte_view_out_of_range_traps ... ok
+test interpolated_str_as_a_value ... ok
+test len_is_bytes ... ok
+test repeat_negative_traps ... ok
+test slice_oob_traps_bounds ... ok
+test from_utf8_accepts_text_including_an_interior_nul ... ok
+test multiline_dedents_by_closing_column ... ok
+test slice_split_code_point_traps_bounds ... ok
+test slicing_from_end ... ok
+test str_ordering_is_byte_lexicographic ... ok
+test slicing_shares_bytes ... ok
+test raise_resolves_declared_row_before_value_namespace ... ok
+test from_utf8_refuses_the_ugly_inputs_as_a_row_not_a_trap ... ok
+test strip_and_trim ... ok
+test words_lines_split_bytes ... ok
+test the_byte_view_query_family_runs_on_a_temporary ... ok
+test to_int_parses_a_trimmed_decimal_or_rows ... ok
+test interpolation_renders_composite_values ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ubcheck.rs (target/debug/deps/ubcheck-9625471f9f504cd9)
+
+running 57 tests
+test an_inclusive_value_at_int_max_still_traps_where_it_is_built ... ok
+test an_exclusive_value_at_int_max_yields_its_items ... ok
+test a_wide_range_value_iterates_without_materializing ... ok
+test a_float_narrowed_to_int_truncates_toward_zero ... ok
+test an_int_widened_to_f64_equals_the_float_it_equals ... ok
+test an_inclusive_header_at_int_max_walks_to_the_end_without_trapping ... ok
+test a_wide_range_header_iterates_without_materializing ... ok
+test a_handler_return_in_argument_position_returns_from_the_caller ... ok
+test a_channel_passed_to_a_fn_is_the_same_channel ... ok
+test a_raw_row_argument_binds_when_the_callee_ignores_it ... ok
+test a_float_that_fits_no_integer_traps ... ok
+test a_raw_row_binds_through_a_method_argument ... ok
+test comptime_folds_execute_checked ... ok
+test l2_double_free_flags ... ok
+test l1_near_miss_written_first_passes ... ok
+test l1_uninitialized_read_flags ... ok
+test l2_near_miss_single_free_passes ... ok
+test a_raw_row_in_argument_position_binds_on_the_path_that_raises ... ok
+test p1_use_after_free_flags ... ok
+test bound_row_crosses_a_call_to_its_handler ... ok
+test p2_near_miss_read_through_frozen_passes ... ok
+test p3_near_miss_in_bounds_passes ... ok
+test p1_near_miss_read_before_free_passes ... ok
+test iterate_then_mutate_agrees_checked ... ok
+test p2_write_through_frozen_flags ... ok
+test p3_out_of_bounds_flags ... ok
+test p5_false_noalias_flags ... ok
+test p4_near_miss_region_alive_passes ... ok
+test a_blocking_channel_operation_on_the_only_task_is_deadlock ... ok
+test p4_access_after_region_free_flags ... ok
+test p6_near_miss_true_door_passes ... ok
+test p6_false_door_flags ... ok
+test posture_mutate_while_iterating_walks_the_snapshot ... ok
+test t2_and_c1_are_out_of_single_threaded_scope ... ok
+test posture_copy_read_after_mut_runs_clean ... ok
+test raw_row_at_let_binds_and_reaches_its_handler ... ok
+test posture_write_through_read_param_lands_on_the_copy ... ok
+test p5_near_miss_distinct_allocations_passes ... ok
+test raw_row_at_assignment_binds ... ok
+test t1_invalid_bool_flags ... ok
+test qmark_still_propagates_through_let ... ok
+test t1_near_miss_valid_bool_passes ... ok
+test tuple_destructure_nested_and_wildcards ... ok
+test tuple_destructure_moves_elements_not_the_whole ... ok
+test qmark_in_argument_position_propagates_past_the_call ... ok
+test wrapping_shift_amount_masks_to_width ... ok
+test wrapping_compound_bitwise_assign ... ok
+test wrapping_narrow_cast_masks_to_width ... ok
+test wrapping_u64_full_range_literal ... ok
+test variadic_calls_are_named_checked_refusals_both_ways ... ok
+test wrapping_u64_shr_is_logical ... ok
+test root_task_channels_send_drain_and_answer_closed ... ok
+test wrapping_shift_bitwise_mirror_native ... ok
+test recursion_to_the_depth_budget_answers_on_any_callers_stack ... ok
+test a_wide_range_that_never_exits_is_the_step_budget ... ok
+test f0048_same_named_fns_across_modules_verdict_is_stable ... ok
+test e1401_uaf_diagnostic ... ok
+
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests wolf_mem
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END t-mem exit=0
+=== t-wir: cargo test -j4 -p wolf_wir
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_wir)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.59s
+     Running unittests src/lib.rs (target/debug/deps/wolf_wir-832585c08357c9a3)
+
+running 40 tests
+test lower::c_layout_tests::a_field_is_as_aligned_as_its_offset_allows ... ok
+test entity::tests::primary_map_lifo_truncate ... ok
+test entity::tests::primary_map_push_and_index ... ok
+test entity::tests::list_pool_intern_get_truncate ... ok
+test lower::strlit_parity::the_engine_and_the_lowering_cook_one_value ... ok
+test profile::tests::a_bad_hash_refuses ... ok
+test entity::tests::secondary_map_defaults_and_growth ... ok
+test hash::tests::known_vectors ... ok
+test lower::c_layout_tests::the_c_layout_is_the_psabi_one ... ok
+test atomic_intrinsic_tests::every_intrinsic_round_trips ... ok
+test profile::tests::a_future_version_refuses_loudly ... ok
+test profile::tests::a_lying_samples_header_refuses ... ok
+test profile::tests::a_missing_producer_refuses ... ok
+test profile::tests::a_missing_version_header_refuses ... ok
+test midend::instrument::tests::a_library_shaped_module_reports_no_entry ... ok
+test profile::tests::a_profile_that_matches_nothing_is_fully_stale ... ok
+test profile::tests::an_empty_file_refuses ... ok
+test profile::tests::an_empty_profile_is_never_fully_stale ... ok
+test profile::tests::an_unknown_directive_refuses_instead_of_skipping ... ok
+test profile::tests::coverage_scores_matched_stale_and_unprofiled ... ok
+test profile::tests::extra_counts_on_a_record_refuse ... ok
+test midend::instrument::tests::counter_indices_are_dense_and_program_wide ... ok
+test profile::tests::merge_is_commutative_in_its_counts ... ok
+test midend::instrument::tests::main_inits_first_and_dumps_before_every_ret ... ok
+test midend::instrument::tests::the_bump_is_the_first_instruction_of_its_block ... ok
+test midend::instrument::tests::every_block_gets_exactly_one_counter ... ok
+test profile::tests::merge_sums_compatible_records_and_keeps_the_rest ... ok
+test profile::tests::merging_incompatible_records_refuses ... ok
+test midend::instrument::tests::the_index_blob_names_every_body_by_content_hash ... ok
+test profile::tests::record_accessors_read_the_positional_counts ... ok
+test profile::tests::records_render_in_hash_order ... ok
+test midend::instrument::tests::an_instrumented_module_still_verifies ... ok
+test profile::tests::samples_is_the_sum_of_every_count ... ok
+test profile::tests::round_trip_is_a_fixpoint ... ok
+test profile::tests::the_reserved_sample_producer_refuses_at_v1 ... ok
+test profile::tests::too_few_counts_refuse ... ok
+test midend::instrument::tests::instrumentation_is_deterministic ... ok
+test types::tests::mem_and_agg_dedup ... ok
+test types::tests::scalars_are_pre_interned ... ok
+test types::tests::union_interns_one_set_once ... ok
+
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/build_peephole.rs (target/debug/deps/build_peephole-a42a55fb77c81603)
+
+running 24 tests
+test icmp_same_operand_folds_by_reflexivity ... ok
+test gvn_misses_across_non_dominating_scopes ... ok
+test gvn_hit_returns_dominating_value_and_rolls_back_to_exact_mark ... ok
+test all_const_operands_fold_and_roll_back ... ok
+test const_zero_divisor_folds_to_trap_even_with_unknown_lhs ... ok
+test identity_add_zero_returns_operand_and_rolls_back ... ok
+test isub_wrap_of_iadd_chk_is_the_addend ... ok
+test checked_overflow_folds_to_trap ... ok
+test agg_get_of_agg_make_is_the_ingredient ... ok
+test a_foreign_store_is_not_forwarded_across_a_call ... ok
+test a_lent_region_still_forwards_across_a_call ... ok
+test isub_wrap_of_iadd_wrap_is_the_addend ... ok
+test a_call_through_a_fn_value_clobbers_too ... ok
+test a_foreign_load_is_not_reused_across_a_call ... ok
+test identical_builder_runs_print_identically ... ok
+test br_on_const_emits_the_taken_edge_only ... ok
+test an_inert_call_keeps_forwarding_and_the_next_call_does_not ... ok
+test a_call_in_a_loop_body_clobbers_the_load_after_the_loop ... ok
+test a_load_inside_a_frozen_container_is_reused_across_a_call ... ok
+test the_same_chain_from_an_unfrozen_parameter_reloads ... ok
+test without_a_call_foreign_forwarding_and_gvn_stay ... ok
+test loop_carried_token_becomes_a_block_param ... ok
+test redundant_load_elimination_via_gvn_same_token ... ok
+test store_to_load_forwarding_through_the_token_chain ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/canonical.rs (target/debug/deps/canonical-f6a94107982b49fb)
+
+running 11 tests
+test region_foreign_rejects_a_role_outside_the_closed_set ... ok
+test unreferenced_data_is_not_printed ... ok
+test region_foreign_cannot_double_root_a_region ... ok
+test two_foreign_roots_of_one_role_are_legal_in_one_function ... ok
+test region_foreign_roots_a_chain_and_round_trips ... ok
+test frem_survives_the_textual_ir ... ok
+test an_under_aligned_access_round_trips ... ok
+test data_declarations_round_trip ... ok
+test c_membrane_widening_round_trips ... ok
+test an_under_aligned_access_states_a_real_alignment ... ok
+test insertion_order_does_not_change_the_dump ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ct_tier.rs (target/debug/deps/ct_tier-b4d2f90732cc24d0)
+
+running 14 tests
+test hand_written_text_accepts_the_contract ... ok
+test off_by_default_is_free ... ok
+test honest_wrapping_kernel_verifies ... ok
+test secret_into_secret_param_composes ... ok
+test e1605_secret_into_public_param_refused ... ok
+test public_param_licenses_control_flow ... ok
+test contract_rides_the_canonical_text ... ok
+test midend_never_dissolves_a_consttime_fn ... ok
+test e1602_secret_index_refused ... ok
+test e1601_branch_on_secret_refused ... ok
+test e1604_div_by_secret_refused ... ok
+test e1603_secret_call_target_refused ... ok
+test e1605_membrane_refused ... ok
+test e1606_checked_arith_on_secret_refused ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/dedup_instances.rs (target/debug/deps/dedup_instances-753592a215bd55c5)
+
+running 3 tests
+test two_casts_one_vtable ... ok
+test a_record_slot_pins_its_function_against_dedup ... ok
+test hundred_shapes_is_one_body ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/fact_text_edges.rs (target/debug/deps/fact_text_edges-e6a3b4726625dd79)
+
+running 4 tests
+test hex_prefix_needs_a_digit ... ok
+test wir_parse_crash_c255f8ab_round_trips ... ok
+test every_printed_immediate_reparses_to_itself ... ok
+test every_printed_fact_reparses_to_itself ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/interproc.rs (target/debug/deps/interproc-3a75b4e378a6745f)
+
+running 8 tests
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_relayed_mut_param_carries_the_callees_writes ... ok
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test analyze_grants_match_the_phase ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/lifo.rs (target/debug/deps/lifo-ecfc8da5f94f3ac1)
+
+running 1 test
+test truncate_to_mark_restores_everything_exactly ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lower_corpus.rs (target/debug/deps/lower_corpus-6dd3db2018a3d4c2)
+
+running 32 tests
+test golden_faults_assert_fails ... ok
+test golden_faults_div_zero_rem ... ok
+test golden_faults_overflow_add ... ok
+test golden_conc_select_two_timeouts ... ok
+test golden_grammar_bang_not ... ok
+test golden_grammar_intdot_range ... ok
+test golden_grammar_bang_errunion ... ok
+test golden_memory_div_zero ... ok
+test golden_memory_region_infer_list_builder ... ok
+test golden_memory_region_freeze_ok ... ok
+test golden_memory_excl_disjoint_ok ... ok
+test golden_memory_exclusivity ... ok
+test golden_memory_region_infer_request_handler ... ok
+test golden_grammar_else_chain ... ok
+test golden_conc_spawn_fanout_loop ... ok
+test golden_memory_checked_unsigned ... ok
+test golden_resolve_forward ... ok
+test golden_resolve_two_mod ... ok
+test golden_overflow ... ok
+test golden_traits_dyn_ok ... ok
+test variadic_declaration_corpus_lowers_on_every_target ... ok
+test golden_rows_open_row_growth ... ok
+test golden_rows_qmark_defer ... ok
+test golden_typecheck_match_unreachable ... ok
+test golden_typecheck_cast_set ... ok
+test golden_typecheck_receiver_modes ... ok
+test golden_typecheck_match_exhaustive ... ok
+test golden_memory_region_multiopen_values_ok ... ok
+test golden_memory_view_set_norm ... ok
+test golden_memory_region_infer_tree_transform ... ok
+stored new snapshot /Users/mfwolffe/lanes/s273/build-2cfe5413/crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap.new
+test corpus_lowering_ledger ... FAILED
+test corpus_dumps_are_deterministic ... ok
+
+failures:
+
+---- corpus_lowering_ledger stdout ----
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap
+Snapshot: corpus_lowering_ledger
+Source: crates/wolf_wir/tests/lower_corpus.rs:362
+────────────────────────────────────────────────────────────────────────────────
+Expression: lines.join("\n")
+────────────────────────────────────────────────────────────────────────────────
+-old snapshot
++new results
+────────────┬───────────────────────────────────────────────────────────────────
+  504   504 │ memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
+  505   505 │ memory/list_pop_empty.lu: lowers
+  506   506 │ memory/list_reserve.lu: lowers
+  507   507 │ memory/list_reset.lu: lowers
+        508 │+memory/list_reset_reuse_ledger.lu: lowers
+  508   509 │ memory/list_session_struct.lu: lowers
+  509   510 │ memory/list_slice.lu: lowers
+  510   511 │ memory/list_slice_edges.lu: lowers
+  511   512 │ memory/list_slice_inline_owned.lu: lowers
+┈┈┈┈┈┈┈┈┈┈┈┈┼┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
+  513   514 │ memory/map_absent_else.lu: lowers
+  514   515 │ memory/map_char_bool_keys.lu: lowers
+  515   516 │ memory/map_count.lu: lowers
+  516   517 │ memory/map_int_keys.lu: lowers
+        518 │+memory/map_pairs_walk_snapshot.lu: lowers
+        519 │+memory/map_pairs_walk_view.lu: lowers
+  517   520 │ memory/map_remove.lu: lowers
+  518   521 │ memory/map_set_generic.lu: lowers
+  519   522 │ memory/map_std_keys.lu: lowers
+  520   523 │ memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
+────────────┴───────────────────────────────────────────────────────────────────
+To update snapshots run `cargo insta review`
+Stopped on the first failure. Run `cargo insta test` to run all snapshots.
+
+thread 'corpus_lowering_ledger' (62248725) panicked at /Users/mfwolffe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/insta-1.48.0/src/runtime.rs:719:13:
+snapshot assertion for 'corpus_lowering_ledger' failed in line 362
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    corpus_lowering_ledger
+
+test result: FAILED. 31 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.65s
+
+error: test failed, to rerun pass `-p wolf_wir --test lower_corpus`
+END t-wir exit=101
+s273: END exit=1
