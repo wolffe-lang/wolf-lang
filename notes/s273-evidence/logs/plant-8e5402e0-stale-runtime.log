@@ -1,0 +1,57 @@
+Preparing worktree (detached HEAD 8e5402e0)
+s273: building at 8e5402e0 in /Users/mfwolffe/lanes/s273/build-8e5402e0
+s273: lock taken, 14451 MiB free; running: /Users/mfwolffe/lanes/s273/steps.sh t-lanes
+=== t-lanes: cargo test -j4 -p wolf_driver --test map_pairs_walk_lanes -- --test-threads=1 --nocapture
+   Compiling wolf_span v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_span)
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_rt)
+   Compiling wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_diag)
+   Compiling wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_ast)
+   Compiling wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_lex)
+   Compiling wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_parse)
+   Compiling wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_cimport)
+   Compiling wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_fmt)
+   Compiling wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_pkg)
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_mem)
+   Compiling wolf_query v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_query)
+   Compiling wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_lsp)
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_wir)
+   Compiling wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s273/build-8e5402e0/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.20s
+     Running tests/map_pairs_walk_lanes.rs (target/debug/deps/map_pairs_walk_lanes-c252555c047a67c2)
+
+running 7 tests
+test a_refilled_container_charges_only_past_its_storage_on_every_machine ... REPORT reuse_ledger --checked: exit(0) "true true true true true true true 1616\n"
+REPORT reuse_ledger --native: exit(0) "true true true true true true true 1616\n"
+REPORT reuse_ledger --release: exit(0) "true true true true true true true 1616\n"
+ok
+test a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine ... REPORT memory/list_reset_reuse_ledger.lu --checked: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu --native: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu --release: exit(0) "8 true true\n"
+SKIP: no sibling lupin on this box (set LUPIN) — the three wolfgang lanes are still asserted; only lupin's column is absent
+ok
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively ... REPORT mapwalk native: 2000 entries 2097152 B, 4000 entries 2260992 B, 81 B an entry
+REPORT mapwalk release: 2000 entries 2097152 B, 4000 entries 2260992 B, 81 B an entry
+ok
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine ... REPORT mapwalk checked: 500 entries 16023552 B, 1000 entries 16285696 B, 524 B an entry
+ok
+test a_walk_that_never_names_its_map_charges_nothing_on_every_machine ... REPORT memory/map_pairs_walk_view.lu --checked: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu --native: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu --release: exit(0) "64 201600 7 true true\n"
+SKIP: no sibling lupin on this box (set LUPIN) — the three wolfgang lanes are still asserted; only lupin's column is absent
+ok
+test a_walk_whose_body_writes_the_map_sees_its_snapshot_on_every_machine ... REPORT memory/map_pairs_walk_snapshot.lu --checked: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --native: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --release: exit(0) "abc 6 3 20 4\n"
+SKIP: no sibling lupin on this box (set LUPIN) — the three wolfgang lanes are still asserted; only lupin's column is absent
+ok
+test the_refill_pin_names_only_the_measured_release_record ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.74s
+
+END t-lanes exit=0
+s273: END exit=0
