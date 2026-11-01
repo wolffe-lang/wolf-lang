@@ -1,0 +1,58 @@
+//! member: false
+//! s273 (wolf-lang#972) — the issue's program, its shape kept, with
+//! wolf-std's `map.set` and `map.get` bodies over a local `Eq` (std.cmp's
+//! shape, as `corpus/memory/map_std_keys.lu` spells it), so the gate
+//! needs no std: `main N` makes N inserts of "0#key{i}" and N lookups of
+//! a freshly built key, and prints the hits. Until s273 each `get` copied
+//! the whole entry buffer into a fresh list (`pairs()`) in the caller's
+//! region — the process root here — so N gets kept N² × 24 bytes.
+
+trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+impl Eq for str {
+    fn eq(self, other: str) -> bool { self == other }
+}
+
+fn set[K, V](mut m: Map[K, V], k: K, v: V) {
+    m[k] = copy v
+}
+
+fn get[K: Eq, V](m: Map[K, V], k: K) -> V ! {none} {
+    for pair in m.pairs() {
+        if Eq.eq(pair.0, k) {
+            return pair.1
+        }
+    }
+    none
+}
+
+fn num(s: str) -> int {
+    var n = 0
+    for b in s.bytes() {
+        n = n * 10 + (b as int - 48)
+    }
+    n
+}
+
+fn main() {
+    let args = env_args()
+    let n = num(args[0])
+    var m = Map[str, int]()
+    var i = 0
+    while i < n {
+        set(mut m, "0#key{i}", i)
+        i += 1
+    }
+    var hits = 0
+    i = 0
+    while i < n {
+        let v = get(m, "0#key{i}") else -1
+        if v >= 0 {
+            hits += 1
+        }
+        i += 1
+    }
+    print("{hits}")
+}
