@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 257] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 262] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -482,6 +482,17 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 257] = [
     ("__wolf_rt_os_set_core_limit", 2, true),
     ("__wolf_rt_os_core_off", 0, true),
     ("__wolf_rt_fs_adopt", 1, true),
+    // s272 (#686, `[os.fs.statfs]`): the file system's twelve words, the
+    // list header through an out word (`fs_stat`'s shape); (#921,
+    // `[os.proc.chroot]`) the change of root, a code; (#922,
+    // `[os.proc.priority]`) the nice value through an out word (it may be
+    // negative) and its set, a code; (#975, `[os.signal.action.one]`) one
+    // meaning's action, or the negated code.
+    ("__wolf_rt_fs_statfs", 3, true),
+    ("__wolf_rt_os_chroot", 2, true),
+    ("__wolf_rt_os_getpriority", 1, true),
+    ("__wolf_rt_os_setpriority", 1, true),
+    ("__wolf_rt_os_signal_action_one", 1, true),
     ("__wolf_rt_time_sleep_ms", 1, false),
     // The s73 conc families (wolf_rt::task, the frozen s32–s36 ABI +
     // the conc_abi additions): handles/ids/words as i64|ptr; the
