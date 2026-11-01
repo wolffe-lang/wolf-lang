@@ -44,7 +44,7 @@ fn main() -> int {
     print("lf_bit_restore_on_a_file={restore(h, lf)}")
     print("past_lf_bit={set(h, lf * 2)}")
     print("past_lf_bit_restore={restore(h, lf * 2)}")
-    fs_close(h) else |e| { }
-    fs_remove(path) else |e| { }
+    fs_close(h) else |e| {}
+    fs_remove(path) else |e| {}
     0
 }

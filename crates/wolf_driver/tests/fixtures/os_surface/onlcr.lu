@@ -22,7 +22,7 @@ fn main() -> int {
     }
     let lf = 16777216
     let raw_output = 64
-    fs_write(t, "raw_lf_at_start={(m0 / lf) % 2}\n") else |e| { }
+    fs_write(t, "raw_lf_at_start={(m0 / lf) % 2}\n") else |e| {}
     let on = m0 - (m0 & raw_output) - (m0 & lf)
     os_term_set_mode(t, on) else |e| {
         let w = match e {
@@ -30,23 +30,23 @@ fn main() -> int {
             io => "io",
             unsupported => "unsupported",
         }
-        fs_write(t, "set_onlcr={w}\n") else |e2| { }
+        fs_write(t, "set_onlcr={w}\n") else |e2| {}
         return 1
     }
     let m1 = os_term_mode(t) else |e| { -1 }
-    fs_write(t, "raw_lf_after_set={(m1 / lf) % 2}\nONLCR-A\nONLCR-B\n") else |e| { }
+    fs_write(t, "raw_lf_after_set={(m1 / lf) % 2}\nONLCR-A\nONLCR-B\n") else |e| {}
     if how.trim() == "register" {
         os_term_restore_at_exit(t, m0, List[byte]()) else |e| {
-            fs_write(t, "register failed\n") else |e2| { }
+            fs_write(t, "register failed\n") else |e2| {}
             return 1
         }
-        fs_write(t, "registered\n") else |e| { }
+        fs_write(t, "registered\n") else |e| {}
         return 0
     }
     os_term_set_mode(t, m0) else |e| {
-        fs_write(t, "restore failed\n") else |e2| { }
+        fs_write(t, "restore failed\n") else |e2| {}
         return 1
     }
-    fs_write(t, "set_back\n") else |e| { }
+    fs_write(t, "set_back\n") else |e| {}
     0
 }

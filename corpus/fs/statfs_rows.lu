@@ -46,7 +46,7 @@ fn main() -> int {
         return 1
     }
     let f = record(probe)
-    fs_remove(probe) else |e| { }
+    fs_remove(probe) else |e| {}
     print("a_file_reads_its_file_system: {f.len == 12 && f[2] == r[2] && f[3] == r[3]}")
     var missing = "a record"
     fs_statfs("s272-statfs-no-such-dir/inner") else |e| {
