@@ -1,0 +1,133 @@
+Preparing worktree (detached HEAD 3a71abb9)
+s273: building at 3a71abb9 in /Users/mfwolffe/lanes/s273/build-3a71abb9
+s273: 20:37:02 mac build lock held by is82 pid 17921; waiting
+s273: 20:37:32 mac build lock held by is82 pid 17921; waiting
+s273: 20:38:02 mac build lock held by is82 pid 17921; waiting
+s273: 20:38:32 mac build lock held by is82 pid 17921; waiting
+s273: 20:39:02 mac build lock held by is82 pid 17921; waiting
+s273: 20:39:32 mac build lock held by is82 pid 17921; waiting
+s273: 20:40:02 mac build lock held by is82 pid 17921; waiting
+s273: 20:40:32 mac build lock held by is82 pid 17921; waiting
+s273: 20:41:02 mac build lock held by cb19 pid 94258; waiting
+s273: 20:41:32 mac build lock held by pk09 pid 24901; waiting
+s273: 20:42:02 mac build lock held by pk09 pid 24901; waiting
+s273: 20:42:32 mac build lock held by pk09 pid 24901; waiting
+s273: 20:43:02 mac build lock held by cb19 pid 51769; waiting
+s273: lock taken, 10032 MiB free; running: cargo test -j4 -p wolf_driver --test map_pairs_walk_lanes -- --test-threads=1
+   Compiling wolf_span v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_span)
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_rt)
+   Compiling wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_diag)
+   Compiling wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_ast)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+   Compiling wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_lex)
+   Compiling wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_parse)
+   Compiling wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_cimport)
+   Compiling wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_fmt)
+   Compiling wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_pkg)
+warning: `wolf_rt` (lib) generated 3 warnings (run `cargo fix --lib -p wolf_rt` to apply 3 suggestions)
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_mem)
+   Compiling wolf_query v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_query)
+   Compiling wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_lsp)
+   Compiling wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_doc)
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_wir)
+   Compiling wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s273/build-3a71abb9/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.45s
+     Running tests/map_pairs_walk_lanes.rs (target/debug/deps/map_pairs_walk_lanes-d5e9bb0ddd46ee71)
+
+running 6 tests
+test a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine ... REPORT memory/list_reset_reuse_ledger.lu --checked: exit(0) "8 false true\n"
+FAILED
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively ... REPORT mapwalk native: 2000 entries 100925440 B, 4000 entries 397377536 B, 148226 B an entry
+REPORT mapwalk release: 2000 entries 100958208 B, 4000 entries 397426688 B, 148234 B an entry
+FAILED
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine ... REPORT mapwalk checked: 500 entries 82214912 B, 1000 entries 291143680 B, 417857 B an entry
+FAILED
+test a_walk_that_never_names_its_map_charges_nothing_on_every_machine ... REPORT memory/map_pairs_walk_view.lu --checked: exit(0) "64 201600 7 false false\n"
+FAILED
+test a_walk_whose_body_writes_the_map_sees_its_snapshot_on_every_machine ... REPORT memory/map_pairs_walk_snapshot.lu --checked: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --native: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --release: exit(0) "abc 6 3 20 4\n"
+ok
+test the_refill_pin_names_only_the_measured_release_record ... ok
+
+failures:
+
+---- a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine stdout ----
+
+thread 'a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine' (60524166) panicked at crates/wolf_driver/tests/map_pairs_walk_lanes.rs:347:9:
+assertion `left == right` failed: memory/list_reset_reuse_ledger.lu on --checked: [type.list.reset]: the next pushes reuse the buffer (#943)
+  left: "8 false true\n"
+ right: "8 true true\n"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively stdout ----
+
+thread 'a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively' (60524273) panicked at crates/wolf_driver/tests/map_pairs_walk_lanes.rs:185:5:
+native: 148226 B an entry (bound 1024): the walk in `get` is copying the map
+native: peak 397377536 B at 4000 entries (ceiling 67108864 B)
+release: 148234 B an entry (bound 1024): the walk in `get` is copying the map
+release: peak 397426688 B at 4000 entries (ceiling 67108864 B)
+
+---- a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine stdout ----
+
+thread 'a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine' (60524479) panicked at crates/wolf_driver/tests/map_pairs_walk_lanes.rs:214:5:
+checked: 417857 B an entry (bound 16 KiB): the walk in `get` is minting a list per call
+
+---- a_walk_that_never_names_its_map_charges_nothing_on_every_machine stdout ----
+
+thread 'a_walk_that_never_names_its_map_charges_nothing_on_every_machine' (60525246) panicked at crates/wolf_driver/tests/map_pairs_walk_lanes.rs:347:9:
+assertion `left == right` failed: memory/map_pairs_walk_view.lu on --checked: a pairs() walk whose body never names the map mints no list (#972)
+  left: "64 201600 7 false false\n"
+ right: "64 201600 7 true true\n"
+
+
+failures:
+    a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine
+    a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively
+    a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine
+    a_walk_that_never_names_its_map_charges_nothing_on_every_machine
+
+test result: FAILED. 2 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.71s
+
+error: test failed, to rerun pass `-p wolf_driver --test map_pairs_walk_lanes`
+s273: END exit=101
