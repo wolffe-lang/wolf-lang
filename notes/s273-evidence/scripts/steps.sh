@@ -29,6 +29,13 @@ for s in "$@"; do
     differ) run differ cargo xtask differ --self || exit 1 ;;
     lane-coverage) run lane-coverage cargo xtask lane-coverage || exit 1 ;;
     t-driver-region) run t-driver-region cargo test -j4 -p wolf_driver --test region_outer_write_lanes --test checked_budget --test cwd_region_lanes || exit 1 ;;
+    snap-update) run snap-update env INSTA_UPDATE=always cargo test -j4 -p wolf_lex --test corpus_snapshots -p wolf_parse --test corpus_decls || exit 1 ;;
+    snap-check) run snap-check env INSTA_UPDATE=no cargo test -j4 -p wolf_lex --test corpus_snapshots -p wolf_parse --test corpus_decls || exit 1 ;;
+    ws-test) run ws-test env INSTA_UPDATE=no cargo test -j4 --workspace --no-fail-fast || exit 1 ;;
+    diag-catalog) run diag-catalog cargo xtask diag-catalog --check || exit 1 ;;
+    bench-gates) run bench-gates cargo xtask bench-gates || exit 1 ;;
+    fmt-lu) run fmt-lu cargo xtask fmt-lu || exit 1 ;;
+    fmt-fixpoint) run fmt-fixpoint cargo xtask fmt-fixpoint || exit 1 ;;
     *) echo "unknown step $s"; exit 2 ;;
   esac
 done

@@ -8,6 +8,9 @@ set -uo pipefail
 source /lane/scripts/gate-env.sh
 cd /lane/wolf-lang
 expected=${1:?expected final head}
+# Optional: the first step to run (a re-run from a red step; the earlier steps are
+# named as skipped with the run that saw them green).
+first=${2:-}
 actual=$(git rev-parse HEAD)
 test "$actual" = "$expected" || { echo "S273_REFUSED head $actual != $expected"; exit 2; }
 git diff --exit-code >/dev/null || { echo "S273_REFUSED dirty tree"; exit 2; }
@@ -26,7 +29,14 @@ PY
 n=$(printf '%s\n' "$steps" | grep -c .)
 printf 'S273_GAUNTLET_STEPS %s\n' "$n"
 cargo xtask ci --plan 2>&1 | tail -1
+started=0
+[ -z "$first" ] && started=1
 while IFS=$'\t' read -r name args; do
+  [ "$name" = "$first" ] && started=1
+  if [ "$started" = 0 ]; then
+    printf 'SKIP %s (green in the earlier run at this head; this run starts at %s)\n' "$name" "$first"
+    continue
+  fi
   IFS=$'\x1f' read -r -a argv <<< "$args"
   printf '== %s %s: cargo %s\n' "$name" "$(date -u +%FT%TZ)" "${argv[*]}"
   cargo "${argv[@]}"
