@@ -3,8 +3,11 @@
 # contract: no full gauntlet; CI's tier pr is the verdict on the rest), ending in
 # the proof. Inside the container (inner.sh's env), one block held for the batch.
 # Every step prints `END <step> exit=N`; the batch stops at the first nonzero step.
-# Steps: head (the tree is the head, clean), build (wolf and the runtime, their
-# sha256 against batch 1's), fmt, clippy (the test target, -D warnings), suite
+# The batch has a clone of its own, /lane/wolf-lang-b2 (its own target/ and
+# target/tmp), so it can run on the other block while batch 1 still runs.
+# Steps: trunk (trunk's row and the load, built in this clone at trunk), head (the
+# tree is the head, clean), build (wolf and the runtime at the head, their sha256
+# against this clone's trunk build), fmt, clippy (the test target, -D warnings), suite
 # (the whole region_copyout_lanes binary, the gauntlet's env, lupin 0.1.58),
 # plant (its test binary built from its own commit), proof (the rigs below).
 # Proof rigs, as in item 1: load4 first, interleaving the head row (HEAD_N),
@@ -12,14 +15,15 @@
 # then rest6, load6 and rest4 with the head row (OTHER_N) and the plant (every
 # PLANT_EVERY-th). The proof step is red if the head row is red once or the
 # plant's row is green once.
-# usage: proof-inner.sh <head sha> <plant sha> [HEAD_N] [OTHER_N] [PLANT_EVERY]
+# usage: proof-inner.sh <trunk sha> <head sha> <plant sha> [HEAD_N] [OTHER_N] [PLANT_EVERY]
 set -uo pipefail
-head=${1:?head sha}
-plant=${2:?plant sha}
-HEAD_N=${3:-220}
-OTHER_N=${4:-50}
-PLANT_EVERY=${5:-11}
-cd /lane/wolf-lang
+trunk=${1:?trunk sha}
+head=${2:?head sha}
+plant=${3:?plant sha}
+HEAD_N=${4:-220}
+OTHER_N=${5:-50}
+PLANT_EVERY=${6:-11}
+cd /lane/wolf-lang-b2 || exit 2
 rows=/lane/records/proof-rows-${head:0:8}.log
 step() {
   local name=$1
@@ -40,9 +44,9 @@ at() {
 }
 copy_bin() {  # copy_bin <label> <test target>: build it at this commit, copy it out
   local label=$1 t=$2
-  cargo test --locked --no-run -p wolf_driver --test "$t" --message-format=json > "/lane/scratch/no-run-$label.json" || return 3
+  cargo test --locked --no-run -p wolf_driver --test "$t" --message-format=json > "/lane/scratch/no-run-$label-$t.json" || return 3
   mkdir -p "/lane/bins/$label"
-  python3 - "/lane/scratch/no-run-$label.json" "/lane/bins/$label/$t" "$t" <<'PY'
+  python3 - "/lane/scratch/no-run-$label-$t.json" "/lane/bins/$label/$t" "$t" <<'PY'
 import json, shutil, sys
 path, dest, name = sys.argv[1:]
 exe = [m["executable"] for m in map(json.loads, open(path))
@@ -53,14 +57,19 @@ shutil.copy2(exe[0], dest)
 print(f"S274_BIN {dest} <- {exe[0]}")
 PY
 }
+trunk_bins() {
+  at "$trunk" || return 2
+  cargo build --locked -p wolf_driver -p wolf_rt || return 3
+  sha256sum target/debug/wolf target/debug/libwolf_rt.a | tee /lane/scratch/b2-trunk-tools.sha | sed 's/^/S274_SHA trunk /'
+  copy_bin b2-trunk region_copyout_lanes && copy_bin b2-trunk element_places_lanes
+}
 build() {
   cargo build --locked -p wolf_driver -p wolf_rt || return 3
-  sha256sum target/debug/wolf target/debug/libwolf_rt.a | tee /lane/scratch/head-tools.sha | sed 's/^/S274_SHA /'
-  grep -E 'S274_SHA [0-9a-f]+  target/debug/(wolf|libwolf_rt\.a)$' /lane/records/m1.log | sed 's/^S274_SHA //' | sort -u > /lane/scratch/trunk-tools.sha
-  if cmp -s <(sort /lane/scratch/head-tools.sha) /lane/scratch/trunk-tools.sha; then
-    echo "S274_TOOLS identical to batch 1's (trunk 7332772f): the rows differ only in the test binary"
+  sha256sum target/debug/wolf target/debug/libwolf_rt.a | tee /lane/scratch/b2-head-tools.sha | sed 's/^/S274_SHA head /'
+  if cmp -s /lane/scratch/b2-head-tools.sha /lane/scratch/b2-trunk-tools.sha; then
+    echo "S274_TOOLS wolf and libwolf_rt.a identical at trunk and the head: the rows differ only in the test binary"
   else
-    echo "S274_TOOLS differ from batch 1's"; cat /lane/scratch/trunk-tools.sha; return 4
+    echo "S274_TOOLS differ between trunk and the head"; return 4
   fi
   copy_bin "head-${head:0:8}" region_copyout_lanes
 }
@@ -95,7 +104,7 @@ head_row() {  # head_row <label> <bin> <rig> <cpus> <k>
 }
 trunk_row() {  # trunk_row <rig> <cpus> <k>
   local out rc legs
-  out=$(/usr/bin/taskset.real -c "$2" /lane/bins/trunk/region_copyout_lanes --exact a_loop_keeping_a_scalar_is_flat --nocapture 2>&1)
+  out=$(/usr/bin/taskset.real -c "$2" /lane/bins/b2-trunk/region_copyout_lanes --exact a_loop_keeping_a_scalar_is_flat --nocapture 2>&1)
   rc=$?
   legs=$(printf '%s\n' "$out" | sed -n 's/^copy_int: VmHWM \([0-9]*\) kB at 20000 turns, \([0-9]*\) kB at 40000$/\1:\2/p' | paste -sd, -)
   printf 'S274_ROW label=trunk rig=%s k=%s exit=%s legs=%s\n' "$1" "$3" "$rc" "$legs" | tee -a "$rows"
@@ -107,7 +116,7 @@ start_load() {
   (
     while [ ! -e "$stop" ]; do
       t0=$(date +%s)
-      out=$(/usr/bin/taskset.real -c "$2" /lane/bins/trunk/element_places_lanes -q 2>&1)
+      out=$(/usr/bin/taskset.real -c "$2" /lane/bins/b2-trunk/element_places_lanes -q 2>&1)
       rc=$?
       printf 'S274_LOAD rig=%s rc=%s secs=%s %s\n' "$1" "$rc" "$(( $(date +%s) - t0 ))" "$(printf '%s\n' "$out" | grep -E '^test result' | tail -1)"
     done
@@ -152,6 +161,7 @@ proof() {
 
 rm -f "$rows"
 printf 'S274_GAUNTLET_START %s head=%s plant=%s\n' "$(date -u +%FT%TZ)" "$head" "$plant"
+step trunk trunk_bins
 step head at "$head"
 step build build
 step fmt cargo fmt --all --check
