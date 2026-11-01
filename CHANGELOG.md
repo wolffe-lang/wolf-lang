@@ -11,6 +11,62 @@
   timing records. See [the CLI page](docs/cli.md) for the schema and the
   distinction between wall time and overlapping contributions.
 
+s272 — the OS surface (wolf-lang#686, #921, #922, #976, #975; boreutils'
+`df`, `stat -f`, `chroot`, `nice` and `env --ignore-signal`, yew's REPL).
+Four calls and one mode bit, on every machine; the shapes beyond the
+issues are recommendations asked at audit (`[os.surface.note]` R-s272-1
+to R-s272-11), each one what is built.
+
+- **`fs_statfs(path) -> List[int] ! {denied, io, not_found}`** (#686,
+  `[os.fs.statfs]`): the record of the file system that holds a path, in
+  `fs_stat`'s shape — twelve words, a `have` word first: block size,
+  fragment size (the unit of the counts), total, free and available
+  blocks, files and free files, name max, a flags word (read-only,
+  set-id ignored), the type (`f_type`) and the id in the order GNU
+  `stat -f` prints it. One `statfs` on linux and macOS (macOS adds
+  `pathconf` for the name length), `statvfs` on the other unixes;
+  windows answers the space words in bytes from `GetDiskFreeSpaceExW`
+  and nothing else. Every word equals GNU `stat -f`'s on ext4, tmpfs,
+  overlay and proc, the free counts within GNU's reads before and after
+  in the same second, and `df -k`'s on macOS.
+- **`os_chroot(path) -> () ! {denied, io, not_found, unsupported}`**
+  (#921, `[os.proc.chroot]`): `chroot(2)` alone; the working directory is
+  left where it is (call `os_chdir("/")` next, as coreutils' `chroot`
+  does). `EPERM` and `EACCES` are `denied`, a missing path `not_found`, a
+  file `io` (`ENOTDIR`), each with the host's number in `os_error()`.
+  linux looks the path up before it asks for the privilege; macOS asks
+  first.
+- **`os_getpriority() -> int ! {unsupported}`** and
+  **`os_setpriority(delta) -> () ! {denied, io, unsupported}`** (#922,
+  `[os.proc.priority]`): the nice value and its change by a delta in
+  `nice(2)`'s shape (saturating, clamped). A lowering without the
+  privilege is `denied` with `EACCES` (13) beside it, and its text is the
+  one GNU `nice` prints ("cannot set niceness: Permission denied"); EPERM
+  and EACCES are one row told apart by `os_error()`. On linux the value
+  is the calling thread's.
+- **`RAW_LF`, bit 24 of the terminal mode word** (#976, `[os.term.mode]`):
+  a written LF reaches the terminal as LF even with output processing on
+  (`ONLCR` cleared). A REPL clears `RAW_OUTPUT` and `RAW_LF` for output
+  processing with the newline mapping. A mode read and set back, or
+  registered with `os_term_restore_at_exit`, keeps the caller's `ONLCR`
+  exactly; a mode built by hand that leaves bit 24 clear now turns the
+  mapping ON on a terminal started without it (it was left as found).
+  Bit 24 was `invalid`; bit 25 and above still are.
+- **`os_signal_action_one(meaning) -> int ! {invalid, io, unsupported}`**
+  (#975, `[os.signal.action.one]`): one meaning's action read and never
+  changed — 0 default, 1 ignored, 2 another handler — in the sending
+  shape, `KILL`, `STOP` and host numbers included. A GET the host refuses
+  is `io` with its number in `os_error()` (Darwin's `EINVAL` on `KILL` and
+  `STOP`; glibc's on its own 32 and 33), never the shape's `invalid`. The
+  answer is the program's: a listen reads 2, and the fault meanings read
+  the program's choice for a sent one, not the stack guard's handler.
+- Charged: `fs_statfs` `fs`; `os_chroot` and `os_setpriority` `exec`;
+  `os_getpriority` and `os_signal_action_one` `env`; all refused at
+  comptime. The checked machine makes each call for the `wolf` process it
+  runs as (and refuses the action query on the fault meanings by name);
+  lupin 0.1.58 does not resolve the four new names (wolf-interp's mirror
+  issue). The host table is 167 lines.
+
 s275 — the drain thread (#1006).
 
 - **The signal hub's drain thread survives a fork** (#1006, pelt#98, `[os.signal.hub]`). It read its poll's errno after the park a fork's hold puts it in, and that park's futex could answer `EAGAIN` first. So a `SIGCHLD` that interrupted the poll during `os_fork` looked fatal, and the thread ended without a word. Nothing made another, and every later `os_signal_wait` parked for ever: pelt's `wait` after eight `true &` hung, and pelt lane sh34's witness (CHILD listened, eight forks back to back) lost the thread in 9 of 10 runs on four CPUs at 0.2.36. The errno is now read before anything else runs. An interrupted poll is retried, and so is the one failure the host's poll(2) names a moment's shortage (`ENOMEM` on linux, `EAGAIN` on macOS). A drain thread that ends anyway wakes every parked wait; the next listen or wait, a parked one included, makes the thread again, and a wait that finds it gone a second time in one call answers `io`. Rows: `fork_lanes::the_drain_thread_outlives_every_fork` (sh34's witness, `drain.lu`) and three `s275_` rows in `wolf_rt`'s `signal.rs`, which stand in for the race with test-only hooks.
