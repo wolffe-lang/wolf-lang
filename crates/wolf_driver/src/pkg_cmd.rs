@@ -1546,6 +1546,16 @@ mod builtin_cap_tests {
             ("os_set_core_limit", Cap::Exec),
             ("os_core_off", Cap::Exec),
             ("fs_adopt", Cap::Fs),
+            // s272 (#686, #921, #922, #975; R-s272-10): the file system's
+            // record reads the filesystem — `fs`; the change of root and of
+            // the nice value are process control — `exec`, with `os_set_ids`
+            // and `os_set_core_limit`; the nice value and a meaning's action
+            // read are process state — `env`, with `os_signal_ignored`.
+            ("fs_statfs", Cap::Fs),
+            ("os_chroot", Cap::Exec),
+            ("os_setpriority", Cap::Exec),
+            ("os_getpriority", Cap::Env),
+            ("os_signal_action_one", Cap::Env),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }

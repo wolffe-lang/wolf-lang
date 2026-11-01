@@ -740,6 +740,44 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_adopt`",
             "hosted runtime",
         ),
+        // s272 (#686, #921, #922, #975): the file system's record, the root,
+        // the nice value and its set, a meaning's action — each a hosted
+        // symbol.
+        (
+            "fs_statfs",
+            "",
+            "let r = fs_statfs(\".\") else |e| {\n        return 0\n    }\n    r.len",
+            "`fs_statfs`",
+            "hosted runtime",
+        ),
+        (
+            "os_chroot",
+            "",
+            "os_chroot(\".\") else |e| {\n        return 0\n    }\n    1",
+            "`os_chroot`",
+            "hosted runtime",
+        ),
+        (
+            "os_getpriority",
+            "",
+            "let p = os_getpriority() else |e| {\n        return 0\n    }\n    p",
+            "`os_getpriority`",
+            "hosted runtime",
+        ),
+        (
+            "os_setpriority",
+            "",
+            "os_setpriority(0) else |e| {\n        return 0\n    }\n    1",
+            "`os_setpriority`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_action_one",
+            "",
+            "let a = os_signal_action_one(2) else |e| {\n        return 0\n    }\n    a",
+            "`os_signal_action_one`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",
