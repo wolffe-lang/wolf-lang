@@ -180,6 +180,7 @@ fs/remove_dir_refused.lu: lowers
 fs/roundtrip.lu: lowers
 fs/seek_tell.lu: lowers
 fs/set_times.lu: lowers
+fs/statfs_rows.lu: lowers
 fs/std_write_bytes.lu: lowers
 fs/truncate.lu: lowers
 generics/box_method.lu: lowers
@@ -836,6 +837,7 @@ os/arg0.lu: lowers
 os/args_bytes.lu: lowers
 os/args_cwd.lu: lowers
 os/chdir_relative.lu: lowers
+os/chroot_rows.lu: lowers
 os/core_limit_rows.lu: lowers
 os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers
@@ -848,9 +850,11 @@ os/ids_rows.lu: lowers
 os/job_poll_rows.lu: lowers
 os/job_rows.lu: lowers
 os/pipe_round_trip.lu: lowers
+os/priority_rows.lu: lowers
 os/random_differs.lu: lowers
 os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
+os/signal_action_rows.lu: lowers
 os/signal_loopback.lu: lowers
 os/signal_one_rows.lu: lowers
 os/signal_reserved_rows.lu: lowers
@@ -859,6 +863,7 @@ os/signal_supervisor.lu: lowers
 os/spawn_fds_rows.lu: lowers
 os/spawn_rows.lu: lowers
 os/term_editor_rows.lu: lowers
+os/term_lf_rows.lu: lowers
 os/umask.lu: lowers
 overflow.lu: lowers
 procs.lu: lowers
