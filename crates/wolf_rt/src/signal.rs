@@ -3625,10 +3625,13 @@ mod tests {
 
     /// wolf-lang#1006, the race itself: a fork holds the drain thread in
     /// its poll, a signal interrupts the poll (EINTR), the thread parks for
-    /// the hold, and the park's futex answers EAGAIN before the unpark. The
-    /// thread must take the poll's own errno, go on, and move the signal's
-    /// byte onto the queue. Until s275 it read the park's EAGAIN and ended
-    /// (pelt#98: every later `os_signal_wait` parked for ever).
+    /// the hold, and the park leaves an errno before the unpark — EAGAIN,
+    /// the futex's answer sh34's strace caught on linux, then EINVAL, which
+    /// no host's poll retries, so the row asks the read's order on every
+    /// host whatever the park leaves. The thread must take the poll's own
+    /// errno, go on, and move the signal's byte onto the queue. Until s275
+    /// it read the park's errno and ended (pelt#98: every later
+    /// `os_signal_wait` parked for ever).
     #[cfg(unix)]
     #[test]
     fn s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread() {
@@ -3637,33 +3640,36 @@ mod tests {
             || {
                 use sys::hook;
                 assert_eq!(listen(meaning::RELOAD), sig_code::OK);
-                sys::fork_hold();
-                assert_eq!(
-                    hook::reader_state(),
-                    hook::HELD,
-                    "the fork holds the drain thread"
-                );
-                let parks = hook::PARKS.load(Ordering::SeqCst);
-                hook::PARK_ERRNO.store(libc::EAGAIN, Ordering::SeqCst);
-                hook::POLL_ERRNO.store(libc::EINTR, Ordering::SeqCst);
-                hook::signal_reader(libc::SIGHUP);
-                assert!(
-                    s275_until(|| hook::PARKS.load(Ordering::SeqCst) > parks),
-                    "the drain thread came back from its poll and parked for the hold"
-                );
-                sys::fork_release();
-                let went_on = s275_until(|| {
-                    s275_queued(meaning::RELOAD) || hook::reader_state() == hook::GONE
-                });
-                hook::PARK_ERRNO.store(0, Ordering::SeqCst);
-                assert!(
-                    went_on && s275_queued(meaning::RELOAD),
-                    "the drain thread moved the signal's byte after the fork's hold (state {}, 5 = \
-                     gone: it read the park's EAGAIN for the poll's EINTR, wolf-lang#1006)",
-                    hook::reader_state()
-                );
-                assert_ne!(hook::reader_state(), hook::GONE, "the drain thread runs");
-                assert_eq!(wait(meaning::RELOAD), meaning::RELOAD);
+                for clobber in [libc::EAGAIN, libc::EINVAL] {
+                    sys::fork_hold();
+                    assert_eq!(
+                        hook::reader_state(),
+                        hook::HELD,
+                        "the fork holds the drain thread"
+                    );
+                    let parks = hook::PARKS.load(Ordering::SeqCst);
+                    hook::PARK_ERRNO.store(clobber, Ordering::SeqCst);
+                    hook::POLL_ERRNO.store(libc::EINTR, Ordering::SeqCst);
+                    hook::signal_reader(libc::SIGHUP);
+                    assert!(
+                        s275_until(|| hook::PARKS.load(Ordering::SeqCst) > parks),
+                        "the drain thread came back from its poll and parked for the hold"
+                    );
+                    sys::fork_release();
+                    let went_on = s275_until(|| {
+                        s275_queued(meaning::RELOAD) || hook::reader_state() == hook::GONE
+                    });
+                    hook::PARK_ERRNO.store(0, Ordering::SeqCst);
+                    assert!(
+                        went_on && s275_queued(meaning::RELOAD),
+                        "the drain thread moved the signal's byte after the fork's hold, the \
+                         park leaving errno {clobber} (state {}, 5 = gone: it read the park's \
+                         errno for the poll's EINTR, wolf-lang#1006)",
+                        hook::reader_state()
+                    );
+                    assert_ne!(hook::reader_state(), hook::GONE, "the drain thread runs");
+                    assert_eq!(wait(meaning::RELOAD), meaning::RELOAD);
+                }
             },
         );
     }
