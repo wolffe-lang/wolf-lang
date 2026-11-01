@@ -1,0 +1,11 @@
+s273: yew f1b68316 (origin/trunk as read on nomad), src/edit_reuse_test.lu and src/edit_drawbufs_test.lu
+through `wolf conform-run --json --checked`, WOLF_STD = wolf-std 2386522 (yew's [std] pin), nomad.
+base = trunk b16353e8 (~/lanes/s273/m/tc-trunk), head = 0097d431 (~/lanes/s273/m/tc-0097d431).
+
+edit_reuse_test base: exit(0) 'menu_reuse: SKIP zero-ledger assertion: checked ledger charges reused pushes; values verified\nmenu_reuse: 200 refills, retained ledger=105900: PASS\nstrip_reuse: SKIP zero-ledger assertion: checked ledger charges reused pushes; draw verified\nstrip_reuse: 30 frames, retained ledger=90: PASS\n'
+edit_reuse_test head: exit(0) 'menu_reuse: 200 refills, retained ledger=0: PASS\nstrip_reuse: 30 frames, retained ledger=0: PASS\n'
+edit_drawbufs_test base: unsupported (step budget exhausted, line 27)
+edit_drawbufs_test head: unsupported (step budget exhausted, line 27)
+
+yew's probe (`ledger_charges_reuse`) answers false on the checked machine at the head, so its
+zero-ledger assertions run there and pass: the SKIP by name retires at the pin that takes s273.

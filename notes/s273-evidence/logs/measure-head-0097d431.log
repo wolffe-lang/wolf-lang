@@ -1,0 +1,87 @@
+s273: 20:50:25 mac build lock held by is82 pid 85887; waiting
+s273: lock taken, 9901 MiB free; running: ./measure.sh /Users/mfwolffe/lanes/s273/m/tc-0097d431/wolf head0097
+C 1000: PEAK 1605632 MB=1.5 wall=0.19 status=exit0 stdout=1000 stderr=
+head0097 native 1000 issue: PEAK 1818624 MB=1.7 wall=0.14 status=exit0 stdout=1000 stderr=
+head0097 release 1000 issue: PEAK 1867776 MB=1.8 wall=0.30 status=exit0 stdout=1000 stderr=
+head0097 checked 1000 issue: PEAK 13991936 MB=13.3 wall=0.55 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000\n","stdout_sha256":"83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9","verdict":"exit(0)","warnings":[ stderr=
+head0097 native 1000 setonly: PEAK 1802240 MB=1.7 wall=0.03 status=exit0 stdout=1000 stderr=
+head0097 release 1000 setonly: PEAK 1851392 MB=1.8 wall=0.03 status=exit0 stdout=1000 stderr=
+head0097 checked 1000 setonly: PEAK 13402112 MB=12.8 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000\n","stdout_sha256":"83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9","verdict":"exit(0)","warnings":[ stderr=
+head0097 native 1000 index: PEAK 1818624 MB=1.7 wall=0.03 status=exit0 stdout=1000 stderr=
+head0097 release 1000 index: PEAK 1867776 MB=1.8 wall=0.02 status=exit0 stdout=1000 stderr=
+head0097 checked 1000 index: PEAK 13418496 MB=12.8 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000\n","stdout_sha256":"83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9","verdict":"exit(0)","warnings":[ stderr=
+head0097 native 1000 keys: PEAK 1753088 MB=1.7 wall=0.03 status=exit0 stdout=7890 stderr=
+head0097 release 1000 keys: PEAK 1802240 MB=1.7 wall=0.03 status=exit0 stdout=7890 stderr=
+head0097 checked 1000 keys: PEAK 13467648 MB=12.8 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"7890\n","stdout_sha256":"e3a651e39bf5686672a388dd692550ac598bafc6eda0f0b680fddc2864c41036","verdict":"exit(0)","warnings":[ stderr=
+head0097 native 1000 intmap: PEAK 1753088 MB=1.7 wall=0.02 status=exit0 stdout=1000 stderr=
+head0097 release 1000 intmap: PEAK 1802240 MB=1.7 wall=0.03 status=exit0 stdout=1000 stderr=
+head0097 checked 1000 intmap: PEAK 13451264 MB=12.8 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000\n","stdout_sha256":"83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9","verdict":"exit(0)","warnings":[ stderr=
+head0097 native 1000 list: PEAK 1785856 MB=1.7 wall=0.03 status=exit0 stdout=1000 stderr=
+head0097 release 1000 list: PEAK 1835008 MB=1.8 wall=0.03 status=exit0 stdout=1000 stderr=
+head0097 checked 1000 list: PEAK 13352960 MB=12.7 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000\n","stdout_sha256":"83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9","verdict":"exit(0)","warnings":[ stderr=
+head0097 native 1000 region: PEAK 1884160 MB=1.8 wall=0.03 status=exit0 stdout=1000 81040 stderr=
+head0097 release 1000 region: PEAK 1916928 MB=1.8 wall=0.03 status=exit0 stdout=1000 81040 stderr=
+head0097 checked 1000 region: PEAK 13959168 MB=13.3 wall=0.51 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000 47780\n","stdout_sha256":"8af0e6b24e52b79974446c029eacb3168b4ae2e865dd41288eca00498ca51677","verdict":"exit(0)","warni stderr=
+head0097 native 1000 rset: PEAK 1867776 MB=1.8 wall=0.03 status=exit0 stdout=1000 65040 stderr=
+head0097 release 1000 rset: PEAK 1900544 MB=1.8 wall=0.03 status=exit0 stdout=1000 65040 stderr=
+head0097 checked 1000 rset: PEAK 13402112 MB=12.8 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000 39890\n","stdout_sha256":"dd935bff10f949f5e753529ab9ec7818093ff0f90e63fb3337670a0f71d9783f","verdict":"exit(0)","warni stderr=
+head0097 native 1000 rindex: PEAK 1884160 MB=1.8 wall=0.03 status=exit0 stdout=1000 81040 stderr=
+head0097 release 1000 rindex: PEAK 1916928 MB=1.8 wall=0.03 status=exit0 stdout=1000 81040 stderr=
+head0097 checked 1000 rindex: PEAK 13352960 MB=12.7 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1000 47780\n","stdout_sha256":"8af0e6b24e52b79974446c029eacb3168b4ae2e865dd41288eca00498ca51677","verdict":"exit(0)","warni stderr=
+C 10000: PEAK 2326528 MB=2.2 wall=0.03 status=exit0 stdout=10000 stderr=
+head0097 native 10000 issue: PEAK 2719744 MB=2.6 wall=0.31 status=exit0 stdout=10000 stderr=
+head0097 release 10000 issue: PEAK 2768896 MB=2.6 wall=0.18 status=exit0 stdout=10000 stderr=
+head0097 checked 10000 issue: PEAK 17416192 MB=16.6 wall=3.39 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget stderr=    |
+head0097 native 10000 setonly: PEAK 2555904 MB=2.4 wall=0.06 status=exit0 stdout=10000 stderr=
+head0097 release 10000 setonly: PEAK 2605056 MB=2.5 wall=0.08 status=exit0 stdout=10000 stderr=
+head0097 checked 10000 setonly: PEAK 14286848 MB=13.6 wall=0.11 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings": stderr=
+head0097 native 10000 index: PEAK 2719744 MB=2.6 wall=0.11 status=exit0 stdout=10000 stderr=
+head0097 release 10000 index: PEAK 2768896 MB=2.6 wall=0.14 status=exit0 stdout=10000 stderr=
+head0097 checked 10000 index: PEAK 15417344 MB=14.7 wall=0.16 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings": stderr=
+head0097 native 10000 keys: PEAK 1916928 MB=1.8 wall=0.03 status=exit0 stdout=88890 stderr=
+head0097 release 10000 keys: PEAK 1966080 MB=1.9 wall=0.03 status=exit0 stdout=88890 stderr=
+head0097 checked 10000 keys: PEAK 14565376 MB=13.9 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"88890\n","stdout_sha256":"9896b6e5f251e4cd8ac00c6e32578153f7b8c0072330c8eaaa217567b5aefc45","verdict":"exit(0)","warnings": stderr=
+head0097 native 10000 intmap: PEAK 2195456 MB=2.1 wall=0.08 status=exit0 stdout=10000 stderr=
+head0097 release 10000 intmap: PEAK 2228224 MB=2.1 wall=0.08 status=exit0 stdout=10000 stderr=
+head0097 checked 10000 intmap: PEAK 14041088 MB=13.4 wall=0.06 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings": stderr=
+head0097 native 10000 list: PEAK 2342912 MB=2.2 wall=0.03 status=exit0 stdout=10000 stderr=
+head0097 release 10000 list: PEAK 2392064 MB=2.3 wall=0.03 status=exit0 stdout=10000 stderr=
+head0097 checked 10000 list: PEAK 13942784 MB=13.3 wall=0.03 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings": stderr=
+head0097 native 10000 region: PEAK 2785280 MB=2.7 wall=0.29 status=exit0 stdout=10000 1106320 stderr=
+head0097 release 10000 region: PEAK 2818048 MB=2.7 wall=0.18 status=exit0 stdout=10000 1106320 stderr=
+head0097 checked 10000 region: PEAK 18563072 MB=17.7 wall=3.44 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget stderr=    |
+head0097 native 10000 rset: PEAK 2621440 MB=2.5 wall=0.08 status=exit0 stdout=10000 946320 stderr=
+head0097 release 10000 rset: PEAK 2654208 MB=2.5 wall=0.09 status=exit0 stdout=10000 946320 stderr=
+head0097 checked 10000 rset: PEAK 14254080 MB=13.6 wall=0.08 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000 408890\n","stdout_sha256":"3cda3e885962f6a1d24e7838a5a4b8fefeb18ee371a6f7f7dba43fce51d47ebb","verdict":"exit(0)","war stderr=
+head0097 native 10000 rindex: PEAK 2768896 MB=2.6 wall=0.13 status=exit0 stdout=10000 1106320 stderr=
+head0097 release 10000 rindex: PEAK 2818048 MB=2.7 wall=0.14 status=exit0 stdout=10000 1106320 stderr=
+head0097 checked 10000 rindex: PEAK 15384576 MB=14.7 wall=0.17 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000 497780\n","stdout_sha256":"3c0eed46c7f4f91c35f97ea7b97b3014499a7ceacd77140ae44f8a9962f802a3","verdict":"exit(0)","war stderr=
+C 100000: PEAK 8519680 MB=8.1 wall=0.03 status=exit0 stdout=100000 stderr=
+head0097 native 100000 issue: PEAK 10584064 MB=10.1 wall=29.26 status=exit0 stdout=100000 stderr=
+head0097 release 100000 issue: PEAK 10633216 MB=10.1 wall=16.02 status=exit0 stdout=100000 stderr=
+head0097 checked 100000 issue: PEAK 51134464 MB=48.8 wall=19.23 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget stderr=    |
+head0097 native 100000 setonly: PEAK 8962048 MB=8.5 wall=5.60 status=exit0 stdout=100000 stderr=
+head0097 release 100000 setonly: PEAK 9011200 MB=8.6 wall=5.78 status=exit0 stdout=100000 stderr=
+head0097 checked 100000 setonly: PEAK 24215552 MB=23.1 wall=6.20 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings" stderr=
+head0097 native 100000 index: PEAK 10567680 MB=10.1 wall=11.44 status=exit0 stdout=100000 stderr=
+head0097 release 100000 index: PEAK 10616832 MB=10.1 wall=11.49 status=exit0 stdout=100000 stderr=
+head0097 checked 100000 index: PEAK 30982144 MB=29.5 wall=12.17 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings" stderr=
+head0097 native 100000 keys: PEAK 3358720 MB=3.2 wall=0.03 status=exit0 stdout=988890 stderr=
+head0097 release 100000 keys: PEAK 3407872 MB=3.2 wall=0.03 status=exit0 stdout=988890 stderr=
+head0097 checked 100000 keys: PEAK 23019520 MB=22.0 wall=0.11 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"988890\n","stdout_sha256":"e2a7b534ba04721417a73814e1aa9e4437834d0f27fddd21b5584e32b0766e1a","verdict":"exit(0)","warnings" stderr=
+head0097 native 100000 intmap: PEAK 5472256 MB=5.2 wall=5.76 status=exit0 stdout=100000 stderr=
+head0097 release 100000 intmap: PEAK 5505024 MB=5.2 wall=5.77 status=exit0 stdout=100000 stderr=
+head0097 checked 100000 intmap: PEAK 22528000 MB=21.5 wall=3.04 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings" stderr=
+head0097 native 100000 list: PEAK 7094272 MB=6.8 wall=0.03 status=exit0 stdout=100000 stderr=
+head0097 release 100000 list: PEAK 7127040 MB=6.8 wall=0.03 status=exit0 stdout=100000 stderr=
+head0097 checked 100000 list: PEAK 22298624 MB=21.3 wall=0.08 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings" stderr=
+head0097 native 100000 region: PEAK 10649600 MB=10.2 wall=28.51 status=exit0 stdout=100000 9491344 stderr=
+head0097 release 100000 region: PEAK 10682368 MB=10.2 wall=15.88 status=exit0 stdout=100000 9491344 stderr=
+head0097 checked 100000 region: PEAK 50937856 MB=48.6 wall=19.66 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget stderr=    |
+head0097 native 100000 rset: PEAK 9027584 MB=8.6 wall=5.68 status=exit0 stdout=100000 7891344 stderr=
+head0097 release 100000 rset: PEAK 9060352 MB=8.6 wall=5.51 status=exit0 stdout=100000 7891344 stderr=
+head0097 checked 100000 rset: PEAK 24412160 MB=23.3 wall=6.39 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000 4188890\n","stdout_sha256":"c4be0c1aaa5b4056e1214a56c698745c2a6f06890cc8f3391acccc0f0260f7e5","verdict":"exit(0)","w stderr=
+head0097 native 100000 rindex: PEAK 10633216 MB=10.1 wall=11.79 status=exit0 stdout=100000 9491344 stderr=
+head0097 release 100000 rindex: PEAK 10682368 MB=10.2 wall=11.47 status=exit0 stdout=100000 9491344 stderr=
+head0097 checked 100000 rindex: PEAK 30736384 MB=29.3 wall=12.57 status=exit0 stdout={"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000 5177780\n","stdout_sha256":"5c482acc7a0af9350d2c905dc591391d1f429fdff737b149f42ac47a56bc7994","verdict":"exit(0)","w stderr=
+s273: END exit=0
