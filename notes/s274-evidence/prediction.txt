@@ -1,0 +1,47 @@
+s274 — the flat loop (wolf-lang#631). Prediction, written 2026-11-01 before any change.
+
+The row: region_copyout_lanes::a_loop_keeping_a_scalar_is_flat. Two processes, 20,000 and 40,000
+turns, each prints its own VmHWM at exit; growth = max(0, b - a) x 1024 / 20,000 B/turn; red at >= 4
+(78 kB). Its siblings in the file share the helper: the kept-str row (< 64) and the control (> 1000).
+
+Rigs (hasu, rootless podman localhost/r41-toolchain:1, one block, both lock names):
+  rest6  = the block's six CPUs, nothing else of mine running;
+  load6  = the same with a parallel `cargo test -p wolf_driver --test element_places_lanes` loop
+           (its test binary run directly, default threads) on the same CPUs;
+  rest4  = taskset -c onto four of the block's CPUs (the CI runner's four vCPUs);
+  load4  = rest4 with the same parallel load on the same four CPUs (the proof rig).
+
+Item 1, trunk 7332772f:
+  P1. The row's b - a is centred near 0 kB with a spread of about +-100 kB in 4 kB steps, on every
+      rig; the clipped statistic reads median 0 B/turn, worst 5-8 B/turn. The row reddens 10-30 % of
+      runs on each rig (s270b, s273: 1 in 5), no rig clean.
+  P2. The leak (the witness's `copy region scratch { build(i).len }` undone to `build(i).len`, #612's
+      shape): 1,000-1,400 B/turn on both tiers, spread under 5 %; the no-region control the same.
+  P3. The kept-str sibling reads 20-50 B/turn (one str per turn kept in the root arena), the control
+      1,200-1,400 B/turn; neither has reddened, and neither will on these rigs.
+  P4. The noise is per process, not per turn. Two readings taken inside ONE process at turns 20,000
+      and 40,000 differ by at most a few pages for a page-table-exact reading (smaps_rollup
+      Anonymous + Swap): |d| <= 8 kB, i.e. <= 0.4 B/turn, on every rig. In-process VmHWM is also
+      much quieter than across processes, but may keep some steps from the kernel's batched RSS
+      counters (per-CPU batching since Linux 6.2; hasu runs 7.2.4, CI's runners 6.x), most under
+      load4.
+  P5. The runtime's own accounting (`live_region_bytes()`) cannot serve: it counts named regions'
+      chunks only, not the process-root arena where #612's leak lands, so the plant would read 0.
+      Adding a root counter is a runtime change, outside this lane's boundary.
+
+Item 2, the expected recommendation (R-s274-1):
+  P6. One process, two readings of smaps_rollup Anonymous + Swap at 20,000 and 40,000 turns, the
+      reading itself taken inside a `copy region` so it keeps nothing; the bound stays 4 B/turn.
+      Expected margins: noise <= 8 kB against the 78 kB bound (>= 9x) below; the leak ~26 MB over
+      the same 20,000 turns (~330x) above; the kept-str shape (~30 B/turn) is also caught by it.
+      The siblings in the file move with the shared helper and keep their bounds.
+
+Item 3, the proof at the head (load4):
+  P7. 0 reds in >= 200 runs; the plant (head + the leak) red 20 of 20 at ~1,300 B/turn; trunk's row
+      on the same rig red 10-30 % of runs.
+
+Item 4, the siblings outside the file (cwd_region_lanes, region_outer_write_lanes,
+map_pairs_walk_lanes, checked_budget, soak_residue, parked_tasks):
+  P8. None has reddened on noise: their bounds are 400 kB (outer_write, 100,000 turns), 800 kB
+      (cwd_region, 200,000 turns), 2 MiB (map walk) and up, against the same ~100 kB per-process
+      noise. They are listed in the note with their measured margins and left as they are.
