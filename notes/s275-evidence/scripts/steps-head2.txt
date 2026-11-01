@@ -1,0 +1,5 @@
+toolchain	rustc --version
+head-rows	cargo test -j4 -p wolf_rt --lib -- signal::tests --test-threads=1
+head-clippy	cargo clippy -j4 -p wolf_rt --all-targets -- -D warnings
+plant-checkout	git checkout -q --detach a8ea141086d6a213f4be76ad4312ce82602c7ff6 && test "$(git rev-parse HEAD)" = a8ea141086d6a213f4be76ad4312ce82602c7ff6 && git diff --quiet
+plant-rows	cargo test -j4 -p wolf_rt --lib -- s275 --test-threads=1
