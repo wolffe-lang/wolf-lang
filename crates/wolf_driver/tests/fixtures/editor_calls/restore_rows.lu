@@ -3,9 +3,12 @@
 //! registration that need no terminal, one truth on every host: a mode
 //! outside the bits is `invalid` before the handle is read (windows too);
 //! then windows is `unsupported`; then a handle that is closed, forged or
-//! not a terminal is `io` (ruling asked R1: the family's row).
-//! Expected (unix): `bit24=invalid negative=invalid forged=io file=io`;
-//! windows: `bit24=invalid negative=invalid forged=unsupported file=unsupported`.
+//! not a terminal is `io` (ruling asked R1: the family's row). s272
+//! (wolf-lang#976): bit 24 is `RAW_LF`, a mode bit, so the first bit that
+//! is none is bit 25; and a registration carrying `RAW_LF` on a file is the
+//! family's `io`, no longer the shape's `invalid`.
+//! Expected (unix): `bit25=invalid negative=invalid forged=io file=io lf=io`;
+//! windows: `bit25=invalid negative=invalid forged=unsupported file=unsupported lf=unsupported`.
 
 fn row(fd: int, mode: int) -> str {
     os_term_restore_at_exit(fd, mode, List[byte]()) else |e| {
@@ -20,12 +23,13 @@ fn row(fd: int, mode: int) -> str {
 
 fn main() -> !int {
     let f = fs_open_mode("s248-restore.tmp", 1)?
-    let a = row(0, 16777216)
+    let a = row(0, 33554432)
     let b = row(0, -1)
     let c = row(1000000, 3)
     let d = row(f, 3)
+    let lf = row(f, 16777216)
     fs_close(f)?
     fs_remove("s248-restore.tmp")?
-    print("bit24={a} negative={b} forged={c} file={d}")
+    print("bit25={a} negative={b} forged={c} file={d} lf={lf}")
     0
 }

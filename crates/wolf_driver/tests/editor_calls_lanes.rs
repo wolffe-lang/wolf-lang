@@ -653,10 +653,12 @@ fn the_restore_rows_on_every_machine() {
         &dir,
         &["os_term_restore_at_exit"],
         &|lane, stdout| {
+            // s272 (#976): bit 24 is RAW_LF, so the undefined bit is 25, and
+            // RAW_LF on a file is the family's `io` (windows `unsupported`).
             let want = if cfg!(unix) {
-                "bit24=invalid negative=invalid forged=io file=io\n"
+                "bit25=invalid negative=invalid forged=io file=io lf=io\n"
             } else {
-                "bit24=invalid negative=invalid forged=unsupported file=unsupported\n"
+                "bit25=invalid negative=invalid forged=unsupported file=unsupported lf=unsupported\n"
             };
             assert_eq!(stdout, want, "the {lane} machine's restore rows");
         },
