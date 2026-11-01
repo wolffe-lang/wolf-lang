@@ -1,0 +1,700 @@
+END build exit=0
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/keyword_block.rs (target/debug/deps/keyword_block-05fdfce4f2d9854d)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 48 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 83 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/conformance.rs (target/debug/deps/conformance-8da4afb6932bd4b1)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/abi_check.rs (target/debug/deps/abi_check-97cecbd01d9ae430)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+     Running tests/clif_goldens.rs (target/debug/deps/clif_goldens-0cadbfafeb44ecb0)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/dense_match.rs (target/debug/deps/dense_match-a4924df53d79706a)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+     Running tests/entry_shim.rs (target/debug/deps/entry_shim-b0980867b379274b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/exec_smoke.rs (target/debug/deps/exec_smoke-a9aec0a139df0984)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.18s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-56653532e55d3207)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/exec_parity.rs (target/debug/deps/exec_parity-fe5cdad4738b0844)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.22s
+     Running tests/fact_fuzz.rs (target/debug/deps/fact_fuzz-8c4c35204e190aed)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.48s
+     Running tests/llvm_goldens.rs (target/debug/deps/llvm_goldens-97a8bece006af8ab)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+     Running tests/parallel_finish.rs (target/debug/deps/parallel_finish-daeaf2e1f2b0b003)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.69s
+     Running tests/s263_variadic.rs (target/debug/deps/s263_variadic-1afee2dccf45bf51)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/target_header.rs (target/debug/deps/target_header-0bc4a4d77996d361)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/json_schema.rs (target/debug/deps/json_schema-518dcdb8ce80db79)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/render_snapshots.rs (target/debug/deps/render_snapshots-76e5131b8490232a)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/generator.rs (target/debug/deps/generator-d4bd50f43227b5ff)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/asm_link.rs (target/debug/deps/asm_link-5b8b27ebcc36c15b)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.35s
+     Running tests/assembler_select.rs (target/debug/deps/assembler_select-a0ab721aed493e4c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/assert_message_lanes.rs (target/debug/deps/assert_message_lanes-36c1992f3316bb48)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+     Running tests/assertion_details.rs (target/debug/deps/assertion_details-67cfd9f72c959633)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.20s
+     Running tests/atomic_disasm.rs (target/debug/deps/atomic_disasm-f2cd173a9495dfe7)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+     Running tests/atomic_lanes.rs (target/debug/deps/atomic_lanes-b33aa286421121c8)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.77s
+     Running tests/atomic_witness.rs (target/debug/deps/atomic_witness-f23df437081fb4d1)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+     Running tests/attr_closed_set_lanes.rs (target/debug/deps/attr_closed_set_lanes-9258711c30385577)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+     Running tests/bare_entry.rs (target/debug/deps/bare_entry-19a5baf0eb1af9d0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+     Running tests/bench_hatches.rs (target/debug/deps/bench_hatches-983272e7b82b73b5)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+     Running tests/byte_surface_lanes.rs (target/debug/deps/byte_surface_lanes-e04499ec65ef3c0b)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.32s
+     Running tests/c_membrane_lanes.rs (target/debug/deps/c_membrane_lanes-00e9218b337a2ba7)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+     Running tests/c_membrane_link.rs (target/debug/deps/c_membrane_link-fb1891c84d80bc70)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+     Running tests/cap_ffi.rs (target/debug/deps/cap_ffi-bb559908055b80dd)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+     Running tests/cap_reach.rs (target/debug/deps/cap_reach-b9f69eebcb5f9cb8)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests/chan_sent_arg_lanes.rs (target/debug/deps/chan_sent_arg_lanes-aa5e7efe9e437ba1)
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.39s
+     Running tests/checked_budget.rs (target/debug/deps/checked_budget-90ab9ad775508bfd)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/checked_net_wait.rs (target/debug/deps/checked_net_wait-f26b36ac2e625e97)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.88s
+     Running tests/checked_net_write.rs (target/debug/deps/checked_net_write-6419f0f2e308a69e)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.50s
+     Running tests/checked_tasks_lanes.rs (target/debug/deps/checked_tasks_lanes-dded01ab58eabdc6)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 59.12s
+     Running tests/cimport.rs (target/debug/deps/cimport-52d723a42a36bb8b)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
+     Running tests/closure_cross_module.rs (target/debug/deps/closure_cross_module-7d242cae050eea31)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.72s
+     Running tests/conc_native.rs (target/debug/deps/conc_native-04230dd996bbc054)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 60.86s
+     Running tests/container_access.rs (target/debug/deps/container_access-bdfbc370cda25c56)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+     Running tests/copy_write_lanes.rs (target/debug/deps/copy_write_lanes-ba24a2874c5cf476)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+     Running tests/ct_asm_witness.rs (target/debug/deps/ct_asm_witness-60f8da95d602333c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+     Running tests/ctrl_c_lanes.rs (target/debug/deps/ctrl_c_lanes-7ab7c025ee98498f)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.41s
+     Running tests/cwd_region_lanes.rs (target/debug/deps/cwd_region_lanes-dcc6a70f3984d846)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.93s
+     Running tests/debug_native.rs (target/debug/deps/debug_native-58d02eeb977d02f7)
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 589.95s
+error: test failed, to rerun pass `-p wolf_driver --test debug_native`
+     Running tests/dense_match_lanes.rs (target/debug/deps/dense_match_lanes-7a088cba6f0eb7c9)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.29s
+     Running tests/doc_and_scripts.rs (target/debug/deps/doc_and_scripts-cdf259d8753a928a)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+     Running tests/editor_calls_lanes.rs (target/debug/deps/editor_calls_lanes-17323cfd353b1c1b)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.71s
+     Running tests/editor_restore_lanes.rs (target/debug/deps/editor_restore_lanes-8f9a60ba456b4608)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/editor_wait_lanes.rs (target/debug/deps/editor_wait_lanes-7029b579c622de35)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.37s
+     Running tests/element_move_conservatism_lanes.rs (target/debug/deps/element_move_conservatism_lanes-8ba6233088481e21)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+     Running tests/element_places_lanes.rs (target/debug/deps/element_places_lanes-c73fac42a2caa7a1)
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.55s
+     Running tests/else_scrutinee_own_row_lanes.rs (target/debug/deps/else_scrutinee_own_row_lanes-067ab35a4b7788fb)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.09s
+     Running tests/env_argv_lanes.rs (target/debug/deps/env_argv_lanes-560a1e1fda1a16c5)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.87s
+     Running tests/epipe.rs (target/debug/deps/epipe-c606bcb8503d110c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/errdefer_block_row_lanes.rs (target/debug/deps/errdefer_block_row_lanes-c3d231928c802416)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s
+     Running tests/error_cap.rs (target/debug/deps/error_cap-b4fc1c017a796873)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/exec_lanes.rs (target/debug/deps/exec_lanes-1d449cc19b972753)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
+     Running tests/explain_footer.rs (target/debug/deps/explain_footer-12ebf49082f7cf50)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/fallible_bind_empty_row_lanes.rs (target/debug/deps/fallible_bind_empty_row_lanes-20ccea3c9193eba6)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+     Running tests/field_shorthand_lanes.rs (target/debug/deps/field_shorthand_lanes-348341ce6ff6d494)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.53s
+     Running tests/first_diagnostic_lanes.rs (target/debug/deps/first_diagnostic_lanes-cc0d1b12d0be2247)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.31s
+     Running tests/fix_unapplied.rs (target/debug/deps/fix_unapplied-346466cf19b0c1ac)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/fmt_parity.rs (target/debug/deps/fmt_parity-ccdc3b73247f931f)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fmt_refusals.rs (target/debug/deps/fmt_refusals-17d24f8f054dddd9)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+     Running tests/fn_param_resolution.rs (target/debug/deps/fn_param_resolution-8e734a057794ca43)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+     Running tests/fn_value_modes_lanes.rs (target/debug/deps/fn_value_modes_lanes-b1a9a997d8767cb6)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+     Running tests/fork_lanes.rs (target/debug/deps/fork_lanes-66ae126edb5f4fda)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/four_machine_regressions.rs (target/debug/deps/four_machine_regressions-e06e6c4357a98efc)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.37s
+     Running tests/freestanding_alloc.rs (target/debug/deps/freestanding_alloc-fbc389daae5309ca)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+     Running tests/freestanding_interrupt.rs (target/debug/deps/freestanding_interrupt-a2d0e7389cdcfd72)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/freestanding_target.rs (target/debug/deps/freestanding_target-46ab88e65f5cf4dd)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+     Running tests/freestanding_threads.rs (target/debug/deps/freestanding_threads-6404c793a58ea841)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/fs_change_lanes.rs (target/debug/deps/fs_change_lanes-3f96fb21b3432543)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.27s
+     Running tests/fs_gaps_lanes.rs (target/debug/deps/fs_gaps_lanes-d77a1cb23b8e6856)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.56s
+     Running tests/fs_stat_lanes.rs (target/debug/deps/fs_stat_lanes-df937aa4007a290d)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.56s
+     Running tests/fs_std_lanes.rs (target/debug/deps/fs_std_lanes-585b9bdd905aa2f5)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.82s
+     Running tests/group_lanes.rs (target/debug/deps/group_lanes-bf73c31c3981791b)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.13s
+     Running tests/help_surface.rs (target/debug/deps/help_surface-d5aaf5d4a6508a23)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+     Running tests/home_method_lanes.rs (target/debug/deps/home_method_lanes-d7cfb16e82abf2ba)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s
+     Running tests/ids_lanes.rs (target/debug/deps/ids_lanes-306b2790cd64cc33)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.57s
+     Running tests/incremental.rs (target/debug/deps/incremental-3840097dfc7c0f0c)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+     Running tests/index_flow_once_lanes.rs (target/debug/deps/index_flow_once_lanes-cb14cff9902f61b1)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.20s
+     Running tests/index_store_lanes.rs (target/debug/deps/index_store_lanes-74d539e94449af71)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+     Running tests/int_ptr_lanes.rs (target/debug/deps/int_ptr_lanes-90143503242f0188)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.22s
+     Running tests/int_truth_lanes.rs (target/debug/deps/int_truth_lanes-ba2f6349a4f5ec7a)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.42s
+     Running tests/interproc_facts.rs (target/debug/deps/interproc_facts-4190edf8a2fff410)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.73s
+     Running tests/job_wait_lanes.rs (target/debug/deps/job_wait_lanes-ea8d20873096ef36)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.35s
+     Running tests/json_dup_lanes.rs (target/debug/deps/json_dup_lanes-4c89471f1d20b6c2)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.17s
+     Running tests/json_parity.rs (target/debug/deps/json_parity-13f27937fb65ac4c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/json_process_native.rs (target/debug/deps/json_process_native-f2d9d8b37035d64d)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.45s
+     Running tests/kill_park_lanes.rs (target/debug/deps/kill_park_lanes-85454aaaa0cd2272)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.58s
+     Running tests/lane_exit_helper.rs (target/debug/deps/lane_exit_helper-bc3db834a5acdb34)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/lend_refusal_code.rs (target/debug/deps/lend_refusal_code-61ff0a1e3f7b2de2)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/linker_select.rs (target/debug/deps/linker_select-9dc07695846b1ff4)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/list_slice_lanes.rs (target/debug/deps/list_slice_lanes-041f0798ae43e608)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+     Running tests/long_line_record.rs (target/debug/deps/long_line_record-87429b4f2e7f62e5)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/lsp_one_truth.rs (target/debug/deps/lsp_one_truth-1772a78e8646c800)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/map_pairs_walk_lanes.rs (target/debug/deps/map_pairs_walk_lanes-c6eaea97e97568fd)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.09s
+     Running tests/match_fallible_lanes.rs (target/debug/deps/match_fallible_lanes-2135b0fb446737a1)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.89s
+     Running tests/module_c_link_lanes.rs (target/debug/deps/module_c_link_lanes-f916a97c4dcd4b94)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.64s
+     Running tests/module_formation.rs (target/debug/deps/module_formation-edaaa09917e71d93)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/move_expression_lanes.rs (target/debug/deps/move_expression_lanes-7dd70bb5b215e15f)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+     Running tests/mut_claim_extent.rs (target/debug/deps/mut_claim_extent-76d31091ff0dc260)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+     Running tests/mut_element_place.rs (target/debug/deps/mut_element_place-1110ef9c4341a98c)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+     Running tests/mut_param_return_lanes.rs (target/debug/deps/mut_param_return_lanes-b977da70ea664d97)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+     Running tests/narrow_cast_lanes.rs (target/debug/deps/narrow_cast_lanes-efb7fd71189a9d0c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 83.69s
+     Running tests/nested_claim_reads_lanes.rs (target/debug/deps/nested_claim_reads_lanes-4f159ae1c67ae8d5)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.72s
+     Running tests/nested_fn_modes_lanes.rs (target/debug/deps/nested_fn_modes_lanes-e002e7a9fa0f72f0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+     Running tests/net_native.rs (target/debug/deps/net_native-3983cc3cd97645d6)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.58s
+     Running tests/net_parity.rs (target/debug/deps/net_parity-8ec4d0b43c792812)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/no_spawn_binary.rs (target/debug/deps/no_spawn_binary-c948a8571f2ee660)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+     Running tests/numlit_binding_literal_lanes.rs (target/debug/deps/numlit_binding_literal_lanes-57ea96b4c6866d55)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+     Running tests/os_error_parity.rs (target/debug/deps/os_error_parity-6337a257345f4a79)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/os_time_native.rs (target/debug/deps/os_time_native-1e2f2e4431abee2c)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+     Running tests/outcome_surface.rs (target/debug/deps/outcome_surface-1e30c1b4c73efa88)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/pairing.rs (target/debug/deps/pairing-08c5f4895af0adf1)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/papercut_lanes.rs (target/debug/deps/papercut_lanes-fa4ef04f0627146e)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.71s
+     Running tests/parked_tasks.rs (target/debug/deps/parked_tasks-74e934d4463adf81)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.19s
+     Running tests/pgo.rs (target/debug/deps/pgo-dbe9fbdfa08184ba)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s
+     Running tests/pkg.rs (target/debug/deps/pkg-bf6a9d222650058b)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+     Running tests/pool_native.rs (target/debug/deps/pool_native-96074736fa3ba13b)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.71s
+     Running tests/prelude_list.rs (target/debug/deps/prelude_list-4295fc713767bba7)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/proc_cross_module.rs (target/debug/deps/proc_cross_module-bc037d8f7849f108)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+     Running tests/proc_fd_lanes.rs (target/debug/deps/proc_fd_lanes-f11ee13001990a68)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.54s
+     Running tests/proc_must_join_lanes.rs (target/debug/deps/proc_must_join_lanes-76b86f62efe2915f)
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.49s
+     Running tests/process_calls_lanes.rs (target/debug/deps/process_calls_lanes-95be4cd84a3f0d10)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.45s
+     Running tests/random_native.rs (target/debug/deps/random_native-2b99c8c620f3f91d)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.73s
+     Running tests/raw_align_ir.rs (target/debug/deps/raw_align_ir-9cb766dd0790a032)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/raw_align_lanes.rs (target/debug/deps/raw_align_lanes-b0f5a9f7d7f56f7f)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.75s
+     Running tests/reactor_lanes.rs (target/debug/deps/reactor_lanes-20dce5422218c030)
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.67s
+error: test failed, to rerun pass `-p wolf_driver --test reactor_lanes`
+     Running tests/read_lend_frames.rs (target/debug/deps/read_lend_frames-0100e7191d77b9ba)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.10s
+     Running tests/receiver_claim_args_lanes.rs (target/debug/deps/receiver_claim_args_lanes-c7d9b816ab7bd7da)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+     Running tests/record_file_index.rs (target/debug/deps/record_file_index-c19b6c8888b858e9)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/refusal_site.rs (target/debug/deps/refusal_site-21150526eefb2166)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+     Running tests/region_copyout_lanes.rs (target/debug/deps/region_copyout_lanes-7fa48154b42b62e4)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+     Running tests/region_kept_arg_lanes.rs (target/debug/deps/region_kept_arg_lanes-12a8fcef01d2d6fe)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+     Running tests/region_outer_write_lanes.rs (target/debug/deps/region_outer_write_lanes-b26124bdebd7f9e4)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.59s
+     Running tests/region_str_call_lanes.rs (target/debug/deps/region_str_call_lanes-597b1cb2cb7b3ee8)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s
+     Running tests/region_str_producers.rs (target/debug/deps/region_str_producers-7931e32b24b03866)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.88s
+     Running tests/region_view_for_lanes.rs (target/debug/deps/region_view_for_lanes-e245f314ded956c6)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+     Running tests/release_determinism.rs (target/debug/deps/release_determinism-c73894d14426b3fe)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.42s
+     Running tests/release_native.rs (target/debug/deps/release_native-79aa721447a0dde2)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 487.63s
+     Running tests/release_overlap_guard.rs (target/debug/deps/release_overlap_guard-b2114520658c031a)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+     Running tests/release_struct_layout.rs (target/debug/deps/release_struct_layout-d8ed33407238a050)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+     Running tests/repr_c_raw_layout.rs (target/debug/deps/repr_c_raw_layout-054d3566f5ecb1ce)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.26s
+     Running tests/repr_layout_lanes.rs (target/debug/deps/repr_layout_lanes-9f8c68e8e97e2d49)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
+     Running tests/root_arena_threads_lanes.rs (target/debug/deps/root_arena_threads_lanes-70d35eae2d26115c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.00s
+     Running tests/row_member_lanes.rs (target/debug/deps/row_member_lanes-a4114169fe9c65e9)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+     Running tests/runtime_residue_lanes.rs (target/debug/deps/runtime_residue_lanes-bdd773ddb5474842)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.62s
+     Running tests/scope_handle_param.rs (target/debug/deps/scope_handle_param-860a68b791b7f8cc)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.40s
+     Running tests/shift_lanes.rs (target/debug/deps/shift_lanes-f43d8e8b7b70e4e8)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.63s
+     Running tests/shr_range_lanes.rs (target/debug/deps/shr_range_lanes-fbad369e936ba580)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+     Running tests/signal_blocked_mask.rs (target/debug/deps/signal_blocked_mask-0dd72318cb49fbf9)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+     Running tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-74fc408e27f0f8c2)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.03s
+     Running tests/signal_native.rs (target/debug/deps/signal_native-1618c410efae5263)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.01s
+     Running tests/signal_shell_lanes.rs (target/debug/deps/signal_shell_lanes-f61b0a4f8b78e455)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.07s
+     Running tests/slice_endpoint_once_lanes.rs (target/debug/deps/slice_endpoint_once_lanes-58f1eab8bf3669cd)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.75s
+     Running tests/small_gaps_lanes.rs (target/debug/deps/small_gaps_lanes-ad4ca8c3fc8ff391)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.12s
+     Running tests/soak_residue.rs (target/debug/deps/soak_residue-522742d8b9bc905a)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.07s
+     Running tests/spawn_errno_lanes.rs (target/debug/deps/spawn_errno_lanes-460aa722d129265a)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+     Running tests/spawn_noexec_lanes.rs (target/debug/deps/spawn_noexec_lanes-fc9b0e3a80a83e8f)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.77s
+     Running tests/stack_overflow_native.rs (target/debug/deps/stack_overflow_native-58ef083f5dcf79e5)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+     Running tests/stale_global_lanes.rs (target/debug/deps/stale_global_lanes-e767583c8760fec1)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+     Running tests/static_entry.rs (target/debug/deps/static_entry-20da5b81df5fec59)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/static_lanes.rs (target/debug/deps/static_lanes-08940286c12984a9)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.02s
+     Running tests/static_sections.rs (target/debug/deps/static_sections-e2109d16a0d35782)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/status_lanes.rs (target/debug/deps/status_lanes-c98bee5fd7b8f5f3)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/std_root.rs (target/debug/deps/std_root-a5899f704fe8ad31)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+     Running tests/stdfd_lanes.rs (target/debug/deps/stdfd_lanes-1bebf7363838b131)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.84s
+     Running tests/store_order_lanes.rs (target/debug/deps/store_order_lanes-8991c0cc7e941fd9)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.22s
+     Running tests/store_rhs_first_lanes.rs (target/debug/deps/store_rhs_first_lanes-e64adf13be48cb61)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+     Running tests/str_list_fs_native.rs (target/debug/deps/str_list_fs_native-52b2722f8ba498ab)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.82s
+     Running tests/str_view_escape.rs (target/debug/deps/str_view_escape-5108f90bd7c4bfc4)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+     Running tests/straight_line_lanes.rs (target/debug/deps/straight_line_lanes-2e29df991c984b5d)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.64s
+     Running tests/term_editor_lanes.rs (target/debug/deps/term_editor_lanes-026743a629231a7f)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.24s
+     Running tests/test_cmd.rs (target/debug/deps/test_cmd-d85241842a75a26d)
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+     Running tests/test_cpus_helper.rs (target/debug/deps/test_cpus_helper-dbee8338b17314e6)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/test_truth_lanes.rs (target/debug/deps/test_truth_lanes-c95a60c537c199ca)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.32s
+     Running tests/trap_site.rs (target/debug/deps/trap_site-613c032bc2ceecfe)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+     Running tests/try_under_defer_refused_lanes.rs (target/debug/deps/try_under_defer_refused_lanes-c16eb7a4af048d54)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/two_machines.rs (target/debug/deps/two_machines-c95b4ac03e3bc8d2)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.02s
+     Running tests/unit_discard_lanes.rs (target/debug/deps/unit_discard_lanes-04b80360ecd4f96e)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.91s
+     Running tests/variadic_abi.rs (target/debug/deps/variadic_abi-2b5ae46a3c8c57a2)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/versioned_loop_root_lanes.rs (target/debug/deps/versioned_loop_root_lanes-0b7011b3d69c3543)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+     Running tests/view_set_writeback_lanes.rs (target/debug/deps/view_set_writeback_lanes-b8167df3c3faea79)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.84s
+     Running tests/volatile_disasm.rs (target/debug/deps/volatile_disasm-2fd9ce8a72361ffd)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running tests/volatile_lanes.rs (target/debug/deps/volatile_lanes-6628a42e2955e196)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+     Running tests/warnings.rs (target/debug/deps/warnings-6f55f4fd186ff633)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/whole_program.rs (target/debug/deps/whole_program-5117a7d7373eccfa)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/broken.rs (target/debug/deps/broken-7aaacee1b42f032b)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/properties.rs (target/debug/deps/properties-18a7b273d0bea2ad)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
+     Running tests/s271_if.rs (target/debug/deps/s271_if-b775ade5e1e2d1af)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.99s
+     Running tests/style.rs (target/debug/deps/style-9f65012faebc982e)
+test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/x4_region.rs (target/debug/deps/x4_region-f85b66cd45dfeeac)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/corpus_snapshots.rs (target/debug/deps/corpus_snapshots-19e0fe04466c1aa8)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.29s
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-bfdaf5eae85803d3)
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/keywords_spec.rs (target/debug/deps/keywords_spec-c2bf3d80c2fcc44c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/lexer_tests.rs (target/debug/deps/lexer_tests-329fa05a26f2ae08)
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/lossless_prop.rs (target/debug/deps/lossless_prop-fe4b63341e3189fb)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+     Running tests/render.rs (target/debug/deps/render-0d261e7b2eb70e9a)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/annotate.rs (target/debug/deps/annotate-e7aa8934dc79818c)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/cancel.rs (target/debug/deps/cancel-110afda2c416c0c6)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/cold.rs (target/debug/deps/cold-2e98646389229687)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/completion.rs (target/debug/deps/completion-dd415590cf67d407)
+test result: ok. 9 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/navigate.rs (target/debug/deps/navigate-55629b7d4496aa47)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/std.rs (target/debug/deps/std-0bf76e6e36e8d93e)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/transcript.rs (target/debug/deps/transcript-6bb1aa7afc684171)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/byteview.rs (target/debug/deps/byteview-e58077a045bad31b)
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/cfg_dumps.rs (target/debug/deps/cfg_dumps-348c1a8157e072d2)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/checked_tasks.rs (target/debug/deps/checked_tasks-8c2f22f8a8148950)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/container_depth.rs (target/debug/deps/container_depth-08edf6211ae7266c)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/exec_env_checked.rs (target/debug/deps/exec_env_checked-bd07fbde308cd6bc)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/io_fs.rs (target/debug/deps/io_fs-bb8669e0684b9b0d)
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/mem_diagnostics.rs (target/debug/deps/mem_diagnostics-7c08e73906dc9c8f)
+test result: ok. 144 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/net.rs (target/debug/deps/net-a5d1afccc17505d8)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+     Running tests/os_time_json.rs (target/debug/deps/os_time_json-f880344ee32d6c84)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+     Running tests/pairswalk.rs (target/debug/deps/pairswalk-57861b4305358a68)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/read_views.rs (target/debug/deps/read_views-67eebd6f576e6bc0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/str_builtins.rs (target/debug/deps/str_builtins-8b40a36a91e97aa3)
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/ubcheck.rs (target/debug/deps/ubcheck-9625471f9f504cd9)
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/ambiguity_trees.rs (target/debug/deps/ambiguity_trees-526fa69673091290)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+     Running tests/blast_radius.rs (target/debug/deps/blast_radius-8bf6c7d246678571)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+     Running tests/broken_suite.rs (target/debug/deps/broken_suite-34fa58167215d7b8)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/corpus_decls.rs (target/debug/deps/corpus_decls-027967958e3b4bdf)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.17s
+     Running tests/corpus_parse.rs (target/debug/deps/corpus_parse-6805c298cb3b014f)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+     Running tests/decl_grammar.rs (target/debug/deps/decl_grammar-103962b5e84acae3)
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-5c77f6daacc0d61a)
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/expr_grammar.rs (target/debug/deps/expr_grammar-38ab23b267b6cd60)
+test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/render.rs (target/debug/deps/render-00bfb641d0671187)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/tree_invariants.rs (target/debug/deps/tree_invariants-a60cd76f43d153ee)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/variadic.rs (target/debug/deps/variadic-681e42dfd3bb11a1)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/c_recipes.rs (target/debug/deps/c_recipes-44cde752e7e5e16c)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/manifest_diags.rs (target/debug/deps/manifest_diags-9ebb089884c97977)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/project_diags.rs (target/debug/deps/project_diags-5c2b52dea957fedf)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/script_frontmatter.rs (target/debug/deps/script_frontmatter-26a6bb54dd886c3c)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/cancellation.rs (target/debug/deps/cancellation-04097723d535634c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/navigate.rs (target/debug/deps/navigate-3b42c5fd32ac247f)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/queries.rs (target/debug/deps/queries-048e72acbd39f9f1)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 343 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.25s
+     Running tests/chan_bench.rs (target/debug/deps/chan_bench-4f8e3af176225116)
+     Running tests/handle_residue.rs (target/debug/deps/handle_residue-1fe58c478b2d0afe)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.14s
+     Running tests/main_stack_bounds.rs (target/debug/deps/main_stack_bounds-7ea8ac6e68d0cbf6)
+     Running tests/no_io.rs (target/debug/deps/no_io-25b81cb62ebed9ef)
+     Running tests/no_spawn.rs (target/debug/deps/no_spawn-0e7d052530fc7d34)
+     Running tests/pool_growth.rs (target/debug/deps/pool_growth-c26caed0c33dde8f)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/pool_retire.rs (target/debug/deps/pool_retire-28f7667da5b1c32d)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+     Running tests/proc_root.rs (target/debug/deps/proc_root-88b0cc905e9a7c2f)
+     Running tests/quarantine_alloc.rs (target/debug/deps/quarantine_alloc-28df57fd4aad515b)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/reactor_limit.rs (target/debug/deps/reactor_limit-b342f4780d394016)
+     Running tests/read_write_alloc.rs (target/debug/deps/read_write_alloc-693cb33ed1404071)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/region_containers.rs (target/debug/deps/region_containers-fa50b2c8765eaa49)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/spawn_bench.rs (target/debug/deps/spawn_bench-e1e4197415811499)
+     Running tests/stack_overflow.rs (target/debug/deps/stack_overflow-a97a8098a62acb8c)
+     Running tests/syscall_shape.rs (target/debug/deps/syscall_shape-067011339dec0040)
+     Running tests/umask.rs (target/debug/deps/umask-161a952c9b3665db)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hook_contract.rs (target/debug/deps/hook_contract-78fe4126ba9ce227)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 107 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/attr_diagnostics.rs (target/debug/deps/attr_diagnostics-4dd2b14c1c828937)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/audit_surface.rs (target/debug/deps/audit_surface-c30648bbc2715671)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/conc_diagnostics.rs (target/debug/deps/conc_diagnostics-b08752c71bbe00b2)
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/ctfe_diagnostics.rs (target/debug/deps/ctfe_diagnostics-618056fc5fbd6f5d)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+     Running tests/ctfe_engine.rs (target/debug/deps/ctfe_engine-f19721de31e9f9dd)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-2355c90758bbf072)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/host_table_spec.rs (target/debug/deps/host_table_spec-a91b93598932e7ce)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/interface_pretty.rs (target/debug/deps/interface_pretty-b19dc1300829c69c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/interface_props.rs (target/debug/deps/interface_props-712260294b71c1bc)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/layout_diagnostics.rs (target/debug/deps/layout_diagnostics-f074a16224d8bd44)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/ledger_diagnostic.rs (target/debug/deps/ledger_diagnostic-2321358b1d469f64)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/lint_diagnostics.rs (target/debug/deps/lint_diagnostics-d8f99694ede7f0c0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/method_diagnostics.rs (target/debug/deps/method_diagnostics-ee6d2f4d2c74bdc4)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/methods_engine.rs (target/debug/deps/methods_engine-0cd6a156e7cbf59a)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/origin_diagnostics.rs (target/debug/deps/origin_diagnostics-79bb7caf7b37dc75)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/pattern_diagnostics.rs (target/debug/deps/pattern_diagnostics-30cdabb458184929)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/prelude_names.rs (target/debug/deps/prelude_names-60fe9f7010d816cc)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/row_diagnostics.rs (target/debug/deps/row_diagnostics-613e75a341cac4d8)
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/rows_engine.rs (target/debug/deps/rows_engine-73a225c6a61baddd)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/sandbox_s215.rs (target/debug/deps/sandbox_s215-23ed3a325c262c13)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s225.rs (target/debug/deps/sandbox_s225-e54f6986d3361d79)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s230.rs (target/debug/deps/sandbox_s230-e0627f619c988071)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s232.rs (target/debug/deps/sandbox_s232-1cf7292007dfe8a3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s234.rs (target/debug/deps/sandbox_s234-14ec51aaa86a2e42)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s236.rs (target/debug/deps/sandbox_s236-5c85457563499834)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s241.rs (target/debug/deps/sandbox_s241-1b4381c0e1508da1)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s242.rs (target/debug/deps/sandbox_s242-8e0334fe11d762f0)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s246.rs (target/debug/deps/sandbox_s246-a29e3bda24f96bb8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s247.rs (target/debug/deps/sandbox_s247-d4a4c758958e5c7b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s248.rs (target/debug/deps/sandbox_s248-1b2ae39d8046bfa8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s253.rs (target/debug/deps/sandbox_s253-6f79b6ae77badae2)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sandbox_s254.rs (target/debug/deps/sandbox_s254-8f37ba26bf00d8ec)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/struct_pattern_diagnostics.rs (target/debug/deps/struct_pattern_diagnostics-e0888231e1c0f83a)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/trait_diagnostics.rs (target/debug/deps/trait_diagnostics-65d71e173a723acc)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/traits_engine.rs (target/debug/deps/traits_engine-ac57867eeb152132)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/typecheck.rs (target/debug/deps/typecheck-c3fee903f7c3aa39)
+test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-129f8c701486c723)
+test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/wave_diagnostics.rs (target/debug/deps/wave_diagnostics-8c49eb5a9820361b)
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/intern.rs (target/debug/deps/intern-aeb1cf4b11a3128b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/build_peephole.rs (target/debug/deps/build_peephole-a42a55fb77c81603)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/canonical.rs (target/debug/deps/canonical-f6a94107982b49fb)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/ct_tier.rs (target/debug/deps/ct_tier-b4d2f90732cc24d0)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/dedup_instances.rs (target/debug/deps/dedup_instances-753592a215bd55c5)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+     Running tests/fact_text_edges.rs (target/debug/deps/fact_text_edges-e6a3b4726625dd79)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/interproc.rs (target/debug/deps/interproc-3a75b4e378a6745f)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/lifo.rs (target/debug/deps/lifo-ecfc8da5f94f3ac1)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/lower_corpus.rs (target/debug/deps/lower_corpus-6dd3db2018a3d4c2)
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.06s
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-e72e1ed511e1b8e9)
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+     Running tests/midend_corpus.rs (target/debug/deps/midend_corpus-58bb4bc8e9eca4df)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.90s
+     Running tests/midend_passes.rs (target/debug/deps/midend_passes-9580da71d8dc857c)
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/pass_facts.rs (target/debug/deps/pass_facts-b9a5cf004adf0227)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/pgo.rs (target/debug/deps/pgo-5518c1ccb7d9cc27)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/roundtrip_prop.rs (target/debug/deps/roundtrip_prop-bd2790bf2cef40f7)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/survey.rs (target/debug/deps/survey-0c0d86bf5d74b2f3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/token_inline.rs (target/debug/deps/token_inline-4090e12a9bbf2700)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/verify_red.rs (target/debug/deps/verify_red-3720bbd005ad74ae)
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/whole_program.rs (target/debug/deps/whole_program-0a5b8748f3e715eb)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/wir_dumps.rs (target/debug/deps/wir_dumps-e19d7f08f52d2132)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/bench_gate.rs (target/debug/deps/bench_gate-e1f60a2ad101f5e9)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/directive_snapshots.rs (target/debug/deps/directive_snapshots-88bc6b34e575660b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/grammar_snapshot.rs (target/debug/deps/grammar_snapshot-8b56c1afcc550d01)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/prelude_diff.rs (target/debug/deps/prelude_diff-405548be7d55723b)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+     Running tests/protocol_fixtures.rs (target/debug/deps/protocol_fixtures-28927106fb531e32)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: 2 targets failed:
+    `-p wolf_driver --test debug_native`
+    `-p wolf_driver --test reactor_lanes`
+END ws-test exit=101
+--- the two failing targets, their failures ---
+thread 'lldb_steps_hello_lu' (74042894) panicked at crates/wolf_driver/tests/debug_native.rs:428:5:
+thread 'lldb_breaks_steps_and_prints' (74042893) panicked at crates/wolf_driver/tests/debug_native.rs:367:5:
+thread 'a_listen_at_the_descriptor_limit_does_not_end_the_process' (74306658) panicked at crates/wolf_driver/tests/reactor_lanes.rs:611:9:
+  left: ("unsupported", false)
+ right: ("unsupported", true)
+thread 'a_park_at_the_descriptor_limit_does_not_end_the_process' (74306659) panicked at crates/wolf_driver/tests/reactor_lanes.rs:347:9:
+assertion `left == right` failed: lupin: Obs { verdict: "unsupported", stdout: "", version: "0.1.58", commit: "6240efe", unsupported: "`fs_open(\"park_at_limit.tmp\")` cannot be served: this machine could not read the working directory it would resolve the path against" }
+  left: "unsupported"
+ right: "exit(0)"
+thread '<unnamed>' (74676665) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+thread '<unnamed>' (74676665) panicked at crates/wolf_rt/src/task/pool.rs:501:5:
+thread '<unnamed>' (74676681) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+thread '<unnamed>' (74676666) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+thread '<unnamed>' (74676683) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+thread '<unnamed>' (74676683) panicked at crates/wolf_rt/src/task/proc.rs:1597:13:
+thread '<unnamed>' (74676700) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+thread '<unnamed>' (74676665) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+thread '<unnamed>' (74676715) panicked at crates/wolf_rt/src/task/mod.rs:634:33:
+thread '<unnamed>' (74676713) panicked at crates/wolf_rt/src/task/when.rs:233:9:
+  left: 1
