@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="abc 6 3 20 4\n")
+//! phase: run
+//! conforms: type.map, mem.map.absent
+//!
+//! s273 (wolf-lang#972): `m.pairs()` is a fresh list of the entries as
+//! they were when the walk began (`[type.map]`), so a body that WRITES
+//! the map mid-walk still sees that snapshot: the rewritten `b` reads
+//! 2, the erased `c` is still visited, the appended `d` is not. s273
+//! walks the map's own entries only when the body never names the map;
+//! this body names it, so the walk materializes as it always did. The
+//! row holds that condition: a walk of the live entries here would
+//! print `abd 25`.
+
+fn main() {
+    var m = Map[str, int]()
+    m["a"] = 1
+    m["b"] = 2
+    m["c"] = 3
+    var seen = ""
+    var sum = 0
+    for pair in m.pairs() {
+        if pair.0 == "a" {
+            m["b"] = 20
+            let _gone = (mut m).remove("c") else 0
+            m["d"] = 4
+        }
+        seen = "{seen}{pair.0}"
+        sum += pair.1
+    }
+    let b = m["b"] else 0
+    let d = m["d"] else 0
+    print("{seen} {sum} {m.len} {b} {d}")
+}
