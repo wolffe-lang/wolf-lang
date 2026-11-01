@@ -309,17 +309,17 @@ fn the_region_is_freed_a_raw_read_after_is_p4() {
 
 // The instrument (s274, wolf-lang#631). Until s274 these rows ran the
 // witness twice, 20,000 turns in one process and 40,000 in another, and
-// compared the two processes' VmHWM. That difference moves by about
-// ±100 kB between two runs of one binary (s263, s270, s270b, s273, and
-// s274's four rigs), more than the scalar row's whole 78 kB bound, so
-// the row went red about one run in five on byte-identical binaries, on
-// hasu and on trunk CI. The noise belongs to the process, not to the
-// turn. So the witness now reads itself in ONE process, at `FIRST` and
-// at `LAST` turns, and the reading is exact: its anonymous memory,
-// resident plus swapped, from `/proc/self/smaps_rollup`, which the
-// kernel counts by walking the page tables. VmHWM comes from batched
-// per-CPU counters instead. Each reading runs in a region of its own, so
-// it keeps nothing.
+// compared the two processes' VmHWM. VmHWM counts file-backed pages too:
+// the executable and its libraries, which a process maps in ahead of
+// use. How many it maps differs from one run of a binary to the next by
+// up to ~190 kB at the same turn, while its anonymous memory differs by
+// 8 kB (s274, hasu). The scalar row's whole bound is 78 kB, so it went
+// red in about one run in five on byte-identical binaries, on hasu and
+// on trunk CI. So the witness now reads itself in ONE process, at
+// `FIRST` and at `LAST` turns, and reads what a leak grows: its
+// anonymous memory, resident plus swapped, from `/proc/self/smaps_rollup`,
+// which the kernel counts from the page tables when it is read. Each
+// reading runs in a region of its own, so it keeps nothing.
 
 /// The two turns the growth is taken between.
 const FIRST: u32 = 20_000;
@@ -553,9 +553,9 @@ fn the_loop_frees_its_scratch_keeping_only_its_result() {
 
 /// Keeping only a scalar, the loop is flat: under 4 bytes a turn, 78 kB
 /// over the 20,000 turns between the readings. Read in one process
-/// (wolf-lang#631, s274), a flat loop answers within a page or two of
-/// zero, and #612's leak (this step with its `copy region` undone)
-/// answers about 1,300; the kept-`str` row above answers between them.
+/// (wolf-lang#631, s274), a flat loop answers within a page of zero (0 on
+/// every rig s274 measured), #612's leak (this step with its `copy
+/// region` undone) about 1,300, and the kept-`str` row above about 33.
 #[test]
 fn a_loop_keeping_a_scalar_is_flat() {
     for release in [false, true] {
