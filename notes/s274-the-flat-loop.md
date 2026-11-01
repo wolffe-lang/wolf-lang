@@ -2,7 +2,7 @@
 
 Footprint: module
 
-Refs wolf-lang#631 (the row), #612 (the leak it guards), #674 (closed as #631's duplicate; it asked for the one-process reading). Tests only: `crates/wolf_driver/tests/region_copyout_lanes.rs` and this note's evidence. No runtime, codegen, CI or pin change; no CHANGELOG entry (the contract).
+Refs wolf-lang#631 (the row), #612 (the leak it guards), #674 (the duplicate that asked for the one-process reading). Tests only: `crates/wolf_driver/tests/region_copyout_lanes.rs` and this note's evidence. No runtime, codegen, CI or pin change; no CHANGELOG entry (the contract).
 
 ## Forbidden
 
@@ -11,7 +11,7 @@ No runtime change (item 1 found no runtime growth: the flat loop is flat inside 
 ## Inputs, verified
 
 - Base: wolf-lang trunk `7332772f` (`7332772f2e96b5d949b7d8a5c5583c81b815a8ae`). Branch `s274`, Mac worktree `~/lanes/s274/wolf-lang`; the plant `s274-plant-leak` in `~/lanes/s274/plant`.
-- hasu (Linux 7.2.4, x86-64), rootless podman `localhost/r41-toolchain:1`, rustc 1.97.1 (`8bab26f4f`), as uid 1000 under a root pid 1 (SigBlk/SigIgn 0), s273's taskset shim copied. Block B (CPUs 6–11) for batch 1, block A (CPUs 0–5) for batches 2 and 3, picked by waiter count (the 21:10Z rule) from batch 2 on. Every job checks out its commit in a clone of its own (`~/lanes/s274/wolf-lang` for batch 1, `wolf-lang-b2` for batches 2 and 3), asserts the sha and a clean tree, and runs the scripts as committed (`git show <sha>:…`).
+- hasu (Linux 7.2.4, x86-64), rootless podman `localhost/r41-toolchain:1`, rustc 1.97.1 (2026-07-14), as uid 1000 under a root pid 1 (SigBlk/SigIgn 0), s273's taskset shim copied. Block B (CPUs 6–11) for batch 1, block A (CPUs 0–5) for batches 2 and 3, picked by waiter count (the 21:10Z rule) from batch 2 on. Every job checks out its commit in a clone of its own (`~/lanes/s274/wolf-lang` for batch 1, `wolf-lang-b2` for batches 2 and 3), asserts the sha and a clean tree, and runs the scripts as committed (`git show <sha>:…`).
 - Tools at trunk, batch 1: `target/debug/wolf` sha256 `cb71dce6…`, `libwolf_rt.a` `581169b1…`. In batch 2's clone `wolf` reads `a23b3e54…` (another checkout path) and `libwolf_rt.a` the same `581169b1…`; at trunk and at the head `wolf` and `libwolf_rt.a` are **identical** (`S274_TOOLS`), so the rows differ only in the test binary.
 - The row's witness, cut from the test file at trunk by `probe.py`: `row/flat/main.lu` sha256 `470bcba9…` is the file the row writes (`cmp` against `target/tmp/region_copyout_lanes/copy_int/main.lu`: equal) and s273's witness; its release executable `839a7caa…` is s273's too.
 - lupin 0.1.58 for the suite's oracle legs: archive sha256 `34f52792…` (read twice), copied from `~/lanes/r41/inputs/lupin058`.
@@ -145,7 +145,7 @@ Recommended rulings, each implemented:
 - **R-s274-4 — the plant's shape.** (A) the witness's `copy region` undone (#612's leak, implemented); (B) the runtime's region free made a no-op. **Recommend A**: s270b's `--dump=regions` shows the row's `scratch` promoted to the stack (create and free elided), so B never reaches this witness.
 - **R-s274-5 — VmHWM.** (A) printed beside the reading, not asserted (implemented); (B) assert on in-process VmHWM. **Recommend A**: in one process VmHWM is flat on hasu too, but it counts file-backed pages, which a process maps in ahead of use; anonymous memory is what a leak grows.
 
-Issues: wolf-lang#631 closes at the merge (the orchestrator's). #674 is already closed as its duplicate. **To file** (R-s274-3): "wolf_driver: the `ru_maxrss` bounded-memory rows (cwd_region_lanes, region_outer_write_lanes, map_pairs_walk_lanes, checked_budget) read the test harness's own peak on Linux; growth under ~2.6 MB reads 0", with section 4's numbers, the method (the witness reads its own smaps_rollup `Anonymous` in one process) and its file list. Nothing filed or closed here.
+Issues: wolf-lang#631 stays open here; the orchestrator closes it at the merge. Its duplicate #674 is shut already. **To file** (R-s274-3): "wolf_driver: the `ru_maxrss` bounded-memory rows (cwd_region_lanes, region_outer_write_lanes, map_pairs_walk_lanes, checked_budget) read the test harness's own peak on Linux; growth under ~2.6 MB reads 0", with section 4's numbers, the method (the witness reads its own smaps_rollup `Anonymous` in one process) and its file list. Nothing filed or closed here.
 
 Test targets:
 
