@@ -159,6 +159,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // s218 (#625, #626): the stat record, the link's target and the
         // typed listing read the filesystem — `fs`, with the family.
         | "fs_stat" | "fs_lstat" | "fs_read_link" | "fs_read_dir_entries"
+        // s272 (#686): the file system's record reads the filesystem —
+        // `fs`, with the stat family.
+        | "fs_statfs"
         // s230 (#346, #698, #699, #700, #702): a mode, a link, a time
         // and a length are changes to the filesystem — `fs`, with the
         // family.
@@ -247,6 +250,12 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // that dumps no core are process control over how this process
         // ends — `exec`, with `os_exit_signal`.
         "os_set_core_limit" | "os_core_off" => SandboxCategory::Exec,
+        // s272 (#921, #922; R-s272-10): the change of root and of the nice
+        // value are process control over this process — `exec`, with
+        // `os_set_ids` and `os_set_core_limit`; the nice value read is
+        // process state — `env`, with `os_core_limit`.
+        "os_chroot" | "os_setpriority" => SandboxCategory::Exec,
+        "os_getpriority" => SandboxCategory::Env,
         "os_pgid" => SandboxCategory::Env,
         // s242 (wolf-lang#680; ruling owed): the poll of the children
         // reaps as `os_wait_status` does — process control, `exec`.
@@ -266,6 +275,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `os_error_text`'s shelf: `pure_builtin`.)
         "os_signal_send" => SandboxCategory::Exec,
         "os_pid" | "os_ppid" | "os_signal_ignored" => SandboxCategory::Env,
+        // s272 (#975; R-s272-10): one meaning's action, read and never
+        // changed — `env`, with `os_signal_ignored`.
+        "os_signal_action_one" => SandboxCategory::Env,
         // s236 (#633; ruling #74's reading of `os_pid`): who the process
         // runs as is process state it reads — `env`. Changing it (#742)
         // is process control, and changes what every later spawn, exec

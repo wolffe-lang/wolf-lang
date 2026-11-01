@@ -14248,6 +14248,16 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, list_int, &["not_found", "denied", "io"]),
             )
         }
+        // s272 (#686, `[os.fs.statfs]`; R-s272-1): the record of the file
+        // system that holds a path — twelve words, a `have` word first, from
+        // one host call. The row set is `fs_stat`'s.
+        "fs_statfs" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_],
+                rowed(table, list_int, &["not_found", "denied", "io"]),
+            )
+        }
         // s218 (#625, `[os.fs.readlink]`): the link's target as the
         // host stored it — bytes, because a name need not be UTF-8.
         // `invalid` is a path that is not a link.
@@ -14712,6 +14722,13 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![str_],
             rowed(table, unit, &["not_found", "denied", "io"]),
         ),
+        // s272 (#921, `[os.proc.chroot]`; R-s272-5): `chroot(2)` alone, the
+        // working directory left as it is — `os_chdir`'s rows and windows'
+        // `unsupported`.
+        "os_chroot" => (
+            vec![str_],
+            rowed(table, unit, &["unsupported", "not_found", "denied", "io"]),
+        ),
         // s215 (`[os.fs.isatty]`): whether a handle names a terminal;
         // a closed or forged handle is `io`.
         "os_isatty" => (vec![int_], rowed(table, bool_, &["io"])),
@@ -14782,6 +14799,15 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             rowed(table, unit, &["unsupported", "invalid", "denied"]),
         ),
         "os_core_off" => (Vec::new(), rowed(table, unit, &["unsupported"])),
+        // s272 (#922, `[os.proc.priority]`; R-s272-6): the nice value and
+        // its change by a delta, `nice(2)`'s shape — a lowering without the
+        // privilege `denied` (EPERM or EACCES, told apart by `os_error`),
+        // windows `unsupported`.
+        "os_getpriority" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        "os_setpriority" => (
+            vec![int_],
+            rowed(table, unit, &["unsupported", "denied", "io"]),
+        ),
         // s253 (wolf-lang#819, `[os.uname]`; ruling asked R5): the OS and the
         // architecture the program runs on, as the kernel answers; no row.
         "os_name" | "os_arch" => (Vec::new(), str_),
@@ -14806,6 +14832,15 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // meanings ignored now (before the program's first disposition
         // call, the ones it started with); windows `unsupported`.
         "os_signal_ignored" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        // s272 (#975, `[os.signal.action.one]`; R-s272-8): one meaning's
+        // action in the sending shape, read and never changed — 0 default,
+        // 1 ignored, 2 another handler; the shape `invalid`, windows
+        // `unsupported`, the host's refusal of the GET `io` (its number in
+        // `os_error`).
+        "os_signal_action_one" => (
+            vec![int_],
+            rowed(table, int_, &["unsupported", "invalid", "io"]),
+        ),
         // s232 (wolf-lang#141, `[os.signal.send]`): one meaning (the
         // whole table, KILL and STOP included) to a process id > 0, or 0
         // to ask whether one could be sent.

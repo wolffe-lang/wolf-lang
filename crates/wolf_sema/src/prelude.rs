@@ -220,6 +220,9 @@ pub const PRELUDE: &[Ambient] = &[
     // the unsorted typed listing (`[os.fs.readdir]`).
     host("fs_stat"),
     host("fs_lstat"),
+    // s272 (wolf-lang#686, `[os.fs.statfs]`): the record of the file system
+    // that holds a path — `fs`-tagged with the stat family.
+    host("fs_statfs"),
     host("fs_read_link"),
     host("fs_read_dir_entries"),
     // s230 (wolf-lang#346, #698, #699, #700, #702): the calls that
@@ -342,6 +345,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_spawn_fds"),
     host("os_pipe"),
     host("os_chdir"),
+    // s272 (wolf-lang#921, `[os.proc.chroot]`): the root's change —
+    // `exec`-tagged with `os_set_ids`, the other privileged change of this
+    // process.
+    host("os_chroot"),
     host("os_isatty"),
     // s230 (wolf-lang#704, `[os.fs.umask]`): the process's file mode
     // creation mask — `env`-tagged with `os_chdir`, the other piece of
@@ -383,6 +390,11 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_core_limit"),
     host("os_set_core_limit"),
     host("os_core_off"),
+    // s272 (wolf-lang#922, `[os.proc.priority]`): the nice value, read
+    // (`env`-tagged, with `os_core_limit`) and set in `nice(2)`'s shape
+    // (`exec`-tagged, with `os_set_core_limit`).
+    host("os_getpriority"),
+    host("os_setpriority"),
     host("os_signal_poll"),
     host("os_spawn_job"),
     host("os_proc_pid"),
@@ -401,6 +413,9 @@ pub const PRELUDE: &[Ambient] = &[
     // meaning's number on this host, and this process's id and its
     // parent's.
     host("os_signal_ignored"),
+    // s272 (wolf-lang#975, `[os.signal.action.one]`): one meaning's action,
+    // read and never changed — `env`-tagged with `os_signal_ignored`.
+    host("os_signal_action_one"),
     host("os_signal_send"),
     host("os_signal_number"),
     host("os_pid"),
