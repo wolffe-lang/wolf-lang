@@ -25,10 +25,13 @@
 //!
 //! windows has neither: both answer `unsupported`, by name.
 
-use crate::fs::{os_error_clear, os_error_record};
+use crate::fs::os_error_clear;
+#[cfg(unix)]
+use crate::fs::os_error_record;
 use crate::os::proc_code;
 
 /// The host's refusal as `proc_code`'s, the number left beside it.
+#[cfg(unix)]
 fn code_of(e: &std::io::Error) -> i64 {
     os_error_record(e);
     match e.kind() {
