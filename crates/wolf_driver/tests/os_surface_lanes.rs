@@ -876,6 +876,7 @@ mod pty {
     use std::os::unix::process::CommandExt as _;
     use std::path::Path;
     use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
@@ -945,12 +946,31 @@ mod pty {
                 Ok(())
             });
             let mut child = cmd.spawn().expect("spawn under the pty");
+            // The command holds its three duplicates of the slave until it
+            // is dropped; linux ends a master's read only when every slave
+            // descriptor is closed (macOS revokes the terminal when its
+            // leader goes), so they go now, and the reader polls with a
+            // stop flag, so a descendant that kept the slave open cannot
+            // hold the join.
+            drop(cmd);
             let buf = Arc::new(Mutex::new(Vec::new()));
             let sink = buf.clone();
+            let stop = Arc::new(AtomicBool::new(false));
+            let stopped = stop.clone();
             let mut rd = master.try_clone().expect("dup master");
             let reader = std::thread::spawn(move || {
                 let mut b = [0u8; 4096];
-                loop {
+                while !stopped.load(Ordering::SeqCst) {
+                    let mut pfd = libc::pollfd {
+                        fd: rd.as_raw_fd(),
+                        events: libc::POLLIN,
+                        revents: 0,
+                    };
+                    // SAFETY: one pollfd for a descriptor this thread owns.
+                    let r = libc::poll(&mut pfd, 1, 100);
+                    if r <= 0 {
+                        continue;
+                    }
                     match rd.read(&mut b) {
                         Ok(0) | Err(_) => return,
                         Ok(n) => sink.lock().unwrap().extend_from_slice(&b[..n]),
@@ -977,6 +997,7 @@ mod pty {
             }
             drop(slave);
             drop(master);
+            stop.store(true, Ordering::SeqCst);
             let _ = reader.join();
             let bytes = buf.lock().unwrap().clone();
             let text = String::from_utf8_lossy(&bytes).to_string();
