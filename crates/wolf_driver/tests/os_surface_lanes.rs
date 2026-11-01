@@ -55,7 +55,8 @@ fn report(line: &str) {
     let _ = err.flush();
 }
 
-/// The pairing at this lane, which predates the mirror of the five names.
+/// The pairing at this lane, which predates the mirror of the five names
+/// (wolf-interp#315): its measured answers are pinned per row (`Lupin`).
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58"];
 
 #[derive(Debug)]
