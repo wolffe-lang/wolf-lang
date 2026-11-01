@@ -27,7 +27,10 @@
 //! grow its region; the checked machine charged every refill until
 //! s273). lupin's column: 0.1.58 answers the first two as the compilers
 //! do and charges the refill as the checked machine did (wolf-interp
-//! owes the mirror); an unlisted release must mirror.
+//! owes the mirror); an unlisted release must mirror. Beside them,
+//! `fixtures/reuse_ledger/main.lu` holds #943's neighbours (`clear` and
+//! `pop` on a list, `clear` and `remove` on a map), whose kept storage is
+//! each machine's own rather than the clause's, to one answer.
 
 #![cfg(unix)]
 
@@ -389,4 +392,29 @@ fn a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine() {
         Some("8 false true\n"),
         "[type.list.reset]: the next pushes reuse the buffer (#943)",
     );
+}
+
+/// #943's neighbours (`fixtures/reuse_ledger/main.lu`): a `List` refilled
+/// after `reset`, `clear` and `pop`, a `Map` after `clear` and `remove`,
+/// each flat on the ledger, and a push or insert past the high-water mark
+/// charging — one answer on every machine. At the base the checked
+/// machine printed `false false false true false false true 1616` (every
+/// refill charged again); native and release printed this line.
+#[test]
+fn a_refilled_container_charges_only_past_its_storage_on_every_machine() {
+    let entry = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reuse_ledger/main.lu");
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            continue;
+        };
+        report(&format!(
+            "REPORT reuse_ledger {flag}: {} {:?}",
+            obs.verdict, obs.stdout
+        ));
+        assert_eq!(obs.verdict, "exit(0)", "reuse_ledger on {flag}");
+        assert_eq!(
+            obs.stdout, "true true true true true true true 1616\n",
+            "reuse_ledger on {flag}: a refill reuses the storage, growth charges"
+        );
+    }
 }

@@ -1,0 +1,73 @@
+//! member: false
+//! s273 (wolf-lang#943) — the storage a container keeps, read through
+//! the ledger: a `List` refilled after `reset`, `clear` and `pop`, and a
+//! `Map` refilled after `clear` and `remove`. `reset` is the clause's
+//! (`[type.list.reset]`: "the next pushes reuse it"); what `clear`, `pop`
+//! and the map's erasures keep is each machine's own, and today every
+//! machine keeps the storage, so every refill is flat and a push past
+//! the high-water mark is not.
+
+fn main() {
+    var flat = List[bool]()
+    var lens = 0
+    region r {
+        var xs = List[int]()
+        for i in 0..8 {
+            (mut xs).push(i)
+        }
+        let a = region_bytes(r)
+        for _ in 0..100 {
+            (mut xs).reset()
+            for i in 0..8 {
+                (mut xs).push(i)
+            }
+        }
+        let b = region_bytes(r)
+        for _ in 0..100 {
+            (mut xs).clear()
+            for i in 0..8 {
+                (mut xs).push(i)
+            }
+        }
+        let c = region_bytes(r)
+        for _ in 0..100 {
+            let _p = (mut xs).pop() else 0
+            (mut xs).push(7)
+        }
+        let d = region_bytes(r)
+        for i in 0..8 {
+            (mut xs).push(i)
+        }
+        let e = region_bytes(r)
+        var m = Map[int, int]()
+        for i in 0..8 {
+            m[i] = i
+        }
+        let f = region_bytes(r)
+        for _ in 0..100 {
+            (mut m).clear()
+            for i in 0..8 {
+                m[i] = i
+            }
+        }
+        let g = region_bytes(r)
+        for t in 0..100 {
+            let _v = (mut m).remove(t % 8) else 0
+            m[t % 8] = t
+        }
+        let h = region_bytes(r)
+        for i in 8..16 {
+            m[i] = i
+        }
+        let k = region_bytes(r)
+        (mut flat).push(b == a)
+        (mut flat).push(c == b)
+        (mut flat).push(d == c)
+        (mut flat).push(e > d)
+        (mut flat).push(g == f)
+        (mut flat).push(h == g)
+        (mut flat).push(k > h)
+        lens = xs.len * 100 + m.len
+    }
+    print("{flat[0]} {flat[1]} {flat[2]} {flat[3]} {flat[4]} {flat[5]} {flat[6]} {lens}")
+}
