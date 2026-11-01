@@ -450,7 +450,69 @@ mod sys {
             if READER_STATE.load(Ordering::SeqCst) != READER_HELD {
                 return;
             }
+            #[cfg(test)]
+            hook::PARKS.fetch_add(1, Ordering::SeqCst);
             std::thread::park();
+            #[cfg(test)]
+            hook::after_park();
+        }
+    }
+
+    /// s275 (wolf-lang#1006): the unit tests' stand-ins for the drain
+    /// thread's races, compiled into no runtime a program links. The park
+    /// for a fork's hold may leave an errno (the futex's EAGAIN when
+    /// `fork_release`'s unpark lands between std's parker state change and
+    /// its `FUTEX_WAIT`, sh34's strace), and the drain thread's next poll
+    /// may answer a chosen errno (EINTR, a transient failure, a fatal one).
+    #[cfg(test)]
+    pub(super) mod hook {
+        use super::{READER_GONE, READER_HELD, READER_STATE, errno_slot};
+        use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
+
+        pub const GONE: u8 = READER_GONE;
+        pub const HELD: u8 = READER_HELD;
+        /// The errno every park for a fork's hold leaves (0: none).
+        pub static PARK_ERRNO: AtomicI32 = AtomicI32::new(0);
+        /// The errno the drain thread's next poll answers, -1 (0: its own
+        /// answer); taken once.
+        pub static POLL_ERRNO: AtomicI32 = AtomicI32::new(0);
+        /// Parks for a fork's hold so far.
+        pub static PARKS: AtomicUsize = AtomicUsize::new(0);
+        /// The running drain thread's `pthread_t` (0: none yet).
+        pub static READER_PTHREAD: AtomicUsize = AtomicUsize::new(0);
+
+        pub(in super::super) fn after_park() {
+            let e = PARK_ERRNO.load(Ordering::SeqCst);
+            if e != 0 {
+                // SAFETY: this thread's own errno.
+                unsafe { *errno_slot() = e };
+            }
+        }
+
+        /// The poll's answer `n`, or -1 with the planted errno.
+        pub(in super::super) fn poll_answer(n: libc::c_int) -> libc::c_int {
+            let e = POLL_ERRNO.swap(0, Ordering::SeqCst);
+            if e == 0 {
+                return n;
+            }
+            // SAFETY: this thread's own errno.
+            unsafe { *errno_slot() = e };
+            -1
+        }
+
+        pub fn reader_state() -> u8 {
+            READER_STATE.load(Ordering::SeqCst)
+        }
+
+        /// `sig` aimed at the drain thread itself (the thread a SIGCHLD
+        /// lands on while a fork blocks every catchable signal on main).
+        pub fn signal_reader(sig: libc::c_int) {
+            let t = READER_PTHREAD.load(Ordering::SeqCst);
+            assert_ne!(t, 0, "a drain thread to signal");
+            // SAFETY: a live thread of this process (the drain thread
+            // records itself before its loop), a valid signal number.
+            let rc = unsafe { libc::pthread_kill(t as libc::pthread_t, sig) };
+            assert_eq!(rc, 0, "pthread_kill on the drain thread");
         }
     }
 
@@ -1225,6 +1287,9 @@ mod sys {
     /// sanctioned "dedicated thread" shape (the reactor thread's twin).
     fn reader_main(h: &'static Hub) {
         *READER.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::thread::current());
+        #[cfg(test)]
+        // SAFETY: pthread_self has no preconditions.
+        hook::READER_PTHREAD.store(unsafe { libc::pthread_self() } as usize, Ordering::SeqCst);
         READER_STATE.store(READER_LOOPING, Ordering::SeqCst);
         reader_loop(h);
         READER_STATE.store(READER_GONE, Ordering::SeqCst);
@@ -1253,6 +1318,8 @@ mod sys {
             READER_STATE.store(READER_POLLING, Ordering::SeqCst);
             // SAFETY: two live pollfds; no timeout.
             let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) };
+            #[cfg(test)]
+            let n = hook::poll_answer(n);
             back_from_poll();
             if n < 0 {
                 if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
@@ -3337,5 +3404,237 @@ mod tests {
             set_disposition(meaning::RESIZE, Disp::Default),
             sig_code::OK
         );
+    }
+
+    // ---- s275 (wolf-lang#1006): the drain thread's end -----------------
+    //
+    // The hub is process-global, and a red row here leaves it with no
+    // drain thread for the rest of the binary (every later wait would
+    // park for ever), so each row's scenario runs alone in a child of
+    // this test binary (`WOLF_S275_CHILD` names it), as `os.rs` and
+    // `net.rs` re-run theirs, killed by its pid at a 30 s cap. The races
+    // are stood in for by `sys::hook` (cfg(test) only): the park for a
+    // fork's hold may leave an errno, the drain thread's next poll may
+    // answer one, and a signal can be aimed at the drain thread itself.
+
+    /// Run the test `name` of this module alone in a child of this binary
+    /// and answer its exit code (`None`: killed at the cap) and its output.
+    #[cfg(unix)]
+    fn s275_in_a_child(name: &str) -> (Option<i32>, String) {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(std::env::current_exe().expect("exe"))
+            .args([
+                "--exact",
+                &format!("signal::tests::{name}"),
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("WOLF_S275_CHILD", name)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("re-exec");
+        let cap = std::time::Instant::now() + Duration::from_secs(30);
+        let code = loop {
+            if let Some(st) = child.try_wait().expect("the child's status") {
+                break st.code();
+            }
+            if std::time::Instant::now() > cap {
+                // The child this row started, by its pid.
+                let _ = child.kill();
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let out = child.wait_with_output().expect("the child's output");
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        (code, text)
+    }
+
+    /// The row in the parent: its scenario in a child, which must pass.
+    #[cfg(unix)]
+    fn s275_row(name: &str, scenario: fn()) {
+        if std::env::var("WOLF_S275_CHILD").as_deref() == Ok(name) {
+            scenario();
+            return;
+        }
+        let (code, out) = s275_in_a_child(name);
+        assert_eq!(
+            code,
+            Some(0),
+            "{name}, in a child of the test binary (None: killed at the 30 s cap):\n{out}"
+        );
+    }
+
+    /// Wait (bounded, 10 s) until `done`; false at the bound.
+    #[cfg(unix)]
+    fn s275_until(done: impl Fn() -> bool) -> bool {
+        let cap = std::time::Instant::now() + Duration::from_secs(10);
+        while !done() {
+            if std::time::Instant::now() > cap {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        true
+    }
+
+    /// Whether `m` is on the hub's queue (nothing is drained by the look).
+    #[cfg(unix)]
+    fn s275_queued(m: i64) -> bool {
+        let h = HUB.get().expect("the hub");
+        h.state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .queue
+            .contains(&m)
+    }
+
+    /// Block `sig` on the calling thread.
+    #[cfg(unix)]
+    fn s275_block_here(sig: libc::c_int) {
+        // SAFETY: a zeroed sigset filled by sigemptyset/sigaddset; this
+        // thread's own mask.
+        unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, sig);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut());
+        }
+    }
+
+    /// wolf-lang#1006, the race itself: a fork holds the drain thread in
+    /// its poll, a signal interrupts the poll (EINTR), the thread parks for
+    /// the hold, and the park's futex answers EAGAIN before the unpark. The
+    /// thread must take the poll's own errno, go on, and move the signal's
+    /// byte onto the queue. Until s275 it read the park's EAGAIN and ended
+    /// (pelt#98: every later `os_signal_wait` parked for ever).
+    #[cfg(unix)]
+    #[test]
+    fn s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread() {
+        s275_row(
+            "s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread",
+            || {
+                use sys::hook;
+                assert_eq!(listen(meaning::RELOAD), sig_code::OK);
+                sys::fork_hold();
+                assert_eq!(
+                    hook::reader_state(),
+                    hook::HELD,
+                    "the fork holds the drain thread"
+                );
+                let parks = hook::PARKS.load(Ordering::SeqCst);
+                hook::PARK_ERRNO.store(libc::EAGAIN, Ordering::SeqCst);
+                hook::POLL_ERRNO.store(libc::EINTR, Ordering::SeqCst);
+                hook::signal_reader(libc::SIGHUP);
+                assert!(
+                    s275_until(|| hook::PARKS.load(Ordering::SeqCst) > parks),
+                    "the drain thread came back from its poll and parked for the hold"
+                );
+                sys::fork_release();
+                let went_on = s275_until(|| {
+                    s275_queued(meaning::RELOAD) || hook::reader_state() == hook::GONE
+                });
+                hook::PARK_ERRNO.store(0, Ordering::SeqCst);
+                assert!(
+                    went_on && s275_queued(meaning::RELOAD),
+                    "the drain thread moved the signal's byte after the fork's hold (state {}, 5 = \
+                     gone: it read the park's EAGAIN for the poll's EINTR, wolf-lang#1006)",
+                    hook::reader_state()
+                );
+                assert_ne!(hook::reader_state(), hook::GONE, "the drain thread runs");
+                assert_eq!(wait(meaning::RELOAD), meaning::RELOAD);
+            },
+        );
+    }
+
+    /// A transient poll failure (EAGAIN, which macOS's poll(2) names when
+    /// it cannot allocate; ENOMEM on linux) is not the drain thread's end:
+    /// it goes on and moves the next byte. Until s275 any errno but EINTR
+    /// ended it.
+    #[cfg(unix)]
+    #[test]
+    fn s275_a_transient_poll_failure_keeps_the_drain_thread() {
+        s275_row(
+            "s275_a_transient_poll_failure_keeps_the_drain_thread",
+            || {
+                use sys::hook;
+                assert_eq!(listen(meaning::RELOAD), sig_code::OK);
+                assert!(s275_until(
+                    || hook::READER_PTHREAD.load(Ordering::SeqCst) != 0
+                ));
+                hook::POLL_ERRNO.store(libc::EAGAIN, Ordering::SeqCst);
+                hook::signal_reader(libc::SIGHUP);
+                let went_on = s275_until(|| {
+                    s275_queued(meaning::RELOAD) || hook::reader_state() == hook::GONE
+                });
+                assert!(
+                    went_on && s275_queued(meaning::RELOAD),
+                    "the drain thread moved the byte after a transient poll failure (state {}, 5 = \
+                     gone)",
+                    hook::reader_state()
+                );
+                assert_eq!(wait(meaning::RELOAD), meaning::RELOAD);
+            },
+        );
+    }
+
+    /// A drain thread that ends for good (its poll answers EBADF) is never
+    /// silent: a wait parked on the hub's condvar wakes, makes the thread
+    /// again, and takes a signal that only the new thread can move (RELOAD
+    /// is blocked on the waiter's thread and on this one). Until s275 the
+    /// thread left READER_UP true, so nothing made another and the wait
+    /// parked for ever.
+    #[cfg(unix)]
+    #[test]
+    fn s275_a_drain_thread_that_ends_is_made_again() {
+        s275_row("s275_a_drain_thread_that_ends_is_made_again", || {
+            use sys::hook;
+            assert_eq!(listen(meaning::RELOAD | meaning::UPGRADE), sig_code::OK);
+            assert!(s275_until(
+                || hook::READER_PTHREAD.load(Ordering::SeqCst) != 0
+            ));
+            let first = hook::READER_PTHREAD.load(Ordering::SeqCst);
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                s275_block_here(libc::SIGHUP);
+                let _ = tx.send(wait(meaning::RELOAD));
+            });
+            // Let the waiter park (either order is the same answer).
+            std::thread::sleep(Duration::from_millis(100));
+            s275_block_here(libc::SIGHUP);
+            hook::POLL_ERRNO.store(libc::EBADF, Ordering::SeqCst);
+            // The poll comes back (an UPGRADE byte for the next thread),
+            // answers EBADF, and the thread ends.
+            hook::signal_reader(libc::SIGUSR2);
+            let again = s275_until(|| {
+                let t = hook::READER_PTHREAD.load(Ordering::SeqCst);
+                t != first && t != 0 && sys::running()
+            });
+            // SAFETY: a signal to this process, which listens for it.
+            unsafe { libc::kill(libc::getpid(), libc::SIGHUP) };
+            let got = rx.recv_timeout(Duration::from_secs(10));
+            assert!(
+                again,
+                "a new drain thread after the first ended (state {}, running {})",
+                hook::reader_state(),
+                sys::running()
+            );
+            assert_eq!(
+                got,
+                Ok(meaning::RELOAD),
+                "the wait parked when the drain thread ended took RELOAD"
+            );
+            assert_eq!(
+                poll(meaning::UPGRADE),
+                meaning::UPGRADE,
+                "the poke's byte moved too"
+            );
+        });
     }
 }
