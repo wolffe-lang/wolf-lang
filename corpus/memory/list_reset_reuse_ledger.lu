@@ -1,0 +1,48 @@
+//! check: run(exit=0, stdout="8 true true\n")
+//! phase: run
+//! conforms: type.list.reset, type.list.reserve, mem.region.account.1
+//!
+//! s273 (wolf-lang#943, yew yw07b's fifteen lines): `reset()` keeps the
+//! list's buffer and "the next pushes reuse it in the list's own
+//! region" (`[type.list.reset]`), so a rebuild that resets and refills
+//! does not grow the region — on every machine. Until s273 the checked
+//! machine charged every push its slot even when the slot was storage
+//! the list already held: 100 rebuilds of eight elements moved its
+//! ledger 128 → 12,928 while native and release read 240 → 240. The
+//! slot is charged once, when the list first holds an element there;
+//! a push past the list's high-water mark is new storage and charges
+//! on every machine (`grew`).
+
+struct V {
+    t: int,
+    i: int,
+    f: f64,
+}
+
+fn main() {
+    var n = 0
+    var flat = false
+    var grew = false
+    region r {
+        var xs = List[V]()
+        (mut xs).reserve(8)
+        for i in 0..8 {
+            (mut xs).push(V { t: 2, i: i, f: 0.0 })
+        }
+        let before = region_bytes(r)
+        for _ in 0..100 {
+            (mut xs).reset()
+            for i in 0..8 {
+                (mut xs).push(V { t: 2, i: i, f: 0.0 })
+            }
+        }
+        let after = region_bytes(r)
+        n = xs.len
+        for i in 0..8 {
+            (mut xs).push(V { t: 3, i: i, f: 1.0 })
+        }
+        flat = after == before
+        grew = region_bytes(r) > after
+    }
+    print("{n} {flat} {grew}")
+}
