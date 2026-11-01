@@ -56,6 +56,9 @@ pub mod map;
 pub mod native;
 pub mod net;
 pub mod os;
+// s272 (wolf-lang#921, #922): the calling process's root and nice value —
+// `[os.proc.chroot]`, `[os.proc.priority]`.
+pub mod procattr;
 // Profile counters (s45). Present in the archive always, referenced
 // only by `--profile-gen` builds — `--gc-sections` drops them from
 // every other binary, so the never-required posture costs nothing.
