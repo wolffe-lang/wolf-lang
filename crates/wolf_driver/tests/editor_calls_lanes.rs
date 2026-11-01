@@ -40,6 +40,13 @@ fn report(line: &str) {
 /// at this lane, and 0.1.55, the 0.2.34 pairing (r39, wolf-interp#268).
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.54", "0.1.55"];
 
+/// s272 (wolf-lang#976): the lupin releases that mirror s248's restore but
+/// predate `RAW_LF` (bit 24 of the mode word). Their own shape refuses the
+/// bit by name, so `restore_rows.lu`'s `lf=` line is `invalid` there,
+/// measured on 0.1.58 (the pairing). The mirror is wolf-interp#315; a lupin
+/// past this list is held to the compiler's `lf=`.
+const PRE_RAW_LF_LUPIN: &[&str] = &["0.1.58"];
+
 #[derive(Debug)]
 struct Obs {
     verdict: String,
@@ -215,6 +222,23 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
         report(&format!(
             "REPORT PINNED pre-mirror lupin {} on {name}: {}",
             obs.version, obs.reason
+        ));
+    } else if name == "restore_rows.lu" && PRE_RAW_LF_LUPIN.contains(&obs.version.as_str()) {
+        // s272 (#976, wolf-interp#315): every row the compiler's, but `lf=`,
+        // which this lupin's older shape refuses (`invalid`, before the host).
+        let pre = want
+            .replace(" lf=io", " lf=invalid")
+            .replace(" lf=unsupported", " lf=invalid");
+        assert_eq!(
+            (obs.verdict.as_str(), obs.stdout.as_str()),
+            ("exit(0)", pre.as_str()),
+            "lupin {} on {name} (pre-RAW_LF, wolf-interp#315): {obs:?}",
+            obs.version
+        );
+        report(&format!(
+            "REPORT PINNED pre-RAW_LF lupin {} on {name}: {} (wolf-interp#315)",
+            obs.version,
+            obs.stdout.trim_end()
         ));
     } else if name == "realpath.lu" && realpath_served_tree_boundary(&obs.version, &obs.commit) {
         // is79 serves canonicalization only inside its tree. This fixture
@@ -655,6 +679,8 @@ fn the_restore_rows_on_every_machine() {
         &|lane, stdout| {
             // s272 (#976): bit 24 is RAW_LF, so the undefined bit is 25, and
             // RAW_LF on a file is the family's `io` (windows `unsupported`).
+            // lupin 0.1.58 answers `lf=invalid` until its mirror
+            // (wolf-interp#315): `PRE_RAW_LF_LUPIN`.
             let want = if cfg!(unix) {
                 "bit25=invalid negative=invalid forged=io file=io lf=io\n"
             } else {
