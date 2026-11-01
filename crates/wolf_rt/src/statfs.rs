@@ -150,10 +150,10 @@ mod sys {
         let flags = flags_word(&s);
         if flags & ST_VALID != 0 {
             let mut f = 0;
-            if flags & libc::ST_RDONLY as u64 != 0 {
+            if flags & libc::ST_RDONLY != 0 {
                 f |= super::flag::READ_ONLY;
             }
-            if flags & libc::ST_NOSUID as u64 != 0 {
+            if flags & libc::ST_NOSUID != 0 {
                 f |= super::flag::NO_SET_ID;
             }
             r.set(word::FLAGS, f);

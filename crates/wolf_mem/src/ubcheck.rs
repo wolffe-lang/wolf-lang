@@ -15381,10 +15381,10 @@ mod checked_surface {
             };
             if flags & 0x20 != 0 {
                 let mut f = 0;
-                if flags & libc::ST_RDONLY as u64 != 0 {
+                if flags & libc::ST_RDONLY != 0 {
                     f |= 1;
                 }
-                if flags & libc::ST_NOSUID as u64 != 0 {
+                if flags & libc::ST_NOSUID != 0 {
                     f |= 2;
                 }
                 set(&mut w, 9, f);
