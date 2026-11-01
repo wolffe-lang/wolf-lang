@@ -18632,12 +18632,37 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(None))
     }
 
+    /// s273 (wolf-lang#972): the receiver of a `for pat in m.pairs()`
+    /// that may walk the map's own entries. The syntax and the type are
+    /// `wolf_mem::pairswalk`'s (one predicate for both machines); what
+    /// only the lowering knows is asked here: the name is a local or a
+    /// parameter of this body (never a module-level `var`, which any
+    /// callee could write), and the call is the builtin `pairs`, not a
+    /// home module's function or a witness-table call.
+    fn pairs_walk_recv(&self, d: ForExpr<'t>) -> Option<&'t GreenNode> {
+        let ty = |sp: Span| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone());
+        let (recv, name) = wolf_mem::pairswalk::walk_recv(d, self.src, &ty)?;
+        if !matches!(
+            self.lookup(&name),
+            Some(LocalBind::Val { .. } | LocalBind::MutRef { .. })
+        ) {
+            return None;
+        }
+        match self.dispatch.get(&d.iterable()?.span) {
+            None | Some(Dispatch::Home { .. }) => None,
+            Some(Dispatch::Trait { dyn_call: true, .. }) => None,
+            Some(_) => Some(recv),
+        }
+    }
+
     /// `for pat in <List>` (s40, s75): a COUNTED loop over the backing
     /// storage — `len` once into the trip count, then `ptr.off` +
     /// `load` per iteration, each element bound by value. No iterator
     /// protocol, no call in the body, and no bounds check: the header
     /// test `i < n` IS the proof, so emitting one would be a check the
-    /// lowering itself can discharge.
+    /// lowering itself can discharge. `iter` is the expression whose
+    /// value is the header: the list itself, or (s273) the map whose
+    /// entries a `pairs()` walk reads in place.
     fn lower_for_list(
         &mut self,
         d: ForExpr<'t>,
@@ -25214,6 +25239,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         self.lower_for_split(d, base, n, np, nl)
                     }
                 };
+            }
+            // s273 (wolf-lang#972): `for pat in m.pairs()` whose body
+            // never names `m` walks the map's OWN entries — the counted
+            // List loop over the map header, whose first five words are
+            // a ListHdr and whose entry stride is the `(K, V)` tuple's
+            // list stride (`wolf_rt::map`), so each element loads as the
+            // tuple `pairs()` would have copied. No list is minted.
+            if let Some(recv) = self.pairs_walk_recv(d)
+                && let Some(it) = self.expr_sema_ty(iter.span)
+                && let TyKind::List(elem) = self.table.kind(self.strip_sema(it))
+            {
+                let elem = *elem;
+                self.refuse_region_elem(elem, e.span)?;
+                return self.lower_for_list(d, recv, elem, e.span);
             }
             // s40: `for` over a List value (a `words()`/`lines()`/
             // `split()` result that had to MATERIALIZE, or any other
