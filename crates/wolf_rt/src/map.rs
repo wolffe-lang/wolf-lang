@@ -182,7 +182,10 @@ pub unsafe extern "C" fn __wolf_rt_map_set(hdr: i64, kv: i64) {
             return;
         }
         if h.len == h.cap {
-            let ncap = if h.cap == 0 { 8 } else { h.cap * 2 };
+            // s273-plant-map (PLANT, never merged): the map's growth made
+            // quadratic — one entry at a time, every grow copying the whole
+            // buffer into a fresh one the region never gives back.
+            let ncap = h.cap + 1;
             let ndata = alloc_in(h.region, (ncap * h.elem) as usize);
             if h.len > 0 {
                 core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * h.elem) as usize);
