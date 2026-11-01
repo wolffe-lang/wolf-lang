@@ -683,7 +683,10 @@ mod tests {
         assert_eq!(set_mode(1_000_000, 1 << 24), Err(proc_code::IO));
         assert_eq!(restore_at_exit(1_000_000, 1 << 24, &[]), Err(proc_code::IO));
         assert_eq!(set_mode(1_000_000, 1 << 25), Err(proc_code::INVALID));
-        assert_eq!(restore_at_exit(1_000_000, 1 << 25, &[]), Err(proc_code::INVALID));
+        assert_eq!(
+            restore_at_exit(1_000_000, 1 << 25, &[]),
+            Err(proc_code::INVALID)
+        );
         assert_eq!(set_mode(1_000_000, -1), Err(proc_code::INVALID));
     }
 
@@ -722,7 +725,11 @@ mod tests {
         assert_eq!(on & mode::RAW_LF, 0, "ONLCR on reads RAW_LF clear: {on:#x}");
         onlcr(false);
         let off = mode_of(slave).expect("mode");
-        assert_eq!(off & mode::RAW_LF, mode::RAW_LF, "ONLCR off reads RAW_LF: {off:#x}");
+        assert_eq!(
+            off & mode::RAW_LF,
+            mode::RAW_LF,
+            "ONLCR off reads RAW_LF: {off:#x}"
+        );
         assert_eq!(off & !mode::RAW_LF, on, "nothing else moved");
         set_mode(slave, off & !mode::RAW_LF & !mode::RAW_OUTPUT).expect("set");
         assert!(has(), "the mapping is on after a set with RAW_LF clear");
@@ -823,9 +830,9 @@ mod tests {
         assert_eq!(set_mode(s, old), Ok(()));
         assert_eq!(mode_of(s), Ok(old));
         assert_eq!(
-            set_mode(s, 1 << 24),
+            set_mode(s, 1 << 25),
             Err(proc_code::INVALID),
-            "bit 24 is not a field"
+            "bit 25 is not a field (s272: bit 24 is RAW_LF)"
         );
         assert_eq!(chars(1_000_000), Err(proc_code::IO));
     }
@@ -874,7 +881,7 @@ mod tests {
         }
         let saved = mode_of(s).expect("mode");
         let raw = saved & !(mode::CANONICAL | mode::ECHO) | 256;
-        assert_eq!(restore_at_exit(s, 1 << 24, b"x"), Err(proc_code::INVALID));
+        assert_eq!(restore_at_exit(s, 1 << 25, b"x"), Err(proc_code::INVALID));
         let p = std::env::temp_dir().join(format!("wolf-rt-restore-{}", std::process::id()));
         std::fs::write(&p, b"x").unwrap();
         let file = crate::fs::mint_file(std::fs::File::open(&p).unwrap());
