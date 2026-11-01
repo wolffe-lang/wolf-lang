@@ -12,7 +12,7 @@
 //! machine); every OTHER escape is still E1010 (a `return`, an outer
 //! binding) and a value with no independent copy is refused (a channel,
 //! a fn value); and the loop runs in bounded memory — #612's measured
-//! shape, at 20,000 and 40,000 turns.
+//! shape, read at 20,000 and 40,000 turns of one process (#631).
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every entry on the NATIVE lane only.
@@ -307,15 +307,67 @@ fn the_region_is_freed_a_raw_read_after_is_p4() {
 
 // ------------------------------------------------- bounded memory --
 
-/// #612's witness at `n` turns, built on one tier, its peak resident
-/// set (`VmHWM`, kB) read by the program itself from
-/// `/proc/self/status` — linux only; elsewhere `None`, printed as a
-/// SKIP. `kept` is what each turn keeps: `"str"` (#612's shape, one
-/// `str` per turn stored into a map) or `"none"` (the turn's work
-/// discarded but its length).
-fn hwm_kb(case: &str, src: &str, release: bool, n: u32) -> Option<u64> {
+// The instrument (s274, wolf-lang#631). Until s274 these rows ran the
+// witness twice, 20,000 turns in one process and 40,000 in another, and
+// compared the two processes' VmHWM. That difference moves by about
+// ±100 kB between two runs of one binary (s263, s270, s270b, s273, and
+// s274's four rigs), more than the scalar row's whole 78 kB bound, so
+// the row went red about one run in five on byte-identical binaries, on
+// hasu and on trunk CI. The noise belongs to the process, not to the
+// turn. So the witness now reads itself in ONE process, at `FIRST` and
+// at `LAST` turns, and the reading is exact: its anonymous memory,
+// resident plus swapped, from `/proc/self/smaps_rollup`, which the
+// kernel counts by walking the page tables. VmHWM comes from batched
+// per-CPU counters instead. Each reading runs in a region of its own, so
+// it keeps nothing.
+
+/// The two turns the growth is taken between.
+const FIRST: u32 = 20_000;
+const LAST: u32 = 40_000;
+
+/// One of the witness's own readings after `turn` turns, in kB: its
+/// anonymous memory (resident plus swapped) and its VmHWM.
+#[derive(Debug, Clone, Copy)]
+struct Mark {
+    turn: u32,
+    anon_kb: u64,
+    hwm_kb: u64,
+}
+
+/// One `mark <turn> anon=<kB> swap=<kB> hwm=<kB>` line, or `None` for
+/// any other line. A reading the witness could not take (`?`) fails the
+/// row: an instrument that cannot read is not a pass.
+fn parse_mark(case: &str, line: &str) -> Option<Mark> {
+    let rest = line.strip_prefix("mark ")?;
+    let mut words = rest.split_whitespace();
+    let turn = words.next()?.parse().ok()?;
+    let mut field = |key: &str| -> u64 {
+        let word = words.next().unwrap_or("");
+        let v = word
+            .strip_prefix(key)
+            .unwrap_or_else(|| panic!("{case}: mark `{line}` has no `{key}`"));
+        v.parse().unwrap_or_else(|_| {
+            panic!("{case}: the witness could not read `{key}` at turn {turn}: `{line}`")
+        })
+    };
+    let anon = field("anon=");
+    let swap = field("swap=");
+    let hwm = field("hwm=");
+    Some(Mark {
+        turn,
+        anon_kb: anon + swap,
+        hwm_kb: hwm,
+    })
+}
+
+/// #612's witness, built on one tier and run once for `LAST` turns: the
+/// readings it took at `FIRST` and at `LAST` turns — linux only;
+/// elsewhere `None`, printed as a SKIP.
+fn marks(case: &str, src: &str, release: bool) -> Option<(Mark, Mark)> {
     if !cfg!(target_os = "linux") {
-        eprintln!("SKIP: {case}: the bounded-memory witness reads /proc/self/status (linux only)");
+        eprintln!(
+            "SKIP: {case}: the bounded-memory witness reads /proc/self/smaps_rollup (linux only)"
+        );
         return None;
     }
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -350,24 +402,24 @@ fn hwm_kb(case: &str, src: &str, release: bool, n: u32) -> Option<u64> {
         String::from_utf8_lossy(&out.stderr)
     );
     let run = Command::new(&bin)
-        .arg(n.to_string())
+        .arg(LAST.to_string())
+        .arg(FIRST.to_string())
         .output()
         .expect("witness runs");
     assert!(
         run.status.success(),
-        "{case} at {n} turns exited {:?}",
+        "{case} at {LAST} turns exited {:?}",
         run.status
     );
     let text = String::from_utf8_lossy(&run.stdout);
-    let hwm = text
-        .lines()
-        .find_map(|l| l.strip_prefix("hwm="))
-        .unwrap_or_else(|| panic!("{case} printed no hwm line: {text}"));
-    Some(
-        hwm.trim()
-            .parse()
-            .unwrap_or_else(|_| panic!("{case} hwm `{hwm}`")),
-    )
+    let got: Vec<Mark> = text.lines().filter_map(|l| parse_mark(case, l)).collect();
+    let turns: Vec<u32> = got.iter().map(|m| m.turn).collect();
+    assert_eq!(
+        turns,
+        [FIRST, LAST],
+        "{case}: the witness's readings: {text}"
+    );
+    Some((got[0], got[1]))
 }
 
 const WITNESS: &str = r#"
@@ -386,29 +438,40 @@ fn build(i: int) -> str {
     "{parts[3]}-{i}"
 }
 
-fn hwm() -> str {
-    let text = fs_read_text("/proc/self/status") else ""
+fn field(text: str, key: str) -> str {
     for line in text.lines() {
-        if line.starts_with("VmHWM:") {
-            return (line.strip_prefix("VmHWM:") else "").trim().strip_suffix("kB") else "?"
+        if line.starts_with(key) {
+            return ((line.strip_prefix(key) else "").trim().strip_suffix("kB") else "?").trim()
         }
     }
     "?"
+}
+
+fn mark(i: int) {
+    region probe {
+        let sm = fs_read_text("/proc/self/smaps_rollup") else ""
+        let st = fs_read_text("/proc/self/status") else ""
+        print("mark {i} anon={field(sm, "Anonymous:")} swap={field(sm, "Swap:")} hwm={field(st, "VmHWM:")}")
+    }
 }
 
 STEP
 
 fn main() -> int {
     let args = env_args()
-    let n = if args.len > 0 { args[0].to_int() else 20000 } else { 20000 }
+    let n = if args.len > 0 { args[0].to_int() else 40000 } else { 40000 }
+    let first = if args.len > 1 { args[1].to_int() else 20000 } else { 20000 }
     var st = St { vals: Map[str, str](), n: 0 }
     var i = 0
     while i < n {
+        if i == first {
+            mark(i)
+        }
         step(mut st, i)
         i += 1
     }
+    mark(n)
     print("{st.vals["x"] else "?"} {st.n}")
-    print("hwm={hwm().trim()}")
     0
 }
 "#;
@@ -440,13 +503,18 @@ fn step(mut st: St, i: int) {
 }
 "#;
 
-/// Growth from 20,000 to 40,000 turns, in bytes per turn, on one tier.
+/// Growth from `FIRST` to `LAST` turns of one process, in bytes per
+/// turn, on one tier. Signed: memory handed back reads below zero.
 fn growth_per_turn(case: &str, step: &str, release: bool) -> Option<f64> {
     let src = WITNESS.replace("STEP", step);
-    let a = hwm_kb(case, &src, release, 20_000)?;
-    let b = hwm_kb(case, &src, release, 40_000)?;
-    eprintln!("{case}: VmHWM {a} kB at 20000 turns, {b} kB at 40000");
-    Some((b.saturating_sub(a) as f64) * 1024.0 / 20_000.0)
+    let (a, b) = marks(case, &src, release)?;
+    let g = (b.anon_kb as f64 - a.anon_kb as f64) * 1024.0 / f64::from(LAST - FIRST);
+    eprintln!(
+        "{case} (release={release}): anonymous {} kB at {FIRST} turns, {} kB at {LAST}, one \
+         process: {g:.2} B/turn (VmHWM {} -> {} kB)",
+        a.anon_kb, b.anon_kb, a.hwm_kb, b.hwm_kb
+    );
+    Some(g)
 }
 
 /// The control: with no region, every turn's twenty strings and list
@@ -461,7 +529,7 @@ fn the_control_grows_without_a_region() {
         };
         assert!(
             g > 1000.0,
-            "no-region control grew {g:.0} B/turn (release={release}); the instrument cannot see growth"
+            "no-region control grew {g:.1} B/turn (release={release}); the instrument cannot see growth"
         );
     }
 }
@@ -478,13 +546,16 @@ fn the_loop_frees_its_scratch_keeping_only_its_result() {
         };
         assert!(
             g < 64.0,
-            "copy region kept-str loop grew {g:.0} B/turn (release={release}), want < 64 ({ISSUE})"
+            "copy region kept-str loop grew {g:.1} B/turn (release={release}), want < 64 ({ISSUE})"
         );
     }
 }
 
-/// Keeping only a scalar, the loop is flat: under 4 bytes a turn
-/// (page-granular noise).
+/// Keeping only a scalar, the loop is flat: under 4 bytes a turn, 78 kB
+/// over the 20,000 turns between the readings. Read in one process
+/// (wolf-lang#631, s274), a flat loop answers within a page or two of
+/// zero, and #612's leak (this step with its `copy region` undone)
+/// answers about 1,300; the kept-`str` row above answers between them.
 #[test]
 fn a_loop_keeping_a_scalar_is_flat() {
     for release in [false, true] {
@@ -493,7 +564,7 @@ fn a_loop_keeping_a_scalar_is_flat() {
         };
         assert!(
             g < 4.0,
-            "copy region scalar loop grew {g:.0} B/turn (release={release}), want flat ({ISSUE})"
+            "copy region scalar loop grew {g:.1} B/turn (release={release}), want flat ({ISSUE})"
         );
     }
 }
