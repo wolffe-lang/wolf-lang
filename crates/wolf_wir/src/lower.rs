@@ -10764,6 +10764,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_lstat"
                 | "fs_read_link"
                 | "fs_read_dir_entries"
+                // s272 (#686): the file system's record by path.
+                | "fs_statfs"
                 // s199 (#426): the handle's offset.
                 | "fs_seek"
                 | "fs_tell"
@@ -10900,6 +10902,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s225 (#534, `[os.proc.exec]`): the exec, `os_spawn_fds`'s
             // operands plus the environment's header.
             | "os_exec"
+            // s272 (#921, `[os.proc.chroot]`): the change of root,
+            // `os_chdir`'s shape.
+            | "os_chroot"
         ) {
             return self.lower_proc_fd_builtin(&callee_text, d, e);
         }
@@ -10984,6 +10989,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_core_off"
                 | "os_name"
                 | "os_arch"
+                // s272 (#922): the nice value and its set; (#975) one
+                // meaning's action.
+                | "os_getpriority"
+                | "os_setpriority"
+                | "os_signal_action_one"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -14503,6 +14513,32 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // path from ONE host call, `follow` 1 for `fs_stat` and 0 for
             // `fs_lstat`; the shim mints the `List[int]`, so the call goes
             // through the foreign chain as `fs_fstat`'s does.
+            // s272 (#686, `[os.fs.statfs]`): the file system's twelve words
+            // by path, `fs_stat`'s shape — the shim mints the `List[int]`, so
+            // the call goes through the foreign chain.
+            "fs_statfs" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_fs_statfs",
+                        &[p, l],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             "fs_stat" | "fs_lstat" => {
                 let s = arg(0)?;
                 let (p, l) = self.str_parts(s);
@@ -15804,6 +15840,39 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // s272 (#921, `[os.proc.chroot]`): `os_chdir`'s unit shape with
+            // `os::proc_code`'s codes (1 not_found, 2 denied, 5 unsupported,
+            // anything else io).
+            "os_chroot" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let rc = self
+                    .rt_call("__wolf_rt_os_chroot", &[p, l], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |z| {
+                        Ok(z.code_tag_chain(
+                            rc,
+                            &[(1, "not_found"), (2, "denied"), (5, "unsupported")],
+                            "io",
+                        ))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             "os_isatty" => {
                 let h = arg(0)?;
                 let (region, slot) = self.rt_slot(8);
@@ -15917,6 +15986,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_last" | "os_signal_realtime" => 0,
             "os_core_limit" | "os_core_off" | "os_name" | "os_arch" => 0,
             "os_set_core_limit" => 2,
+            "os_getpriority" => 0,
             "os_wait_poll" | "os_wait_poll_core" | "os_fork" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
@@ -16006,6 +16076,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_core_limit" => ("__wolf_rt_os_core_limit", PROC),
             "os_set_core_limit" => ("__wolf_rt_os_set_core_limit", PROC),
             "os_core_off" => ("__wolf_rt_os_core_off", PROC),
+            "os_getpriority" => ("__wolf_rt_os_getpriority", PROC),
+            "os_setpriority" => ("__wolf_rt_os_setpriority", PROC),
+            "os_signal_action_one" => ("__wolf_rt_os_signal_action_one", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
         // s241 (`[os.signal.text]`): `env_get`'s str shape — rc 0 and the
@@ -16166,7 +16239,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_restore_at_exit"
                 | "os_set_core_limit"
                 | "os_core_off"
+                | "os_setpriority"
         );
+        // s272 (#922, `[os.proc.priority]`): the nice value may be negative,
+        // so it comes through an out word, `os_wait_status`'s shape with no
+        // argument — rc 0 and the value, else the code.
+        if name == "os_getpriority" {
+            let (region, slot) = self.rt_slot(8);
+            let rc = self
+                .rt_call_slot(sym, &[], slot, region, Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| Ok(Some(zz.load_flat(types::I64, slot, region, e.span)?)),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
         if name == "os_wait_status" || name == "os_wait_status_core" {
             let (region, slot) = self.rt_slot(8);
             let rc = self
