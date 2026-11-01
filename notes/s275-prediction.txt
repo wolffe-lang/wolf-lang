@@ -1,0 +1,66 @@
+s275 prediction, before any change, base trunk 7332772f (2026-11-01 16:50 EST)
+
+wolf-lang#1006 (pelt#98): `reader_loop` in crates/wolf_rt/src/signal.rs reads
+errno after `back_from_poll()`. During os_fork's hold the drain thread is the
+only thread with SIGCHLD unblocked; its poll answers -1 EINTR, it parks for the
+hold, and when fork_release's unpark lands between std's parker state change
+and its FUTEX_WAIT the futex answers EAGAIN and writes errno. The thread reads
+EAGAIN, returns, READER_UP stays true, and every later os_signal_wait parks on
+the hub's condvar for ever. signal.rs and fork.rs are byte-identical between
+pelt's pin 0.2.36 (5adf3d9) and trunk, so trunk carries the bug as sh34 saw it.
+
+Rows, red first (committed before the fix):
+
+1. Witness row (crates/wolf_driver/tests/fork_lanes.rs, fixture
+   fixtures/fork/drain.lu: sh34's drain_after_fork.lu on intrinsics, CHILD
+   listened, eight forks back to back, /proc/self/status Threads: read before
+   each reap). At trunk on hasu (r41-toolchain:1, taskset -c on four of the
+   block's CPUs, run directly; no nested engine there, so the cargo row SKIPs
+   loudly): red in 80-100% of runs, the thread gone within the first 20 rounds;
+   the rest stall in the reap's os_signal_wait (timeout exit 124). Over 30 runs
+   I expect at least 24 red (exit 1 or 124), as sh34's 9 of 10.
+2. Deterministic rows (wolf_rt signal.rs unit tests, each re-run in a child of
+   the test binary so a red never leaves the shared hub broken for the rest):
+   test-only hooks (cfg(test)) stand in for the race: the park in
+   back_from_poll writes EAGAIN to errno (the futex's answer), and the poll
+   itself may answer a chosen errno.
+   a. a poll interrupted inside a fork's hold, the park writing EAGAIN: red at
+      trunk (the drain thread ends, the byte stays in the pipe), every time.
+   b. a drain thread that ends (the poll answers EBADF) while a wait is parked:
+      red at trunk (the waiter never wakes; the child is killed at its cap).
+   c. a transient poll failure (EAGAIN from poll itself): red at trunk (the
+      thread ends).
+   All three green at the head, on linux and macOS.
+
+The fix:
+- errno read right after poll returns, before back_from_poll;
+- EINTR, EAGAIN and ENOMEM retried by the drain thread (the last two after a
+  1 ms sleep: poll(2) names them as transient);
+- any other end of the drain thread is never silent: it clears READER_UP (the
+  next try_hub makes one), re-arms the unblock of the installed meanings for
+  the next thread, and wakes every parked wait (the condvar and the descriptor
+  waits' shared pipe); a parked os_signal_wait or os_signal_wait_fds that finds
+  the thread gone makes it again once per call, and answers io if it is gone
+  again (never a park for ever, never a spawn loop);
+- the fork's hold waits out a drain thread in its exit path (it holds locks
+  there), as it waits out one at work.
+
+Audit (expected): every other last_os_error() in signal.rs (cloexec_pipe,
+drain, wait_many, unblock, kill_code) and fork.rs (the fork's own errno),
+stdfd::off_std, and the reactor's poller (Poller::new, wait) read errno
+straight after the call that set it; the reactor's wait reads none and loops
+on every error, so it cannot leave. Only reader_loop has the shape.
+
+The checked machine: no drain thread (a handler sets a bit, the machine's one
+thread polls), errno read straight after its poll and select, and os_fork is
+unsupported there: not the shape. lupin refuses os_signal_listen, wait and
+os_fork by name (unsafe_code = forbid): no hub, no mirror to file.
+
+Proof (expected): the witness 0 red in 200 runs at the head under four CPUs on
+hasu, beside trunk's rate from the same rig (about 90% red); pelt's F0 replay
+(sh34's tools/wait-replay, by copy) against pelt built with the head's wolf
+and runtime: 0 stalls in 100.
+
+Plant s275-plant-errno = the head with the errno read moved back after
+back_from_poll: row 2a red by name (deterministic), the witness red on hasu;
+rows 2b and 2c stay green (the recovery and the retry are kept).
