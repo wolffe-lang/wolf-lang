@@ -209,10 +209,9 @@ enum Lupin<'a> {
     /// 0.1.58 stops at a name it does not resolve (one of these); a newer
     /// lupin mirrors the compiler.
     Unresolved(&'a [&'a str]),
-    /// Every lupin refuses by name at one of these calls: the program
-    /// meets a call lupin refuses by design (no `tcsetattr`, ruling #57 R8)
-    /// before any new name.
-    Refuses(&'a [&'a str]),
+    /// 0.1.58 answers the program itself, with its own older shape (this
+    /// stdout, measured); a newer lupin mirrors the compiler.
+    Answers(&'a str),
 }
 
 fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
@@ -255,7 +254,15 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
                 );
             }
         }
-        Lupin::Refuses(calls) => refuses(calls, false),
+        Lupin::Answers(pre_want) => {
+            let w = if pre { pre_want } else { want };
+            assert_eq!(
+                (obs.verdict.as_str(), obs.stdout.as_str()),
+                ("exit(0)", w),
+                "lupin {} on {name}: {obs:?}",
+                obs.version
+            );
+        }
     }
 }
 
@@ -354,7 +361,9 @@ fn the_file_system_record_on_every_host() {
 #[test]
 fn the_root_rows_on_every_host() {
     if as_root() {
-        eprintln!("SKIP: the_root_rows_on_every_host: the test runs as root — these are a user's rows");
+        eprintln!(
+            "SKIP: the_root_rows_on_every_host: the test runs as root — these are a user's rows"
+        );
         return;
     }
     let dir = scratch("chroot_rows");
@@ -376,7 +385,9 @@ fn the_root_rows_on_every_host() {
 #[test]
 fn the_priority_rows_on_every_host() {
     if as_root() {
-        eprintln!("SKIP: the_priority_rows_on_every_host: the test runs as root — these are a user's rows");
+        eprintln!(
+            "SKIP: the_priority_rows_on_every_host: the test runs as root — these are a user's rows"
+        );
         return;
     }
     let dir = scratch("priority_rows");
@@ -434,7 +445,16 @@ fn the_mode_word_carries_onlcr_rows() {
     } else {
         declared_stdout(&entry)
     };
-    every_lane_answers_on_the_host(&entry, &dir, &want, Lupin::Refuses(&["os_term_set_mode"]));
+    // lupin 0.1.58 answers the rows with its own shape, in which bit 24 is
+    // not a mode bit (measured on nomad): the mirror is wolf-interp's issue.
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &want,
+        Lupin::Answers(
+            "lf_bit_on_a_file=invalid\nlf_bit_restore_on_a_file=invalid\npast_lf_bit=invalid\npast_lf_bit_restore=invalid\n",
+        ),
+    );
 }
 
 /// #975, R-s272-9: the two fault meanings the runtime's stack guard holds
@@ -464,7 +484,10 @@ fn the_fault_meanings_read_the_programs_choice() {
         };
         let out = run_in(Command::new(&exe), &dir);
         let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
-        eprintln!("== {tier} on action_faults.lu: exit {:?}\n{stdout}", out.status.code());
+        eprintln!(
+            "== {tier} on action_faults.lu: exit {:?}\n{stdout}",
+            out.status.code()
+        );
         assert_eq!(out.status.code(), Some(0), "the {tier} binary");
         assert_eq!(stdout, want, "the {tier} binary");
     }
@@ -514,7 +537,10 @@ fn record_machines(dir: &Path) -> Vec<(String, Reader)> {
             "checked".into(),
             Box::new(move || {
                 let obs = checked_in(&entry, &dir);
-                assert_eq!(obs.verdict, "exit(0)", "the checked machine reads the record: {obs:?}");
+                assert_eq!(
+                    obs.verdict, "exit(0)",
+                    "the checked machine reads the record: {obs:?}"
+                );
                 obs.stdout
             }),
         ));
@@ -574,7 +600,10 @@ fn gnu_words(p: &str) -> Option<Vec<i64>> {
     if f.len() != 10 {
         return None;
     }
-    let mut w: Vec<i64> = f[..8].iter().map(|s| s.parse::<u64>().unwrap() as i64).collect();
+    let mut w: Vec<i64> = f[..8]
+        .iter()
+        .map(|s| s.parse::<u64>().unwrap() as i64)
+        .collect();
     w.push(u64::from_str_radix(f[8], 16).unwrap() as i64);
     w.push(u64::from_str_radix(f[9], 16).unwrap() as i64);
     Some(w)
@@ -601,7 +630,9 @@ fn mount_flags(p: &str) -> (bool, bool) {
         }
         let opts: Vec<&str> = f[5].split(',').collect();
         let dash = f.iter().position(|x| *x == "-").unwrap_or(f.len() - 1);
-        let sup: Vec<&str> = f.get(dash + 3).map_or(Vec::new(), |s| s.split(',').collect());
+        let sup: Vec<&str> = f
+            .get(dash + 3)
+            .map_or(Vec::new(), |s| s.split(',').collect());
         let ro = opts.contains(&"ro") || sup.contains(&"ro");
         let nosuid = opts.contains(&"nosuid");
         if best.is_none_or(|(n, _, _)| mp.len() >= n) {
@@ -615,7 +646,7 @@ fn mount_flags(p: &str) -> (bool, bool) {
 /// the block size, the fragment size, the totals, name max, type and id
 /// exactly, the free counts between GNU's read before and after the
 /// program's — and the flags word the mount's `ro` and `nosuid`; on
-/// macOS the 1024-blocks, used, available, iused and ifree `/bin/df -k`
+/// macOS the 1024-blocks, available, iused and ifree `/bin/df -k`
 /// prints, and name max `getconf NAME_MAX`'s. Every machine reads the
 /// same record. The plant (`s272-plant-statfs`: `free` reported as
 /// `available`) is red HERE by name on any file system that keeps blocks
@@ -637,7 +668,9 @@ fn fs_statfs_matches_gnu_stat_f() {
                 std::env::var_os("WOLF_STATFS_REQUIRE_GNU").is_none(),
                 "WOLF_STATFS_REQUIRE_GNU is set and no GNU stat is on PATH"
             );
-            eprintln!("SKIP: fs_statfs_matches_gnu_stat_f: no GNU stat on PATH — the oracle is absent");
+            eprintln!(
+                "SKIP: fs_statfs_matches_gnu_stat_f: no GNU stat on PATH — the oracle is absent"
+            );
             return;
         }
         for (machine, read) in record_machines(&dir) {
@@ -712,17 +745,48 @@ fn fs_statfs_matches_gnu_stat_f() {
     #[cfg(target_os = "macos")]
     {
         // macOS `df -k`: Filesystem 1024-blocks Used Available Capacity
-        // iused ifree %iused Mounted-on.
+        // iused ifree %iused Mounted-on. Used is NOT read: on APFS it is the
+        // volume's own allocation, not total less free — its volumes share
+        // the container's free space (measured on nomad: `/` reads 12 GB used
+        // in a container of 926 GiB with 23 GiB free), so statfs cannot
+        // answer it and the record does not carry it.
         let df = |p: &str| -> Option<Vec<i64>> {
             let out = Command::new("/bin/df").args(["-k", p]).output().ok()?;
             let t = String::from_utf8_lossy(&out.stdout).to_string();
             let line = t.lines().nth(1)?;
             let f: Vec<&str> = line.split_whitespace().collect();
             let num = |i: usize| f.get(i).and_then(|s| s.parse::<i64>().ok());
-            Some(vec![num(1)?, num(2)?, num(3)?, num(5)?, num(6)?])
+            Some(vec![num(1)?, num(3)?, num(5)?, num(6)?])
+        };
+        // The mount that holds `p` (`mount`'s `<dev> on <dir> (<opts>)`, the
+        // longest mount point that is a prefix of the path): (read-only,
+        // nosuid).
+        let mount_flags = |p: &str| -> (bool, bool) {
+            let canon = std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p));
+            let canon = canon.display().to_string();
+            let out = Command::new("/sbin/mount").output().expect("mount runs");
+            let mut best: Option<(usize, bool, bool)> = None;
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let Some((_, rest)) = line.split_once(" on ") else {
+                    continue;
+                };
+                let Some((mp, opts)) = rest.rsplit_once(" (") else {
+                    continue;
+                };
+                let under = canon == mp || mp == "/" || canon.starts_with(&format!("{mp}/"));
+                if !under || best.is_some_and(|(n, _, _)| mp.len() < n) {
+                    continue;
+                }
+                let o: Vec<&str> = opts.trim_end_matches(')').split(", ").collect();
+                best = Some((mp.len(), o.contains(&"read-only"), o.contains(&"nosuid")));
+            }
+            best.map_or((false, false), |(_, ro, ns)| (ro, ns))
         };
         let name_max = |p: &str| -> Option<i64> {
-            let out = Command::new("getconf").args(["NAME_MAX", p]).output().ok()?;
+            let out = Command::new("getconf")
+                .args(["NAME_MAX", p])
+                .output()
+                .ok()?;
             String::from_utf8_lossy(&out.stdout).trim().parse().ok()
         };
         for (machine, read) in record_machines(&dir) {
@@ -744,11 +808,11 @@ fn fs_statfs_matches_gnu_stat_f() {
                     };
                     assert_eq!(w.len(), 12, "{machine}: twelve words for {p}: {w:?}");
                     let k = |n: i64| n * w[2] / 1024;
-                    let mine = [k(w[3]), k(w[3] - w[4]), k(w[5]), w[6] - w[7], w[7]];
+                    let mine = [k(w[3]), k(w[5]), w[6] - w[7], w[7]];
                     report(&format!(
                         "REPORT {machine} {p}: wolf {w:?} as df {mine:?} df-before {b:?} df-after {a:?}"
                     ));
-                    let names = ["1024-blocks", "used", "available", "iused", "ifree"];
+                    let names = ["1024-blocks", "available", "iused", "ifree"];
                     for (j, name) in names.iter().enumerate() {
                         let fine = if j == 0 {
                             mine[j] == b[j] && mine[j] == a[j]
@@ -766,6 +830,11 @@ fn fs_statfs_matches_gnu_stat_f() {
                         if w[8] != n {
                             bad.push(format!("{p}: name_max wolf={} getconf={n}", w[8]));
                         }
+                    }
+                    let (ro, nosuid) = mount_flags(p);
+                    let want_flags = i64::from(ro) | (i64::from(nosuid) << 1);
+                    if w[9] != want_flags {
+                        bad.push(format!("{p}: flags wolf={} mount={want_flags}", w[9]));
                     }
                     if w[0] != 0xfff {
                         bad.push(format!("{p}: have wolf={:#x} want 0xfff", w[0]));
@@ -786,7 +855,9 @@ fn fs_statfs_matches_gnu_stat_f() {
         let _ = record_machines;
         let _ = records_of;
         let _ = bracketed;
-        eprintln!("SKIP: fs_statfs_matches_gnu_stat_f: no oracle on this host (windows: the corpus row)");
+        eprintln!(
+            "SKIP: fs_statfs_matches_gnu_stat_f: no oracle on this host (windows: the corpus row)"
+        );
     }
 }
 
@@ -959,7 +1030,11 @@ fn onlcr_on_a_terminal_started_with_it_on_and_off() {
                 eprintln!(
                     "== {machine} onlcr={onlcr} how={how}: exit {code:?}, ONLCR after {after:?}\n{text:?}"
                 );
-                let start_bit = if onlcr { "raw_lf_at_start=0" } else { "raw_lf_at_start=1" };
+                let start_bit = if onlcr {
+                    "raw_lf_at_start=0"
+                } else {
+                    "raw_lf_at_start=1"
+                };
                 let mut why = Vec::new();
                 if code != Some(0) {
                     why.push(format!("exit {code:?}"));
@@ -970,14 +1045,18 @@ fn onlcr_on_a_terminal_started_with_it_on_and_off() {
                 if !text.contains("raw_lf_after_set=0") {
                     why.push("no `raw_lf_after_set=0`".into());
                 }
-                if !bytes.windows(17).any(|w| w == b"ONLCR-A\r\nONLCR-B") {
+                const WIRE: &[u8] = b"ONLCR-A\r\nONLCR-B";
+                if !bytes.windows(WIRE.len()).any(|w| w == WIRE) {
                     why.push("the wire does not read ONLCR-A CR LF ONLCR-B".into());
                 }
                 if after != Some(onlcr) {
                     why.push(format!("ONLCR after is {after:?}, at start {onlcr}"));
                 }
                 if !why.is_empty() {
-                    bad.push(format!("{machine} onlcr={onlcr} how={how}: {}", why.join("; ")));
+                    bad.push(format!(
+                        "{machine} onlcr={onlcr} how={how}: {}",
+                        why.join("; ")
+                    ));
                 }
             }
         }
@@ -1023,12 +1102,18 @@ fn engine(test: &str) -> Option<(String, bool)> {
                         .output()
                         .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("rootless"))
                 };
-                report(&format!("REPORT {test}: engine {e}, rootless {rootless}, image {}", image()));
+                report(&format!(
+                    "REPORT {test}: engine {e}, rootless {rootless}, image {}",
+                    image()
+                ));
                 return Some((e.clone(), rootless));
             }
             Ok(o) => why.push(format!(
                 "{e}: {}",
-                String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("")
+                String::from_utf8_lossy(&o.stderr)
+                    .lines()
+                    .next()
+                    .unwrap_or("")
             )),
             Err(err) => why.push(format!("{e}: {err}")),
         }
@@ -1052,13 +1137,24 @@ fn engine(test: &str) -> Option<(String, bool)> {
 #[cfg(target_os = "linux")]
 fn in_container(engine: &str, dir: &Path, user: &str, caps: &[&str], script: &str) -> Output {
     let mut c = Command::new(engine);
-    c.args(["run", "--rm", "--network", "none", "--user", user, "-e", "HOME=/tmp"]);
+    c.args([
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--user",
+        user,
+        "-e",
+        "HOME=/tmp",
+    ]);
     for cap in caps {
         c.args(["--cap-add", cap]);
     }
     c.arg("-v").arg(format!("{}:/w:ro", dir.display()));
-    c.arg("-v")
-        .arg(format!("{}:/fx:ro", fixture("onlcr.lu").parent().unwrap().display()));
+    c.arg("-v").arg(format!(
+        "{}:/fx:ro",
+        fixture("onlcr.lu").parent().unwrap().display()
+    ));
     c.arg("-v").arg(format!("{}:/machines/wolf:ro", wolf()));
     c.args(["-w", "/w"]).arg(image()).args(["sh", "-c", script]);
     c.stdin(Stdio::null())
@@ -1072,7 +1168,12 @@ fn in_container(engine: &str, dir: &Path, user: &str, caps: &[&str], script: &st
 /// the native and release binaries in the test's directory — plain, and
 /// under `taskset` on four of the allocation where there are four.
 #[cfg(target_os = "linux")]
-fn container_machines(entry_name: &str, stem: &str, dir: &Path, test: &str) -> Vec<(String, String, bool)> {
+fn container_machines(
+    entry_name: &str,
+    stem: &str,
+    dir: &Path,
+    test: &str,
+) -> Vec<(String, String, bool)> {
     let entry = fixture(entry_name);
     let mut rows = vec![(
         "checked".to_string(),
@@ -1142,14 +1243,20 @@ fn chroot_and_priority_in_a_container_as_root_and_as_a_user() {
         let want = if who == "root" {
             "euid=0\nmissing=not_found number=2\nfile=io number=20\njail=ok number=0\ncwd_unchanged: true\nmarker_at_root: true\nold_root_gone: true\n".to_string()
         } else {
-            "euid=4242\nmissing=not_found number=2\nfile=io number=20\njail=denied number=1\n".to_string()
+            "euid=4242\nmissing=not_found number=2\nfile=io number=20\njail=denied number=1\n"
+                .to_string()
         };
         for (machine, cmd, record) in &roots {
             let out = in_container(&engine, &dir, user, &[], cmd);
             let got = answer_of(&out, *record, &format!("chroot {who} {machine}"));
-            eprintln!("== chroot as {who}, {machine}:\n{got}{}", String::from_utf8_lossy(&out.stderr));
+            eprintln!(
+                "== chroot as {who}, {machine}:\n{got}{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             if got != want {
-                bad.push(format!("chroot as {who}, {machine}: got {got:?}, want {want:?}"));
+                bad.push(format!(
+                    "chroot as {who}, {machine}: got {got:?}, want {want:?}"
+                ));
             }
         }
     }
@@ -1169,30 +1276,34 @@ fn chroot_and_priority_in_a_container_as_root_and_as_a_user() {
         for (machine, cmd, record) in &prios {
             let out = in_container(&engine, &dir, user, caps, cmd);
             let got = answer_of(&out, *record, &format!("priority {who} {machine}"));
-            eprintln!("== priority as {who}, {machine}:\n{got}{}", String::from_utf8_lossy(&out.stderr));
+            eprintln!(
+                "== priority as {who}, {machine}:\n{got}{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             if got != want {
-                bad.push(format!("priority as {who}, {machine}: got {got:?}, want {want:?}"));
+                bad.push(format!(
+                    "priority as {who}, {machine}: got {got:?}, want {want:?}"
+                ));
             }
         }
-        let gnu = in_container(
-            &engine,
-            &dir,
-            user,
-            caps,
-            "nice -n -1 true; echo status=$?",
-        );
+        let gnu = in_container(&engine, &dir, user, caps, "nice -n -1 true; echo status=$?");
         let text = String::from_utf8_lossy(&gnu.stderr).to_string();
         let status = String::from_utf8_lossy(&gnu.stdout).to_string();
-        report(&format!("REPORT GNU nice -n -1 as {who}: {text:?} {status:?}"));
-        let gnu_says = text
-            .lines()
-            .find_map(|l| l.split_once("cannot set niceness: ").map(|(_, t)| t.trim().to_string()));
+        report(&format!(
+            "REPORT GNU nice -n -1 as {who}: {text:?} {status:?}"
+        ));
+        let gnu_says = text.lines().find_map(|l| {
+            l.split_once("cannot set niceness: ")
+                .map(|(_, t)| t.trim().to_string())
+        });
         if lowers {
             if gnu_says.is_some() {
                 bad.push(format!("GNU nice as {who} refused: {text:?}"));
             }
         } else if gnu_says.as_deref() != Some("Permission denied") {
-            bad.push(format!("GNU nice as {who}: {text:?}, the row says `Permission denied`"));
+            bad.push(format!(
+                "GNU nice as {who}: {text:?}, the row says `Permission denied`"
+            ));
         }
     }
     assert!(bad.is_empty(), "container rows:\n{}", bad.join("\n"));
