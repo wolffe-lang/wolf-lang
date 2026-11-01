@@ -64,8 +64,8 @@ to R-s272-11), each one what is built.
   `os_getpriority` and `os_signal_action_one` `env`; all refused at
   comptime. The checked machine makes each call for the `wolf` process it
   runs as (and refuses the action query on the fault meanings by name);
-  lupin 0.1.58 does not resolve the four new names (wolf-interp's mirror
-  issue). The host table is 167 lines.
+  lupin 0.1.58 does not resolve the four new names (wolf-interp#315, the
+  mirror). The host table is 167 lines.
 
 s275 — the drain thread (#1006).
 
