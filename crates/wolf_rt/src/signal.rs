@@ -1345,12 +1345,14 @@ mod sys {
             // `fork_release`'s unpark lands between std's parker state
             // change and its FUTEX_WAIT): read after it, a poll a SIGCHLD
             // interrupted looked fatal, and the thread ended.
+            // PLANT s275-plant-errno (never merge): the read moved back
+            // after the park, as trunk had it.
+            back_from_poll();
             let err = if n < 0 {
                 std::io::Error::last_os_error().raw_os_error()
             } else {
                 None
             };
-            back_from_poll();
             if n < 0 {
                 match err {
                     Some(libc::EINTR) => {}
