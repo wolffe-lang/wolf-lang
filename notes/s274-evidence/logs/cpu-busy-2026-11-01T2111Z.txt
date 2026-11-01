@@ -1,0 +1,16 @@
+s274: hasu per-CPU busy share over 10 s, from /proc/stat, 2026-11-01T21:11:19Z..21:11:29Z.
+At that moment batch 2 (block A) ran its load4 rig (the head row on CPUs 0-3 beside the
+element_places_lanes loop on the same CPUs) and batch 1 (block B) its load6 rig (trunk's row
+on CPUs 6-11 beside the same loop on CPUs 6-11). CPUs 4-5 are block A's, unused by load4.
+cpu0 busy 99%
+cpu1 busy 99%
+cpu2 busy 99%
+cpu3 busy 98%
+cpu4 busy 10%
+cpu5 busy 12%
+cpu6 busy 94%
+cpu7 busy 94%
+cpu8 busy 92%
+cpu9 busy 96%
+cpu10 busy 93%
+cpu11 busy 93%
