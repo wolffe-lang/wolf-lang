@@ -1,0 +1,10 @@
+red-build	cargo build -j4 -p wolf_driver -p wolf_rt
+red-rows	cargo test -j4 -p wolf_rt --lib -- s275 --test-threads=1
+red-drain-compile	target/debug/wolf build --no-cache crates/wolf_driver/tests/fixtures/fork/drain.lu -o /Users/mfwolffe/lanes/s275/drain-mac && ls -l /Users/mfwolffe/lanes/s275/drain-mac
+head-checkout	git checkout -q --detach 3094151f9fc9088ad4e1260510797244875d71c5 && test "$(git rev-parse HEAD)" = 3094151f9fc9088ad4e1260510797244875d71c5 && git diff --quiet
+head-build	cargo build -j4 -p wolf_driver -p wolf_rt
+head-rows	cargo test -j4 -p wolf_rt --lib -- signal::tests --test-threads=1
+head-fork-lanes-compile	cargo test -j4 -p wolf_driver --test fork_lanes --no-run
+head-clippy	cargo clippy -j4 -p wolf_rt --all-targets -- -D warnings && cargo clippy -j4 -p wolf_driver --test fork_lanes -- -D warnings
+plant-checkout	git checkout -q --detach 565775ba6df56fc9779c6960eea1b518ca345201 && test "$(git rev-parse HEAD)" = 565775ba6df56fc9779c6960eea1b518ca345201 && git diff --quiet
+plant-rows	cargo test -j4 -p wolf_rt --lib -- s275 --test-threads=1
