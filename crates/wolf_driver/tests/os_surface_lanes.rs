@@ -758,29 +758,33 @@ fn fs_statfs_matches_gnu_stat_f() {
             let num = |i: usize| f.get(i).and_then(|s| s.parse::<i64>().ok());
             Some(vec![num(1)?, num(3)?, num(5)?, num(6)?])
         };
-        // The mount that holds `p` (`mount`'s `<dev> on <dir> (<opts>)`, the
-        // longest mount point that is a prefix of the path): (read-only,
-        // nosuid).
+        // The mount that holds `p`: `df`'s own "Mounted on" column (a path
+        // under `/Users` reaches the Data volume through a firmlink, so a
+        // prefix of the path names the wrong mount), then that mount point's
+        // options in `mount`'s `<dev> on <dir> (<opts>)`: (read-only, nosuid).
         let mount_flags = |p: &str| -> (bool, bool) {
-            let canon = std::fs::canonicalize(p).unwrap_or_else(|_| PathBuf::from(p));
-            let canon = canon.display().to_string();
+            let out = Command::new("/bin/df")
+                .args(["-k", p])
+                .output()
+                .expect("df runs");
+            let t = String::from_utf8_lossy(&out.stdout).to_string();
+            let line = t.lines().nth(1).unwrap_or("");
+            let f: Vec<&str> = line.split_whitespace().collect();
+            let mp = f.get(8..).map(|r| r.join(" ")).unwrap_or_default();
             let out = Command::new("/sbin/mount").output().expect("mount runs");
-            let mut best: Option<(usize, bool, bool)> = None;
             for line in String::from_utf8_lossy(&out.stdout).lines() {
                 let Some((_, rest)) = line.split_once(" on ") else {
                     continue;
                 };
-                let Some((mp, opts)) = rest.rsplit_once(" (") else {
+                let Some((dir, opts)) = rest.rsplit_once(" (") else {
                     continue;
                 };
-                let under = canon == mp || mp == "/" || canon.starts_with(&format!("{mp}/"));
-                if !under || best.is_some_and(|(n, _, _)| mp.len() < n) {
-                    continue;
+                if dir == mp {
+                    let o: Vec<&str> = opts.trim_end_matches(')').split(", ").collect();
+                    return (o.contains(&"read-only"), o.contains(&"nosuid"));
                 }
-                let o: Vec<&str> = opts.trim_end_matches(')').split(", ").collect();
-                best = Some((mp.len(), o.contains(&"read-only"), o.contains(&"nosuid")));
             }
-            best.map_or((false, false), |(_, ro, ns)| (ro, ns))
+            (false, false)
         };
         let name_max = |p: &str| -> Option<i64> {
             let out = Command::new("getconf")
@@ -826,10 +830,10 @@ fn fs_statfs_matches_gnu_stat_f() {
                             ));
                         }
                     }
-                    if let Some(n) = name_max(p) {
-                        if w[8] != n {
-                            bad.push(format!("{p}: name_max wolf={} getconf={n}", w[8]));
-                        }
+                    if let Some(n) = name_max(p)
+                        && w[8] != n
+                    {
+                        bad.push(format!("{p}: name_max wolf={} getconf={n}", w[8]));
                     }
                     let (ro, nosuid) = mount_flags(p);
                     let want_flags = i64::from(ro) | (i64::from(nosuid) << 1);
