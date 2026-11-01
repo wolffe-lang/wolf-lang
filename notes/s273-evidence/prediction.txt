@@ -1,0 +1,88 @@
+s273 prediction, written before the first change (2026-10-31 20:35 EDT, 2026-11-01 00:35Z)
+Lane: s273 (wolf-lang#972, #943). Base: wolf-lang trunk b16353e8ae616ff3a35bd27adc56b727c50df345.
+Toolchain measured: the base built `cargo build --release -p wolf_driver -p wolf_rt` on nomad (macOS
+arm64), std = wolf-std 78b9d3c (crates/wolf_driver/STD-PIN) via WOLF_STD. Peak = wait4(2) ru_maxrss of
+exactly the child (scripts/peak.py, a 3 GB / 120 s guard). Logs: logs/measure-trunk-b16353e8.log,
+logs/w943-trunk-b16353e8.log.
+
+## Measured at the base (before this file)
+
+#972, witness/w972.lu (the issue's program, `main N MODE`), peak resident MB:
+
+| mode    | tier     | 1k    | 10k              | 100k              |
+|---------|----------|-------|------------------|-------------------|
+| C bar   | cc -O2   | 1.5   | 2.2              | 8.1               |
+| issue   | native   | 26.9  | 2,356.3          | killed at 3 GB    |
+| issue   | release  | 26.9  | 2,356.3          | killed at 3 GB    |
+| issue   | checked  | 276.1 | killed at 3 GB   | killed at 3 GB    |
+| setonly | native   | 1.8   | 2.5              | 8.6               |
+| index   | native   | 1.8   | 2.6              | 10.1 (11.4 s)     |
+| keys    | native   | 1.7   | 1.9              | 3.2               |
+| list    | native   | 1.7   | 2.3              | 6.8               |
+
+The region ledger (`region r { … }`, `region_bytes(r)`), native = release:
+- region (the issue's program): 24,129,040 B at 1k, 2,401,586,320 B at 10k.
+- rset (its N `set`s alone):    65,040 / 946,320 / 7,891,344 B.
+- rindex (`m[k] = i`, `m[k] else -1`): 81,040 / 1,106,320 / 9,491,344 B.
+- region − rset at 10k = 2,400,640,000 = 10,000 gets × 240,064 B, and 240,064 = 10,000 entries × 24 B
+  (the `(str, int)` entry stride) + 48 (a list header, rounded) + 16 (the probe key "0#key{i}").
+  At 1k: 1,000 × (24,000 + 64) = 24,064,000 = 24,129,040 − 65,040. To the byte.
+
+Where the bytes go: NOT the key storage (16 B a key, `keys`/`list` flat), NOT the map's growth (`setonly`
+and `rset` linear: 79 B an entry at 100k = 16 B key + 24 B entry + the doubling's abandoned buffers), NOT
+the interpolation (16 B a probe key, `rindex` − `rset` = N × 16). Every byte of the blow-up is
+wolf-std's `map.get` body, `for pair in m.pairs() { if cmp.Eq.eq(pair.0, k) { return pair.1 } }`:
+`pairs()` copies the whole entry buffer into a fresh `List[(K, V)]` on every call
+(`__wolf_rt_map_pairs`), in the caller's ambient region, and nothing in a region is freed before the
+region ends — for `main` that is the process root, so N gets retain N² × 24 B. The issue's "each `set`
+copying the map" is wrong by the ledger: `set` is `m[k] = copy v` and is linear. The checked machine
+does the same at its own unit (16 B a slot, 2 slots an entry: 16,047,780 B at 1k) and also keeps every
+minted list in its arena for the run (276 MB resident at 1k).
+
+#943, witness/w943.lu (yew b05f256's fifteen lines) and witness/w943-variants.lu:
+- checked: before=128 after=12928 delta=12800; native and release: before=240 after=240 delta=0.
+- variants, checked: reset=12800 clear=12800 pop=1600 grow=128; native and release:
+  reset=0 clear=0 pop=0 grow=128.
+The checked machine charges every `push` its 16-byte slot, so a slot a reset/clear/pop gave back and a
+push fills again is charged twice; its own storage (`Vec::clear` keeps the capacity) is reused.
+
+## The changes, and what each will show
+
+1. (#972) A `for pat in m.pairs() { body }` whose receiver `m` is a bare local or parameter of type
+   `Map[K, V]` that the body never names is a VIEW of the map's own entries: no list is minted, nothing
+   is charged. Native and release lower it as the counted List loop over the map header (the header's
+   first five words are a ListHdr, the entry stride is the tuple's list stride); the checked machine
+   walks a host-side snapshot it does not retain. Any other `pairs()` (bound by `let`, an argument, a
+   body that names the map) materializes exactly as today. One predicate, in wolf_mem, decides for
+   both machines.
+   - native/release `region` mode = `rindex`'s ledger exactly: 81,040 B at 1k, 1,106,320 B at 10k,
+     9,491,344 B at 100k (from 24,129,040 / 2,401,586,320 / killed).
+   - native/release `issue` peak: 1k ≈ 1.8 MB, 10k ≈ 2.7 MB (from 2,356 MB; the C bar 2.2 MB, so ≈ 1.2×,
+     inside the 4× target), 100k ≈ 10.2 MB and completing (the scan stays O(N) a get, so it is slow:
+     tens of seconds, under the 120 s guard).
+   - per-entry cost, 10k → 100k slope: native ≈ 87 B of peak (C: 69 B), ledger 93.2 B; before: N × 24 B
+     an entry (240 KB an entry at 10k), quadratic.
+   - checked: `region` mode at 1k prints 47,780 (= `rindex`, from 16,047,780); `issue` at 1k ≈ 13 MB
+     (from 276 MB). At 10k the checked machine stops on its STEP budget (`unsupported`, 50 M loop turns
+     of the generic scan against 20 M steps) with its resident set flat (≈ 15 MB), not killed.
+2. (#943) The checked machine keeps, per list, the number of slots it has charged; a `push` charges a
+   slot (budget and region ledger) only past that high-water mark — the storage `[type.list.reset]`
+   says the next pushes reuse. The same for a `Map`'s entries after `clear`/`remove`.
+   - w943: checked prints before=128 after=128 delta=0 (from 12928 / 12800); native/release unchanged.
+   - variants: checked reset=0 clear=0 pop=0 grow=128, the native answer.
+3. Every existing corpus entry keeps its verdict and stdout (no row prints a ledger after a pairs()
+   walk, a reset or a pop and refill — to be checked by the corpus, conformance, differ-self and
+   lane-coverage steps). The `--phase=mem` census over the corpus and the downstream trees is
+   byte-identical: nothing here touches the static checker.
+4. Rows, each red at the base before its fix lands:
+   - crates/wolf_driver/tests/map_pairs_walk_lanes.rs: the #972 shape (std.map's `get` and `set`
+     bodies over a local `Eq`) built native and release, run at N and 2N, the per-entry peak slope under
+     a bound (red at the base by ~140 KB an entry); the checked machine likewise at its own N.
+   - corpus/memory/map_pairs_walk_view.lu: 100 walks of a map's pairs() in a region, the ledger flat
+     (false at the base on all three machines, true after).
+   - corpus/memory/map_pairs_walk_snapshot.lu: a body that writes the map mid-walk still sees the walk's
+     snapshot (green at the base; it holds the predicate's "never named" condition).
+   - corpus/memory/list_reset_reuse_ledger.lu: w943 and its variants, flat on every machine (false on
+     checked at the base, so differ-self disagrees there).
+5. The plant s273-plant-map: the head with `__wolf_rt_map_set` growing by one entry instead of doubling;
+   map_pairs_walk_lanes red by name on native and release (Σk × 24 B: ~70 KB an entry at N = 2,000).
