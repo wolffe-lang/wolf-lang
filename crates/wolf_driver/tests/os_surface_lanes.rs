@@ -803,10 +803,14 @@ mod pty {
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
-    /// One run on a fresh pseudo-terminal, its controlling terminal, the
-    /// slave started with `ONLCR` as `onlcr` says (output processing on).
-    /// Answers the raw transcript, the exit code and `ONLCR` after.
-    pub fn run(argv: &[String], dir: &Path, onlcr: bool) -> (Vec<u8>, Option<i32>, bool) {
+    /// One run on a fresh pseudo-terminal, the slave started with `ONLCR`
+    /// as `onlcr` says (output processing on). A shell leads the
+    /// terminal's session and runs the program, then `stty -a` on the same
+    /// terminal (macOS revokes a terminal whose session leader has gone,
+    /// so the settings after are read while the session lives, as
+    /// `editor_restore_lanes` reads them). Answers the raw transcript, the
+    /// program's exit code and `ONLCR` after it.
+    pub fn run(argv: &[String], dir: &Path, onlcr: bool) -> (Vec<u8>, Option<i32>, Option<bool>) {
         // SAFETY: the pty calls on descriptors this test owns; the child's
         // hook calls only async-signal-safe functions.
         unsafe {
@@ -844,8 +848,13 @@ mod pty {
                 ws_ypixel: 0,
             };
             assert_eq!(libc::ioctl(m, libc::TIOCSWINSZ, &w), 0, "TIOCSWINSZ");
-            let mut cmd = Command::new(&argv[0]);
-            cmd.args(&argv[1..])
+            let quoted: Vec<String> = argv.iter().map(|a| format!("'{a}'")).collect();
+            let script = format!(
+                "{}; echo \"S272-EXIT=$?\"; echo S272-STTY; stty -a; echo S272-END",
+                quoted.join(" ")
+            );
+            let mut cmd = Command::new("/bin/sh");
+            cmd.args(["-c", &script])
                 .current_dir(dir)
                 .stdin(Stdio::from(slave.try_clone().expect("dup")))
                 .stdout(Stdio::from(slave.try_clone().expect("dup")))
@@ -873,30 +882,39 @@ mod pty {
                 }
             });
             let end = Instant::now() + Duration::from_secs(120);
-            let code = loop {
+            loop {
                 match child.try_wait().expect("try_wait") {
-                    Some(st) => break st.code(),
+                    Some(_) => break,
                     None if Instant::now() > end => {
                         let _ = child.kill();
                         let _ = child.wait();
-                        break None;
+                        break;
                     }
                     None => std::thread::sleep(Duration::from_millis(20)),
                 }
-            };
-            std::thread::sleep(Duration::from_millis(200));
-            let mut after: libc::termios = std::mem::zeroed();
-            assert_eq!(
-                libc::tcgetattr(slave.as_raw_fd(), &mut after),
-                0,
-                "tcgetattr after"
-            );
-            let onlcr_after = after.c_oflag & libc::ONLCR != 0;
+            }
+            let settle = Instant::now() + Duration::from_secs(5);
+            while Instant::now() < settle
+                && !String::from_utf8_lossy(&buf.lock().unwrap()).contains("S272-END")
+            {
+                std::thread::sleep(Duration::from_millis(20));
+            }
             drop(slave);
             drop(master);
             let _ = reader.join();
             let bytes = buf.lock().unwrap().clone();
-            (bytes, code, onlcr_after)
+            let text = String::from_utf8_lossy(&bytes).to_string();
+            let code = text
+                .split("S272-EXIT=")
+                .nth(1)
+                .and_then(|t| t.split_whitespace().next())
+                .and_then(|n| n.parse::<i32>().ok());
+            let after = text.split("S272-STTY").nth(1).map(|t| {
+                let t = t.split("S272-END").next().unwrap_or("");
+                let words: Vec<&str> = t.split_whitespace().collect();
+                !words.contains(&"-onlcr") && words.contains(&"onlcr")
+            });
+            (bytes, code, after)
         }
     }
 }
@@ -939,7 +957,7 @@ fn onlcr_on_a_terminal_started_with_it_on_and_off() {
                 let (bytes, code, after) = pty::run(argv, &dir, onlcr);
                 let text = String::from_utf8_lossy(&bytes).to_string();
                 eprintln!(
-                    "== {machine} onlcr={onlcr} how={how}: exit {code:?}, ONLCR after {after}\n{text:?}"
+                    "== {machine} onlcr={onlcr} how={how}: exit {code:?}, ONLCR after {after:?}\n{text:?}"
                 );
                 let start_bit = if onlcr { "raw_lf_at_start=0" } else { "raw_lf_at_start=1" };
                 let mut why = Vec::new();
@@ -955,8 +973,8 @@ fn onlcr_on_a_terminal_started_with_it_on_and_off() {
                 if !bytes.windows(17).any(|w| w == b"ONLCR-A\r\nONLCR-B") {
                     why.push("the wire does not read ONLCR-A CR LF ONLCR-B".into());
                 }
-                if after != onlcr {
-                    why.push(format!("ONLCR after is {after}, at start {onlcr}"));
+                if after != Some(onlcr) {
+                    why.push(format!("ONLCR after is {after:?}, at start {onlcr}"));
                 }
                 if !why.is_empty() {
                     bad.push(format!("{machine} onlcr={onlcr} how={how}: {}", why.join("; ")));
