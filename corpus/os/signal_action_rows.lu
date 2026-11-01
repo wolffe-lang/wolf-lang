@@ -1,0 +1,70 @@
+//! check: run(exit=0, stdout="zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=0\nhost_number_term=0\nkill=0\nkill_number=0\nstop=0\nstop_number=0\nnothing_moved: true\nuser_ignored=1\nuser_back=0\nreload_listened=2\nreload_back=0")
+//! phase: run
+//! conforms: os.signal.action.one, os.fs.error, err.union
+//!
+//! s272 (wolf-lang#975; R-s272-8 and R-s272-9, the recommendations
+//! implemented) — one signal's action, read and never changed: 0 the
+//! default, 1 ignored, 2 another handler. The meaning is the SENDING
+//! shape (`[os.signal.send]`): 0, two bits and a bit past the table are
+//! `invalid`, and a host number past every host's last is `invalid` where
+//! the host has numbers (`unsupported` on windows). `KILL` and `STOP` are
+//! asked of the host: linux answers the default, and Darwin refuses the
+//! GET itself — `io`, with `EINVAL` (22) beside the row
+//! (`crates/wolf_driver/tests/os_surface_lanes.rs` holds macOS's and
+//! windows' lines). A run of queries moves no disposition
+//! (`os_signal_ignored` reads the same after them); an ignore reads 1 and
+//! its default 0 again; a listen reads 2, the runtime's own handler, and
+//! the default that ends it 0.
+
+fn action(m: int) -> str {
+    let a = os_signal_action_one(m) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "{a}"
+}
+
+fn main() -> int {
+    print("zero={action(0)}")
+    print("two_bits={action(3)}")
+    print("past_table={action(268435456)}")
+    let far: int = -1099511627776
+    let a = action(far)
+    print("far_host_number: {a == "invalid" || a == "unsupported"}")
+    let before = os_signal_ignored() else |e| { -1 }
+    print("term={action(2)}")
+    if before == -1 {
+        return 0
+    }
+    print("host_number_term={action(-15)}")
+    print("kill={action(1048576)}")
+    print("kill_number={os_error()}")
+    print("stop={action(2097152)}")
+    print("stop_number={os_error()}")
+    let after = os_signal_ignored() else |e| { -2 }
+    print("nothing_moved: {before == after}")
+    os_signal_ignore_one(512) else |e| {
+        print("ignore_one failed")
+        return 1
+    }
+    print("user_ignored={action(512)}")
+    os_signal_default_one(512) else |e| {
+        print("default_one failed")
+        return 1
+    }
+    print("user_back={action(512)}")
+    os_signal_listen(1) else |e| {
+        print("listen failed")
+        return 1
+    }
+    print("reload_listened={action(1)}")
+    os_signal_default(1) else |e| {
+        print("default failed")
+        return 1
+    }
+    print("reload_back={action(1)}")
+    0
+}

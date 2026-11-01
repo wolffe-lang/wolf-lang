@@ -1,0 +1,65 @@
+//! check: run(exit=0, stdout="words=12\nhave_self: true\nspace_answered: true\nfree_within_total: true\navailable_within_free: true\nfragment_positive: true\na_file_reads_its_file_system: true\nmissing=not_found\nmissing_number_is_set: true\nsuccess_clears_the_number: true")
+//! phase: run
+//! conforms: os.fs.statfs, os.fs.error, err.union
+//!
+//! s272 (wolf-lang#686; R-s272-1, the recommendation implemented) — the
+//! file-system record's rows that hold on every host, windows included:
+//! twelve words; the `have` word answers itself (bit 0) and the space
+//! words (fragment size, total, free and available blocks: bits 2..5); the
+//! free blocks are at most the total and the available at most the free;
+//! the unit is a positive size; a regular file reads the record of the file
+//! system that holds it (the same unit and total as its directory); a
+//! missing path is `not_found` with the host's number beside the row
+//! (`[os.fs.error]`), and a record that answers clears it. The words
+//! measured against GNU `stat -f` and macOS `df -k` in the same second are
+//! `crates/wolf_driver/tests/os_surface_lanes.rs`.
+
+fn record(p: str) -> List[int] {
+    fs_statfs(p) else |e| {
+        let t = match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        print("{p}={t}")
+        return List[int]()
+    }
+}
+
+fn main() -> int {
+    let r = record(".")
+    if r.len != 12 {
+        print("words={r.len}")
+        return 1
+    }
+    print("words={r.len}")
+    let have = r[0]
+    print("have_self: {(have & 1) == 1}")
+    let space = 4 | 8 | 16 | 32
+    print("space_answered: {(have & space) == space}")
+    print("free_within_total: {r[4] <= r[3]}")
+    print("available_within_free: {r[5] <= r[4]}")
+    print("fragment_positive: {r[2] > 0}")
+    let probe = "s272-statfs-rows.txt"
+    fs_write_text(probe, "statfs") else |e| {
+        print("probe write failed")
+        return 1
+    }
+    let f = record(probe)
+    fs_remove(probe) else |e| { }
+    print("a_file_reads_its_file_system: {f.len == 12 && f[2] == r[2] && f[3] == r[3]}")
+    var missing = "a record"
+    fs_statfs("s272-statfs-no-such-dir/inner") else |e| {
+        missing = match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        List[int]()
+    }
+    print("missing={missing}")
+    print("missing_number_is_set: {os_error() > 0}")
+    let again = record(".")
+    print("success_clears_the_number: {again.len == 12 && os_error() == 0}")
+    0
+}

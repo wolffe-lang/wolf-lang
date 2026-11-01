@@ -1,0 +1,54 @@
+//! check: run(exit=0, stdout="read_in_range: true\nzero=ok\nzero_kept: true\nraise=ok\nraised: true\nfar_raise=ok\nat_the_top: true\nlower=denied\nlower_number=13\nlower_text=Permission denied")
+//! phase: run
+//! conforms: os.proc.priority, os.fs.error, err.union
+//!
+//! s272 (wolf-lang#922; R-s272-6, the recommendation implemented) — the
+//! scheduling priority of the calling process in `nice(2)`'s shape, as a
+//! process that is not privileged meets it: the value it reads is one of
+//! the host's (-20 to 19 on linux, to 20 on macOS); the issue's own
+//! witness, `os_setpriority(0)`, is `ok` and moves nothing; a raise of one
+//! is `ok` and reads back one higher (or the top, already there); a raise
+//! far past any range saturates and the host clamps it to its top; and a
+//! lowering is `denied`, with `EACCES` (13) and its text beside the row —
+//! the text GNU `nice` prints for the same refusal. Windows has no nice
+//! value: every line there is `unsupported`. The lowering as root, with
+//! and without the privilege, is `crates/wolf_driver/tests/os_surface_lanes.rs`.
+
+fn set(d: int) -> str {
+    os_setpriority(d) else |e| {
+        return match e {
+            denied => "denied",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> int {
+    let p = os_getpriority() else |e| {
+        match e {
+            unsupported => {
+                print("read=unsupported")
+                print("zero={set(0)}")
+                return 0
+            },
+        }
+    }
+    print("read_in_range: {p >= -20 && p <= 20}")
+    print("zero={set(0)}")
+    let kept = os_getpriority() else |e| { -100 }
+    print("zero_kept: {kept == p}")
+    print("raise={set(1)}")
+    let q = os_getpriority() else |e| { -100 }
+    print("raised: {q == p + 1 || p >= 19 && q == p}")
+    let far: int = 1099511627776
+    print("far_raise={set(far)}")
+    let top = os_getpriority() else |e| { -100 }
+    print("at_the_top: {top >= 19}")
+    print("lower={set(-1)}")
+    let n = os_error()
+    print("lower_number={n}")
+    print("lower_text={os_error_text(n)}")
+    0
+}

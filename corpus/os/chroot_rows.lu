@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="missing=not_found\nmissing_number=2\ndot=denied\ndot_number=1")
+//! phase: run
+//! conforms: os.proc.chroot, os.fs.error, err.union
+//!
+//! s272 (wolf-lang#921; R-s272-5, the recommendation implemented) — the
+//! rows of `os_chroot` a process that is not privileged meets. The header
+//! is linux's: a missing path is `not_found` (the host looks the path up
+//! before it asks for the privilege) with `ENOENT` beside the row, and the
+//! issue's own witness, `os_chroot(".")`, is `denied` with `EPERM` (1)
+//! beside it. macOS asks for the privilege first (a missing path is
+//! `denied`, 1, measured on nomad, Darwin 26.4.1), and windows has no root
+//! to change (`unsupported`, 0: decided before any host is asked);
+//! `crates/wolf_driver/tests/os_surface_lanes.rs` holds each host's lines,
+//! and the change of root itself, as root and as a user, in throwaway
+//! containers.
+
+fn root(p: str) -> str {
+    os_chroot(p) else |e| {
+        return match e {
+            denied => "denied",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> int {
+    let missing = root("s272-chroot-no-such-dir/inner")
+    print("missing={missing}")
+    print("missing_number={os_error()}")
+    let dot = root(".")
+    print("dot={dot}")
+    print("dot_number={os_error()}")
+    0
+}

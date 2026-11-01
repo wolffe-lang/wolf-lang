@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="lf_bit_on_a_file=io\nlf_bit_restore_on_a_file=io\npast_lf_bit=invalid\npast_lf_bit_restore=invalid")
+//! phase: run
+//! conforms: os.term.mode, os.term.restore, err.union
+//!
+//! s272 (wolf-lang#976; R-s272-7, the recommendation implemented) — bit 24
+//! of the mode word, `RAW_LF` (16777216: a written LF reaches the terminal
+//! as LF even with output processing on, `ONLCR` cleared), is a mode bit:
+//! a set or a registered restore that carries it on a handle that is not a
+//! terminal is the family's `io` (windows: `unsupported`), no longer the
+//! shape's `invalid`; bit 25 and above are still `invalid`, before the
+//! handle is read. The bit on a terminal started with `ONLCR` on and off
+//! is `crates/wolf_driver/tests/os_surface_lanes.rs`.
+
+fn set(h: int, m: int) -> str {
+    os_term_set_mode(h, m) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn restore(h: int, m: int) -> str {
+    os_term_restore_at_exit(h, m, List[byte]()) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> int {
+    let path = "s272-term-lf-rows.txt"
+    let h = fs_create(path) else |e| {
+        print("create failed")
+        return 1
+    }
+    let lf = 16777216
+    print("lf_bit_on_a_file={set(h, lf)}")
+    print("lf_bit_restore_on_a_file={restore(h, lf)}")
+    print("past_lf_bit={set(h, lf * 2)}")
+    print("past_lf_bit_restore={restore(h, lf * 2)}")
+    fs_close(h) else |e| { }
+    fs_remove(path) else |e| { }
+    0
+}
