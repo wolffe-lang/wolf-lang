@@ -1,0 +1,4 @@
+run=39618268643 job=119285472634 2026-10-21T14:36:11Z s250 9ccd1175 [lint + test + corpus (linux x86-64)] scalar loop grew 5 B/turn (release=false), want flat (wolf-lang#612)
+run=41262203723 job=124717601992 2026-11-01T01:42:33Z s273-plant-map 8e5402e0 [lint + test + corpus (linux x86-64)] B an entry (bound 1024): the walk in `get` is copying the map
+run=41270953944 job=124743471498 2026-11-01T03:53:52Z s273-plant-map 5616b77b [lint + test + corpus (linux x86-64)] B an entry (bound 1024): the walk in `get` is copying the map
+run=41282097347 job=124775939821 2026-11-01T06:45:29Z trunk 7332772f [lint + test + corpus (linux x86-64)] scalar loop grew 5 B/turn (release=false), want flat (wolf-lang#612)
