@@ -509,6 +509,7 @@ memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
 memory/list_pop_empty.lu: lowers
 memory/list_reserve.lu: lowers
 memory/list_reset.lu: lowers
+memory/list_reset_reuse_ledger.lu: lowers
 memory/list_session_struct.lu: lowers
 memory/list_slice.lu: lowers
 memory/list_slice_edges.lu: lowers
@@ -518,6 +519,8 @@ memory/map_absent_else.lu: lowers
 memory/map_char_bool_keys.lu: lowers
 memory/map_count.lu: lowers
 memory/map_int_keys.lu: lowers
+memory/map_pairs_walk_snapshot.lu: lowers
+memory/map_pairs_walk_view.lu: lowers
 memory/map_remove.lu: lowers
 memory/map_set_generic.lu: lowers
 memory/map_std_keys.lu: lowers
