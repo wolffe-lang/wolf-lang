@@ -577,6 +577,8 @@ fn the_characters_and_flow_and_extended() {
 fn the_terminal_rows_on_every_machine() {
     let rel = "os/term_editor_rows.lu";
     // s248 (#802): bit 5 is a field (`RAW_CR`); its row left the corpus.
+    // s272 (#976): so is bit 24 (`RAW_LF`); the row past every field asks
+    // bit 25, and still reads `invalid`.
     let want = "wait_empty=io\nwait_send_only=io\nwait_past_table=io\n\
 mode_negative=invalid\nmode_past_vtime=invalid\n";
     let entry = Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -9,7 +9,7 @@
 //! set, a send-only meaning (`KILL`, 1048576) and a bit past the table
 //! are each `io` before the handle is looked at — on windows too. A mode
 //! is `invalid` before its handle is read for a bit that is no field — a
-//! negative mode, or a bit past `VTIME` (bit 24; s248, wolf-lang#802, made
+//! negative mode, or a bit past `VTIME` (bit 25 since s272; s248 #802 made
 //! bits 5..7 fields, `RAW_CR`, `RAW_OUTPUT` and `STRIP8`, so bit 5's row
 //! that stood here until 0.2.33 moved to `editor_wait_lanes.rs`, where a
 //! terminal reads it back). The live witnesses (the size, a
@@ -43,5 +43,5 @@ fn main() {
     print("wait_send_only={wait_row(1048576)}")
     print("wait_past_table={wait_row(1099511627776)}")
     print("mode_negative={mode_row(-1)}")
-    print("mode_past_vtime={mode_row(16777216)}")
+    print("mode_past_vtime={mode_row(33554432)}")
 }
