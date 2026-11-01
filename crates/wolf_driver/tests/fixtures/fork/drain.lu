@@ -1,0 +1,81 @@
+//! member: false
+//! s275 (wolf-lang#1006, pelt#98) — the hub's drain thread outlives every
+//! fork. pelt lane sh34's witness (`notes/sh34/witness/drain_after_fork.lu`
+//! in pelt), on the intrinsics alone: the program listens for CHILD (256),
+//! then, round after round, forks eight children back to back that end at
+//! once (no wait between the forks, so an earlier child's SIGCHLD comes
+//! while a later fork holds the drain thread, and the drain thread is the
+//! one thread it can land on: the fork blocks every catchable signal on
+//! the caller), and reads `Threads:` from `/proc/self/status` (linux)
+//! before it parks to reap them. At rest the count is 2: `main` and
+//! `wolf-signal`. argv: the rounds (3,000 when absent).
+//!
+//! Until s275 the drain thread read the poll's errno after its park for
+//! the fork's hold, and the park's futex could answer EAGAIN first: the
+//! thread took the interrupted poll for a fatal error and ended, and every
+//! later `os_signal_wait` parked for ever. Exit 1 the round the count
+//! falls; a stall in the reap is the caller's cap. Elsewhere than linux
+//! there is no count to read, and only the stall can tell.
+
+fn threads() -> int {
+    let s = fs_read_text("/proc/self/status") else ""
+    for line in s.lines() {
+        if line.starts_with("Threads:") {
+            var n = 0
+            for c in line.chars() {
+                if c >= '0' && c <= '9' {
+                    n = n * 10 + (c as int - 48)
+                }
+            }
+            return n
+        }
+    }
+    -1
+}
+
+fn main() -> int {
+    let child = 256
+    let kids = 8
+    let args = env_args()
+    var rounds = 3000
+    if args.len > 0 {
+        rounds = args[0].to_int() else 3000
+    }
+    os_signal_listen(child) else |_| {
+        print("drain: listen refused")
+        return 2
+    }
+    let at_rest = threads()
+    var round = 0
+    while round < rounds {
+        var k = 0
+        while k < kids {
+            let (pid, _h) = os_fork() else (-1, -1)
+            if pid == 0 {
+                os_exit(0)
+            }
+            if pid < 0 {
+                print("drain: round {round}: os_fork refused")
+                return 2
+            }
+            k += 1
+        }
+        let now = threads()
+        if now < at_rest {
+            print("drain: round {round}: threads {now} of {at_rest} after {kids} forks: the drain thread is gone")
+            return 1
+        }
+        var reaped = 0
+        while reaped < kids {
+            let (h, _st) = os_wait_poll() else (-1, 0)
+            if h >= 0 {
+                reaped += 1
+                continue
+            }
+            let _m = os_signal_wait(child) else -1
+        }
+        round += 1
+    }
+    print("drain: {rounds} rounds of {kids} forks, the drain thread at every one true")
+    0
+}

@@ -577,6 +577,38 @@ fn the_hub_is_the_childs_own() {
     }
 }
 
+/// s275 (wolf-lang#1006, pelt#98): the hub's drain thread outlives every
+/// fork. pelt lane sh34's witness on the intrinsics (`drain.lu`): CHILD
+/// listened, eight forks back to back whose children end at once, the
+/// thread count read before each reap, 1,000 rounds a row. An earlier
+/// child's SIGCHLD lands on the drain thread while a later fork holds it
+/// (the fork blocks every catchable signal on the caller), so its poll
+/// answers EINTR and it parks for the hold; until s275 it read errno after
+/// that park, whose futex could answer EAGAIN first, and it ended. On
+/// linux the count falls (exit 1); a stall in the reap's `os_signal_wait`
+/// is ended by the row's cap (`timeout` in the container, exit 124; perl's
+/// `alarm` on CI's macOS runner, exit 142, `fs_gaps_lanes`'s watchdog) and
+/// is the only sign elsewhere. sh34 measured 9 of 10 runs red on four CPUs
+/// at 0.2.36; s275's note has the rates at trunk and at the fix.
+#[cfg(unix)]
+#[test]
+fn the_drain_thread_outlives_every_fork() {
+    every_row(
+        "drain",
+        "drain.lu",
+        &|live: &Live, prog: &str| {
+            let cap = if live.engine.is_some() {
+                "timeout 120"
+            } else {
+                "perl -e 'alarm 120; exec @ARGV or die'"
+            };
+            format!("{cap} {prog} 1000; echo rc=$?")
+        },
+        "drain: 1000 rounds of 8 forks, the drain thread at every one true\n\
+         rc=0\n",
+    );
+}
+
 /// The readiness set across a fork: parent and child each parked in their
 /// own reactor at once, a net round trip between them, then a deadline in
 /// the child that must fire (its own timer wheel). Under the reactor plant
