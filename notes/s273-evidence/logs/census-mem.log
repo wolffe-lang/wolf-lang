@@ -1,0 +1,137 @@
+s273 --phase=mem census, nomad, 2026-11-01T01:22:12Z
+base: ~/lanes/s273/m/tc-trunk/wolf (b16353e8); head: ~/lanes/s273/m/tc-0097d431/wolf (0097d431; the static checker is unchanged after it)
+trees (git archive of each local origin/trunk, read only):
+boreutils 0f7a57b68829765f60c39ced01edb7ea75265eb8
+lobo 49ed870e828af92c66f7f2c626cb1f12c2dcca3a
+pelt 4683b3f5faf46cd393ec2632f345f8cd483a4f1f
+wolf-std 5f49efd84140167c594c4107061769bf26841f84
+yew f1b68316ae5129e21a470eb24fed653b71bb7d17
+scent 81d761d6d3b3c32f83a7b54801728088afea245a
+pax 8495bdc0a8b914e407ae6644bad4fd074bb0817f
+den 595a87ebc2741784799676967f047ef2abd1b6f8
+cub c8669f2c0531b8b8b64cc10f88ff60dc25688926
+wolf-lang-corpus 2cfe54136954f5ffc90073bc32dc07d38192966e
+WOLF_STD = wolf-std 78b9d3c
+
+census:     3463 files -> /Users/mfwolffe/lanes/s273/census/base.tsv
+END census-base exit=0
+census:     3463 files -> /Users/mfwolffe/lanes/s273/census/head.tsv
+END census-head exit=0
+census: byte-identical (    3463 files)
+END census-diff exit=0
+s273: END exit=0
+582b8daa6c054f001f6dc389b0e06a94b10cc901616a6ac1691f1e3499cfd258  base.tsv
+582b8daa6c054f001f6dc389b0e06a94b10cc901616a6ac1691f1e3499cfd258  head.tsv
+
+verdicts:
+2196 pass
+ 746 fail(E0301)
+  65 fail(E1010)
+  58 fail(E0302)
+  57 fail(E0701)
+  48 fail(E1002)
+  43 fail(E1001)
+  26 fail(E0401)
+  14 fail(E0201)
+  13 fail(E0403)
+  12 unsupported
+   9 fail(E0817)
+   9 fail(E0409)
+   7 fail(E1301)
+   6 fail(E1014)
+   6 fail(E0402)
+   5 fail(E1101)
+   5 fail(E1004)
+   5 fail(E0801)
+   5 fail(E0415)
+   3 fail(E1013)
+   3 fail(E1007)
+   3 fail(E1005)
+   3 fail(E0708)
+   3 fail(E0705)
+   3 fail(E0611)
+   3 fail(E0501)
+   3 fail(E0410)
+   3 fail(E0207)
+   3 fail(E0202)
+   3 fail(E0107)
+   3 fail(E0102)
+   3 fail(E0101)
+   2 fail(E1307)
+   2 fail(E1006)
+   2 fail(E0804)
+   2 fail(E0706)
+   2 fail(E0605)
+   2 fail(E0602)
+   2 fail(E0504)
+   2 fail(E0502)
+   2 fail(E0413)
+   2 fail(E0304)
+   2 fail(E0103)
+   1 fail(E1607)
+   1 fail(E1309)
+   1 fail(E1308)
+   1 fail(E1305)
+   1 fail(E1304)
+   1 fail(E1302)
+   1 fail(E1103)
+   1 fail(E1102)
+   1 fail(E1012)
+   1 fail(E1011)
+   1 fail(E1009)
+   1 fail(E1008)
+   1 fail(E0822)
+   1 fail(E0821)
+   1 fail(E0820)
+   1 fail(E0819)
+   1 fail(E0818)
+   1 fail(E0816)
+   1 fail(E0815)
+   1 fail(E0814)
+   1 fail(E0813)
+   1 fail(E0812)
+   1 fail(E0810)
+   1 fail(E0809)
+   1 fail(E0808)
+   1 fail(E0807)
+   1 fail(E0806)
+   1 fail(E0805)
+   1 fail(E0803)
+   1 fail(E0710)
+   1 fail(E0709)
+   1 fail(E0707)
+   1 fail(E0704)
+   1 fail(E0703)
+   1 fail(E0702)
+   1 fail(E0610)
+   1 fail(E0609)
+   1 fail(E0608)
+   1 fail(E0607)
+   1 fail(E0606)
+   1 fail(E0601)
+   1 fail(E0514)
+   1 fail(E0510)
+   1 fail(E0509)
+   1 fail(E0508)
+   1 fail(E0506)
+   1 fail(E0505)
+   1 fail(E0419)
+   1 fail(E0418)
+   1 fail(E0417)
+   1 fail(E0416)
+   1 fail(E0414)
+   1 fail(E0412)
+   1 fail(E0411)
+   1 fail(E0405)
+   1 fail(E0305)
+   1 fail(E0303)
+   1 fail(E0211)
+   1 fail(E0210)
+   1 fail(E0206)
+   1 fail(E0105)
+   1 fail(E0104)
+   1 fail(E0008)
+   1 fail(E0006)
+   1 fail(E0004)
+   1 fail(E0002)
+   1 fail(E0001)
