@@ -1,0 +1,68 @@
+//! check: run(exit=0, stdout="64 201600 7 true true\n")
+//! phase: run
+//! conforms: type.map, mem.region.account.1, mem.region.promote.1
+//!
+//! s273 (wolf-lang#972): a `for` over `m.pairs()` whose body never
+//! names `m` walks the map's own entries — no `List[(K, V)]` is
+//! minted, so the walk charges the region nothing. `[mem.region.account.1]`
+//! licenses it: an allocation the implementation elides may charge
+//! nothing, and `[mem.region.promote.1]` keeps it unobservable but for
+//! the ledger. wolf-std's `map.get` is exactly this walk (its body over
+//! a local `Eq`, as `map_std_keys.lu` spells it), and until s273 each
+//! call copied every entry into a fresh list in the caller's region: N
+//! gets on an N-entry map kept N² × 24 bytes (2.4 GB at 10,000 keys).
+//! Here a region holds a 64-entry map; 100 walks in the region's own
+//! body and 100 lookups through the generic `get` leave its ledger
+//! where the inserts put it, on every machine.
+
+trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+impl Eq for str {
+    fn eq(self, other: str) -> bool { self == other }
+}
+
+fn get[K: Eq, V](m: Map[K, V], k: K) -> V ! {none} {
+    for pair in m.pairs() {
+        if Eq.eq(pair.0, k) {
+            return pair.1
+        }
+    }
+    none
+}
+
+fn main() {
+    var count = 0
+    var total = 0
+    var hit = 0
+    var walks_flat = false
+    var gets_flat = false
+    region r {
+        var m = Map[str, int]()
+        var i = 0
+        while i < 64 {
+            m["k{i}"] = i
+            i += 1
+        }
+        count = m.len
+        let before = region_bytes(r)
+        var t = 0
+        while t < 100 {
+            for pair in m.pairs() {
+                total += pair.1
+            }
+            t += 1
+        }
+        let walked = region_bytes(r)
+        t = 0
+        while t < 100 {
+            hit = get(m, "k7") else -1
+            t += 1
+        }
+        let looked = region_bytes(r)
+        walks_flat = walked == before
+        gets_flat = looked == walked
+    }
+    print("{count} {total} {hit} {walks_flat} {gets_flat}")
+}
