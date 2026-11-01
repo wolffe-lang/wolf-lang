@@ -494,11 +494,11 @@ fn step(mut st: St, i: int) {
 }
 "#;
 
+// PLANT (s274-plant-leak, never merge): #612's leak back, the scalar
+// step's `copy region` undone, so every turn's scratch stays in the root.
 const STEP_COPY_INT: &str = r#"
 fn step(mut st: St, i: int) {
-    let k = copy region scratch {
-        build(i).len
-    }
+    let k = build(i).len
     st.n += k
 }
 "#;
