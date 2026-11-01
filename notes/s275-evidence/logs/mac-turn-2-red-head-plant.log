@@ -1,0 +1,800 @@
+waiting for the Mac lock (holder ap02a pid 58775) 17:46:47
+waiting for the Mac lock (holder ap02a pid 58775) 17:47:17
+waiting for the Mac lock (holder ap02a pid 58775) 17:47:47
+waiting for the Mac lock (holder ap02a pid 58775) 17:48:17
+took the Mac lock 17:48:48, at cfaf11d11b970fbb0f1b286edd382cdbdfea2376
+8 GiB gate passed: 9968 MiB 17:48:48
+BEGIN red-build 17:48:48
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.17.1
+   Compiling cfg-if v1.0.4
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.10
+   Compiling stable_deref_trait v1.2.1
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling blake3 v1.8.6
+   Compiling crossbeam-deque v0.8.7
+   Compiling wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_lex)
+   Compiling cranelift-srcgen v0.134.3
+   Compiling arrayvec v0.7.8
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling smallvec v1.15.2
+   Compiling rayon-core v1.13.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling zerofrom v0.1.8
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling yoke v0.8.3
+   Compiling wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling zerovec v0.11.6
+   Compiling wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_parse)
+   Compiling either v1.17.0
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling indexmap v2.14.0
+   Compiling rayon v1.12.0
+   Compiling tinystr v0.8.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling cranelift-isle v0.134.3
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling fnv v1.0.7
+   Compiling icu_properties_data v2.2.0
+   Compiling utf8_iter v1.0.4
+   Compiling libc v0.2.189
+   Compiling wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_sema)
+   Compiling hashbrown v0.16.1
+   Compiling log v0.4.33
+   Compiling icu_normalizer_data v2.2.0
+   Compiling serde_core v1.0.229
+   Compiling heck v0.5.0
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling gimli v0.33.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling icu_collections v2.2.0
+   Compiling icu_provider v2.2.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling target-lexicon v0.13.5
+   Compiling memchr v2.8.3
+   Compiling allocator-api2 v0.2.21
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-codegen v0.134.3
+   Compiling cranelift-entity v0.134.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling rustc-hash v2.1.3
+   Compiling arbitrary v1.4.2
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-control v0.134.3
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling serde_derive v1.0.229
+   Compiling crc32fast v1.5.0
+   Compiling serde_json v1.0.151
+   Compiling anyhow v1.0.104
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_mem)
+   Compiling percent-encoding v2.3.2
+   Compiling object v0.39.1
+   Compiling itoa v1.0.18
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_fmt)
+   Compiling url v2.5.8
+   Compiling wolf_query v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_query)
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_wir)
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+   Compiling wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_backend)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+warning: `wolf_rt` (lib) generated 3 warnings (run `cargo fix --lib -p wolf_rt` to apply 3 suggestions)
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling lsp-server v0.10.0
+   Compiling wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_cimport)
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_codegen_clif)
+   Compiling wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_pkg)
+   Compiling wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_lsp)
+   Compiling wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_codegen_llvm)
+   Compiling wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_doc)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 18.68s
+END red-build exit=0 17:49:06
+BEGIN red-rows 17:49:06
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib test) generated 3 warnings (run `cargo fix --lib -p wolf_rt --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.84s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-5c1e18375aac0b43)
+
+running 3 tests
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... FAILED
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... FAILED
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... FAILED
+
+failures:
+
+---- signal::tests::s275_a_drain_thread_that_ends_is_made_again stdout ----
+
+thread 'signal::tests::s275_a_drain_thread_that_ends_is_made_again' (85603181) panicked at crates/wolf_rt/src/signal.rs:3467:9:
+assertion `left == right` failed: s275_a_drain_thread_that_ends_is_made_again, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_drain_thread_that_ends_is_made_again
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 345 filtered out; finished in 20.12s
+
+
+thread 'signal::tests::s275_a_drain_thread_that_ends_is_made_again' (85603183) panicked at crates/wolf_rt/src/signal.rs:3622:13:
+a new drain thread after the first ended (state 5, running true)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread stdout ----
+
+thread 'signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread' (85603684) panicked at crates/wolf_rt/src/signal.rs:3467:9:
+assertion `left == right` failed: s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.00s
+
+
+thread 'signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread' (85603686) panicked at crates/wolf_rt/src/signal.rs:3544:17:
+the drain thread moved the signal's byte after the fork's hold (state 5, 5 = gone: it read the park's EAGAIN for the poll's EINTR, wolf-lang#1006)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+
+---- signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread stdout ----
+
+thread 'signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread' (85603688) panicked at crates/wolf_rt/src/signal.rs:3467:9:
+assertion `left == right` failed: s275_a_transient_poll_failure_keeps_the_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.00s
+
+
+thread 'signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread' (85603690) panicked at crates/wolf_rt/src/signal.rs:3576:17:
+the drain thread moved the byte after a transient poll failure (state 5, 5 = gone)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+
+
+failures:
+    signal::tests::s275_a_drain_thread_that_ends_is_made_again
+    signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread
+    signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 343 filtered out; finished in 20.16s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+END red-rows exit=101 17:49:29
+BEGIN red-drain-compile 17:49:29
+-rwxr-xr-x@ 1 mfwolffe  staff  1570312 Nov  1 17:49 /Users/mfwolffe/lanes/s275/drain-mac
+END red-drain-compile exit=0 17:49:31
+BEGIN head-checkout 17:49:31
+END head-checkout exit=0 17:49:31
+BEGIN head-build 17:49:31
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib) generated 3 warnings (run `cargo fix --lib -p wolf_rt` to apply 3 suggestions)
+   Compiling wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_codegen_llvm)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.58s
+END head-build exit=0 17:49:33
+BEGIN head-rows 17:49:33
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib test) generated 3 warnings (run `cargo fix --lib -p wolf_rt --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.79s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-5c1e18375aac0b43)
+
+running 28 tests
+test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+test signal::tests::disposition_of_a_bad_set_is_io ... ok
+test signal::tests::disposition_one_rows ... ok
+test signal::tests::empty_set_is_io_not_a_hang ... ok
+test signal::tests::group_and_all_shape_rows ... ok
+test signal::tests::host_numbers ... ok
+test signal::tests::ignored_reads_the_disposition ... ok
+test signal::tests::new_meanings_round_trip_by_index ... ok
+test signal::tests::number_rows ... ok
+test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+test signal::tests::poll_right_after_raise_never_misses ... ok
+test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+test signal::tests::raise_unmapped_is_io ... ok
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+test signal::tests::self_raise_delivers_the_meaning ... ok
+test signal::tests::send_rows ... ok
+test signal::tests::set_pgid_shape_rows ... ok
+test signal::tests::text_rows ... ok
+test signal::tests::the_eleven_new_meanings_round_trip ... ok
+test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... ok
+test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+test signal::tests::wait_fds_answers_write_readiness ... ok
+test signal::tests::wait_filters_by_set ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 318 filtered out; finished in 0.87s
+
+END head-rows exit=0 17:49:36
+BEGIN head-fork-lanes-compile 17:49:36
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib) generated 3 warnings (run `cargo fix --lib -p wolf_rt` to apply 3 suggestions)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+  Executable tests/fork_lanes.rs (target/debug/deps/fork_lanes-25e991e542a917bd)
+END head-fork-lanes-compile exit=0 17:49:36
+BEGIN head-clippy 17:49:36
+    Checking libc v0.2.189
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+error: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `-D deprecated` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(deprecated)]`
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+error: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+error: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+error: using `chunks_exact` with a constant chunk size
+  --> crates/wolf_rt/src/bytes.rs:93:23
+   |
+93 |     let mut rows = xs.chunks_exact(16);
+   |                       ^^^^^^^^^^^^^^^^
+   |
+help: consider using `as_chunks::<16>()` instead
+  --> crates/wolf_rt/src/bytes.rs:93:23
+   |
+93 |     let mut rows = xs.chunks_exact(16);
+   |                       ^^^^^^^^^^^^^^^^
+   = note: you can access the chunks using `rows.0.iter()`, and the remainder using `rows.1`
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+   = note: `-D clippy::chunks-exact-to-as-chunks` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::chunks_exact_to_as_chunks)]`
+
+error: using `chunks_exact` with a constant chunk size
+   --> crates/wolf_rt/src/bytes.rs:160:23
+    |
+160 |     let mut rows = xs.chunks_exact(16);
+    |                       ^^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<16>()` instead
+   --> crates/wolf_rt/src/bytes.rs:160:23
+    |
+160 |     let mut rows = xs.chunks_exact(16);
+    |                       ^^^^^^^^^^^^^^^^
+    = note: you can access the chunks using `rows.0.iter()`, and the remainder using `rows.1`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+error: using `chunks_exact` with a constant chunk size
+    --> crates/wolf_rt/src/os.rs:1371:22
+     |
+1371 |     for pair in flat.chunks_exact(2) {
+     |                      ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<2>().0`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks
+
+error: could not compile `wolf_rt` (lib) due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: items after a test module
+    --> crates/wolf_rt/src/signal.rs:474:5
+     |
+ 474 |       pub(super) mod hook {
+     |       ^^^^^^^^^^^^^^^^^^^
+...
+ 531 |       pub fn fork_hold() {
+     |       ^^^^^^^^^^^^^^^^^^
+...
+ 558 |       pub fn fork_release() {
+     |       ^^^^^^^^^^^^^^^^^^^^^
+...
+ 576 |       pub fn unblock_at_start(h: &Hub) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 593 |       pub fn fork_child_pipes(h: &'static Hub) -> std::io::Result<()> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 638 |       fn cloexec_pipe() -> std::io::Result<[RawFd; 2]> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 661 |       fn set_nonblocking(fd: RawFd) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 674 |       pub fn make_pipes() -> std::io::Result<(RawFd, RawFd)> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 696 |       pub fn running() -> bool {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 702 |       pub fn init(h: &'static Hub) -> std::io::Result<()> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 722 |       pub fn to_signal(m: i64) -> Option<i32> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 759 |       pub fn signals_of(set: i64) -> [i32; super::LISTENED_COUNT] {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 772 |       fn index_of(sig: i32) -> u8 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 785 |       unsafe fn errno_slot() -> *mut libc::c_int {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 805 |       extern "C" fn trampoline(sig: libc::c_int) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 831 |       pub fn drain(h: &Hub, st: &mut HubState) -> bool {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 871 |       fn wake_all(h: &Hub, st: &mut HubState) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 891 |       static WAKE_R: AtomicI32 = AtomicI32::new(-1);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^
+ 892 |       static WAKE_W: AtomicI32 = AtomicI32::new(-1);
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^
+ 893 |       static WAKE_MAKING: Mutex<()> = Mutex::new(());
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 899 |       pub fn make_wake() -> std::io::Result<RawFd> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 916 |       fn ack(h: &Hub, st: &mut HubState, seen: &mut u64) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 934 |       fn deregister(h: &Hub, st: &mut HubState, seen: &mut u64) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 944 |       pub fn wait_fd(h_fd: i64, want: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 968 |       pub fn wait_fds(handles: &[i64], want: i64, deadline_ms: i64) -> Result<(i64, i64), i64> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1162 | /     pub fn wait_many(
+1163 | |         fds: &[RawFd],
+1164 | |         write: &[bool],
+1165 | |         wake: RawFd,
+1166 | |         timeout_ms: i32,
+1167 | |     ) -> Result<(Option<usize>, bool), i32> {
+     | |___________________________________________^
+...
+1263 |       pub fn settle(installed: i64) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1303 |       fn blocked_here(sig: i32) -> bool {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1321 |       fn reader_main(h: &'static Hub) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1341 |       fn reader_gone(h: &'static Hub) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1363 |       fn reader_loop(h: &'static Hub) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1443 |       fn unblock_here(m: i64) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^
+...
+1464 |       pub fn unblock(armed: i64) {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1514 |       pub fn listen_one(_h: &Hub, bit: i64) -> Result<(), ()> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1537 |       pub fn set_disp(bit: i64, d: super::Disp) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1572 |       pub fn set_disp_one(m: i64, d: super::Disp) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1621 |       pub fn exit_signal(m: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1652 |       pub fn ignored() -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^
+...
+1680 |       pub fn raise(m: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1703 |       pub fn last() -> Option<libc::c_int> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1720 |       pub fn realtime() -> Option<(libc::c_int, libc::c_int)> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1749 |       pub fn reserved(sig: libc::c_int) -> bool {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1761 |       pub fn host_signal(m: i64, zero: bool) -> Result<libc::c_int, i64> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1784 |       fn kill_code(target: libc::pid_t, sig: libc::c_int) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1802 |       pub fn send(pid: i64, m: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1823 |       fn self_kill(target: libc::pid_t, sig: libc::c_int) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1840 |       pub fn send_group(pgid: i64, m: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1860 |       pub fn send_all(m: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1877 |       pub fn text(m: i64) -> Result<String, i64> {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1915 |       pub fn number(m: i64) -> i64 {
+     |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#items_after_test_module
+     = note: `-D clippy::items-after-test-module` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::items_after_test_module)]`
+     = help: move the items to before the test module was defined
+
+error: it looks like the same item is being pushed into this `Vec`
+    --> crates/wolf_rt/src/task/proc.rs:2029:13
+     |
+2029 |             model.push(RUNNING);
+     |             ^^^^^
+     |
+     = help: consider using `vec![RUNNING;SIZE]`
+     = help: or `model.extend(std::iter::repeat_n(RUNNING, SIZE))`
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#same_item_push
+     = note: `-D clippy::same-item-push` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::same_item_push)]`
+
+error: could not compile `wolf_rt` (lib test) due to 8 previous errors
+END head-clippy exit=101 17:49:38
+BEGIN plant-checkout 17:49:38
+END plant-checkout exit=0 17:49:38
+BEGIN plant-rows 17:49:38
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib test) generated 3 warnings (run `cargo fix --lib -p wolf_rt --tests` to apply 3 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.81s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-5c1e18375aac0b43)
+
+running 3 tests
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... FAILED
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+
+failures:
+
+---- signal::tests::s275_a_drain_thread_that_ends_is_made_again stdout ----
+
+thread 'signal::tests::s275_a_drain_thread_that_ends_is_made_again' (85604965) panicked at crates/wolf_rt/src/signal.rs:3567:9:
+assertion `left == right` failed: s275_a_drain_thread_that_ends_is_made_again, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_drain_thread_that_ends_is_made_again
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 345 filtered out; finished in 10.11s
+
+
+thread 'signal::tests::s275_a_drain_thread_that_ends_is_made_again' (85604967) panicked at crates/wolf_rt/src/signal.rs:3722:13:
+a new drain thread after the first ended (state 3, running true)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    signal::tests::s275_a_drain_thread_that_ends_is_made_again
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 343 filtered out; finished in 10.15s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+END plant-rows exit=101 17:49:50
+released the Mac lock 17:49:50

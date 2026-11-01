@@ -9,8 +9,13 @@
 set -u
 L=/Users/mfwolffe/lanes/s275
 LOCK=/Users/mfwolffe/lanes/mac-build.lock
+# rustup's cargo first, so rust-toolchain.toml's pin (1.97.1) is the one
+# that builds: Homebrew's (1.99.1 here) is ahead of it on this PATH.
+export PATH=$HOME/.cargo/bin:$PATH
 sha=$(git -C "$L/wolf-lang" rev-parse "${1:?sha}") || exit 2
 steps=${2:?step file}
+case $steps in /*) ;; *) steps=$PWD/$steps ;; esac
+[ -f "$steps" ] || { echo "REFUSED no step file $steps"; exit 2; }
 B=$L/build
 [ -d "$B" ] || git -C "$L/wolf-lang" worktree add -q --detach "$B" "$sha" || exit 2
 git -C "$B" checkout -q --detach "$sha" || exit 2
