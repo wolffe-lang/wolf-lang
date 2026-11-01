@@ -1,0 +1,32 @@
+//! member: false
+//! s272 (wolf-lang#686, `[os.fs.statfs]`) — the twelve words of each path
+//! the file `s272.paths` names (one a line; `conform-run` passes no
+//! arguments), one line a path: `<path>: w0 w1 … w11`, or `<path>: <tag>`
+//! for a refusal. The test reads GNU `stat -f` (linux) or `df -k`
+//! (macOS) before and after this program, in the same second, and holds
+//! every word to theirs.
+
+fn main() -> int {
+    let text = fs_read_text("s272.paths") else |_| ""
+    for line in text.split("\n") {
+        let p = line.trim()
+        if p == "" {
+            continue
+        }
+        let r = fs_statfs(p) else |e| {
+            let t = match e {
+                not_found => "not_found",
+                denied => "denied",
+                io => "io",
+            }
+            print("{p}: {t}")
+            continue
+        }
+        var out = "{p}:"
+        for w in r {
+            out = out + " {w}"
+        }
+        print(out)
+    }
+    0
+}

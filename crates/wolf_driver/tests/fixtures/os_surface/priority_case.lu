@@ -1,0 +1,31 @@
+//! member: false
+//! s272 (wolf-lang#922, `[os.proc.priority]`) — the nice value, run in a
+//! throwaway container once as a user, once as root inside it, and (where
+//! the engine grants it) once as root with the privilege to lower it: the
+//! value it starts with, a raise of two, then a lowering of one, each with
+//! the host's number and text beside a refusal, and the value after.
+
+fn set(d: int) -> str {
+    os_setpriority(d) else |e| {
+        return match e {
+            denied => "denied",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> int {
+    let p0 = os_getpriority() else |e| { -100 }
+    print("start={p0}")
+    print("raise={set(2)}")
+    let p1 = os_getpriority() else |e| { -100 }
+    print("raised={p1}")
+    let lower = set(-1)
+    let n = os_error()
+    print("lower={lower} number={n} text={os_error_text(n)}")
+    let p2 = os_getpriority() else |e| { -100 }
+    print("after={p2}")
+    0
+}

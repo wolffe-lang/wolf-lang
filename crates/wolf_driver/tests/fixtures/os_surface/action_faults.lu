@@ -1,0 +1,37 @@
+//! member: false
+//! s272 (wolf-lang#975, `[os.signal.action.one]`; R-s272-9) — the two
+//! fault meanings the runtime's stack guard holds a handler for: the query
+//! answers the PROGRAM's choice for a sent one (0 the default it starts
+//! with, 1 after `os_signal_ignore_one`, 0 again after
+//! `os_signal_default_one`), never the guard's own handler. The checked
+//! machine refuses both by name: the `wolf` process's guard is its own
+//! (`[os.signal.disp.one]`'s rule).
+
+fn action(m: int) -> str {
+    let a = os_signal_action_one(m) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "{a}"
+}
+
+fn main() -> int {
+    for m in [4194304, 8388608] {
+        let name = if m == 4194304 { "segv" } else { "bus" }
+        print("{name}={action(m)}")
+        os_signal_ignore_one(m) else |e| {
+            print("{name} ignore failed")
+            return 1
+        }
+        print("{name}_ignored={action(m)}")
+        os_signal_default_one(m) else |e| {
+            print("{name} default failed")
+            return 1
+        }
+        print("{name}_back={action(m)}")
+    }
+    0
+}

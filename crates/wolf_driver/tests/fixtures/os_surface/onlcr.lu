@@ -1,0 +1,52 @@
+//! member: false
+//! s272 (wolf-lang#976, `[os.term.mode]`; yew yw08's `onlcr/probe.py`
+//! shape) — on its controlling terminal, started with `ONLCR` on or off by
+//! the test: the mode it finds (`RAW_LF`, bit 24, set when `ONLCR` is
+//! off), the terminal set to process output WITH the newline mapping
+//! (`RAW_OUTPUT` and `RAW_LF` clear, every other bit as found), two lines
+//! written to the terminal (`ONLCR-A`, `ONLCR-B`: the wire must read CR LF
+//! between them), and the mode it found put back — by `os_term_set_mode`
+//! when `s272.how` says `set`, by the runtime's restore at the return from
+//! `main` when it says `register`. Everything goes to `/dev/tty`, never to
+//! standard output (the checked machine buffers that into its record).
+
+fn main() -> int {
+    let how = fs_read_text("s272.how") else |_| "set"
+    let t = fs_open_mode("/dev/tty", 3) else |e| {
+        print("no terminal")
+        return 1
+    }
+    let m0 = os_term_mode(t) else |e| {
+        print("mode unread")
+        return 1
+    }
+    let lf = 16777216
+    let raw_output = 64
+    fs_write(t, "raw_lf_at_start={(m0 / lf) % 2}\n") else |e| { }
+    let on = m0 - (m0 & raw_output) - (m0 & lf)
+    os_term_set_mode(t, on) else |e| {
+        let w = match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+        fs_write(t, "set_onlcr={w}\n") else |e2| { }
+        return 1
+    }
+    let m1 = os_term_mode(t) else |e| { -1 }
+    fs_write(t, "raw_lf_after_set={(m1 / lf) % 2}\nONLCR-A\nONLCR-B\n") else |e| { }
+    if how.trim() == "register" {
+        os_term_restore_at_exit(t, m0, List[byte]()) else |e| {
+            fs_write(t, "register failed\n") else |e2| { }
+            return 1
+        }
+        fs_write(t, "registered\n") else |e| { }
+        return 0
+    }
+    os_term_set_mode(t, m0) else |e| {
+        fs_write(t, "restore failed\n") else |e2| { }
+        return 1
+    }
+    fs_write(t, "set_back\n") else |e| { }
+    0
+}

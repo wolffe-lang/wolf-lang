@@ -1,0 +1,39 @@
+//! member: false
+//! s272 (wolf-lang#921, `[os.proc.chroot]`) — the change of root, run in a
+//! throwaway container whose working directory holds `jail/s272-marker`,
+//! once as a user and once as root inside the container. Each line is
+//! one answer; after a change that took, `os_chdir("/")` (what coreutils'
+//! `chroot` does next) and the new root's view: the marker is at `/`, and
+//! the old root's `/w` is gone from sight.
+
+fn root(p: str) -> str {
+    os_chroot(p) else |e| {
+        return match e {
+            denied => "denied",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> int {
+    let euid = os_euid() else |e| { -1 }
+    print("euid={euid}")
+    print("missing={root("no-such-dir/inner")} number={os_error()}")
+    print("file={root("jail/s272-marker")} number={os_error()}")
+    let jail = root("jail")
+    print("jail={jail} number={os_error()}")
+    if jail != "ok" {
+        return 0
+    }
+    print("cwd_unchanged: {fs_exists("jail/s272-marker")}")
+    os_chdir("/") else |e| {
+        print("chdir failed")
+        return 1
+    }
+    print("marker_at_root: {fs_exists("/s272-marker")}")
+    print("old_root_gone: {!fs_exists("/w")}")
+    0
+}
