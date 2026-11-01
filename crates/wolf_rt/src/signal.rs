@@ -326,9 +326,10 @@ fn try_hub() -> std::io::Result<&'static Hub> {
     };
     sys::init(h)?;
     // s247 (`[os.proc.fork]`): a forked child's first drain thread
-    // unblocks what the program armed.
+    // unblocks what the program armed; s275: so does the thread made after
+    // one that ended.
     #[cfg(unix)]
-    sys::unblock_after_fork(h);
+    sys::unblock_at_start(h);
     Ok(h)
 }
 
@@ -418,8 +419,10 @@ mod sys {
     /// the fork reads it — not made; made and not yet at its loop (its
     /// thread's start is running); at its loop, working; in its kernel
     /// wait (`poll`), holding nothing; claimed there by a fork (it does
-    /// not go on past its wait until the fork releases it); ended
-    /// (teardown).
+    /// not go on past its wait until the fork releases it); ended. s275
+    /// (wolf-lang#1006): ending — in its exit path ([`reader_gone`]),
+    /// where it takes locks, so a fork waits it out as it waits out a
+    /// moment of work.
     static READER_STATE: AtomicU8 = AtomicU8::new(READER_NONE);
     const READER_NONE: u8 = 0;
     const READER_STARTING: u8 = 1;
@@ -427,12 +430,15 @@ mod sys {
     const READER_POLLING: u8 = 3;
     const READER_HELD: u8 = 4;
     const READER_GONE: u8 = 5;
+    const READER_ENDING: u8 = 6;
     /// The drain thread itself, for the fork's unpark.
     static READER: Mutex<Option<std::thread::Thread>> = Mutex::new(None);
     /// s247: a forked child's drain thread, made at its first wait or
     /// listen, unblocks the meanings the program armed before it starts
-    /// work (the parent's unblocks were on the parent's thread).
-    static UNBLOCK_AFTER_FORK: AtomicBool = AtomicBool::new(false);
+    /// work (the parent's unblocks were on the parent's thread). s275: and
+    /// so does a drain thread made after one that ended (what that one
+    /// unblocked on itself ended with it).
+    static UNBLOCK_AT_START: AtomicBool = AtomicBool::new(false);
 
     /// s247: the drain thread back from its kernel wait — on, unless a fork
     /// claimed it there; then parked, holding nothing, until the fork
@@ -519,12 +525,16 @@ mod sys {
     /// s247: claim the drain thread for a fork where it holds nothing — in
     /// its kernel wait — waiting out a start or a moment of work (each
     /// bounded) first; nothing where there is no drain thread. The thread is
-    /// not woken: if nothing comes it never knows.
+    /// not woken: if nothing comes it never knows. s275: a thread in its
+    /// exit path is waited out too (bounded: it takes three locks no one
+    /// holds long).
     pub fn fork_hold() {
         let mut round = 0;
         loop {
             match READER_STATE.load(Ordering::SeqCst) {
-                READER_STARTING | READER_LOOPING => crate::task::backoff(&mut round),
+                READER_STARTING | READER_LOOPING | READER_ENDING => {
+                    crate::task::backoff(&mut round);
+                }
                 READER_POLLING => {
                     if READER_STATE
                         .compare_exchange(
@@ -561,9 +571,10 @@ mod sys {
     }
 
     /// s247: after a forked child's [`init`] made its drain thread, the
-    /// armed meanings unblocked on it (once).
-    pub fn unblock_after_fork(h: &Hub) {
-        if UNBLOCK_AFTER_FORK.swap(false, Ordering::SeqCst) {
+    /// armed meanings unblocked on it (once). s275: likewise after the
+    /// [`init`] that made a drain thread again.
+    pub fn unblock_at_start(h: &Hub) {
+        if UNBLOCK_AT_START.swap(false, Ordering::SeqCst) {
             unblock(super::installed(h));
         }
     }
@@ -602,7 +613,7 @@ mod sys {
         READER_STATE.store(READER_NONE, Ordering::SeqCst);
         *READER.lock().unwrap_or_else(|p| p.into_inner()) = None;
         *UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner()) = 0;
-        UNBLOCK_AFTER_FORK.store(true, Ordering::SeqCst);
+        UNBLOCK_AT_START.store(true, Ordering::SeqCst);
         {
             let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
             st.queue.clear();
@@ -842,30 +853,35 @@ mod sys {
                 }
             }
         }
-        // s234 (`[os.signal.wait.fd]`): wake every descriptor wait. A
-        // full wake pipe already holds a byte, which is all a wake is.
-        // s242: and every `os_signal_wait`, which parks on the condvar
-        // with no timer — whoever drains (the drain thread, a poll, a
-        // descriptor wait) wakes it, so a meaning another thread's look
-        // moved onto the queue is never left unseen.
+        // s242: whoever drains (the drain thread, a poll, a descriptor
+        // wait) wakes every wait, so a meaning another thread's look moved
+        // onto the queue is never left unseen.
         if moved {
-            h.cv.notify_all();
-            // s246 (#781): one shared pipe, one byte a generation.
-            if st.wake.waiters > 0 {
-                st.wake.generation += 1;
-                st.wake.unacked = st.wake.waiters;
-                let w = WAKE_W.load(Ordering::Relaxed);
-                if !st.wake.full && w >= 0 {
-                    let one = 1u8;
-                    // SAFETY: a one-byte write to the runtime's own
-                    // nonblocking pipe, under the lock every reader of
-                    // its state holds.
-                    unsafe { libc::write(w, (&raw const one).cast(), 1) };
-                    st.wake.full = true;
-                }
-            }
+            wake_all(h, st);
         }
         moved
+    }
+
+    /// Wake every wait parked on the hub, under the hub lock the caller
+    /// holds: each `os_signal_wait` on the condvar (s242: it has no timer)
+    /// and, s234 (`[os.signal.wait.fd]`), each descriptor wait, through
+    /// the shared wake pipe (s246, #781: one byte a generation; a full
+    /// pipe already holds a byte, which is all a wake is). s275: a drain
+    /// thread's end wakes them too ([`reader_gone`]).
+    fn wake_all(h: &Hub, st: &mut HubState) {
+        h.cv.notify_all();
+        if st.wake.waiters > 0 {
+            st.wake.generation += 1;
+            st.wake.unacked = st.wake.waiters;
+            let w = WAKE_W.load(Ordering::Relaxed);
+            if !st.wake.full && w >= 0 {
+                let one = 1u8;
+                // SAFETY: a one-byte write to the runtime's own nonblocking
+                // pipe, under the lock every reader of its state holds.
+                unsafe { libc::write(w, (&raw const one).cast(), 1) };
+                st.wake.full = true;
+            }
+        }
     }
 
     /// s246 (#781): the shared wake pipe's ends (read, write), `-1` until
@@ -987,6 +1003,7 @@ mod sys {
             let scope = crate::task::current_scope();
             let mut registered = false;
             let mut seen = 0u64;
+            let mut remade = false;
             loop {
                 settle(super::installed(h));
                 let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -1020,6 +1037,22 @@ mod sys {
                     st.wake.waiters += 1;
                     seen = st.wake.generation;
                     registered = true;
+                }
+                // s275 (wolf-lang#1006): no park without the drain thread,
+                // the one mover of a signal's byte while this wait sleeps in
+                // its poll. One that ended is made again, once a call (read
+                // under the lock its end clears READER_UP under; registered
+                // first, so an end after this look wakes the poll); gone
+                // again, the wait is `io`.
+                if !running() {
+                    drop(st);
+                    if remade || super::try_hub().is_err() {
+                        let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                        deregister(h, &mut st, &mut seen);
+                        return Err(sig_code::IO);
+                    }
+                    remade = true;
+                    continue;
                 }
                 // The pipe still holds the byte of a generation this wait
                 // has looked at: the waits that have not will empty it.
@@ -1292,9 +1325,41 @@ mod sys {
         hook::READER_PTHREAD.store(unsafe { libc::pthread_self() } as usize, Ordering::SeqCst);
         READER_STATE.store(READER_LOOPING, Ordering::SeqCst);
         reader_loop(h);
-        READER_STATE.store(READER_GONE, Ordering::SeqCst);
+        reader_gone(h);
     }
 
+    /// s275 (wolf-lang#1006): the drain thread's end is never silent.
+    /// Until s275 it left READER_UP true, so [`super::try_hub`] never made
+    /// another, and every later `os_signal_wait` parked for ever (pelt#98).
+    /// Now, in order: the state says ending (a fork waits it out, since
+    /// this takes locks); what it unblocked on itself is forgotten, and the
+    /// next thread unblocks the armed meanings again; READER_UP is cleared
+    /// under the hub lock (a wait reads it there before it parks, so none
+    /// misses the wake), every parked wait is woken, and each makes the
+    /// thread again ([`super::wait`], [`wait_fds`]); the state says gone
+    /// unless a new thread has already started (its state is its own).
+    fn reader_gone(h: &'static Hub) {
+        READER_STATE.store(READER_ENDING, Ordering::SeqCst);
+        *READER.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner()) = 0;
+        UNBLOCK_AT_START.store(true, Ordering::SeqCst);
+        {
+            let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+            READER_UP.store(false, Ordering::SeqCst);
+            wake_all(h, &mut st);
+        }
+        let _ = READER_STATE.compare_exchange(
+            READER_ENDING,
+            READER_GONE,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
+    }
+
+    /// The drain thread's loop. It returns only where the hub cannot go on
+    /// through it — a poll(2) failure no retry mends (EFAULT, EINVAL), or
+    /// one of its own pipes' write ends gone (never closed in a live
+    /// process) — and [`reader_gone`] then says so.
     fn reader_loop(h: &'static Hub) {
         let read_fd = h.read_fd.load(Ordering::Relaxed);
         let ctl_fd = h.ctl_fd.load(Ordering::Relaxed);
@@ -1320,19 +1385,37 @@ mod sys {
             let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) };
             #[cfg(test)]
             let n = hook::poll_answer(n);
+            // s275 (wolf-lang#1006): the poll's own errno, read before
+            // anything else runs. `back_from_poll` can park this thread for
+            // a fork's hold, and the park's futex writes errno (EAGAIN when
+            // `fork_release`'s unpark lands between std's parker state
+            // change and its FUTEX_WAIT): read after it, a poll a SIGCHLD
+            // interrupted looked fatal, and the thread ended.
+            let err = if n < 0 {
+                std::io::Error::last_os_error().raw_os_error()
+            } else {
+                None
+            };
             back_from_poll();
             if n < 0 {
-                if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
-                    continue;
+                match err {
+                    Some(libc::EINTR) => {}
+                    // poll(2): the kernel could not allocate its tables
+                    // (ENOMEM on linux, EAGAIN on macOS) — a moment's
+                    // shortage, so the thread waits a moment and polls again.
+                    Some(libc::EAGAIN | libc::ENOMEM) => {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                    _ => return,
                 }
-                return; // fatal to delivery — only reachable on teardown
+                continue;
             }
             if fds[1].revents != 0 {
                 let mut buf = [0u8; 64];
                 // SAFETY: the control pipe's read end is readable.
                 let k = unsafe { libc::read(ctl_fd, buf.as_mut_ptr().cast(), buf.len()) };
                 if k == 0 {
-                    return; // write end closed (process teardown)
+                    return; // its write end gone
                 }
                 if k > 0 {
                     for &b in &buf[..k as usize] {
@@ -1346,7 +1429,7 @@ mod sys {
                     h.cv.notify_all();
                 }
                 if fds[0].revents & libc::POLLIN == 0 {
-                    return; // hang-up or error on our own pipe: teardown
+                    return; // a hang-up or an error on its own pipe
                 }
             }
         }
@@ -2175,6 +2258,7 @@ pub fn wait(mask: i64) -> i64 {
     sys::settle(installed(h));
     blocking(|| {
         let scope = current_scope();
+        let mut remade = false;
         let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
         loop {
             sys::drain(h, &mut st);
@@ -2190,6 +2274,20 @@ pub fn wait(mask: i64) -> i64 {
                 // `-IO` below is only the C/main-frame fallback.
                 kill_teardown_check(s);
                 return -sig_code::IO;
+            }
+            // s275 (wolf-lang#1006): the drain thread is the one waker of
+            // this park, so a wait never parks without it. One that ended
+            // (read here, under the lock its end clears READER_UP under) is
+            // made again, once a call: gone again, the wait is `io`, as a
+            // hub the host will not give is — never a park for ever.
+            if !sys::running() {
+                drop(st);
+                if remade || try_hub().is_err() {
+                    return -sig_code::IO;
+                }
+                remade = true;
+                st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                continue;
             }
             // s242 (wolf-lang#680, `[os.signal.wait]`): with no scope
             // that can be killed the wait has no timer — an idle wait
