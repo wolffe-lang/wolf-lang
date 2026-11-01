@@ -1923,6 +1923,60 @@ impl<'t> Machine<'t> {
         Ok(Found::At(s.into_bytes()))
     }
 
+    /// The `pairs()` walk as a view (s273, wolf-lang#972): a `for pat in
+    /// m.pairs() { body }` whose body never names `m`
+    /// ([`crate::pairswalk`], the predicate `wolf_wir` lowers by too),
+    /// `m` a local or parameter of this frame (a module-level `var` is
+    /// reachable from any callee) and the call the builtin `pairs`. The
+    /// walk's items are the map's entries as `pairs()` would have built
+    /// them — handed to the loop, never minted into `lists`, never
+    /// charged — so a lookup that walks the map (wolf-std's `map.get`)
+    /// retains nothing on the host and charges nothing to the ledger,
+    /// where it minted and kept a list of every entry per call before
+    /// (`[exec.checked.budget]`'s invariant; `[mem.region.account.1]`:
+    /// an elided allocation may charge nothing). `Found::Not` for every
+    /// other loop: the iterable evaluates as before.
+    fn eval_pairs_walk(&mut self, d: ForExpr<'t>) -> E<Found<Vec<Value>>> {
+        let src = &self.pkg.files[self.ctx().src_file].raw.src;
+        let Some((recv, name)) =
+            crate::pairswalk::walk_recv(d, src, &|sp| self.expr_ty(sp).cloned())
+        else {
+            return Ok(Found::Not);
+        };
+        if self.lookup(&name).is_none() {
+            return Ok(Found::Not);
+        }
+        let Some(iter) = d.iterable() else {
+            return Ok(Found::Not);
+        };
+        match self.ctx().dispatch.get(&iter.span) {
+            None | Some(Dispatch::Home { .. }) | Some(Dispatch::Trait { dyn_call: true, .. }) => {
+                return Ok(Found::Not);
+            }
+            Some(_) => {}
+        }
+        let mv = match self.place_of(recv)? {
+            Found::At(place) => self.read_place(&place, recv.span)?,
+            Found::Flow(f) => return Ok(Found::Flow(f)),
+            Found::Not => return Ok(Found::Not),
+        };
+        let Value::Map(id) = mv else {
+            return Ok(Found::Not);
+        };
+        Ok(Found::At(self.map_pair_items(id)))
+    }
+
+    /// A map's entries as `pairs()` answers them: `(K, V)` tuples (the
+    /// positional struct the TupleExpr evaluator builds), insertion order.
+    fn map_pair_items(&self, id: usize) -> Vec<Value> {
+        self.maps[id]
+            .iter()
+            .map(|(k, v)| Value::Struct {
+                fields: vec![("0".to_string(), k.value()), ("1".to_string(), v.clone())],
+            })
+            .collect()
+    }
+
     /// A fresh `str` built by `+`/`+=` or by an interpolation with a
     /// hole (s153, wolf-lang#308/#310): an allocation in the ambient
     /// region (`[mem.region.escape]`, `[type.str.concat.cost]`),
@@ -5503,9 +5557,20 @@ impl<'t> Machine<'t> {
                     view_items = Some(octets.into_iter().map(Value::Byte).collect());
                     Value::Unit
                 }
-                None => match found!(self.place_of(it)) {
-                    Some(place) => self.read_place(&place, it.span)?,
-                    None => val!(self.eval(it)),
+                // s273 (wolf-lang#972): `for pat in m.pairs()` whose
+                // body never names `m` walks the map's entries — the
+                // loop's items, minted into no list and charged nothing
+                // (`wolf_mem::pairswalk`, the predicate native and
+                // release lower by).
+                None => match found!(self.eval_pairs_walk(d)) {
+                    Some(items) => {
+                        view_items = Some(items);
+                        Value::Unit
+                    }
+                    None => match found!(self.place_of(it)) {
+                        Some(place) => self.read_place(&place, it.span)?,
+                        None => val!(self.eval(it)),
+                    },
                 },
             },
             None => Value::Unit,
@@ -13051,15 +13116,7 @@ impl<'t> Machine<'t> {
                     "len" | "count" => Ok(Flow::Val(Value::Int(self.maps[id].len() as i64))),
                     "is_empty" => Ok(Flow::Val(Value::Bool(self.maps[id].is_empty()))),
                     "pairs" => {
-                        let items: Vec<Value> = self.maps[id]
-                            .iter()
-                            .map(|(k, v)| Value::Struct {
-                                fields: vec![
-                                    ("0".to_string(), k.value()),
-                                    ("1".to_string(), v.clone()),
-                                ],
-                            })
-                            .collect();
+                        let items = self.map_pair_items(id);
                         let bytes: u64 = items.iter().map(slot_bytes).sum();
                         self.charge_mem(bytes)?;
                         let nid = self.mint_list(items, e.span)?;
