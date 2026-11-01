@@ -137,6 +137,7 @@ pub mod json;
 pub mod loans;
 mod lower;
 mod moves;
+pub mod pairswalk;
 pub mod place;
 mod procjoin;
 pub mod regions;
