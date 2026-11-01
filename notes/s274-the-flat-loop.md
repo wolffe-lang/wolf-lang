@@ -81,7 +81,7 @@ The witnesses, cut from the test file (`probe.py`) and built once per tier with 
 
 `S274_PROOF head red 0/370, plant red 32/32, trunk (load4) red 28/110`. The plant's row stops at its native leg (red), so its release leg is not reached by the row; the probe's `leak` witness reads release at 1,298.6 too (section 1). In-process VmHWM reads +0 kB in all 740 head legs.
 
-Batch 3 repeats the gauntlet and the proof at `8a544687`, the final test file (job `proof3`, `/home/mfwolffe/lanes/s274/records/proof3.log`, exit marker `proof3.exit`); its result is in the PR body.
+Batch 3 repeats the gauntlet and the proof at `8a544687`, the final test file, after the floor experiment, and keeps one plant run and one head run whole. At the hand-back it was still queued on block A (job `proof3`: pid file `/home/mfwolffe/lanes/s274/records/proof3.pid`, log `proof3.log`, exit marker `proof3.exit`, rows `proof-rows-8a544687.log`); its `END` lines are read there.
 
 ### 4. The siblings
 
@@ -123,7 +123,7 @@ END plant exit=0     (the plant's test binary, from its commit)
 END proof exit=0     (S274_PROOF head red 0/370, plant red 32/32, trunk (load4) red 28/110)
 ```
 
-Batch 3 at `8a544687`: in the PR body. The final head adds only `notes/` after `8a544687` (this note and its logs), so no row can differ between them.
+Batch 3 at `8a544687`: queued at the hand-back (above). The final head adds only `notes/` after `8a544687` (this note and its logs), so no row can differ between them.
 
 ### Rig and records
 
