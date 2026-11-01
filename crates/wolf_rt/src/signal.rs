@@ -1328,6 +1328,16 @@ mod sys {
         reader_gone(h);
     }
 
+    /// s275: the one poll(2) failure the host names a moment's shortage
+    /// (the kernel could not allocate its tables): linux's ENOMEM; macOS's
+    /// and the BSDs' EAGAIN. Linux's poll never answers EAGAIN — on linux
+    /// that errno is a futex's, the very one wolf-lang#1006 read by mistake —
+    /// so it is not retried there.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    const POLL_SHORT: libc::c_int = libc::ENOMEM;
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    const POLL_SHORT: libc::c_int = libc::EAGAIN;
+
     /// s275 (wolf-lang#1006): the drain thread's end is never silent.
     /// Until s275 it left READER_UP true, so [`super::try_hub`] never made
     /// another, and every later `os_signal_wait` parked for ever (pelt#98).
@@ -1357,9 +1367,9 @@ mod sys {
     }
 
     /// The drain thread's loop. It returns only where the hub cannot go on
-    /// through it — a poll(2) failure no retry mends (EFAULT, EINVAL), or
-    /// one of its own pipes' write ends gone (never closed in a live
-    /// process) — and [`reader_gone`] then says so.
+    /// through it — a poll(2) failure but an interruption and the host's
+    /// shortage ([`POLL_SHORT`]), or one of its own pipes' write ends gone
+    /// (never closed in a live process) — and [`reader_gone`] then says so.
     fn reader_loop(h: &'static Hub) {
         let read_fd = h.read_fd.load(Ordering::Relaxed);
         let ctl_fd = h.ctl_fd.load(Ordering::Relaxed);
@@ -1400,10 +1410,10 @@ mod sys {
             if n < 0 {
                 match err {
                     Some(libc::EINTR) => {}
-                    // poll(2): the kernel could not allocate its tables
-                    // (ENOMEM on linux, EAGAIN on macOS) — a moment's
-                    // shortage, so the thread waits a moment and polls again.
-                    Some(libc::EAGAIN | libc::ENOMEM) => {
+                    // The host's poll(2) could not allocate its tables — a
+                    // moment's shortage, so the thread waits a moment and
+                    // polls again ([`POLL_SHORT`]).
+                    Some(e) if e == POLL_SHORT => {
                         std::thread::sleep(std::time::Duration::from_millis(1));
                     }
                     _ => return,
