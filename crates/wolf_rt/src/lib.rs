@@ -99,6 +99,9 @@ pub(crate) mod stdfd;
 // gate; BSD delivery widens with s61 (a NAMED stop).
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod signal;
+// s272 (wolf-lang#686): the record of the file system that holds a path —
+// `[os.fs.statfs]`.
+pub mod statfs;
 pub mod str;
 // s219 (wolf-lang#622): the controlling terminal — its foreground
 // process group and its mode (canonical, echo, signals, vmin/vtime).
