@@ -3,6 +3,9 @@
 # lock): the targeted rows at the head, clippy and the cross-target checks
 # under the pinned 1.97.1 (rustup's proxies first on PATH for those).
 set -u
+# The lane rules (2026-11-01): rustup's proxies first on PATH on nomad, so the
+# pinned 1.97.1 (rust-toolchain.toml) builds, not Homebrew's 1.99.1.
+export PATH=$HOME/.cargo/bin:$PATH
 B=/Users/mfwolffe/lanes/s272/build
 cd "$B" || exit 1
 echo "head $(git rev-parse HEAD) $(date -u +%FT%TZ)"
