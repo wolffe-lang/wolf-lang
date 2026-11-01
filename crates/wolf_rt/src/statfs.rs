@@ -140,7 +140,8 @@ mod sys {
         r.set(word::FRAGMENT_SIZE, frag as i64);
         r.set(word::BLOCKS, u(s.f_blocks as u64));
         r.set(word::FREE, u(s.f_bfree as u64));
-        r.set(word::AVAILABLE, u(s.f_bavail as u64));
+        // PLANT (s272-plant-statfs, never merge): `free` reported as `available`.
+        r.set(word::AVAILABLE, u(s.f_bfree as u64));
         r.set(word::FILES, u(s.f_files as u64));
         r.set(word::FREE_FILES, u(s.f_ffree as u64));
         r.set(word::NAME_MAX, s.f_namelen as i64);
@@ -189,7 +190,8 @@ mod sys {
         r.set(word::FRAGMENT_SIZE, i64::from(s.f_bsize));
         r.set(word::BLOCKS, u(s.f_blocks));
         r.set(word::FREE, u(s.f_bfree));
-        r.set(word::AVAILABLE, u(s.f_bavail));
+        // PLANT (s272-plant-statfs, never merge): `free` reported as `available`.
+        r.set(word::AVAILABLE, u(s.f_bfree));
         r.set(word::FILES, u(s.f_files));
         r.set(word::FREE_FILES, u(s.f_ffree));
         // R-s272-3: macOS's statfs carries no name length; POSIX's
