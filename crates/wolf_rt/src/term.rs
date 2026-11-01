@@ -14,7 +14,8 @@
 //! `VMIN` in bits 8..15 and `VTIME` (tenths of a second) in bits
 //! 16..23. s248 (wolf-lang#802) adds bit 5 [`mode::RAW_CR`] (`ICRNL`
 //! cleared), bit 6 [`mode::RAW_OUTPUT`] (`OPOST` cleared) and bit 7
-//! [`mode::STRIP8`] (`ISTRIP` set). Any other bit set is `invalid`.
+//! [`mode::STRIP8`] (`ISTRIP` set). s272 (wolf-lang#976) adds bit 24
+//! [`mode::RAW_LF`] (`ONLCR` cleared). Any other bit set is `invalid`.
 //!
 //! **s234 (wolf-lang#719, W05)** adds what a line editor asks of the
 //! terminal beside its mode: the window's size ([`size`], `TIOCGWINSZ`)
@@ -65,7 +66,16 @@ pub mod mode {
     pub const RAW_OUTPUT: i64 = 64;
     /// s248 (#802): input bytes are stripped to seven bits (`ISTRIP` set).
     pub const STRIP8: i64 = 128;
-    /// Every bit a mode may carry: the eight flags, `VMIN`, `VTIME`.
+    /// s272 (wolf-lang#976, R-s272-7): a written LF reaches the terminal as
+    /// LF even with output processing on — the newline is not mapped to CR
+    /// LF (`ONLCR` CLEARED). s248's family rule: the bit names the setting
+    /// a terminal does not usually have, so 0 is what a terminal is given
+    /// and a mode read and set back keeps `ONLCR` exactly as found. Above
+    /// `VTIME`'s byte, so every mode built before it reads and sets the
+    /// same int on a terminal that maps newlines (yew's REPL needs output
+    /// processing WITH the mapping: `RAW_OUTPUT` and `RAW_LF` clear).
+    pub const RAW_LF: i64 = 1 << 24;
+    /// Every bit a mode may carry: the nine flags, `VMIN`, `VTIME`.
     pub const VALID: i64 = CANONICAL
         | ECHO
         | SIGNALS
@@ -75,7 +85,8 @@ pub mod mode {
         | RAW_OUTPUT
         | STRIP8
         | 0xFF00
-        | 0xFF_0000;
+        | 0xFF_0000
+        | RAW_LF;
 }
 
 /// s234 (`[os.term.chars]`): how many special characters
@@ -159,6 +170,10 @@ mod sys {
         if t.c_iflag & libc::ISTRIP != 0 {
             m |= mode::STRIP8;
         }
+        // s272 (#976): the output newline mapping, read whatever OPOST is.
+        if t.c_oflag & libc::ONLCR == 0 {
+            m |= mode::RAW_LF;
+        }
         m |= i64::from(t.c_cc[libc::VMIN]) << 8;
         m |= i64::from(t.c_cc[libc::VTIME]) << 16;
         Ok(m)
@@ -218,6 +233,14 @@ mod sys {
             t.c_iflag |= libc::ISTRIP;
         } else {
             t.c_iflag &= !libc::ISTRIP;
+        }
+        // s272 (#976): ONLCR is an output flag; RAW_LF CLEARS it. It acts
+        // only while OPOST is on, and is kept as the mode says either way,
+        // so a restore puts back the caller's mapping exactly.
+        if m & mode::RAW_LF != 0 {
+            t.c_oflag &= !libc::ONLCR;
+        } else {
+            t.c_oflag |= libc::ONLCR;
         }
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
@@ -649,16 +672,63 @@ mod tests {
         let _ = std::fs::remove_file(&p);
     }
 
-    /// A mode with a bit outside the eight flags, VMIN and VTIME is
+    /// A mode with a bit outside the nine flags, VMIN and VTIME is
     /// `invalid` before the handle is read. s248 (#802): bits 5..7 are
-    /// fields now, so a forged handle is `io` for them; bit 24 is the first
-    /// bit that is none.
+    /// fields now, so a forged handle is `io` for them; s272 (#976): so is
+    /// bit 24 (`RAW_LF`), and bit 25 is the first bit that is none.
     #[test]
     fn a_mode_outside_the_bits_is_invalid() {
         assert_eq!(set_mode(1_000_000, 32), Err(proc_code::IO));
         assert_eq!(set_mode(1_000_000, 64 | 128), Err(proc_code::IO));
-        assert_eq!(set_mode(1_000_000, 1 << 24), Err(proc_code::INVALID));
+        assert_eq!(set_mode(1_000_000, 1 << 24), Err(proc_code::IO));
+        assert_eq!(restore_at_exit(1_000_000, 1 << 24, &[]), Err(proc_code::IO));
+        assert_eq!(set_mode(1_000_000, 1 << 25), Err(proc_code::INVALID));
+        assert_eq!(restore_at_exit(1_000_000, 1 << 25, &[]), Err(proc_code::INVALID));
         assert_eq!(set_mode(1_000_000, -1), Err(proc_code::INVALID));
+    }
+
+    /// s272 (#976): `RAW_LF` reads the slave's ONLCR as found (on, then
+    /// off), and a set with it clear turns the mapping on with OPOST; a set
+    /// of the mode read back puts it back exactly.
+    #[test]
+    fn raw_lf_reads_and_sets_onlcr() {
+        let (_master, slave) = pty();
+        let fd = crate::fs::dup_of(slave).expect("the slave");
+        let onlcr = |on: bool| {
+            use std::os::fd::AsRawFd as _;
+            // SAFETY: tcgetattr/tcsetattr on the slave this test opened.
+            unsafe {
+                let mut t: libc::termios = std::mem::zeroed();
+                assert_eq!(libc::tcgetattr(fd.as_raw_fd(), &mut t), 0);
+                if on {
+                    t.c_oflag |= libc::ONLCR;
+                } else {
+                    t.c_oflag &= !libc::ONLCR;
+                }
+                assert_eq!(libc::tcsetattr(fd.as_raw_fd(), libc::TCSANOW, &t), 0);
+            }
+        };
+        let has = || {
+            use std::os::fd::AsRawFd as _;
+            // SAFETY: tcgetattr on the slave this test opened.
+            unsafe {
+                let mut t: libc::termios = std::mem::zeroed();
+                assert_eq!(libc::tcgetattr(fd.as_raw_fd(), &mut t), 0);
+                t.c_oflag & libc::ONLCR != 0
+            }
+        };
+        onlcr(true);
+        let on = mode_of(slave).expect("mode");
+        assert_eq!(on & mode::RAW_LF, 0, "ONLCR on reads RAW_LF clear: {on:#x}");
+        onlcr(false);
+        let off = mode_of(slave).expect("mode");
+        assert_eq!(off & mode::RAW_LF, mode::RAW_LF, "ONLCR off reads RAW_LF: {off:#x}");
+        assert_eq!(off & !mode::RAW_LF, on, "nothing else moved");
+        set_mode(slave, off & !mode::RAW_LF & !mode::RAW_OUTPUT).expect("set");
+        assert!(has(), "the mapping is on after a set with RAW_LF clear");
+        set_mode(slave, off).expect("set back");
+        assert!(!has(), "the mode read is put back exactly");
+        assert_eq!(mode_of(slave), Ok(off));
     }
 
     /// The group is this process's own (a test runner is in some group).
