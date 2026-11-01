@@ -1,0 +1,46 @@
+1:S273_GAUNTLET_LAUNCH 2026-11-01T02:41:39Z block=A expected=d07e868742826d346f354b3b7152781eb6650df5 pid=2749838
+4:s273 acquired block A (both locks) 2026-11-01T02:46:29Z
+11:S273_PREP_START 2026-11-01T02:46:29Z head=d07e868742826d346f354b3b7152781eb6650df5
+76:S273_PREP_GREEN 2026-11-01T02:46:36Z head=d07e868742826d346f354b3b7152781eb6650df5
+77:END prep exit=0 2026-11-01T02:46:36Z
+79:s273 acquired block A (both locks) 2026-11-01T02:46:36Z
+86:S273_GAUNTLET_START 2026-11-01T02:46:37Z head=d07e868742826d346f354b3b7152781eb6650df5 tree=563c07b43ed42c392a02ef833d786ad458d7bd74
+87:S273_GAUNTLET_STEPS 23
+89:SKIP fmt (green in the earlier run at this head; this run starts at test)
+90:SKIP fmt-fixpoint (green in the earlier run at this head; this run starts at test)
+91:SKIP clippy (green in the earlier run at this head; this run starts at test)
+92:SKIP rt-none (green in the earlier run at this head; this run starts at test)
+2547:SKIP freestanding_interrupt: no qemu-system-x86_64 on the PATH — the image row did not run (rows 1 and 2 did)
+5322:failures:
+5324:failures:
+5325:    a_descriptor_wait_makes_no_descriptor_while_the_program_runs
+5327:test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s
+5330:END test exit=101 2026-11-01T03:16:53Z
+5331:S273_GAUNTLET_RED 2026-11-01T03:16:53Z head=d07e868742826d346f354b3b7152781eb6650df5 step=test exit=101
+5332:S273_GAUNTLET_EXIT 2026-11-01T03:16:54Z head=d07e868742826d346f354b3b7152781eb6650df5 code=101
+--- the failure, in full ---
+exit_past_table=invalid
+far_host_number: true
+
+test the_one_meaning_shape_rows_on_every_host ... ok
+REPORT race781 native: exit Some(0): waits 1044773 ready 1044773, fstat(1) asked 9062886, ok 17
+
+thread 'a_descriptor_wait_makes_no_descriptor_while_the_program_runs' (274228) panicked at crates/wolf_driver/tests/signal_gaps_lanes.rs:524:13:
+assertion `left == right` failed: #781: on native a descriptor wait put a descriptor on the closed 1 while another task looked (waits 1044773 ready 1044773, fstat(1) asked 9062886, ok 17
+)
+  left: 17
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_descriptor_wait_makes_no_descriptor_while_the_program_runs ... FAILED
+
+failures:
+
+failures:
+    a_descriptor_wait_makes_no_descriptor_while_the_program_runs
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s
+
+error: test failed, to rerun pass `-p wolf_driver --test signal_gaps_lanes`
+END test exit=101 2026-11-01T03:16:53Z
+S273_GAUNTLET_RED 2026-11-01T03:16:53Z head=d07e868742826d346f354b3b7152781eb6650df5 step=test exit=101
+S273_GAUNTLET_EXIT 2026-11-01T03:16:54Z head=d07e868742826d346f354b3b7152781eb6650df5 code=101

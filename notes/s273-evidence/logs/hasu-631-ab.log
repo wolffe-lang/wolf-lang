@@ -1,0 +1,176 @@
+S273_FLAT_LAUNCH 2026-11-01T02:33:31Z pid=2539990
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T02:33:31Z
+s273 acquired block A (both locks) 2026-11-01T02:34:18Z
+s273 block=A cpus=0-5 head=d07e868742826d346f354b3b7152781eb6650df5 date=2026-11-01T02:34:18Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	0-5
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+S273_FLAT_BUILD 2026-11-01T02:34:18Z /lane/wolf-lang-trunk
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling foldhash v0.2.0
+   Compiling wolf_span v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_span)
+   Compiling stable_deref_trait v1.2.1
+   Compiling hashbrown v0.17.1
+   Compiling shlex v2.0.1
+   Compiling cfg-if v1.0.4
+   Compiling find-msvc-tools v0.1.10
+   Compiling wolf_diag v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling cc v1.4.2
+   Compiling crossbeam-deque v0.8.7
+   Compiling smallvec v1.15.2
+   Compiling wolf_lex v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_lex)
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling cranelift-srcgen v0.134.3
+   Compiling arrayvec v0.7.8
+   Compiling rayon-core v1.13.0
+   Compiling cpufeatures v0.3.0
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling wolf_ast v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling blake3 v1.8.6
+   Compiling wolf_parse v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_parse)
+   Compiling equivalent v1.0.2
+   Compiling either v1.17.0
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling rayon v1.12.0
+   Compiling indexmap v2.14.0
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling litemap v0.8.2
+   Compiling writeable v0.6.3
+   Compiling cranelift-isle v0.134.3
+   Compiling log v0.4.33
+   Compiling libc v0.2.189
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling fnv v1.0.7
+   Compiling hashbrown v0.16.1
+   Compiling icu_properties_data v2.2.0
+   Compiling utf8_iter v1.0.4
+   Compiling wolf_sema v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_sema)
+   Compiling zerofrom v0.1.8
+   Compiling heck v0.5.0
+   Compiling yoke v0.8.3
+   Compiling icu_normalizer_data v2.2.0
+   Compiling serde_core v1.0.229
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling gimli v0.33.0
+   Compiling zerotrie v0.2.4
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling cranelift-bitset v0.134.3
+   Compiling zerovec v0.11.6
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling target-lexicon v0.13.5
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling memchr v2.8.3
+   Compiling icu_provider v2.2.0
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling cranelift-codegen v0.134.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling rustc-hash v2.1.3
+   Compiling arbitrary v1.4.2
+   Compiling regalloc2 v0.15.2
+   Compiling icu_normalizer v2.2.0
+   Compiling cranelift-control v0.134.3
+   Compiling icu_properties v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling serde_derive v1.0.229
+   Compiling anyhow v1.0.104
+   Compiling serde_json v1.0.151
+   Compiling crc32fast v1.5.0
+   Compiling wolf_mem v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_mem)
+   Compiling idna_adapter v1.2.2
+   Compiling itoa v1.0.18
+   Compiling object v0.39.1
+   Compiling percent-encoding v2.3.2
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_fmt)
+   Compiling url v2.5.8
+   Compiling wolf_query v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_query)
+   Compiling wolf_rt v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_rt)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling wolf_wir v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_wir)
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling lsp-server v0.10.0
+   Compiling wolf_cimport v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_cimport)
+   Compiling wolf_doc v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_doc)
+   Compiling wolf_pkg v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_pkg)
+   Compiling wolf_backend v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_codegen_llvm)
+   Compiling wolf_lsp v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_lsp)
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_driver)
+    Finished `dev` profile [unoptimized] target(s) in 21.55s
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.23s
+  Executable tests/region_copyout_lanes.rs (target/debug/deps/region_copyout_lanes-2d4cda1c86d4937b)
+S273_FLAT_BUILD 2026-11-01T02:34:40Z /lane/wolf-lang
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.15s
+  Executable tests/region_copyout_lanes.rs (target/debug/deps/region_copyout_lanes-2d4cda1c86d4937b)
+S273_FLAT run=1 tree=trunk exit=0 2026-11-01T02:34:41Z
+  [trunk 1] copy_int: VmHWM 2048 kB at 20000 turns, 1988 kB at 40000
+  [trunk 1] copy_int: VmHWM 2032 kB at 20000 turns, 2032 kB at 40000
+  [trunk 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=1 tree=head exit=101 2026-11-01T02:34:42Z
+  [head 1] copy_int: VmHWM 2052 kB at 20000 turns, 2000 kB at 40000
+  [head 1] copy_int: VmHWM 1960 kB at 20000 turns, 2064 kB at 40000
+  [head 1] copy region scalar loop grew 5 B/turn (release=true), want flat (wolf-lang#612)
+  [head 1] test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=2 tree=trunk exit=101 2026-11-01T02:34:43Z
+  [trunk 2] copy_int: VmHWM 1956 kB at 20000 turns, 2076 kB at 40000
+  [trunk 2] copy region scalar loop grew 6 B/turn (release=false), want flat (wolf-lang#612)
+  [trunk 2] test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.44s
+S273_FLAT run=2 tree=head exit=0 2026-11-01T02:34:44Z
+  [head 2] copy_int: VmHWM 2076 kB at 20000 turns, 2072 kB at 40000
+  [head 2] copy_int: VmHWM 2048 kB at 20000 turns, 2036 kB at 40000
+  [head 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=3 tree=trunk exit=0 2026-11-01T02:34:45Z
+  [trunk 3] copy_int: VmHWM 2036 kB at 20000 turns, 1932 kB at 40000
+  [trunk 3] copy_int: VmHWM 2000 kB at 20000 turns, 1992 kB at 40000
+  [trunk 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=3 tree=head exit=0 2026-11-01T02:34:46Z
+  [head 3] copy_int: VmHWM 2048 kB at 20000 turns, 1976 kB at 40000
+  [head 3] copy_int: VmHWM 2052 kB at 20000 turns, 2092 kB at 40000
+  [head 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=4 tree=trunk exit=0 2026-11-01T02:34:47Z
+  [trunk 4] copy_int: VmHWM 2076 kB at 20000 turns, 2012 kB at 40000
+  [trunk 4] copy_int: VmHWM 2004 kB at 20000 turns, 2044 kB at 40000
+  [trunk 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=4 tree=head exit=0 2026-11-01T02:34:48Z
+  [head 4] copy_int: VmHWM 2056 kB at 20000 turns, 1992 kB at 40000
+  [head 4] copy_int: VmHWM 2100 kB at 20000 turns, 2016 kB at 40000
+  [head 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=5 tree=trunk exit=0 2026-11-01T02:34:49Z
+  [trunk 5] copy_int: VmHWM 1980 kB at 20000 turns, 2024 kB at 40000
+  [trunk 5] copy_int: VmHWM 2056 kB at 20000 turns, 2024 kB at 40000
+  [trunk 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT run=5 tree=head exit=0 2026-11-01T02:34:50Z
+  [head 5] copy_int: VmHWM 1932 kB at 20000 turns, 1940 kB at 40000
+  [head 5] copy_int: VmHWM 2004 kB at 20000 turns, 2048 kB at 40000
+  [head 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.00s
+S273_FLAT_DONE 2026-11-01T02:34:50Z
+S273_FLAT_EXIT 2026-11-01T02:34:50Z code=0

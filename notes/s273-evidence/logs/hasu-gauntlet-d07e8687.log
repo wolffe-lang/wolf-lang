@@ -1,0 +1,53 @@
+1:S273_GAUNTLET_LAUNCH 2026-11-01T01:49:01Z block=A expected=d07e868742826d346f354b3b7152781eb6650df5 pid=3610259
+5:s273 acquired block A (both locks) 2026-11-01T01:58:30Z
+12:S273_PREP_START 2026-11-01T01:58:31Z head=d07e868742826d346f354b3b7152781eb6650df5
+407:S273_PREP_GREEN 2026-11-01T02:01:51Z head=d07e868742826d346f354b3b7152781eb6650df5
+408:END prep exit=0 2026-11-01T02:01:52Z
+410:s273 acquired block A (both locks) 2026-11-01T02:01:52Z
+417:S273_GAUNTLET_START 2026-11-01T02:01:53Z head=d07e868742826d346f354b3b7152781eb6650df5 tree=563c07b43ed42c392a02ef833d786ad458d7bd74
+418:S273_GAUNTLET_STEPS 23
+421:END fmt exit=0 2026-11-01T02:01:55Z
+424:END fmt-fixpoint exit=0 2026-11-01T02:02:01Z
+580:END clippy exit=0 2026-11-01T02:02:24Z
+583:END rt-none exit=0 2026-11-01T02:02:26Z
+3091:SKIP freestanding_interrupt: no qemu-system-x86_64 on the PATH — the image row did not run (rows 1 and 2 did)
+5505:failures:
+5507:failures:
+5508:    a_loop_keeping_a_scalar_is_flat
+5510:test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+5513:END test exit=101 2026-11-01T02:31:05Z
+5514:S273_GAUNTLET_RED 2026-11-01T02:31:05Z head=d07e868742826d346f354b3b7152781eb6650df5 step=test exit=101
+5515:S273_GAUNTLET_EXIT 2026-11-01T02:31:06Z head=d07e868742826d346f354b3b7152781eb6650df5 code=101
+--- the failure, in full ---
+running 10 tests
+test a_value_with_no_independent_copy_is_refused ... ok
+test every_other_escape_is_still_refused ... ok
+test every_other_exit_frees_and_copies_nothing ... ok
+test a_struct_of_strings_and_a_list_copies_out_deep ... ok
+test the_region_is_freed_a_raw_read_after_is_p4 ... ok
+test maps_and_tuples_copy_out ... ok
+copy_int: VmHWM 1968 kB at 20000 turns, 2052 kB at 40000
+
+thread 'a_loop_keeping_a_scalar_is_flat' (218502) panicked at crates/wolf_driver/tests/region_copyout_lanes.rs:494:9:
+copy region scalar loop grew 4 B/turn (release=false), want flat (wolf-lang#612)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_loop_keeping_a_scalar_is_flat ... FAILED
+test the_loop_keeps_each_turn_s_result ... ok
+no_region: VmHWM 27316 kB at 20000 turns, 52692 kB at 40000
+copy_str: VmHWM 2596 kB at 20000 turns, 3288 kB at 40000
+copy_str: VmHWM 2584 kB at 20000 turns, 3204 kB at 40000
+test the_loop_frees_its_scratch_keeping_only_its_result ... ok
+no_region: VmHWM 27384 kB at 20000 turns, 52728 kB at 40000
+test the_control_grows_without_a_region ... ok
+
+failures:
+
+failures:
+    a_loop_keeping_a_scalar_is_flat
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.41s
+
+error: test failed, to rerun pass `-p wolf_driver --test region_copyout_lanes`
+END test exit=101 2026-11-01T02:31:05Z
+S273_GAUNTLET_RED 2026-11-01T02:31:05Z head=d07e868742826d346f354b3b7152781eb6650df5 step=test exit=101
+S273_GAUNTLET_EXIT 2026-11-01T02:31:06Z head=d07e868742826d346f354b3b7152781eb6650df5 code=101

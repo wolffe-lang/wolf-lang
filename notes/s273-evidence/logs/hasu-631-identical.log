@@ -1,0 +1,16 @@
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T02:36:08Z
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T02:40:08Z
+s273 acquired block A (both locks) 2026-11-01T02:40:59Z
+s273 block=A cpus=0-5 head=d07e868742826d346f354b3b7152781eb6650df5 date=2026-11-01T02:41:00Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	0-5
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+470bcba9c333f473c83612f922cbbcba210d7632d61f65955c7b7b33e7041a91  main.lu
+a65345400f66e682f67198532c0ce5069e60d23603b7e529a63cb516b684abbd  native-trunk
+a65345400f66e682f67198532c0ce5069e60d23603b7e529a63cb516b684abbd  native-head
+839a7caac8b1876a0fba6ee5ab6e9eee625c7ceb09745603ae57d6512d52ce56  release-trunk
+839a7caac8b1876a0fba6ee5ab6e9eee625c7ceb09745603ae57d6512d52ce56  release-head
+S273_AB631 native identical
+S273_AB631 release identical

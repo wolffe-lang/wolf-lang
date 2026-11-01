@@ -1,0 +1,367 @@
+S273_AB_LAUNCH 2026-11-01T03:21:00Z pid=4076165 signal_gaps_lanes a_descriptor_wait_makes_no_descriptor_while_the_program_runs REPORT race781|panicked|left:|right:
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T03:21:00Z
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T03:25:00Z
+s273 acquired block A (both locks) 2026-11-01T03:26:40Z
+s273 block=A cpus=0-5 head=d07e868742826d346f354b3b7152781eb6650df5 date=2026-11-01T03:26:41Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	0-5
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+S273_AB_BUILD 2026-11-01T03:26:41Z /lane/wolf-lang-trunk
+    Finished `dev` profile [unoptimized] target(s) in 0.07s
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang-trunk/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.22s
+  Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-dd69dbceeadbea5c)
+S273_AB_BUILD 2026-11-01T03:26:41Z /lane/wolf-lang
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.22s
+  Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-dd69dbceeadbea5c)
+S273_AB run=1 tree=trunk exit=0 2026-11-01T03:26:49Z
+  [trunk 1] REPORT race781 native: exit Some(0): waits 1031263 ready 1031263, fstat(1) asked 9097891, ok 0
+  [trunk 1] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1031459 ready 1031459, fstat(1) asked 9150639, ok 0
+  [trunk 1] REPORT race781 release: exit Some(0): waits 1016864 ready 1016864, fstat(1) asked 9165769, ok 0
+  [trunk 1] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1030314 ready 1030314, fstat(1) asked 9170976, ok 0
+  [trunk 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=1 tree=head exit=0 2026-11-01T03:26:58Z
+  [head 1] REPORT race781 native: exit Some(0): waits 1027921 ready 1027921, fstat(1) asked 9122682, ok 0
+  [head 1] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1028133 ready 1028133, fstat(1) asked 9131928, ok 0
+  [head 1] REPORT race781 release: exit Some(0): waits 1031304 ready 1031304, fstat(1) asked 9285994, ok 0
+  [head 1] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1021574 ready 1021574, fstat(1) asked 9169529, ok 0
+  [head 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=2 tree=trunk exit=0 2026-11-01T03:27:06Z
+  [trunk 2] REPORT race781 native: exit Some(0): waits 1036155 ready 1036155, fstat(1) asked 9119382, ok 0
+  [trunk 2] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1032695 ready 1032695, fstat(1) asked 9139292, ok 0
+  [trunk 2] REPORT race781 release: exit Some(0): waits 1026033 ready 1026033, fstat(1) asked 9158123, ok 0
+  [trunk 2] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1046870 ready 1046870, fstat(1) asked 9349046, ok 0
+  [trunk 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=2 tree=head exit=0 2026-11-01T03:27:14Z
+  [head 2] REPORT race781 native: exit Some(0): waits 1032918 ready 1032918, fstat(1) asked 9206968, ok 0
+  [head 2] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1031322 ready 1031322, fstat(1) asked 9109954, ok 0
+  [head 2] REPORT race781 release: exit Some(0): waits 1026776 ready 1026776, fstat(1) asked 9244808, ok 0
+  [head 2] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1025811 ready 1025811, fstat(1) asked 9178231, ok 0
+  [head 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=3 tree=trunk exit=0 2026-11-01T03:27:22Z
+  [trunk 3] REPORT race781 native: exit Some(0): waits 1025465 ready 1025465, fstat(1) asked 9126776, ok 0
+  [trunk 3] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1022814 ready 1022814, fstat(1) asked 8979586, ok 0
+  [trunk 3] REPORT race781 release: exit Some(0): waits 1029426 ready 1029426, fstat(1) asked 9210458, ok 0
+  [trunk 3] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1023610 ready 1023610, fstat(1) asked 9249427, ok 0
+  [trunk 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=3 tree=head exit=0 2026-11-01T03:27:31Z
+  [head 3] REPORT race781 native: exit Some(0): waits 1026251 ready 1026251, fstat(1) asked 9076981, ok 0
+  [head 3] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1025125 ready 1025125, fstat(1) asked 9080760, ok 0
+  [head 3] REPORT race781 release: exit Some(0): waits 1032636 ready 1032636, fstat(1) asked 9300766, ok 0
+  [head 3] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1018725 ready 1018725, fstat(1) asked 9152065, ok 0
+  [head 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=4 tree=trunk exit=0 2026-11-01T03:27:39Z
+  [trunk 4] REPORT race781 native: exit Some(0): waits 1035324 ready 1035324, fstat(1) asked 9119809, ok 0
+  [trunk 4] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1029334 ready 1029334, fstat(1) asked 9107527, ok 0
+  [trunk 4] REPORT race781 release: exit Some(0): waits 1019743 ready 1019743, fstat(1) asked 9230266, ok 0
+  [trunk 4] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1013764 ready 1013764, fstat(1) asked 9003064, ok 0
+  [trunk 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=4 tree=head exit=101 2026-11-01T03:27:45Z
+  [head 4] REPORT race781 native: exit Some(0): waits 1056128 ready 1056128, fstat(1) asked 9253500, ok 0
+  [head 4] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1028309 ready 1028309, fstat(1) asked 9066842, ok 0
+  [head 4] REPORT race781 release: exit Some(0): waits 1049940 ready 1049940, fstat(1) asked 9387766, ok 15
+  [head 4] thread 'a_descriptor_wait_makes_no_descriptor_while_the_program_runs' (1351) panicked at crates/wolf_driver/tests/signal_gaps_lanes.rs:524:13:
+  [head 4]   left: 15
+  [head 4]  right: 0
+  [head 4] test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 6.19s
+S273_AB run=5 tree=trunk exit=0 2026-11-01T03:27:53Z
+  [trunk 5] REPORT race781 native: exit Some(0): waits 1039757 ready 1039757, fstat(1) asked 9027141, ok 0
+  [trunk 5] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1036367 ready 1036367, fstat(1) asked 9091071, ok 0
+  [trunk 5] REPORT race781 release: exit Some(0): waits 1020200 ready 1020200, fstat(1) asked 9256696, ok 0
+  [trunk 5] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1016292 ready 1016292, fstat(1) asked 9198876, ok 0
+  [trunk 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=5 tree=head exit=0 2026-11-01T03:28:02Z
+  [head 5] REPORT race781 native: exit Some(0): waits 1024036 ready 1024036, fstat(1) asked 9077883, ok 0
+  [head 5] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1027521 ready 1027521, fstat(1) asked 9061893, ok 0
+  [head 5] REPORT race781 release: exit Some(0): waits 1052252 ready 1052252, fstat(1) asked 9125429, ok 0
+  [head 5] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1026873 ready 1026873, fstat(1) asked 9205920, ok 0
+  [head 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB_DONE 2026-11-01T03:28:02Z
+S273_AB_EXIT 2026-11-01T03:28:02Z code=0
+S273_AB884B_LAUNCH 2026-11-01T03:28:46Z pid=93786
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T03:28:46Z
+s273 acquired block A (both locks) 2026-11-01T03:28:46Z
+s273 block=A cpus=0-5 head=d07e868742826d346f354b3b7152781eb6650df5 date=2026-11-01T03:28:46Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	0-5
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+7ddc2eacae3b5c6f588b3924aad19a49bbf7fac214d7f1c8cf38cd7c798130af  main.lu
+10159b33695de69b26200bfae682e8d98bea82ec31be4ce6f8483d16d5d328bd  native-trunk
+10159b33695de69b26200bfae682e8d98bea82ec31be4ce6f8483d16d5d328bd  native-head
+e84f7dc85c053e00a65e35092affae3a79fd02db2f7459244d530c2ebd8e6c16  release-trunk
+e84f7dc85c053e00a65e35092affae3a79fd02db2f7459244d530c2ebd8e6c16  release-head
+S273_IDENT race781 native identical
+S273_IDENT race781 release identical
+S273_AB_BUILD 2026-11-01T03:28:47Z /lane/wolf-lang-trunk
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+  Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-dd69dbceeadbea5c)
+S273_AB_BUILD 2026-11-01T03:28:47Z /lane/wolf-lang
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+  Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-dd69dbceeadbea5c)
+S273_AB run=1 tree=trunk exit=0 2026-11-01T03:28:55Z
+  [trunk 1] REPORT race781 native: exit Some(0): waits 1029097 ready 1029097, fstat(1) asked 9183153, ok 0
+  [trunk 1] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1021262 ready 1021262, fstat(1) asked 9053990, ok 0
+  [trunk 1] REPORT race781 release: exit Some(0): waits 1026585 ready 1026585, fstat(1) asked 9185911, ok 0
+  [trunk 1] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1034964 ready 1034964, fstat(1) asked 9205286, ok 0
+  [trunk 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=1 tree=head exit=0 2026-11-01T03:29:04Z
+  [head 1] REPORT race781 native: exit Some(0): waits 1023859 ready 1023859, fstat(1) asked 9111363, ok 0
+  [head 1] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1053681 ready 1053681, fstat(1) asked 9084295, ok 0
+  [head 1] REPORT race781 release: exit Some(0): waits 1035226 ready 1035226, fstat(1) asked 9197028, ok 0
+  [head 1] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1016524 ready 1016524, fstat(1) asked 9150846, ok 0
+  [head 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=2 tree=trunk exit=0 2026-11-01T03:29:12Z
+  [trunk 2] REPORT race781 native: exit Some(0): waits 1034317 ready 1034317, fstat(1) asked 9119042, ok 0
+  [trunk 2] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1030014 ready 1030014, fstat(1) asked 9164237, ok 0
+  [trunk 2] REPORT race781 release: exit Some(0): waits 1046363 ready 1046363, fstat(1) asked 9229266, ok 0
+  [trunk 2] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1033700 ready 1033700, fstat(1) asked 9211836, ok 0
+  [trunk 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=2 tree=head exit=0 2026-11-01T03:29:20Z
+  [head 2] REPORT race781 native: exit Some(0): waits 1028115 ready 1028115, fstat(1) asked 9133116, ok 0
+  [head 2] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1029429 ready 1029429, fstat(1) asked 9103763, ok 0
+  [head 2] REPORT race781 release: exit Some(0): waits 1028456 ready 1028456, fstat(1) asked 9245910, ok 0
+  [head 2] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1055555 ready 1055555, fstat(1) asked 9262746, ok 0
+  [head 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=3 tree=trunk exit=0 2026-11-01T03:29:28Z
+  [trunk 3] REPORT race781 native: exit Some(0): waits 1031347 ready 1031347, fstat(1) asked 9211827, ok 0
+  [trunk 3] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1033832 ready 1033832, fstat(1) asked 9104292, ok 0
+  [trunk 3] REPORT race781 release: exit Some(0): waits 1050278 ready 1050278, fstat(1) asked 9209242, ok 0
+  [trunk 3] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1035631 ready 1035631, fstat(1) asked 9192840, ok 0
+  [trunk 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=3 tree=head exit=0 2026-11-01T03:29:37Z
+  [head 3] REPORT race781 native: exit Some(0): waits 1037808 ready 1037808, fstat(1) asked 9114198, ok 0
+  [head 3] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1050810 ready 1050810, fstat(1) asked 9044856, ok 0
+  [head 3] REPORT race781 release: exit Some(0): waits 1027337 ready 1027337, fstat(1) asked 9191803, ok 0
+  [head 3] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1024654 ready 1024654, fstat(1) asked 9142652, ok 0
+  [head 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=4 tree=trunk exit=0 2026-11-01T03:29:45Z
+  [trunk 4] REPORT race781 native: exit Some(0): waits 1048161 ready 1048161, fstat(1) asked 9210206, ok 0
+  [trunk 4] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1032848 ready 1032848, fstat(1) asked 9216029, ok 0
+  [trunk 4] REPORT race781 release: exit Some(0): waits 1027785 ready 1027785, fstat(1) asked 9202506, ok 0
+  [trunk 4] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1033489 ready 1033489, fstat(1) asked 9301661, ok 0
+  [trunk 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=4 tree=head exit=0 2026-11-01T03:29:53Z
+  [head 4] REPORT race781 native: exit Some(0): waits 1033320 ready 1033320, fstat(1) asked 9132146, ok 0
+  [head 4] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1025235 ready 1025235, fstat(1) asked 9091881, ok 0
+  [head 4] REPORT race781 release: exit Some(0): waits 1025085 ready 1025085, fstat(1) asked 9279555, ok 0
+  [head 4] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1029216 ready 1029216, fstat(1) asked 9288926, ok 0
+  [head 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=5 tree=trunk exit=0 2026-11-01T03:30:01Z
+  [trunk 5] REPORT race781 native: exit Some(0): waits 1022731 ready 1022731, fstat(1) asked 9076875, ok 0
+  [trunk 5] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1025329 ready 1025329, fstat(1) asked 8988746, ok 0
+  [trunk 5] REPORT race781 release: exit Some(0): waits 1027853 ready 1027853, fstat(1) asked 9192887, ok 0
+  [trunk 5] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1027250 ready 1027250, fstat(1) asked 9169538, ok 0
+  [trunk 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=5 tree=head exit=0 2026-11-01T03:30:10Z
+  [head 5] REPORT race781 native: exit Some(0): waits 1038276 ready 1038276, fstat(1) asked 9136872, ok 0
+  [head 5] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1029458 ready 1029458, fstat(1) asked 9089398, ok 0
+  [head 5] REPORT race781 release: exit Some(0): waits 1024207 ready 1024207, fstat(1) asked 9162050, ok 0
+  [head 5] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1029310 ready 1029310, fstat(1) asked 9185112, ok 0
+  [head 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=6 tree=trunk exit=0 2026-11-01T03:30:18Z
+  [trunk 6] REPORT race781 native: exit Some(0): waits 1051172 ready 1051172, fstat(1) asked 9239244, ok 0
+  [trunk 6] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1035433 ready 1035433, fstat(1) asked 9122378, ok 0
+  [trunk 6] REPORT race781 release: exit Some(0): waits 1033151 ready 1033151, fstat(1) asked 9266941, ok 0
+  [trunk 6] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1051233 ready 1051233, fstat(1) asked 9352159, ok 0
+  [trunk 6] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=6 tree=head exit=0 2026-11-01T03:30:26Z
+  [head 6] REPORT race781 native: exit Some(0): waits 1048317 ready 1048317, fstat(1) asked 9192720, ok 0
+  [head 6] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1029627 ready 1029627, fstat(1) asked 9175270, ok 0
+  [head 6] REPORT race781 release: exit Some(0): waits 1036618 ready 1036618, fstat(1) asked 9318726, ok 0
+  [head 6] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1055801 ready 1055801, fstat(1) asked 9230071, ok 0
+  [head 6] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=7 tree=trunk exit=0 2026-11-01T03:30:34Z
+  [trunk 7] REPORT race781 native: exit Some(0): waits 1026016 ready 1026016, fstat(1) asked 9239718, ok 0
+  [trunk 7] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1036874 ready 1036874, fstat(1) asked 9098742, ok 0
+  [trunk 7] REPORT race781 release: exit Some(0): waits 1031281 ready 1031281, fstat(1) asked 9179744, ok 0
+  [trunk 7] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1049187 ready 1049187, fstat(1) asked 9283374, ok 0
+  [trunk 7] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=7 tree=head exit=0 2026-11-01T03:30:43Z
+  [head 7] REPORT race781 native: exit Some(0): waits 1020638 ready 1020638, fstat(1) asked 9125975, ok 0
+  [head 7] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1030796 ready 1030796, fstat(1) asked 9172054, ok 0
+  [head 7] REPORT race781 release: exit Some(0): waits 1026143 ready 1026143, fstat(1) asked 9198345, ok 0
+  [head 7] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1026864 ready 1026864, fstat(1) asked 9188476, ok 0
+  [head 7] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=8 tree=trunk exit=0 2026-11-01T03:30:51Z
+  [trunk 8] REPORT race781 native: exit Some(0): waits 1023714 ready 1023714, fstat(1) asked 9073562, ok 0
+  [trunk 8] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1023767 ready 1023767, fstat(1) asked 9107382, ok 0
+  [trunk 8] REPORT race781 release: exit Some(0): waits 1027894 ready 1027894, fstat(1) asked 9173945, ok 0
+  [trunk 8] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1042983 ready 1042983, fstat(1) asked 9408498, ok 0
+  [trunk 8] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=8 tree=head exit=0 2026-11-01T03:30:59Z
+  [head 8] REPORT race781 native: exit Some(0): waits 1032712 ready 1032712, fstat(1) asked 9187619, ok 0
+  [head 8] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1032198 ready 1032198, fstat(1) asked 9094591, ok 0
+  [head 8] REPORT race781 release: exit Some(0): waits 1048666 ready 1048666, fstat(1) asked 9186130, ok 0
+  [head 8] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1028556 ready 1028556, fstat(1) asked 9196772, ok 0
+  [head 8] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=9 tree=trunk exit=0 2026-11-01T03:31:07Z
+  [trunk 9] REPORT race781 native: exit Some(0): waits 1030173 ready 1030173, fstat(1) asked 9127382, ok 0
+  [trunk 9] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1049374 ready 1049374, fstat(1) asked 9162398, ok 0
+  [trunk 9] REPORT race781 release: exit Some(0): waits 1034327 ready 1034327, fstat(1) asked 9365563, ok 0
+  [trunk 9] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1033466 ready 1033466, fstat(1) asked 9283392, ok 0
+  [trunk 9] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.21s
+S273_AB run=9 tree=head exit=0 2026-11-01T03:31:15Z
+  [head 9] REPORT race781 native: exit Some(0): waits 1035692 ready 1035692, fstat(1) asked 9171939, ok 0
+  [head 9] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1051932 ready 1051932, fstat(1) asked 9117453, ok 0
+  [head 9] REPORT race781 release: exit Some(0): waits 1030749 ready 1030749, fstat(1) asked 9254380, ok 0
+  [head 9] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1034441 ready 1034441, fstat(1) asked 9245304, ok 0
+  [head 9] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=10 tree=trunk exit=0 2026-11-01T03:31:24Z
+  [trunk 10] REPORT race781 native: exit Some(0): waits 1045782 ready 1045782, fstat(1) asked 9106772, ok 0
+  [trunk 10] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1020810 ready 1020810, fstat(1) asked 9079245, ok 0
+  [trunk 10] REPORT race781 release: exit Some(0): waits 1037836 ready 1037836, fstat(1) asked 9262433, ok 0
+  [trunk 10] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1051034 ready 1051034, fstat(1) asked 9162510, ok 0
+  [trunk 10] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=10 tree=head exit=101 2026-11-01T03:31:26Z
+  [head 10] REPORT race781 native: exit Some(0): waits 1041144 ready 1041144, fstat(1) asked 9184724, ok 19
+  [head 10]   left: 19
+  [head 10] test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 2.06s
+S273_AB_DONE 2026-11-01T03:31:26Z
+S273_AB884B_EXIT 2026-11-01T03:31:26Z code=0
+S273_AB884C_LAUNCH 2026-11-01T03:32:28Z pid=190489
+s273 waiting for block A (hasu-block-A.lock) 2026-11-01T03:32:28Z
+s273 acquired block A (both locks) 2026-11-01T03:33:09Z
+s273 block=A cpus=0-5 head=d07e868742826d346f354b3b7152781eb6650df5 date=2026-11-01T03:33:09Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	0-5
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+S273_AB_BUILD 2026-11-01T03:33:09Z /lane/wolf-lang-trunk
+    Finished `dev` profile [unoptimized] target(s) in 0.05s
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+  Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-dd69dbceeadbea5c)
+S273_AB_BUILD 2026-11-01T03:33:09Z /lane/wolf-lang
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+  Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-dd69dbceeadbea5c)
+S273_AB run=1 tree=head exit=0 2026-11-01T03:33:18Z
+  [head 1] REPORT race781 native: exit Some(0): waits 1022293 ready 1022293, fstat(1) asked 9070494, ok 0
+  [head 1] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1032533 ready 1032533, fstat(1) asked 9159184, ok 0
+  [head 1] REPORT race781 release: exit Some(0): waits 1023217 ready 1023217, fstat(1) asked 9348232, ok 0
+  [head 1] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1024972 ready 1024972, fstat(1) asked 9148472, ok 0
+  [head 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=1 tree=trunk exit=0 2026-11-01T03:33:26Z
+  [trunk 1] REPORT race781 native: exit Some(0): waits 1032597 ready 1032597, fstat(1) asked 9156322, ok 0
+  [trunk 1] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1058182 ready 1058182, fstat(1) asked 9176370, ok 0
+  [trunk 1] REPORT race781 release: exit Some(0): waits 1019069 ready 1019069, fstat(1) asked 9146355, ok 0
+  [trunk 1] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1034269 ready 1034269, fstat(1) asked 9251991, ok 0
+  [trunk 1] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=2 tree=head exit=0 2026-11-01T03:33:34Z
+  [head 2] REPORT race781 native: exit Some(0): waits 1024529 ready 1024529, fstat(1) asked 9104150, ok 0
+  [head 2] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1028118 ready 1028118, fstat(1) asked 9117367, ok 0
+  [head 2] REPORT race781 release: exit Some(0): waits 1024881 ready 1024881, fstat(1) asked 9168752, ok 0
+  [head 2] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1023040 ready 1023040, fstat(1) asked 9196415, ok 0
+  [head 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=2 tree=trunk exit=0 2026-11-01T03:33:42Z
+  [trunk 2] REPORT race781 native: exit Some(0): waits 1028863 ready 1028863, fstat(1) asked 9138911, ok 0
+  [trunk 2] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1017834 ready 1017834, fstat(1) asked 9096256, ok 0
+  [trunk 2] REPORT race781 release: exit Some(0): waits 1031471 ready 1031471, fstat(1) asked 9363743, ok 0
+  [trunk 2] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1036358 ready 1036358, fstat(1) asked 9400953, ok 0
+  [trunk 2] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=3 tree=head exit=0 2026-11-01T03:33:51Z
+  [head 3] REPORT race781 native: exit Some(0): waits 1046529 ready 1046529, fstat(1) asked 9186516, ok 0
+  [head 3] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1029009 ready 1029009, fstat(1) asked 9075600, ok 0
+  [head 3] REPORT race781 release: exit Some(0): waits 1051195 ready 1051195, fstat(1) asked 9209867, ok 0
+  [head 3] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1052143 ready 1052143, fstat(1) asked 9207635, ok 0
+  [head 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=3 tree=trunk exit=0 2026-11-01T03:33:59Z
+  [trunk 3] REPORT race781 native: exit Some(0): waits 1034542 ready 1034542, fstat(1) asked 8973393, ok 0
+  [trunk 3] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1032717 ready 1032717, fstat(1) asked 9135604, ok 0
+  [trunk 3] REPORT race781 release: exit Some(0): waits 1027129 ready 1027129, fstat(1) asked 9137412, ok 0
+  [trunk 3] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1051380 ready 1051380, fstat(1) asked 9395335, ok 0
+  [trunk 3] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=4 tree=head exit=0 2026-11-01T03:34:07Z
+  [head 4] REPORT race781 native: exit Some(0): waits 1051290 ready 1051290, fstat(1) asked 9200782, ok 0
+  [head 4] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1023295 ready 1023295, fstat(1) asked 9108518, ok 0
+  [head 4] REPORT race781 release: exit Some(0): waits 1025709 ready 1025709, fstat(1) asked 9190257, ok 0
+  [head 4] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1050019 ready 1050019, fstat(1) asked 9359874, ok 0
+  [head 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=4 tree=trunk exit=0 2026-11-01T03:34:15Z
+  [trunk 4] REPORT race781 native: exit Some(0): waits 1026218 ready 1026218, fstat(1) asked 9130500, ok 0
+  [trunk 4] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1025756 ready 1025756, fstat(1) asked 9092438, ok 0
+  [trunk 4] REPORT race781 release: exit Some(0): waits 1018319 ready 1018319, fstat(1) asked 9130351, ok 0
+  [trunk 4] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1016159 ready 1016159, fstat(1) asked 9072239, ok 0
+  [trunk 4] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=5 tree=head exit=0 2026-11-01T03:34:24Z
+  [head 5] REPORT race781 native: exit Some(0): waits 1048295 ready 1048295, fstat(1) asked 9171620, ok 0
+  [head 5] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1020764 ready 1020764, fstat(1) asked 9082323, ok 0
+  [head 5] REPORT race781 release: exit Some(0): waits 1025050 ready 1025050, fstat(1) asked 9289502, ok 0
+  [head 5] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1030932 ready 1030932, fstat(1) asked 9368846, ok 0
+  [head 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=5 tree=trunk exit=0 2026-11-01T03:34:32Z
+  [trunk 5] REPORT race781 native: exit Some(0): waits 1022938 ready 1022938, fstat(1) asked 9077673, ok 0
+  [trunk 5] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1026771 ready 1026771, fstat(1) asked 9080118, ok 0
+  [trunk 5] REPORT race781 release: exit Some(0): waits 1025437 ready 1025437, fstat(1) asked 9183391, ok 0
+  [trunk 5] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1022780 ready 1022780, fstat(1) asked 9163117, ok 0
+  [trunk 5] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=6 tree=head exit=0 2026-11-01T03:34:40Z
+  [head 6] REPORT race781 native: exit Some(0): waits 1028578 ready 1028578, fstat(1) asked 9114973, ok 0
+  [head 6] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1039521 ready 1039521, fstat(1) asked 9143051, ok 0
+  [head 6] REPORT race781 release: exit Some(0): waits 1023311 ready 1023311, fstat(1) asked 9112957, ok 0
+  [head 6] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1033386 ready 1033386, fstat(1) asked 9158410, ok 0
+  [head 6] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=6 tree=trunk exit=0 2026-11-01T03:34:48Z
+  [trunk 6] REPORT race781 native: exit Some(0): waits 1049063 ready 1049063, fstat(1) asked 9183310, ok 0
+  [trunk 6] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1047425 ready 1047425, fstat(1) asked 9159537, ok 0
+  [trunk 6] REPORT race781 release: exit Some(0): waits 1046440 ready 1046440, fstat(1) asked 9236819, ok 0
+  [trunk 6] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1025846 ready 1025846, fstat(1) asked 9149020, ok 0
+  [trunk 6] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=7 tree=head exit=0 2026-11-01T03:34:57Z
+  [head 7] REPORT race781 native: exit Some(0): waits 1048499 ready 1048499, fstat(1) asked 9102969, ok 0
+  [head 7] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1021751 ready 1021751, fstat(1) asked 9088894, ok 0
+  [head 7] REPORT race781 release: exit Some(0): waits 1027196 ready 1027196, fstat(1) asked 9162394, ok 0
+  [head 7] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1046065 ready 1046065, fstat(1) asked 9298937, ok 0
+  [head 7] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=7 tree=trunk exit=0 2026-11-01T03:35:05Z
+  [trunk 7] REPORT race781 native: exit Some(0): waits 1038195 ready 1038195, fstat(1) asked 9073586, ok 0
+  [trunk 7] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1031911 ready 1031911, fstat(1) asked 9093974, ok 0
+  [trunk 7] REPORT race781 release: exit Some(0): waits 1029227 ready 1029227, fstat(1) asked 9171228, ok 0
+  [trunk 7] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1016517 ready 1016517, fstat(1) asked 9221258, ok 0
+  [trunk 7] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.20s
+S273_AB run=8 tree=head exit=0 2026-11-01T03:35:13Z
+  [head 8] REPORT race781 native: exit Some(0): waits 1028100 ready 1028100, fstat(1) asked 9095299, ok 0
+  [head 8] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1030329 ready 1030329, fstat(1) asked 9172849, ok 0
+  [head 8] REPORT race781 release: exit Some(0): waits 1032797 ready 1032797, fstat(1) asked 9138217, ok 0
+  [head 8] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1030155 ready 1030155, fstat(1) asked 9320424, ok 0
+  [head 8] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=8 tree=trunk exit=0 2026-11-01T03:35:21Z
+  [trunk 8] REPORT race781 native: exit Some(0): waits 1025298 ready 1025298, fstat(1) asked 9106703, ok 0
+  [trunk 8] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1029811 ready 1029811, fstat(1) asked 9160391, ok 0
+  [trunk 8] REPORT race781 release: exit Some(0): waits 1028920 ready 1028920, fstat(1) asked 9166326, ok 0
+  [trunk 8] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1033153 ready 1033153, fstat(1) asked 9387188, ok 0
+  [trunk 8] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=9 tree=head exit=0 2026-11-01T03:35:30Z
+  [head 9] REPORT race781 native: exit Some(0): waits 1052222 ready 1052222, fstat(1) asked 9106782, ok 0
+  [head 9] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1033133 ready 1033133, fstat(1) asked 9172794, ok 0
+  [head 9] REPORT race781 release: exit Some(0): waits 1031989 ready 1031989, fstat(1) asked 9206317, ok 0
+  [head 9] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1026859 ready 1026859, fstat(1) asked 9171536, ok 0
+  [head 9] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=9 tree=trunk exit=0 2026-11-01T03:35:38Z
+  [trunk 9] REPORT race781 native: exit Some(0): waits 1030538 ready 1030538, fstat(1) asked 9131155, ok 0
+  [trunk 9] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1024249 ready 1024249, fstat(1) asked 9075160, ok 0
+  [trunk 9] REPORT race781 release: exit Some(0): waits 1030676 ready 1030676, fstat(1) asked 9130754, ok 0
+  [trunk 9] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1029079 ready 1029079, fstat(1) asked 9251419, ok 0
+  [trunk 9] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=10 tree=head exit=0 2026-11-01T03:35:46Z
+  [head 10] REPORT race781 native: exit Some(0): waits 1030401 ready 1030401, fstat(1) asked 9119636, ok 0
+  [head 10] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1033836 ready 1033836, fstat(1) asked 9107738, ok 0
+  [head 10] REPORT race781 release: exit Some(0): waits 1028668 ready 1028668, fstat(1) asked 9216899, ok 0
+  [head 10] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1044793 ready 1044793, fstat(1) asked 9237890, ok 0
+  [head 10] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB run=10 tree=trunk exit=0 2026-11-01T03:35:54Z
+  [trunk 10] REPORT race781 native: exit Some(0): waits 1022376 ready 1022376, fstat(1) asked 9048808, ok 0
+  [trunk 10] REPORT race781 native (taskset -c 0-3): exit Some(0): waits 1048293 ready 1048293, fstat(1) asked 9142073, ok 0
+  [trunk 10] REPORT race781 release: exit Some(0): waits 1028556 ready 1028556, fstat(1) asked 9140219, ok 0
+  [trunk 10] REPORT race781 release (taskset -c 0-3): exit Some(0): waits 1054250 ready 1054250, fstat(1) asked 9171500, ok 0
+  [trunk 10] test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.19s
+S273_AB_DONE 2026-11-01T03:35:54Z
+S273_AB884C_EXIT 2026-11-01T03:35:54Z code=0
