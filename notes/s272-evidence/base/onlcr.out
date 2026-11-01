@@ -1,0 +1,5 @@
+wolf built at 7332772f, nomad, 2026-11-01:
+$ wolf build main.lu -o onlcr.bin --no-cache   (exit 0)
+$ ./onlcr.bin < /dev/null
+set: invalid
+(exit 0: os_term_set_mode(0, 1 << 24) is the shape refusal at base)

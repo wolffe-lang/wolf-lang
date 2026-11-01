@@ -1,0 +1,275 @@
+s272: building at 896e5204 in /Users/mfwolffe/lanes/s272/build
+s272: 15:34:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:35:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:35:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:36:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:36:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:37:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:37:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:38:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:38:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:39:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:39:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:40:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:40:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:41:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:41:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:42:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:42:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:43:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:43:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:44:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:44:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:45:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:45:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:46:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:46:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:47:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:47:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:48:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:48:46 mac build lock held by sh34 pid 91200; waiting
+s272: 15:49:16 mac build lock held by sh34 pid 91200; waiting
+s272: 15:49:47 mac build lock held by sh34 pid 91200; waiting
+s272: 15:50:17 mac build lock held by sh34 pid 91200; waiting
+s272: 15:50:47 mac build lock held by sh34 pid 91200; waiting
+s272: 15:51:17 mac build lock held by sh34 pid 91200; waiting
+s272: 15:51:47 mac build lock held by sh34 pid 91200; waiting
+s272: 15:52:17 mac build lock held by sh34 pid 91200; waiting
+s272: 15:52:47 mac build lock held by sh34 pid 91200; waiting
+s272: 15:53:17 mac build lock held by sh34 pid 91200; waiting
+s272: 15:53:47 mac build lock held by sh34 pid 91200; waiting
+s272: 15:54:17 mac build lock held by sh34 pid 91200; waiting
+s272: lock taken, 9664 MiB free; running: env LUPIN=/Users/mfwolffe/.local/bin/lupin cargo test -j4 -p wolf_driver --test os_surface_lanes -- --test-threads=2
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib) generated 3 warnings (run `cargo fix --lib -p wolf_rt` to apply 3 suggestions)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-0624bbcfb6bd84ab)
+
+running 8 tests
+REPORT statfs paths: ["/Users/mfwolffe/lanes/s272/build/target/tmp/os_surface_lanes/statfs_gnu", "/", "/tmp", "/dev", "/System/Volumes/Data"]
+test fs_statfs_matches_gnu_stat_f ... FAILED
+test the_fault_meanings_read_the_programs_choice ... FAILED
+test the_file_system_record_on_every_host ... FAILED
+test the_mode_word_carries_onlcr_rows ... FAILED
+test the_priority_rows_on_every_host ... FAILED
+test the_root_rows_on_every_host ... FAILED
+test the_signal_action_rows_on_every_host ... FAILED
+test onlcr_on_a_terminal_started_with_it_on_and_off ... FAILED
+
+failures:
+
+---- fs_statfs_matches_gnu_stat_f stdout ----
+
+thread 'fs_statfs_matches_gnu_stat_f' (83174219) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:161:5:
+wolf build /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/statfs_words.lu refused the program (a compile error is the defect, never a skip):
+error[E0301]: nothing named `fs_statfs` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/statfs_words.lu:16:17
+   |
+16 |         let r = fs_statfs(p) else |e| {
+   |                 ^^^^^^^^^ not found
+   |
+help: did you mean `fs_stat`?
+   |
+16 |         let r = fs_stat(p) else |e| {
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_fault_meanings_read_the_programs_choice stdout ----
+== checked on action_faults.lu: fail(E0301) 
+error[E0301]: nothing named `os_signal_action_one` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/tests/fixtures/os_surface/action_faults.lu:11:13
+   |
+11 |     let a = os_signal_action_one(m) else |e| {
+   |             ^^^^^^^^^^^^^^^^^^^^ not found
+   |
+
+
+
+thread 'the_fault_meanings_read_the_programs_choice' (83174443) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:452:5:
+assertion `left == right` failed: the checked machine refuses the fault meanings by name: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: "fail(E0301)"
+ right: "unsupported"
+
+---- the_file_system_record_on_every_host stdout ----
+== checked on statfs_rows.lu: fail(E0301) 
+error[E0301]: nothing named `fs_statfs` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/fs/statfs_rows.lu:18:5
+   |
+18 |     fs_statfs(p) else |e| {
+   |     ^^^^^^^^^ not found
+   |
+help: did you mean `fs_stat`?
+   |
+18 |     fs_stat(p) else |e| {
+   |
+
+error[E0301]: nothing named `fs_statfs` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/fs/statfs_rows.lu:52:5
+   |
+52 |     fs_statfs("s272-statfs-no-such-dir/inner") else |e| {
+   |     ^^^^^^^^^ not found
+   |
+help: did you mean `fs_stat`?
+   |
+52 |     fs_stat("s272-statfs-no-such-dir/inner") else |e| {
+   |
+
+
+
+thread 'the_file_system_record_on_every_host' (83174463) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:288:5:
+assertion `left == right` failed: the CHECKED machine on statfs_rows.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "words=12\nhave_self: true\nspace_answered: true\nfree_within_total: true\navailable_within_free: true\nfragment_positive: true\na_file_reads_its_file_system: true\nmissing=not_found\nmissing_number_is_set: true\nsuccess_clears_the_number: true\n")
+
+---- the_mode_word_carries_onlcr_rows stdout ----
+== checked on term_lf_rows.lu: exit(0) 
+lf_bit_on_a_file=invalid
+lf_bit_restore_on_a_file=invalid
+past_lf_bit=invalid
+past_lf_bit_restore=invalid
+
+
+thread 'the_mode_word_carries_onlcr_rows' (83174505) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:288:5:
+assertion `left == right` failed: the CHECKED machine on term_lf_rows.lu: Obs { verdict: "exit(0)", stdout: "lf_bit_on_a_file=invalid\nlf_bit_restore_on_a_file=invalid\npast_lf_bit=invalid\npast_lf_bit_restore=invalid\n", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("exit(0)", "lf_bit_on_a_file=invalid\nlf_bit_restore_on_a_file=invalid\npast_lf_bit=invalid\npast_lf_bit_restore=invalid\n")
+ right: ("exit(0)", "lf_bit_on_a_file=io\nlf_bit_restore_on_a_file=io\npast_lf_bit=invalid\npast_lf_bit_restore=invalid\n")
+
+---- the_priority_rows_on_every_host stdout ----
+== checked on priority_rows.lu: fail(E0301) 
+error[E0301]: nothing named `os_setpriority` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/priority_rows.lu:18:5
+   |
+18 |     os_setpriority(d) else |e| {
+   |     ^^^^^^^^^^^^^^ not found
+   |
+
+error[E0301]: nothing named `os_getpriority` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/priority_rows.lu:29:13
+   |
+29 |     let p = os_getpriority() else |e| {
+   |             ^^^^^^^^^^^^^^ not found
+   |
+
+error[E0301]: nothing named `os_getpriority` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/priority_rows.lu:40:16
+   |
+40 |     let kept = os_getpriority() else |e| { -100 }
+   |                ^^^^^^^^^^^^^^ not found
+   |
+
+error[E0301]: nothing named `os_getpriority` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/priority_rows.lu:43:13
+   |
+43 |     let q = os_getpriority() else |e| { -100 }
+   |             ^^^^^^^^^^^^^^ not found
+   |
+
+error[E0301]: nothing named `os_getpriority` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/priority_rows.lu:47:15
+   |
+47 |     let top = os_getpriority() else |e| { -100 }
+   |               ^^^^^^^^^^^^^^ not found
+   |
+
+
+
+thread 'the_priority_rows_on_every_host' (83174531) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:288:5:
+assertion `left == right` failed: the CHECKED machine on priority_rows.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "read_in_range: true\nzero=ok\nzero_kept: true\nraise=ok\nraised: true\nfar_raise=ok\nat_the_top: true\nlower=denied\nlower_number=13\nlower_text=Permission denied\n")
+
+---- the_root_rows_on_every_host stdout ----
+== checked on chroot_rows.lu: fail(E0301) 
+error[E0301]: nothing named `os_chroot` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/chroot_rows.lu:18:5
+   |
+18 |     os_chroot(p) else |e| {
+   |     ^^^^^^^^^ not found
+   |
+
+
+
+thread 'the_root_rows_on_every_host' (83174581) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:288:5:
+assertion `left == right` failed: the CHECKED machine on chroot_rows.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "missing=denied\nmissing_number=1\ndot=denied\ndot_number=1\n")
+
+---- the_signal_action_rows_on_every_host stdout ----
+== checked on signal_action_rows.lu: fail(E0301) 
+error[E0301]: nothing named `os_signal_action_one` is in scope
+  --> /Users/mfwolffe/lanes/s272/build/crates/wolf_driver/../../corpus/os/signal_action_rows.lu:20:13
+   |
+20 |     let a = os_signal_action_one(m) else |e| {
+   |             ^^^^^^^^^^^^^^^^^^^^ not found
+   |
+
+
+
+thread 'the_signal_action_rows_on_every_host' (83174612) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:288:5:
+assertion `left == right` failed: the CHECKED machine on signal_action_rows.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=0\nhost_number_term=0\nkill=io\nkill_number=22\nstop=io\nstop_number=22\nnothing_moved: true\nuser_ignored=1\nuser_back=0\nreload_listened=2\nreload_back=0\n")
+
+---- onlcr_on_a_terminal_started_with_it_on_and_off stdout ----
+
+thread 'onlcr_on_a_terminal_started_with_it_on_and_off' (83174220) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:889:13:
+assertion `left == right` failed: tcgetattr after
+  left: -1
+ right: 0
+
+
+failures:
+    fs_statfs_matches_gnu_stat_f
+    onlcr_on_a_terminal_started_with_it_on_and_off
+    the_fault_meanings_read_the_programs_choice
+    the_file_system_record_on_every_host
+    the_mode_word_carries_onlcr_rows
+    the_priority_rows_on_every_host
+    the_root_rows_on_every_host
+    the_signal_action_rows_on_every_host
+
+test result: FAILED. 0 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.81s
+
+error: test failed, to rerun pass `-p wolf_driver --test os_surface_lanes`
+s272: END exit=101
+exit=101

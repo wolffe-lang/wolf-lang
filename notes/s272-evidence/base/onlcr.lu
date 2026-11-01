@@ -1,0 +1,7 @@
+fn main() {
+    os_term_set_mode(0, 16777216) else |e| {
+        print("set: {e}")
+        return
+    }
+    print("set")
+}

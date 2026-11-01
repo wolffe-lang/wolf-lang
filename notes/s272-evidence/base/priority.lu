@@ -1,0 +1,3 @@
+fn main() {
+    let _ = os_setpriority(0)
+}

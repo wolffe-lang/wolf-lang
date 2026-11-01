@@ -1,0 +1,12 @@
+error[E0301]: nothing named `fs_statfs` is in scope
+ --> ./main.lu:2:13
+  |
+2 |     let _ = fs_statfs("/")
+  |             ^^^^^^^^^ not found
+  |
+help: did you mean `fs_stat`?
+  |
+2 |     let _ = fs_stat("/")
+  |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)

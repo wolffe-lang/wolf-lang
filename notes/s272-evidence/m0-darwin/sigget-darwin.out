@@ -1,0 +1,12 @@
+sig 1: rc=0 errno=0 () default
+sig 2: rc=0 errno=0 () default
+sig 9: rc=-1 errno=22 (Invalid argument) -
+sig 17: rc=-1 errno=22 (Invalid argument) -
+sig 15: rc=0 errno=0 () default
+sig 13: rc=0 errno=0 () default
+sig 11: rc=0 errno=0 () default
+sig 10: rc=0 errno=0 () default
+sig 0: rc=-1 errno=22 (Invalid argument) -
+sig 32: rc=-1 errno=22 (Invalid argument) -
+sig 33: rc=-1 errno=22 (Invalid argument) -
+sig 64: rc=-1 errno=22 (Invalid argument) -

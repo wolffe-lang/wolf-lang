@@ -1,0 +1,208 @@
+queued 2026-11-01T20:38:10Z
+== start 2026-11-01T20:38:10Z
+END build exit=0
+=== as 4242:4242 cap=none
+== id: uid=4242(4242) gid=4242(4242) groups=4242(4242)
+euid=4242
+statfs /: type=794c7630 bsize=4096 frsize=4096 blocks=947579070 bfree=212907127 bavail=164754066 files=240746496 ffree=230678510 namelen=255 flags=1020 fsid0=318c2f13 fsid1=8f9ecd45 vfs_fsid=8f9ecd45318c2f13 vfs_flag=1000
+statfs /m1: type=ef53 bsize=4096 frsize=4096 blocks=947579070 bfree=212907127 bavail=164754066 files=240746496 ffree=230678510 namelen=255 flags=1021 fsid0=aca08b2b fsid1=b4aec482 vfs_fsid=b4aec482aca08b2b vfs_flag=1001
+statfs /dev/shm: type=1021994 bsize=4096 frsize=4096 blocks=16000 bfree=16000 bavail=16000 files=6141471 ffree=6141470 namelen=255 flags=102e fsid0=f41e0b74 fsid1=2719672e vfs_fsid=2719672ef41e0b74 vfs_flag=100e
+statfs /proc: type=9fa0 bsize=4096 frsize=4096 blocks=0 bfree=0 bavail=0 files=0 ffree=0 namelen=255 flags=102e fsid0=00000098 fsid1=00000000 vfs_fsid=98 vfs_flag=100e
+sigaction-get 1: rc=0 errno=0 default
+sigaction-get 9: rc=0 errno=0 default
+sigaction-get 19: rc=0 errno=0 default
+sigaction-get 15: rc=0 errno=0 default
+sigaction-get 11: rc=0 errno=0 default
+sigaction-get 7: rc=0 errno=0 default
+sigaction-get 0: rc=-1 errno=22 -
+sigaction-get 32: rc=-1 errno=22 -
+sigaction-get 33: rc=-1 errno=22 -
+sigaction-get 34: rc=0 errno=0 default
+sigaction-get 64: rc=0 errno=0 default
+sigaction-get 65: rc=-1 errno=22 -
+chroot(missing): rc=-1 errno=2
+chroot(file): rc=-1 errno=20
+getpriority=0 errno=0
+setpriority(+2): rc=0 errno=0 now=2
+setpriority(-1): rc=-1 errno=13 Permission denied now=2
+nice(-1): rc=-1 errno=1 Operation not permitted
+setpriority(100): rc=0 errno=0 now=19
+chroot(.): rc=-1 errno=1
+gnu-stat-f /: 4096 4096 947579070 212907127 164754066 240746496 230678510 255 794c7630 318c2f138f9ecd45
+gnu-stat-f /m1: 4096 4096 947579070 212907127 164754066 240746496 230678510 255 ef53 aca08b2bb4aec482
+gnu-stat-f /dev/shm: 4096 4096 16000 16000 16000 6141471 6141470 255 1021994 f41e0b742719672e
+gnu-stat-f /proc: 4096 4096 0 0 0 0 0 255 9fa0 9800000000
+  File: "/m1"
+    ID: aca08b2bb4aec482 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+1552 1643 8:2 /home/mfwolffe/lanes/s272/m1 /m1 ro,relatime - ext4 /dev/sda2 rw
+1554 1559 0:118 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=64000k,uid=1000,gid=100
+1558 1643 0:152 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+1559 1643 0:153 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,uid=1000,gid=100
+1560 1643 0:154 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs rw
+1561 1559 0:155 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=100004,mode=620,ptmxmode=666
+1562 1559 0:150 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+1563 1560 0:23 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw,nsdelegate,memory_recursiveprot,memory_hugetlb_accounting
+1643 1565 0:148 / / rw,relatime - overlay overlay rw,lowerdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/l/B3YJUXFAEF67TKGVSNT2D4LREA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/ULSKHS4CKQYGLGQOFI7RGJQ5EQ:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/5MQYLEGLQGNTUPBLOULYLTT7WP:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/MWKIJRUOT354KRQVQMWD3ZI7V7:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RAX7HZTUGESEOJVJHKSWJJQWXA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/6VCMA76HEHJ252RLQKUHYIFIKI:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/VYLVMOO5BS6WPZDJDGMTGHXIHV:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RZ6J4RMXMWZ7GAKVO2AZMSEMVC:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/SUOZJC2V37NKZM6L2Q4DTGDWZI,upperdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/04c07b8ee8f6f92db608dd7ae78703f57c6235b3e8a785f1e52900c3fcd92b2d/diff,workdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/04c07b8ee8f6f92db608dd7ae78703f57c6235b3e8a785f1e52900c3fcd92b2d/work,redirect_dir=nofollow,uuid=on,fsync=volatile,userxattr
+nice: cannot set niceness: Permission denied
+gnu nice -n -1 status=0
+2
+gnu nice -n 2 status=0
+chroot: cannot change root directory to '/m1': Operation not permitted
+gnu chroot status=0
+END case 4242:4242 none exit=0
+=== as 4242:4242 cap=SYS_NICE
+== id: uid=4242(4242) gid=4242(4242) groups=4242(4242)
+euid=4242
+statfs /: type=794c7630 bsize=4096 frsize=4096 blocks=947579070 bfree=212907126 bavail=164754065 files=240746496 ffree=230678510 namelen=255 flags=1020 fsid0=8a0fd0e1 fsid1=4cdaae1a vfs_fsid=4cdaae1a8a0fd0e1 vfs_flag=1000
+statfs /m1: type=ef53 bsize=4096 frsize=4096 blocks=947579070 bfree=212907126 bavail=164754065 files=240746496 ffree=230678510 namelen=255 flags=1021 fsid0=aca08b2b fsid1=b4aec482 vfs_fsid=b4aec482aca08b2b vfs_flag=1001
+statfs /dev/shm: type=1021994 bsize=4096 frsize=4096 blocks=16000 bfree=16000 bavail=16000 files=6141471 ffree=6141470 namelen=255 flags=102e fsid0=dfc5567b fsid1=ccbd1634 vfs_fsid=ccbd1634dfc5567b vfs_flag=100e
+statfs /proc: type=9fa0 bsize=4096 frsize=4096 blocks=0 bfree=0 bavail=0 files=0 ffree=0 namelen=255 flags=102e fsid0=00000098 fsid1=00000000 vfs_fsid=98 vfs_flag=100e
+sigaction-get 1: rc=0 errno=0 default
+sigaction-get 9: rc=0 errno=0 default
+sigaction-get 19: rc=0 errno=0 default
+sigaction-get 15: rc=0 errno=0 default
+sigaction-get 11: rc=0 errno=0 default
+sigaction-get 7: rc=0 errno=0 default
+sigaction-get 0: rc=-1 errno=22 -
+sigaction-get 32: rc=-1 errno=22 -
+sigaction-get 33: rc=-1 errno=22 -
+sigaction-get 34: rc=0 errno=0 default
+sigaction-get 64: rc=0 errno=0 default
+sigaction-get 65: rc=-1 errno=22 -
+chroot(missing): rc=-1 errno=2
+chroot(file): rc=-1 errno=20
+getpriority=0 errno=0
+setpriority(+2): rc=0 errno=0 now=2
+setpriority(-1): rc=-1 errno=13 Permission denied now=2
+nice(-1): rc=-1 errno=1 Operation not permitted
+setpriority(100): rc=0 errno=0 now=19
+chroot(.): rc=-1 errno=1
+gnu-stat-f /: 4096 4096 947579070 212907126 164754065 240746496 230678510 255 794c7630 8a0fd0e14cdaae1a
+gnu-stat-f /m1: 4096 4096 947579070 212907126 164754065 240746496 230678510 255 ef53 aca08b2bb4aec482
+gnu-stat-f /dev/shm: 4096 4096 16000 16000 16000 6141471 6141470 255 1021994 dfc5567bccbd1634
+gnu-stat-f /proc: 4096 4096 0 0 0 0 0 255 9fa0 9800000000
+  File: "/m1"
+    ID: aca08b2bb4aec482 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+1552 1643 8:2 /home/mfwolffe/lanes/s272/m1 /m1 ro,relatime - ext4 /dev/sda2 rw
+1556 1559 0:118 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=64000k,uid=1000,gid=100
+1558 1643 0:152 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+1559 1643 0:153 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,uid=1000,gid=100
+1560 1643 0:154 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs rw
+1561 1559 0:155 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=100004,mode=620,ptmxmode=666
+1562 1559 0:150 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+1563 1560 0:23 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw,nsdelegate,memory_recursiveprot,memory_hugetlb_accounting
+1643 1565 0:148 / / rw,relatime - overlay overlay rw,lowerdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/l/B3YJUXFAEF67TKGVSNT2D4LREA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/ULSKHS4CKQYGLGQOFI7RGJQ5EQ:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/5MQYLEGLQGNTUPBLOULYLTT7WP:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/MWKIJRUOT354KRQVQMWD3ZI7V7:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RAX7HZTUGESEOJVJHKSWJJQWXA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/6VCMA76HEHJ252RLQKUHYIFIKI:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/VYLVMOO5BS6WPZDJDGMTGHXIHV:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RZ6J4RMXMWZ7GAKVO2AZMSEMVC:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/SUOZJC2V37NKZM6L2Q4DTGDWZI,upperdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/829b3efdf545993fc67cd688f79d503abe6063aec672b2d8019c7ff2b56a23b1/diff,workdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/829b3efdf545993fc67cd688f79d503abe6063aec672b2d8019c7ff2b56a23b1/work,redirect_dir=nofollow,uuid=on,fsync=volatile,userxattr
+nice: cannot set niceness: Permission denied
+gnu nice -n -1 status=0
+2
+gnu nice -n 2 status=0
+chroot: cannot change root directory to '/m1': Operation not permitted
+gnu chroot status=0
+END case 4242:4242 SYS_NICE exit=0
+=== as 0:0 cap=none
+== id: uid=0(root) gid=0(root) groups=0(root)
+euid=0
+statfs /: type=794c7630 bsize=4096 frsize=4096 blocks=947579070 bfree=212907127 bavail=164754066 files=240746496 ffree=230678512 namelen=255 flags=1020 fsid0=dd9d1b87 fsid1=76aa092e vfs_fsid=76aa092edd9d1b87 vfs_flag=1000
+statfs /m1: type=ef53 bsize=4096 frsize=4096 blocks=947579070 bfree=212907127 bavail=164754066 files=240746496 ffree=230678512 namelen=255 flags=1021 fsid0=aca08b2b fsid1=b4aec482 vfs_fsid=b4aec482aca08b2b vfs_flag=1001
+statfs /dev/shm: type=1021994 bsize=4096 frsize=4096 blocks=16000 bfree=16000 bavail=16000 files=6141471 ffree=6141470 namelen=255 flags=102e fsid0=426590d6 fsid1=237fefdf vfs_fsid=237fefdf426590d6 vfs_flag=100e
+statfs /proc: type=9fa0 bsize=4096 frsize=4096 blocks=0 bfree=0 bavail=0 files=0 ffree=0 namelen=255 flags=102e fsid0=00000098 fsid1=00000000 vfs_fsid=98 vfs_flag=100e
+sigaction-get 1: rc=0 errno=0 default
+sigaction-get 9: rc=0 errno=0 default
+sigaction-get 19: rc=0 errno=0 default
+sigaction-get 15: rc=0 errno=0 default
+sigaction-get 11: rc=0 errno=0 default
+sigaction-get 7: rc=0 errno=0 default
+sigaction-get 0: rc=-1 errno=22 -
+sigaction-get 32: rc=-1 errno=22 -
+sigaction-get 33: rc=-1 errno=22 -
+sigaction-get 34: rc=0 errno=0 default
+sigaction-get 64: rc=0 errno=0 default
+sigaction-get 65: rc=-1 errno=22 -
+chroot(missing): rc=-1 errno=2
+chroot(file): rc=-1 errno=20
+getpriority=0 errno=0
+setpriority(+2): rc=0 errno=0 now=2
+setpriority(-1): rc=-1 errno=13 Permission denied now=2
+nice(-1): rc=-1 errno=1 Operation not permitted
+setpriority(100): rc=0 errno=0 now=19
+chroot(.): rc=0 errno=0
+gnu-stat-f /: 4096 4096 947579070 212907127 164754066 240746496 230678512 255 794c7630 dd9d1b8776aa092e
+gnu-stat-f /m1: 4096 4096 947579070 212907127 164754066 240746496 230678512 255 ef53 aca08b2bb4aec482
+gnu-stat-f /dev/shm: 4096 4096 16000 16000 16000 6141471 6141470 255 1021994 426590d6237fefdf
+gnu-stat-f /proc: 4096 4096 0 0 0 0 0 255 9fa0 9800000000
+  File: "/m1"
+    ID: aca08b2bb4aec482 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+1552 1643 8:2 /home/mfwolffe/lanes/s272/m1 /m1 ro,relatime - ext4 /dev/sda2 rw
+1554 1559 0:118 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=64000k,uid=1000,gid=100
+1558 1643 0:152 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+1559 1643 0:153 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,uid=1000,gid=100
+1560 1643 0:154 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs rw
+1561 1559 0:155 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=100004,mode=620,ptmxmode=666
+1562 1559 0:150 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+1563 1560 0:23 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw,nsdelegate,memory_recursiveprot,memory_hugetlb_accounting
+1643 1565 0:148 / / rw,relatime - overlay overlay rw,lowerdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/l/B3YJUXFAEF67TKGVSNT2D4LREA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/ULSKHS4CKQYGLGQOFI7RGJQ5EQ:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/5MQYLEGLQGNTUPBLOULYLTT7WP:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/MWKIJRUOT354KRQVQMWD3ZI7V7:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RAX7HZTUGESEOJVJHKSWJJQWXA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/6VCMA76HEHJ252RLQKUHYIFIKI:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/VYLVMOO5BS6WPZDJDGMTGHXIHV:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RZ6J4RMXMWZ7GAKVO2AZMSEMVC:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/SUOZJC2V37NKZM6L2Q4DTGDWZI,upperdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/5581cab029a17240dd854bc316aa5ca9f5745efa39cb48a64090e15ede0d071c/diff,workdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/5581cab029a17240dd854bc316aa5ca9f5745efa39cb48a64090e15ede0d071c/work,redirect_dir=nofollow,uuid=on,fsync=volatile,userxattr
+nice: cannot set niceness: Permission denied
+gnu nice -n -1 status=0
+2
+gnu nice -n 2 status=0
+chroot: failed to run command '/probe': No such file or directory
+gnu chroot status=0
+END case 0:0 none exit=0
+=== as 0:0 cap=SYS_NICE
+== id: uid=0(root) gid=0(root) groups=0(root)
+euid=0
+statfs /: type=794c7630 bsize=4096 frsize=4096 blocks=947579070 bfree=212907126 bavail=164754065 files=240746496 ffree=230678512 namelen=255 flags=1020 fsid0=a39d9687 fsid1=b892e6d6 vfs_fsid=b892e6d6a39d9687 vfs_flag=1000
+statfs /m1: type=ef53 bsize=4096 frsize=4096 blocks=947579070 bfree=212907126 bavail=164754065 files=240746496 ffree=230678512 namelen=255 flags=1021 fsid0=aca08b2b fsid1=b4aec482 vfs_fsid=b4aec482aca08b2b vfs_flag=1001
+statfs /dev/shm: type=1021994 bsize=4096 frsize=4096 blocks=16000 bfree=16000 bavail=16000 files=6141471 ffree=6141470 namelen=255 flags=102e fsid0=44643c99 fsid1=f4031cb1 vfs_fsid=f4031cb144643c99 vfs_flag=100e
+statfs /proc: type=9fa0 bsize=4096 frsize=4096 blocks=0 bfree=0 bavail=0 files=0 ffree=0 namelen=255 flags=102e fsid0=00000098 fsid1=00000000 vfs_fsid=98 vfs_flag=100e
+sigaction-get 1: rc=0 errno=0 default
+sigaction-get 9: rc=0 errno=0 default
+sigaction-get 19: rc=0 errno=0 default
+sigaction-get 15: rc=0 errno=0 default
+sigaction-get 11: rc=0 errno=0 default
+sigaction-get 7: rc=0 errno=0 default
+sigaction-get 0: rc=-1 errno=22 -
+sigaction-get 32: rc=-1 errno=22 -
+sigaction-get 33: rc=-1 errno=22 -
+sigaction-get 34: rc=0 errno=0 default
+sigaction-get 64: rc=0 errno=0 default
+sigaction-get 65: rc=-1 errno=22 -
+chroot(missing): rc=-1 errno=2
+chroot(file): rc=-1 errno=20
+getpriority=0 errno=0
+setpriority(+2): rc=0 errno=0 now=2
+setpriority(-1): rc=-1 errno=13 Permission denied now=2
+nice(-1): rc=-1 errno=1 Operation not permitted
+setpriority(100): rc=0 errno=0 now=19
+chroot(.): rc=0 errno=0
+gnu-stat-f /: 4096 4096 947579070 212907126 164754065 240746496 230678512 255 794c7630 a39d9687b892e6d6
+gnu-stat-f /m1: 4096 4096 947579070 212907126 164754065 240746496 230678512 255 ef53 aca08b2bb4aec482
+gnu-stat-f /dev/shm: 4096 4096 16000 16000 16000 6141471 6141470 255 1021994 44643c99f4031cb1
+gnu-stat-f /proc: 4096 4096 0 0 0 0 0 255 9fa0 9800000000
+  File: "/m1"
+    ID: aca08b2bb4aec482 Namelen: 255     Type: ext2/ext3
+Block size: 4096       Fundamental block size: 4096
+1552 1643 8:2 /home/mfwolffe/lanes/s272/m1 /m1 ro,relatime - ext4 /dev/sda2 rw
+1554 1559 0:118 / /dev/shm rw,nosuid,nodev,noexec,relatime - tmpfs shm rw,size=64000k,uid=1000,gid=100
+1558 1643 0:152 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+1559 1643 0:153 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755,uid=1000,gid=100
+1560 1643 0:154 / /sys ro,nosuid,nodev,noexec,relatime - sysfs sysfs rw
+1561 1559 0:155 / /dev/pts rw,nosuid,noexec,relatime - devpts devpts rw,gid=100004,mode=620,ptmxmode=666
+1562 1559 0:150 / /dev/mqueue rw,nosuid,nodev,noexec,relatime - mqueue mqueue rw
+1563 1560 0:23 / /sys/fs/cgroup ro,nosuid,nodev,noexec,relatime - cgroup2 cgroup rw,nsdelegate,memory_recursiveprot,memory_hugetlb_accounting
+1643 1565 0:148 / / rw,relatime - overlay overlay rw,lowerdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/l/B3YJUXFAEF67TKGVSNT2D4LREA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/ULSKHS4CKQYGLGQOFI7RGJQ5EQ:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/5MQYLEGLQGNTUPBLOULYLTT7WP:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/MWKIJRUOT354KRQVQMWD3ZI7V7:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RAX7HZTUGESEOJVJHKSWJJQWXA:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/6VCMA76HEHJ252RLQKUHYIFIKI:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/VYLVMOO5BS6WPZDJDGMTGHXIHV:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/RZ6J4RMXMWZ7GAKVO2AZMSEMVC:/home/mfwolffe/lanes/hasu-env/storage/overlay/l/SUOZJC2V37NKZM6L2Q4DTGDWZI,upperdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/28ccc9fdf000d39f9016ab6fdb7075ecfdbd7dc92367aac7d6f042aefcd690a7/diff,workdir=/home/mfwolffe/lanes/hasu-env/storage/overlay/28ccc9fdf000d39f9016ab6fdb7075ecfdbd7dc92367aac7d6f042aefcd690a7/work,redirect_dir=nofollow,uuid=on,fsync=volatile,userxattr
+nice: cannot set niceness: Permission denied
+gnu nice -n -1 status=0
+2
+gnu nice -n 2 status=0
+chroot: failed to run command '/probe': No such file or directory
+gnu chroot status=0
+END case 0:0 SYS_NICE exit=0
+== host GNU stat (9.11) on hasu itself, for the record
+host-gnu-stat-f /: 4096 4096 947579070 212907150 164754089 240746496 230678538 255 ef53 aca08b2bb4aec482 ext2/ext3
+host-gnu-stat-f /dev/shm: 4096 4096 6141471 6125811 6125811 6141471 6141412 255 1021994 740c1fb9017965d4 tmpfs
+host-gnu-stat-f /boot: 4096 4096 261627 35298 35298 0 0 1530 4d44 80100000000 msdos
+== end 2026-11-01T20:38:11Z

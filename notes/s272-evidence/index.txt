@@ -1,0 +1,16 @@
+s272 evidence (wolf-lang#686, #921, #922, #976, #975)
+
+base/             each issue's witness at 7332772f: E0301 (wolf build exit 2); the bit-24 set answers invalid
+m0-darwin/        black box on nomad (Darwin 26.4.1 arm64): sigaction GET on 0, 9, 17, 32..64 is EINVAL;
+                  a user's chroot is EPERM for every path; a lowering setpriority is EACCES; setpriority(100) -> 20
+m1-hasu/          black box on hasu, ubuntu 24.04 in rootless podman, block A, as 4242 and root, +/- SYS_NICE:
+                  statfs words beside GNU stat -f (GNU's %i order: f_fsid's first half high), ST_VALID flags,
+                  glibc's GET refusals (0, 32, 33, 65), chroot ENOENT/ENOTDIR/EPERM, setpriority EACCES,
+                  nice(3) EPERM, GNU nice's "cannot set niceness: Permission denied", setpriority(100) -> 19
+red-896e5204-nomad.log
+                  os_surface_lanes at the red commit, nomad: 8 FAILED (seven by E0301 / bit 24 invalid, the
+                  ONLCR row in its harness — fixed at ee4af99d)
+rig/              the scripts as run: the Mac lock and build-at (copies of s273's), the three Mac jobs, the
+                  hasu container rig (copied from r41's; the taskset shim moves 0-5 lists by the block's offset),
+                  the targeted head rows, roottest (build in r41-toolchain, programs COPIED into an image from
+                  ubuntu:24.04, each case as a user and as root, --network none)

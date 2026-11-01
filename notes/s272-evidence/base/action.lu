@@ -1,0 +1,3 @@
+fn main() {
+    let _ = os_signal_action_one(2)
+}

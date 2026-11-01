@@ -1,0 +1,9 @@
+chroot(missing): rc=-1 errno=1 Operation not permitted
+chroot(.): rc=-1 errno=1 Operation not permitted
+chroot(file): rc=-1 errno=1 Operation not permitted
+getpriority: 0 errno=0 PRIO_MIN=-20 PRIO_MAX=20
+setpriority(+1): rc=0 errno=0
+now 1
+setpriority(back to 0): rc=-1 errno=13 Permission denied
+setpriority(100): rc=0 errno=0  now 20
+statvfs . flag=0 namemax=255 frsize=4096 bsize=1048576

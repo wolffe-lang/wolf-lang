@@ -1,0 +1,8 @@
+error[E0301]: nothing named `os_chroot` is in scope
+ --> ./main.lu:2:13
+  |
+2 |     let _ = os_chroot(".")
+  |             ^^^^^^^^^ not found
+  |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
