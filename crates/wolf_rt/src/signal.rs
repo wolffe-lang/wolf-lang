@@ -464,64 +464,6 @@ mod sys {
         }
     }
 
-    /// s275 (wolf-lang#1006): the unit tests' stand-ins for the drain
-    /// thread's races, compiled into no runtime a program links. The park
-    /// for a fork's hold may leave an errno (the futex's EAGAIN when
-    /// `fork_release`'s unpark lands between std's parker state change and
-    /// its `FUTEX_WAIT`, sh34's strace), and the drain thread's next poll
-    /// may answer a chosen errno (EINTR, a transient failure, a fatal one).
-    #[cfg(test)]
-    pub(super) mod hook {
-        use super::{READER_GONE, READER_HELD, READER_STATE, errno_slot};
-        use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
-
-        pub const GONE: u8 = READER_GONE;
-        pub const HELD: u8 = READER_HELD;
-        /// The errno every park for a fork's hold leaves (0: none).
-        pub static PARK_ERRNO: AtomicI32 = AtomicI32::new(0);
-        /// The errno the drain thread's next poll answers, -1 (0: its own
-        /// answer); taken once.
-        pub static POLL_ERRNO: AtomicI32 = AtomicI32::new(0);
-        /// Parks for a fork's hold so far.
-        pub static PARKS: AtomicUsize = AtomicUsize::new(0);
-        /// The running drain thread's `pthread_t` (0: none yet).
-        pub static READER_PTHREAD: AtomicUsize = AtomicUsize::new(0);
-
-        pub(in super::super) fn after_park() {
-            let e = PARK_ERRNO.load(Ordering::SeqCst);
-            if e != 0 {
-                // SAFETY: this thread's own errno.
-                unsafe { *errno_slot() = e };
-            }
-        }
-
-        /// The poll's answer `n`, or -1 with the planted errno.
-        pub(in super::super) fn poll_answer(n: libc::c_int) -> libc::c_int {
-            let e = POLL_ERRNO.swap(0, Ordering::SeqCst);
-            if e == 0 {
-                return n;
-            }
-            // SAFETY: this thread's own errno.
-            unsafe { *errno_slot() = e };
-            -1
-        }
-
-        pub fn reader_state() -> u8 {
-            READER_STATE.load(Ordering::SeqCst)
-        }
-
-        /// `sig` aimed at the drain thread itself (the thread a SIGCHLD
-        /// lands on while a fork blocks every catchable signal on main).
-        pub fn signal_reader(sig: libc::c_int) {
-            let t = READER_PTHREAD.load(Ordering::SeqCst);
-            assert_ne!(t, 0, "a drain thread to signal");
-            // SAFETY: a live thread of this process (the drain thread
-            // records itself before its loop), a valid signal number.
-            let rc = unsafe { libc::pthread_kill(t as libc::pthread_t, sig) };
-            assert_eq!(rc, 0, "pthread_kill on the drain thread");
-        }
-    }
-
     /// s247: claim the drain thread for a fork where it holds nothing — in
     /// its kernel wait — waiting out a start or a moment of work (each
     /// bounded) first; nothing where there is no drain thread. The thread is
@@ -1323,6 +1265,8 @@ mod sys {
         #[cfg(test)]
         // SAFETY: pthread_self has no preconditions.
         hook::READER_PTHREAD.store(unsafe { libc::pthread_self() } as usize, Ordering::SeqCst);
+        #[cfg(test)]
+        hook::STARTS.fetch_add(1, Ordering::SeqCst);
         READER_STATE.store(READER_LOOPING, Ordering::SeqCst);
         reader_loop(h);
         reader_gone(h);
@@ -1927,6 +1871,69 @@ mod sys {
             return -crate::os::proc_code::INVALID;
         }
         to_signal(m).map_or(-crate::os::proc_code::INVALID, i64::from)
+    }
+
+    /// s275 (wolf-lang#1006): the unit tests' stand-ins for the drain
+    /// thread's races, compiled into no runtime a program links. The park
+    /// for a fork's hold may leave an errno (the futex's EAGAIN when
+    /// `fork_release`'s unpark lands between std's parker state change and
+    /// its `FUTEX_WAIT`, sh34's strace), and the drain thread's next poll
+    /// may answer a chosen errno (EINTR, a transient failure, a fatal one).
+    #[cfg(test)]
+    pub(super) mod hook {
+        use super::{POLL_SHORT, READER_GONE, READER_HELD, READER_STATE, errno_slot};
+        use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
+
+        pub const GONE: u8 = READER_GONE;
+        pub const HELD: u8 = READER_HELD;
+        /// The poll failure this host's poll(2) names a moment's shortage.
+        pub const SHORT: libc::c_int = POLL_SHORT;
+        /// The errno every park for a fork's hold leaves (0: none).
+        pub static PARK_ERRNO: AtomicI32 = AtomicI32::new(0);
+        /// The errno the drain thread's next poll answers, -1 (0: its own
+        /// answer); taken once.
+        pub static POLL_ERRNO: AtomicI32 = AtomicI32::new(0);
+        /// Parks for a fork's hold so far.
+        pub static PARKS: AtomicUsize = AtomicUsize::new(0);
+        /// Drain threads started so far (a `pthread_t` is no name for one:
+        /// macOS hands a gone thread's to the next).
+        pub static STARTS: AtomicUsize = AtomicUsize::new(0);
+        /// The running drain thread's `pthread_t` (0: none yet).
+        pub static READER_PTHREAD: AtomicUsize = AtomicUsize::new(0);
+
+        pub(in super::super) fn after_park() {
+            let e = PARK_ERRNO.load(Ordering::SeqCst);
+            if e != 0 {
+                // SAFETY: this thread's own errno.
+                unsafe { *errno_slot() = e };
+            }
+        }
+
+        /// The poll's answer `n`, or -1 with the planted errno.
+        pub(in super::super) fn poll_answer(n: libc::c_int) -> libc::c_int {
+            let e = POLL_ERRNO.swap(0, Ordering::SeqCst);
+            if e == 0 {
+                return n;
+            }
+            // SAFETY: this thread's own errno.
+            unsafe { *errno_slot() = e };
+            -1
+        }
+
+        pub fn reader_state() -> u8 {
+            READER_STATE.load(Ordering::SeqCst)
+        }
+
+        /// `sig` aimed at the drain thread itself (the thread a SIGCHLD
+        /// lands on while a fork blocks every catchable signal on main).
+        pub fn signal_reader(sig: libc::c_int) {
+            let t = READER_PTHREAD.load(Ordering::SeqCst);
+            assert_ne!(t, 0, "a drain thread to signal");
+            // SAFETY: a live thread of this process (the drain thread
+            // records itself before its loop), a valid signal number.
+            let rc = unsafe { libc::pthread_kill(t as libc::pthread_t, sig) };
+            assert_eq!(rc, 0, "pthread_kill on the drain thread");
+        }
     }
 }
 
@@ -3661,9 +3668,9 @@ mod tests {
         );
     }
 
-    /// A transient poll failure (EAGAIN, which macOS's poll(2) names when
-    /// it cannot allocate; ENOMEM on linux) is not the drain thread's end:
-    /// it goes on and moves the next byte. Until s275 any errno but EINTR
+    /// A transient poll failure (the host's poll(2) could not allocate:
+    /// ENOMEM on linux, EAGAIN on macOS) is not the drain thread's end: it
+    /// goes on and moves the next byte. Until s275 any errno but EINTR
     /// ended it.
     #[cfg(unix)]
     #[test]
@@ -3676,7 +3683,7 @@ mod tests {
                 assert!(s275_until(
                     || hook::READER_PTHREAD.load(Ordering::SeqCst) != 0
                 ));
-                hook::POLL_ERRNO.store(libc::EAGAIN, Ordering::SeqCst);
+                hook::POLL_ERRNO.store(hook::SHORT, Ordering::SeqCst);
                 hook::signal_reader(libc::SIGHUP);
                 let went_on = s275_until(|| {
                     s275_queued(meaning::RELOAD) || hook::reader_state() == hook::GONE
@@ -3707,7 +3714,7 @@ mod tests {
             assert!(s275_until(
                 || hook::READER_PTHREAD.load(Ordering::SeqCst) != 0
             ));
-            let first = hook::READER_PTHREAD.load(Ordering::SeqCst);
+            let first = hook::STARTS.load(Ordering::SeqCst);
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
                 s275_block_here(libc::SIGHUP);
@@ -3720,10 +3727,8 @@ mod tests {
             // The poll comes back (an UPGRADE byte for the next thread),
             // answers EBADF, and the thread ends.
             hook::signal_reader(libc::SIGUSR2);
-            let again = s275_until(|| {
-                let t = hook::READER_PTHREAD.load(Ordering::SeqCst);
-                t != first && t != 0 && sys::running()
-            });
+            let again =
+                s275_until(|| hook::STARTS.load(Ordering::SeqCst) > first && sys::running());
             // SAFETY: a signal to this process, which listens for it.
             unsafe { libc::kill(libc::getpid(), libc::SIGHUP) };
             let got = rx.recv_timeout(Duration::from_secs(10));
