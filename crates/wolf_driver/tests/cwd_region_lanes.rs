@@ -4,10 +4,13 @@
 //! pelt's `shape-rss` method, as a row: the witness
 //! (`fixtures/cwd_region/main.lu`, sh22's program) runs N and 2N turns of
 //! `region r { let c = os_cwd() …; t += c.len }`, and the turn's cost is
-//! what the extra N turns add to the peak resident set, divided by N — the
-//! OS's own high-water mark of exactly this child (`wait4(2)`'s
-//! `ru_maxrss`: kibibytes on linux, bytes on macOS), never a ledger. Two
-//! controls beside it: a `str` of the same length built by interpolation
+//! what the extra N turns add to `wait4(2)`'s `ru_maxrss`, divided by N
+//! (kibibytes on linux, bytes on macOS), never a ledger. On Linux this
+//! reading has the harness's high-water floor (#1008): equal readings do
+//! not prove that a smaller leak is absent. This row guards #834's
+//! root-retained cwd answers at 200k/400k turns, not arbitrary sub-floor
+//! growth. The off-line s276 plant restores that allocation's placement.
+//! Two controls beside it: a `str` of the same length built by interpolation
 //! in the same region (the region gives it back), and the loop alone.
 //!
 //! **Red at trunk** (`9da7bdcf`, 0.2.34): the runtime copied the name with
