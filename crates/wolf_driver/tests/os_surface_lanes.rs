@@ -653,13 +653,20 @@ enum Phase {
 struct Oracle {
     name: &'static str,
     tag: &'static str,
-    read: Box<dyn Fn(&str) -> Option<Vec<i64>>>,
-    project: Box<dyn Fn(&[i64]) -> Vec<i64>>,
+    read: OracleRead,
+    project: Projection,
     names: &'static [&'static str],
     moving: &'static [usize],
-    others: Box<dyn Fn(&str, &[i64]) -> Vec<String>>,
+    others: OtherChecks,
     free_bytes: fn(&[i64]) -> i64,
 }
+
+/// The oracle's read of one path's words (`None`: it did not answer).
+type OracleRead = Box<dyn Fn(&str) -> Option<Vec<i64>>>;
+/// The machine's twelve words in the oracle's order.
+type Projection = Box<dyn Fn(&[i64]) -> Vec<i64>>;
+/// The misses of the words the oracle does not print, for a path.
+type OtherChecks = Box<dyn Fn(&str, &[i64]) -> Vec<String>>;
 
 /// linux: GNU `stat -f` (its order: %s %S %b %f %a %c %d %l %t %i, the
 /// record's words 1..8, 10, 11) and the mount's flags; `None`, with a loud
