@@ -3369,17 +3369,62 @@ mod tests {
         );
     }
 
+    /// s275 (R-s275-6, wolf-lang#1011's macOS run): the verdict on a parked
+    /// wait's wakes. A hosted runner's stall delays one wait now and then:
+    /// 1 of 200 over 50 ms in trunk's macOS job of 2026-10-23 (run
+    /// 39990785067, before s275), and again at s275's labelled head, while
+    /// the distribution on nomad is the same at trunk and the head (median
+    /// 2.5 ms, longest 3.4 ms in 4,000 waits each; `notes/s275-evidence/lat/`).
+    /// What the row guards — a wake with no timer — moves every wait when it
+    /// regresses: a fallback timer puts the median at its period, and a lost
+    /// wake parks for ever. So: at most 2 of the waits over 50 ms, none over
+    /// 1 s, and the median under 25 ms, each failure named. What this gives
+    /// up: a race that delays 1% or fewer of wakes past 50 ms passes. The
+    /// count line, written to standard error past libtest's capture whenever
+    /// a wait is over 50 ms, is where such a race stays visible.
+    #[cfg(unix)]
+    fn wake_verdict(row: &str, took: &[Duration]) {
+        use std::io::Write as _;
+        let ms = |d: &Duration| d.as_secs_f64() * 1000.0;
+        let mut sorted = took.to_vec();
+        sorted.sort();
+        let median = sorted[sorted.len() / 2];
+        let longest = sorted[sorted.len() - 1];
+        let slow: Vec<String> = took
+            .iter()
+            .filter(|d| **d > Duration::from_millis(50))
+            .map(|d| format!("{:.1} ms", ms(d)))
+            .collect();
+        let line = format!(
+            "{row}: {} of {} waits took over 50 ms [{}] (at most 2), the median {:.2} ms (under \
+             25), the longest {:.2} ms (at most 1,000)",
+            slow.len(),
+            took.len(),
+            slow.join(", "),
+            ms(&median),
+            ms(&longest)
+        );
+        if !slow.is_empty() {
+            let mut err = std::io::stderr().lock();
+            let _ = writeln!(err, "REPORT {line}");
+        }
+        assert!(slow.len() <= 2, "the count: {line}");
+        assert!(longest <= Duration::from_secs(1), "none over 1 s: {line}");
+        assert!(median < Duration::from_millis(25), "the median: {line}");
+    }
+
     /// s234: a signal sent from another thread while the wait is parked
     /// on an empty descriptor wakes it promptly (no timer: the delivery
-    /// path writes the wait's pipe), 200 rounds; and end of input (the
-    /// write end closed) answers 0.
+    /// path writes the wait's pipe), 200 rounds, judged by
+    /// [`wake_verdict`] (s275, R-s275-6); and end of input (the write end
+    /// closed) answers 0.
     #[cfg(unix)]
     #[test]
     fn wait_fd_wakes_for_a_signal_while_parked() {
         let _g = serial();
         assert_eq!(listen(meaning::USER), sig_code::OK);
         let (r, w) = table_pipe();
-        let mut slow = 0;
+        let mut took = Vec::with_capacity(200);
         for _ in 0..200 {
             let t = std::thread::spawn(|| {
                 std::thread::sleep(Duration::from_millis(2));
@@ -3388,12 +3433,10 @@ mod tests {
             });
             let t0 = std::time::Instant::now();
             assert_eq!(wait_fd(r, meaning::USER), meaning::USER);
-            if t0.elapsed() > Duration::from_millis(50) {
-                slow += 1;
-            }
+            took.push(t0.elapsed());
             t.join().unwrap();
         }
-        assert_eq!(slow, 0, "{slow} of 200 waits took over 50 ms");
+        wake_verdict("wait_fd_wakes_for_a_signal_while_parked", &took);
         assert_eq!(crate::fs::__wolf_rt_fs_close(w), 0);
         assert_eq!(wait_fd(r, meaning::USER), 0, "end of input is ready");
         assert_eq!(set_disposition(meaning::USER, Disp::Default), sig_code::OK);
