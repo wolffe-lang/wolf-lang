@@ -3571,13 +3571,16 @@ mod tests {
         (code, text)
     }
 
-    /// The row in the parent: its scenario in a child, which must pass.
+    /// The row in the parent: its scenario in a child, which must pass. The
+    /// parent holds the signal rows' lock while the child runs (R-s275-7),
+    /// so the child's start never overlaps another signal row's timing.
     #[cfg(unix)]
     fn s275_row(name: &str, scenario: fn()) {
         if std::env::var("WOLF_S275_CHILD").as_deref() == Ok(name) {
             scenario();
             return;
         }
+        let _g = serial();
         let (code, out) = s275_in_a_child(name);
         assert_eq!(
             code,
