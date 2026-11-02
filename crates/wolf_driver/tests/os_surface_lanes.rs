@@ -18,9 +18,10 @@
 //!   test started.
 //! - MEASURED: `fs_statfs`'s words against GNU `stat -f` (linux: ext4,
 //!   tmpfs, overlay, proc — whatever this host mounts) and `/bin/df -k`
-//!   (macOS), the free counts bracketed by the oracle's read before and
-//!   after the program's, in the same second; the flags word against the
-//!   mount's options (`/proc/self/mountinfo`).
+//!   (macOS), the free counts equal in a triple of reads (the oracle's,
+//!   the program's, the oracle's) that agree, and held so while a writer
+//!   churns the measured disk; the flags word against the mount's options
+//!   (`/proc/self/mountinfo`).
 //! - LIVE: `ONLCR` on a pseudo-terminal the test opens, started on and
 //!   off (unix); the change of root and the nice value in a throwaway
 //!   `--network none` container (linux), once as a user and once as root
@@ -564,13 +565,6 @@ fn record_machines(dir: &Path) -> Vec<(String, Reader)> {
     rows
 }
 
-/// Each word against the oracle's two reads around it: a word the host
-/// keeps still (`fixed`) equals both; a count that moves while the host
-/// writes (`moving`) lies between them, in the same second.
-fn bracketed(before: i64, got: i64, after: i64) -> bool {
-    got >= before.min(after) && got <= before.max(after)
-}
-
 /// The paths the record is measured on: the test's own directory (the
 /// checkout's file system: ext4 on hasu and CI, APFS on macOS), the root,
 /// and the host's other kinds where it mounts them.
@@ -654,7 +648,8 @@ enum Phase {
 /// One host's oracle of the record: its name and its lines' tag, its
 /// read of a path's words, the machine's twelve words put in its order,
 /// the words' names, which of them move while the host writes (the rest
-/// it keeps still), and the checks of the words it does not print.
+/// it keeps still), the checks of the words it does not print, and the
+/// free space its read shows, in bytes.
 struct Oracle {
     name: &'static str,
     tag: &'static str,
@@ -663,6 +658,7 @@ struct Oracle {
     names: &'static [&'static str],
     moving: &'static [usize],
     others: Box<dyn Fn(&str, &[i64]) -> Vec<String>>,
+    free_bytes: fn(&[i64]) -> i64,
 }
 
 /// linux: GNU `stat -f` (its order: %s %S %b %f %a %c %d %l %t %i, the
@@ -706,6 +702,7 @@ fn host_oracle() -> Option<Oracle> {
             "fsid",
         ],
         moving: &[3, 4, 6],
+        free_bytes: |o| o[3] * o[1],
         others: Box::new(|p, w| {
             let mut bad = Vec::new();
             let (ro, nosuid) = mount_flags(p);
@@ -783,6 +780,7 @@ fn host_oracle() -> Option<Oracle> {
         }),
         names: &["1024-blocks", "available", "iused", "ifree"],
         moving: &[1, 2, 3],
+        free_bytes: |o| o[1] * 1024,
         others: Box::new(|p, w| {
             let mut bad = Vec::new();
             if let Some(n) = name_max(p)
@@ -810,11 +808,24 @@ fn host_oracle() -> Option<Oracle> {
     None
 }
 
-/// One machine's record against the oracle, in up to three triples (the
-/// oracle's read of every path, the machine's, the oracle's again):
-/// every word the host keeps still equals both reads, and every count
-/// that moves lies between them. `disturb` runs between the reads (the
-/// churn row's writer). The last attempt's misses on failure.
+/// How many triples a path is given to find the disk still: on a disk
+/// other work writes, a triple whose three reads agree comes within a few
+/// (hasu block A, CI's runner); a word the machine gets wrong never agrees.
+const STATFS_TRIPLES: usize = 40;
+
+/// One machine's record against the oracle, in triples: the oracle's
+/// read of each open path, the machine's, the oracle's again. Every word
+/// the host keeps still (the sizes, the totals, name max, type, id, the
+/// flags) equals both reads in every triple, or the row fails at once. A
+/// count the host moves while it writes (free, available, free files)
+/// settles a path only when all three reads are EQUAL: the oracle's two
+/// reads agreeing do not prove the disk still between them (a write and
+/// its removal fit inside the window), and a read between two others is
+/// no proof either (a disk written and freed is not monotonic). A path
+/// that agrees is settled; the others go round again, up to
+/// `STATFS_TRIPLES`, with a pause that grows. `disturb` runs between the
+/// reads (the churn row's writer). Answers the triple each path settled
+/// in, or every unsettled path with its tally and last disagreement.
 fn judge_record(
     machine: &str,
     read: &Reader,
@@ -822,62 +833,110 @@ fn judge_record(
     paths: &[String],
     oracle: &Oracle,
     disturb: &dyn Fn(Phase, usize),
-) -> Result<(), String> {
-    let mut last = String::new();
-    for attempt in 0..3 {
-        std::fs::write(dir.join("s272.paths"), paths.join("\n") + "\n").expect("paths written");
-        let before: Vec<Option<Vec<i64>>> = paths.iter().map(|p| (oracle.read)(p)).collect();
+) -> Result<Vec<(String, usize)>, String> {
+    let t = oracle.tag;
+    let mut open: Vec<String> = paths.to_vec();
+    let mut settled = Vec::new();
+    // Per open path: triples with the oracle still and the machine apart,
+    // triples with the oracle moving, and the last disagreement.
+    let mut tally: Vec<(String, usize, usize, String)> = Vec::new();
+    for attempt in 0..STATFS_TRIPLES {
+        std::fs::write(dir.join("s272.paths"), open.join("\n") + "\n").expect("paths written");
+        let before: Vec<Option<Vec<i64>>> = open.iter().map(|p| (oracle.read)(p)).collect();
         disturb(Phase::OracleRead, attempt);
         let got = records_of(&read());
         disturb(Phase::MachineRead, attempt);
-        let after: Vec<Option<Vec<i64>>> = paths.iter().map(|p| (oracle.read)(p)).collect();
-        let mut bad = Vec::new();
-        for (i, p) in paths.iter().enumerate() {
+        let after: Vec<Option<Vec<i64>>> = open.iter().map(|p| (oracle.read)(p)).collect();
+        let mut next = Vec::new();
+        for (i, p) in open.iter().enumerate() {
             let (Some(b), Some(a)) = (&before[i], &after[i]) else {
                 eprintln!("SKIP: {p}: {} did not answer", oracle.name);
                 continue;
             };
             let Some((_, w)) = got.iter().find(|(q, _)| q == p) else {
-                bad.push(format!("{p}: no record from {machine}"));
-                continue;
+                return Err(format!("{p}: no record from {machine}"));
             };
             assert_eq!(w.len(), 12, "{machine}: twelve words for {p}: {w:?}");
             let mine = (oracle.project)(w);
-            let t = oracle.tag;
             report(&format!(
-                "REPORT {machine} {p}: wolf {w:?} as {t} {mine:?} {t}-before {b:?} {t}-after {a:?}"
+                "REPORT {machine} {p} triple {attempt}: wolf {w:?} as {t} {mine:?} {t}-before {b:?} {t}-after {a:?}"
             ));
+            let mut fixed_bad = Vec::new();
             for (k, name) in oracle.names.iter().enumerate() {
-                let fine = if oracle.moving.contains(&k) {
-                    bracketed(b[k], mine[k], a[k])
-                } else {
-                    mine[k] == b[k] && mine[k] == a[k]
-                };
-                if !fine {
-                    bad.push(format!(
+                if !oracle.moving.contains(&k) && (mine[k] != b[k] || mine[k] != a[k]) {
+                    fixed_bad.push(format!(
                         "{p}: {name} wolf={} {t}-before={} {t}-after={}",
                         mine[k], b[k], a[k]
                     ));
                 }
             }
-            bad.extend((oracle.others)(p, w));
+            fixed_bad.extend((oracle.others)(p, w));
+            if !fixed_bad.is_empty() {
+                return Err(fixed_bad.join("\n"));
+            }
+            let still = oracle.moving.iter().all(|&k| b[k] == a[k]);
+            let agree = oracle
+                .moving
+                .iter()
+                .all(|&k| mine[k] == b[k] && mine[k] == a[k]);
+            if agree {
+                report(&format!("REPORT {machine} {p}: agreed in triple {attempt}"));
+                settled.push((p.clone(), attempt));
+                continue;
+            }
+            let apart: Vec<String> = oracle
+                .moving
+                .iter()
+                .filter(|&&k| !(mine[k] == b[k] && mine[k] == a[k]))
+                .map(|&k| {
+                    format!(
+                        "{p}: {} wolf={} {t}-before={} {t}-after={}",
+                        oracle.names[k], mine[k], b[k], a[k]
+                    )
+                })
+                .collect();
+            let row = match tally.iter_mut().find(|r| &r.0 == p) {
+                Some(r) => r,
+                None => {
+                    tally.push((p.clone(), 0, 0, String::new()));
+                    tally.last_mut().expect("just pushed")
+                }
+            };
+            if still {
+                row.1 += 1;
+            } else {
+                row.2 += 1;
+            }
+            row.3 = apart.join("\n");
+            next.push(p.clone());
         }
-        if bad.is_empty() {
-            return Ok(());
+        open = next;
+        if open.is_empty() {
+            return Ok(settled);
         }
-        last = bad.join("\n");
-        eprintln!(
-            "{machine}: attempt {attempt} outside {}'s reads:\n{last}",
-            oracle.name
-        );
+        let pause = (25 * (attempt as u64 + 1)).min(400);
+        std::thread::sleep(std::time::Duration::from_millis(pause));
     }
-    Err(last)
+    let mut out = Vec::new();
+    for p in &open {
+        let (_, still, moving, last) = tally
+            .iter()
+            .find(|r| &r.0 == p)
+            .cloned()
+            .unwrap_or_default();
+        out.push(format!(
+            "{p}: no triple of {STATFS_TRIPLES} had {}'s two reads and {machine}'s equal \
+             ({still} with {t} still and {machine} apart, {moving} with {t} moving); the last:\n{last}",
+            oracle.name
+        ));
+    }
+    Err(out.join("\n"))
 }
 
 /// #686: every word `fs_statfs` answers equals GNU `stat -f`'s (linux) —
 /// the block size, the fragment size, the totals, name max, type and id
-/// exactly, the free counts between GNU's read before and after the
-/// program's — and the flags word the mount's `ro` and `nosuid`; on
+/// in every triple, the free counts in a triple whose three reads agree
+/// (`judge_record`) — and the flags word the mount's `ro` and `nosuid`; on
 /// macOS the 1024-blocks, available, iused and ifree `/bin/df -k`
 /// prints, and name max `getconf NAME_MAX`'s. Every machine reads the
 /// same record. The plant (`s272-plant-statfs`: `free` reported as
@@ -925,7 +984,11 @@ const CHURNED: usize = 5;
 /// machine reads 4096 blocks fewer free than the two oracle reads around
 /// it, which agree: a write and its removal inside the window, the shape
 /// a busy disk gives. The machine is right each time; a comparison that
-/// takes a still oracle for a still disk calls it wrong.
+/// takes a still oracle for a still disk calls it wrong. The test's own
+/// directory must settle only after the churn ends: the churn was seen.
+/// A file system that does not count an unsynced write at once (btrfs
+/// counts it at its commit; measured on kasumi) cannot be churned this
+/// way, and says so.
 #[test]
 fn fs_statfs_holds_while_a_writer_churns() {
     let dir = scratch("statfs_churn");
@@ -935,6 +998,23 @@ fn fs_statfs_holds_while_a_writer_churns() {
     };
     let junk = dir.join("churn.bin");
     let bytes = churn_bytes();
+    let here = dir.display().to_string();
+    let seen = {
+        let before = (oracle.read)(&here);
+        std::fs::write(&junk, &bytes).expect("the probe written");
+        let during = (oracle.read)(&here);
+        std::fs::remove_file(&junk).expect("the probe removed");
+        match (before, during) {
+            (Some(b), Some(d)) => (oracle.free_bytes)(&b) - (oracle.free_bytes)(&d) >= 8 << 20,
+            _ => false,
+        }
+    };
+    if !seen {
+        report(&format!(
+            "REPORT the churn: {here}'s file system did not count 16 MiB written unsynced; \
+             the churned triples cannot disagree here"
+        ));
+    }
     let disturb = |phase: Phase, attempt: usize| {
         if attempt >= CHURNED {
             return;
@@ -945,10 +1025,19 @@ fn fs_statfs_holds_while_a_writer_churns() {
         }
     };
     for (machine, read) in record_machines(&dir) {
-        if let Err(last) = judge_record(&machine, &read, &dir, &paths, &oracle, &disturb) {
-            panic!(
-                "{machine}: fs_statfs against {} while a writer churns:\n{last}",
-                oracle.name
+        let settled = judge_record(&machine, &read, &dir, &paths, &oracle, &disturb)
+            .unwrap_or_else(|last| {
+                panic!(
+                    "{machine}: fs_statfs against {} while a writer churns:\n{last}",
+                    oracle.name
+                )
+            });
+        if seen {
+            let at = settled.iter().find(|(p, _)| *p == here).map(|(_, a)| *a);
+            assert!(
+                at.is_some_and(|a| a >= CHURNED),
+                "{machine}: the test's own directory settled in triple {at:?}, inside the \
+                 churn: the churn was not seen"
             );
         }
     }
