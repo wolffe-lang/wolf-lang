@@ -65,3 +65,21 @@ kasumi/rows-8c212681-13818328.log
 rig/kasumi/       kasumi's rig: the container (slot 8-11's one lock taken by job.sh, the shim moving 0-5 by 8,
                   the scratch on a tmpfs when asked), the rows chain, and the final chain (the plant's row, prep,
                   the gauntlet: hasu's prep and gauntlet scripts, copied)
+nomad/mac-job8-8c212681-13818328.log
+                  nomad (APFS) at the red row 8c212681: the churn row red in each of its three tries (the
+                  available count 16384 KiB apart from two equal df reads), the plain row green; at 13818328 both
+                  green alone (the test's own directory agreed in triple 5); then os_surface_lanes whole red: the
+                  churn row's /dev, `1024-blocks wolf=215 df-before=214 df-after=215` (devfs grows while the pty
+                  row makes terminals: a word kept still elsewhere moves there; fixed at 261a9293), and clippy's
+                  type_complexity on the oracle's closures (fixed at 534684a8)
+kasumi/rows2-261a9293.log
+                  kasumi slot 8-11 at 261a9293: the statfs rows alone and os_surface_lanes whole twice, the scratch
+                  on a private tmpfs (the churn seen: the test's own directory agreed in triple 5 on every
+                  machine) and on btrfs (the churn not counted, said by name): every run green
+kasumi/lint-261a9293.log
+                  kasumi slot 8-11 at 261a9293: cargo fmt --all --check and cargo clippy --workspace --all-targets
+                  -D warnings, both 0
+nomad/mac-job9-261a9293.log
+                  nomad at 261a9293: the statfs rows alone, os_surface_lanes whole three times (the pty row
+                  beside them: /dev agreed in triple 1 where it moved), fmt, clippy -D warnings on wolf_driver:
+                  every END 0

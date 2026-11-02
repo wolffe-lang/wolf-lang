@@ -3,9 +3,10 @@
 # kasumi's slot 8-11: for each <label> <sha>, the build, then the churn row and
 # the plain row, each alone, one `END <step> exit=N` line each (a measurement:
 # the red commit's churn row is expected nonzero).
-# usage: rows-inner.sh <label> <sha> [<label> <sha> ...]
+# usage: rows-inner.sh [--all=N] <label> <sha> [<label> <sha> ...]
 set -uo pipefail
 source /lane/scripts/gate-env.sh
+case "${1:-}" in --all=*) S272_ALL=${1#--all=}; shift ;; esac
 cd /lane/wolf-lang || exit 2
 printf 'S272_ROWS_START %s block=%s scratch=%s\n' "$(date -u +%FT%TZ)" "$S272_BLOCK" "$(stat -f -c %T /lane/wolf-lang/target/tmp 2>/dev/null || echo none)"
 grep -E 'Cpus_allowed_list|SigBlk|SigIgn' /proc/self/status
@@ -33,6 +34,16 @@ while [ $# -ge 2 ]; do
     rc=$?
     grep -E "^SKIP|REPORT statfs paths|REPORT the churn|agreed in triple|attempt [0-9]+ outside|panicked at|: (free|available|free_files|blocks|1024-blocks|iused|ifree) wolf=|no triple of|test result" "$log" | head -40
     echo "END $label-$row exit=$rc"
+  done
+  # --all=N: os_surface_lanes whole, N times (the rows beside the pty
+  # and container rows, as the gauntlet runs them).
+  for i in $(seq 1 "${S272_ALL:-0}"); do
+    log=/lane/records/rows/$label-all-$i-$(stat -f -c %T /lane/wolf-lang/target/tmp).log
+    echo "== STEP $label-all-$i $(date -u +%T)"
+    cargo test --locked -p wolf_driver --test os_surface_lanes -- --nocapture > "$log" 2>&1
+    rc=$?
+    grep -E "^SKIP|agreed in triple [1-9]|no triple of|panicked at|^test .* (ok|FAILED)$|test result" "$log" | head -30
+    echo "END $label-all-$i exit=$rc"
   done
 done
 printf 'S272_ROWS_END %s\n' "$(date -u +%FT%TZ)"

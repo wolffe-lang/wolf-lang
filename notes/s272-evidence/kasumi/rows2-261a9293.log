@@ -1,0 +1,188 @@
+S272 rows2 waiting for kasumi slot 8-11 at 2026-11-02T18:24:46Z
+S272 acquired kasumi slot 8-11 at 2026-11-02T18:24:46Z
+/dev/nvme0n1p2  928G  869G   57G  94% /home
+S272 rows2-tmpfs container start at 2026-11-02T18:24:46Z (tmpfs scratch 1)
+S272 in the container at 2026-11-02T18:24:46Z
+S272_ROWS_START 2026-11-02T18:24:46Z block=K scratch=tmpfs
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	8-11
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+stat (GNU coreutils) 9.4
+== STEP head-build 18:24:46 head=261a929392cfdfca9563df0dcc50d719faef4b43
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.29s
+  Executable tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-2a825e9ce4f74f98)
+END head-build exit=0
+== STEP head-fs_statfs_holds_while_a_writer_churns 18:24:46
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.46s
+END head-fs_statfs_holds_while_a_writer_churns exit=0
+== STEP head-fs_statfs_matches_gnu_stat_f 18:24:48
+REPORT statfs paths: ["/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu", "/", "/dev/shm", "/proc", "/tmp", "/dev"]
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.18s
+END head-fs_statfs_matches_gnu_stat_f exit=0
+== STEP head-all-1 18:24:48
+SKIP: root_and_priority: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live witnesses did not run
+test chroot_and_priority_in_a_container_as_root_and_as_a_user ... ok
+test fs_statfs_matches_gnu_stat_f ... ok
+test the_fault_meanings_read_the_programs_choice ... ok
+test the_file_system_record_on_every_host ... ok
+test the_mode_word_carries_onlcr_rows ... ok
+test onlcr_on_a_terminal_started_with_it_on_and_off ... ok
+test the_root_rows_on_every_host ... ok
+test the_priority_rows_on_every_host ... ok
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+test the_signal_action_rows_on_every_host ... ok
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+test fs_statfs_holds_while_a_writer_churns ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.55s
+END head-all-1 exit=0
+== STEP head-all-2 18:24:50
+SKIP: root_and_priority: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live witnesses did not run
+test chroot_and_priority_in_a_container_as_root_and_as_a_user ... ok
+test the_fault_meanings_read_the_programs_choice ... ok
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 1
+test fs_statfs_matches_gnu_stat_f ... ok
+test the_file_system_record_on_every_host ... ok
+test the_mode_word_carries_onlcr_rows ... ok
+test onlcr_on_a_terminal_started_with_it_on_and_off ... ok
+test the_root_rows_on_every_host ... ok
+test the_priority_rows_on_every_host ... ok
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+test the_signal_action_rows_on_every_host ... ok
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+test fs_statfs_holds_while_a_writer_churns ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.51s
+END head-all-2 exit=0
+S272_ROWS_END 2026-11-02T18:24:51Z
+S272 rows2-tmpfs END exit=0 at 2026-11-02T18:24:52Z
+S272 rows2-btrfs container start at 2026-11-02T18:24:52Z (tmpfs scratch 0)
+S272 in the container at 2026-11-02T18:24:52Z
+S272_ROWS_START 2026-11-02T18:24:52Z block=K scratch=btrfs
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	8-11
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+stat (GNU coreutils) 9.4
+== STEP head-build 18:24:52 head=261a929392cfdfca9563df0dcc50d719faef4b43
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+  Executable tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-2a825e9ce4f74f98)
+END head-build exit=0
+== STEP head-fs_statfs_holds_while_a_writer_churns 18:24:52
+REPORT the churn: /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn's file system did not count 16 MiB written unsynced; the churned triples cannot disagree here
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 1
+REPORT checked /: agreed in triple 1
+REPORT checked /tmp: agreed in triple 1
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 0
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 0
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.27s
+END head-fs_statfs_holds_while_a_writer_churns exit=0
+== STEP head-fs_statfs_matches_gnu_stat_f 18:24:52
+REPORT statfs paths: ["/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu", "/", "/dev/shm", "/proc", "/tmp", "/dev"]
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.18s
+END head-fs_statfs_matches_gnu_stat_f exit=0
+== STEP head-all-1 18:24:53
+SKIP: root_and_priority: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live witnesses did not run
+test chroot_and_priority_in_a_container_as_root_and_as_a_user ... ok
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 1
+test fs_statfs_matches_gnu_stat_f ... ok
+test the_fault_meanings_read_the_programs_choice ... ok
+test fs_statfs_holds_while_a_writer_churns ... ok
+test the_file_system_record_on_every_host ... ok
+test the_mode_word_carries_onlcr_rows ... ok
+test the_priority_rows_on_every_host ... ok
+test onlcr_on_a_terminal_started_with_it_on_and_off ... ok
+test the_root_rows_on_every_host ... ok
+test the_signal_action_rows_on_every_host ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+END head-all-1 exit=0
+== STEP head-all-2 18:24:53
+SKIP: root_and_priority: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: No such file or directory (os error 2)"]) — the live witnesses did not run
+test chroot_and_priority_in_a_container_as_root_and_as_a_user ... ok
+test fs_statfs_matches_gnu_stat_f ... ok
+test fs_statfs_holds_while_a_writer_churns ... ok
+test the_fault_meanings_read_the_programs_choice ... ok
+test the_file_system_record_on_every_host ... ok
+test the_mode_word_carries_onlcr_rows ... ok
+test the_priority_rows_on_every_host ... ok
+test onlcr_on_a_terminal_started_with_it_on_and_off ... ok
+test the_root_rows_on_every_host ... ok
+test the_signal_action_rows_on_every_host ... ok
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+END head-all-2 exit=0
+S272_ROWS_END 2026-11-02T18:24:54Z
+S272 rows2-btrfs END exit=0 at 2026-11-02T18:24:54Z
+S272 chain-rows2 tmpfs=0 btrfs=0
+S272 rows2 chain END exit=0 at 2026-11-02T18:24:54Z
