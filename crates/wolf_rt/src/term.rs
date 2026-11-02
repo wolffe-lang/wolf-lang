@@ -745,12 +745,22 @@ mod tests {
         assert_eq!(pgid(), Ok(i64::from(unsafe { libc::getpgrp() })));
     }
 
+    /// The term tests open their pairs at once, and a pair is opened
+    /// whole under this lock. POSIX does not require `ptsname` to be
+    /// thread-safe (its answer may live in storage the next call
+    /// overwrites: on linux one test opened another's slave), and
+    /// macOS's `posix_openpt` answered -1 with errno -6 when eight
+    /// threads opened at once, never under one lock (the probe and its
+    /// runs: `notes/s272-evidence/nomad/ptyprobe/`).
+    static PAIRS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// A fresh pseudo-terminal: the master's descriptor and the slave
     /// as a table handle (POSIX `posix_openpt`, `grantpt`, `unlockpt`,
     /// `ptsname`).
     fn pty() -> (std::fs::File, i64) {
         use std::os::fd::FromRawFd as _;
         use std::os::unix::fs::OpenOptionsExt as _;
+        let _held = PAIRS.lock().unwrap_or_else(|p| p.into_inner());
         // SAFETY: the POSIX pseudo-terminal calls on a descriptor we own.
         unsafe {
             let m = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
@@ -772,10 +782,10 @@ mod tests {
 
     /// s272: each pair the helper opens is its own: a size set on the
     /// master reads back on the slave while eight threads open pairs at
-    /// once, as the term tests do. POSIX does not require `ptsname` to
-    /// be thread-safe, and hasu's head4 run at `7ca4f949` failed four
-    /// of these tests at once (a size of 0x0, a mode word with another
-    /// test's bits) because one test's slave was another's.
+    /// once, as the term tests do. hasu's head4 run at `7ca4f949` failed
+    /// four of these tests at once (a size of 0x0, a mode word with
+    /// another test's bits) because one test's slave was another's; on
+    /// macOS this row failed at `posix_openpt` itself (see `PAIRS`).
     #[test]
     fn the_pty_helper_answers_its_own_pair() {
         use std::os::fd::AsRawFd as _;
