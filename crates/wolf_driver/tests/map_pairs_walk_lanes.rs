@@ -10,9 +10,12 @@
 //! the same program in C (`notes/s273-evidence/`). A walk whose body never
 //! names the map now reads the map's own entries. The row is the cost of
 //! an entry: what N more entries add to the peak resident set, divided by
-//! N — the OS's own high-water mark of exactly this child (`wait4(2)`'s
-//! `ru_maxrss`: kibibytes on linux, bytes on macOS), never a ledger. The
-//! bound is 1 KiB an entry natively (≈ 90 B measured after, ≈ 140 KB at
+//! N — `wait4(2)`'s `ru_maxrss` (kibibytes on linux, bytes on macOS),
+//! never a ledger. On Linux the reading has the harness's high-water
+//! floor (#1008), so it cannot resolve arbitrary sub-floor growth. The
+//! regression guarded here is the retained N² entry snapshots, not a
+//! small linear leak; s276's off-line plant materializes `pairs()` per get.
+//! The bound is 1 KiB an entry natively (≈ 90 B measured after, ≈ 140 KB at
 //! N = 2,000 before) and 16 KiB on the checked machine (its `Value`s and
 //! the compiler beside them; ≈ 400 KB before), with the peak itself under
 //! a ceiling. linux and macOS (windows has no `wait4`, and the row is not
