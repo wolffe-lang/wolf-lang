@@ -770,6 +770,46 @@ mod tests {
         }
     }
 
+    /// s272: each pair the helper opens is its own: a size set on the
+    /// master reads back on the slave while eight threads open pairs at
+    /// once, as the term tests do. POSIX does not require `ptsname` to
+    /// be thread-safe, and hasu's head4 run at `7ca4f949` failed four
+    /// of these tests at once (a size of 0x0, a mode word with another
+    /// test's bits) because one test's slave was another's.
+    #[test]
+    fn the_pty_helper_answers_its_own_pair() {
+        use std::os::fd::AsRawFd as _;
+        let workers: Vec<_> = (0..8u16)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    let mut crossed = 0u32;
+                    for i in 0..100u16 {
+                        let (m, s) = pty();
+                        let rows = t * 100 + i + 1;
+                        // SAFETY: a winsize for this pair's master.
+                        unsafe {
+                            let w = libc::winsize {
+                                ws_row: rows,
+                                ws_col: 7,
+                                ws_xpixel: 0,
+                                ws_ypixel: 0,
+                            };
+                            assert_eq!(libc::ioctl(m.as_raw_fd(), libc::TIOCSWINSZ, &w), 0);
+                        }
+                        if size(s) != Ok((i64::from(rows), 7)) {
+                            crossed += 1;
+                        }
+                        drop(m);
+                        assert_eq!(crate::fs::__wolf_rt_fs_close(s), crate::fs::fs_code::OK);
+                    }
+                    crossed
+                })
+            })
+            .collect();
+        let crossed: u32 = workers.into_iter().map(|w| w.join().unwrap_or(1)).sum();
+        assert_eq!(crossed, 0, "pairs whose slave was another pair's");
+    }
+
     /// s234 (`[os.term.size]`): the size the other side set, and a new
     /// one after a resize; a file is `io`.
     #[test]
