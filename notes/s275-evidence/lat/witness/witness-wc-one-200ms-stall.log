@@ -1,0 +1,9 @@
+$ WOLF_S275_PLANT_STALLS=1 /Users/mfwolffe/lanes/s275/lat/wolf_rt-witness-2004bf6b --exact signal::tests::wait_fd_wakes_for_a_signal_while_parked --test-threads=1
+
+running 1 test
+test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... REPORT wait_fd_wakes_for_a_signal_while_parked: 1 of 200 waits took over 50 ms [204.4 ms] (at most 2), the median 2.55 ms (under 25), the longest 204.44 ms (at most 1,000)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.71s
+
+exit=0

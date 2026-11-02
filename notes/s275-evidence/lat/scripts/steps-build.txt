@@ -1,0 +1,5 @@
+toolchain	rustc --version
+build-trunk-lat	cargo test -j4 -p wolf_rt --lib --no-run --message-format=json | python3 /Users/mfwolffe/lanes/s275/lat/extract.py /Users/mfwolffe/lanes/s275/lat/wolf_rt-trunk-c4c0e0fb
+checkout-head-lat	git checkout -q --detach 9f3c58827be8ca757e7a660ee7c302d25c3479e5 && test "$(git rev-parse HEAD)" = 9f3c58827be8ca757e7a660ee7c302d25c3479e5 && git diff --quiet
+build-head-lat	cargo test -j4 -p wolf_rt --lib --no-run --message-format=json | python3 /Users/mfwolffe/lanes/s275/lat/extract.py /Users/mfwolffe/lanes/s275/lat/wolf_rt-head-9f3c5882
+shas	shasum -a 256 /Users/mfwolffe/lanes/s275/lat/wolf_rt-*

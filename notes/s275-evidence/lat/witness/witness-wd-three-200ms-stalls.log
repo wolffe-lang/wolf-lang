@@ -1,0 +1,21 @@
+$ WOLF_S275_PLANT_STALLS=3 /Users/mfwolffe/lanes/s275/lat/wolf_rt-witness-2004bf6b --exact signal::tests::wait_fd_wakes_for_a_signal_while_parked --test-threads=1
+
+running 1 test
+test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... REPORT wait_fd_wakes_for_a_signal_while_parked: 3 of 200 waits took over 50 ms [205.1 ms, 204.3 ms, 205.1 ms] (at most 2), the median 2.56 ms (under 25), the longest 205.11 ms (at most 1,000)
+FAILED
+
+failures:
+
+---- signal::tests::wait_fd_wakes_for_a_signal_while_parked stdout ----
+
+thread 'signal::tests::wait_fd_wakes_for_a_signal_while_parked' (89213640) panicked at crates/wolf_rt/src/signal.rs:3425:9:
+the count: wait_fd_wakes_for_a_signal_while_parked: 3 of 200 waits took over 50 ms [205.1 ms, 204.3 ms, 205.1 ms] (at most 2), the median 2.56 ms (under 25), the longest 205.11 ms (at most 1,000)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    signal::tests::wait_fd_wakes_for_a_signal_while_parked
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 345 filtered out; finished in 1.12s
+
+exit=101

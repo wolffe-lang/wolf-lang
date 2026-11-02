@@ -1,0 +1,7 @@
+toolchain	rustc --version && df -g ~ | tail -1
+real-build	cargo test -j4 -p wolf_rt --lib --no-run
+real-signal-rows	cargo test -j4 -p wolf_rt --lib -- signal::tests --test-threads=1
+real-row-x3	for i in 1 2 3; do cargo test -q -j4 -p wolf_rt --lib -- --exact signal::tests::wait_fd_wakes_for_a_signal_while_parked 2>&1 | grep -E "test result|REPORT|panicked|the count|the median|none over"; done
+real-clippy	cargo clippy -j4 -p wolf_rt --all-targets -- -D warnings
+checkout-witness	git checkout -q --detach 2004bf6be8b27228ba3c26331e23fc1ad6c9ce96 && test "$(git rev-parse HEAD)" = 2004bf6be8b27228ba3c26331e23fc1ad6c9ce96 && git diff --quiet
+witness-build	cargo test -j4 -p wolf_rt --lib --no-run --message-format=json | python3 /Users/mfwolffe/lanes/s275/lat/extract.py /Users/mfwolffe/lanes/s275/lat/wolf_rt-witness-2004bf6b && shasum -a 256 /Users/mfwolffe/lanes/s275/lat/wolf_rt-witness-2004bf6b

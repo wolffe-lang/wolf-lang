@@ -1,0 +1,22 @@
+took the Mac lock 13:43:17, at c4c0e0fbdf177beb5a938c686aa6882be8ada4f7
+8 GiB gate passed: 12194 MiB 13:43:17
+BEGIN toolchain 13:43:17
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+END toolchain exit=0 13:43:17
+BEGIN build-trunk-lat 13:43:17
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.31s
+copied /Users/mfwolffe/lanes/s275/build/target/debug/deps/wolf_rt-90f255db9a814193 -> /Users/mfwolffe/lanes/s275/lat/wolf_rt-trunk-c4c0e0fb
+END build-trunk-lat exit=0 13:43:20
+BEGIN checkout-head-lat 13:43:20
+END checkout-head-lat exit=0 13:43:20
+BEGIN build-head-lat 13:43:20
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.05s
+copied /Users/mfwolffe/lanes/s275/build/target/debug/deps/wolf_rt-90f255db9a814193 -> /Users/mfwolffe/lanes/s275/lat/wolf_rt-head-9f3c5882
+END build-head-lat exit=0 13:43:22
+BEGIN shas 13:43:22
+04bdf96ac7aa00a07f565c85b4d1e5860969ef962b9e291642f463cfded2a306  /Users/mfwolffe/lanes/s275/lat/wolf_rt-head-9f3c5882
+6f895a879506a607d2ee5199f0c7f891d0ab427c9b389307866a066b6a9f5ec5  /Users/mfwolffe/lanes/s275/lat/wolf_rt-trunk-c4c0e0fb
+END shas exit=0 13:43:22
+released the Mac lock 13:43:22

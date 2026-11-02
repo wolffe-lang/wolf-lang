@@ -1,0 +1,3 @@
+uptime	uptime
+trunk	WOLF_S275_LAT=1 /Users/mfwolffe/lanes/s275/lat/wolf_rt-trunk-c4c0e0fb --exact signal::tests::wait_fd_wakes_for_a_signal_while_parked --nocapture --test-threads=1 > /Users/mfwolffe/lanes/s275/lat/run-1-trunk.log 2>&1; rc=$?; grep -c S275_LAT /Users/mfwolffe/lanes/s275/lat/run-1-trunk.log; exit $rc
+head	WOLF_S275_LAT=1 /Users/mfwolffe/lanes/s275/lat/wolf_rt-head-9f3c5882 --exact signal::tests::wait_fd_wakes_for_a_signal_while_parked --nocapture --test-threads=1 > /Users/mfwolffe/lanes/s275/lat/run-1-head.log 2>&1; rc=$?; grep -c S275_LAT /Users/mfwolffe/lanes/s275/lat/run-1-head.log; exit $rc

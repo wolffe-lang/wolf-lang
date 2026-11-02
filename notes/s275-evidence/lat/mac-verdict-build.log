@@ -1,0 +1,107 @@
+waiting for the Mac lock (holder fg04 pid 33585) 14:40:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:40:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:41:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:41:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:42:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:42:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:43:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:43:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:44:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:44:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:45:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:45:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:46:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:46:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:47:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:47:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:48:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:48:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:49:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:49:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:50:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:50:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:51:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:51:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:52:15
+waiting for the Mac lock (holder fg04 pid 33585) 14:52:45
+waiting for the Mac lock (holder fg04 pid 33585) 14:53:15
+waiting for the Mac lock (holder px88 pid 2314) 14:53:45
+waiting for the Mac lock (holder px88 pid 2314) 14:54:15
+waiting for the Mac lock (holder px88 pid 2314) 14:54:45
+waiting for the Mac lock (holder px88 pid 2314) 14:55:16
+waiting for the Mac lock (holder px88 pid 2314) 14:55:46
+waiting for the Mac lock (holder px88 pid 2314) 14:56:16
+waiting for the Mac lock (holder orch-hexd-judge pid 92436) 14:56:46
+waiting for the Mac lock (holder orch-hexd-judge pid 92436) 14:57:16
+waiting for the Mac lock (holder fg04 pid 54361) 14:57:46
+waiting for the Mac lock (holder fg04 pid 54361) 14:58:16
+waiting for the Mac lock (holder fg04 pid 54361) 14:58:46
+took the Mac lock 14:59:16, at e730a403b080944311f7f33855a1db5314b68963
+8 GiB gate passed: 12196 MiB 14:59:16
+disk gate passed: 64 GB free 14:59:16
+BEGIN toolchain 14:59:16
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+/dev/disk3s5       926  821        64    93% 12144220 672820720    2%   /System/Volumes/Data
+END toolchain exit=0 14:59:16
+BEGIN real-build 14:59:16
+   Compiling libc v0.2.189
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.94s
+  Executable unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+END real-build exit=0 14:59:19
+BEGIN real-signal-rows 14:59:19
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.01s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+
+running 28 tests
+test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+test signal::tests::disposition_of_a_bad_set_is_io ... ok
+test signal::tests::disposition_one_rows ... ok
+test signal::tests::empty_set_is_io_not_a_hang ... ok
+test signal::tests::group_and_all_shape_rows ... ok
+test signal::tests::host_numbers ... ok
+test signal::tests::ignored_reads_the_disposition ... ok
+test signal::tests::new_meanings_round_trip_by_index ... ok
+test signal::tests::number_rows ... ok
+test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+test signal::tests::poll_right_after_raise_never_misses ... ok
+test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+test signal::tests::raise_unmapped_is_io ... ok
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+test signal::tests::self_raise_delivers_the_meaning ... ok
+test signal::tests::send_rows ... ok
+test signal::tests::set_pgid_shape_rows ... ok
+test signal::tests::text_rows ... ok
+test signal::tests::the_eleven_new_meanings_round_trip ... ok
+test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... ok
+test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+test signal::tests::wait_fds_answers_write_readiness ... ok
+test signal::tests::wait_filters_by_set ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 318 filtered out; finished in 0.75s
+
+END real-signal-rows exit=0 14:59:20
+BEGIN real-row-x3 14:59:20
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.51s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.51s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.51s
+END real-row-x3 exit=0 14:59:22
+BEGIN real-clippy 14:59:22
+    Checking libc v0.2.189
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.52s
+END real-clippy exit=0 14:59:23
+BEGIN checkout-witness 14:59:23
+END checkout-witness exit=0 14:59:23
+BEGIN witness-build 14:59:23
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s275/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.03s
+copied /Users/mfwolffe/lanes/s275/build/target/debug/deps/wolf_rt-90f255db9a814193 -> /Users/mfwolffe/lanes/s275/lat/wolf_rt-witness-2004bf6b
+4f189f7c7557e0687a6951e35443e8c985d3fff2f38ef08b01595cd3a68125ec  /Users/mfwolffe/lanes/s275/lat/wolf_rt-witness-2004bf6b
+END witness-build exit=0 14:59:25
+released the Mac lock 14:59:25

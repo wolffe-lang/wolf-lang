@@ -1,0 +1,45 @@
+# run 41488742290 (the labelled tier full at abd9482f), attempt 1, job 125425931192 'build + test (macos-latest)': the row's lines and the rows beside it, gh run view --log
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3002770Z test reactor::tests::cancellation_surfaces_at_parked_io_wait ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3003210Z test reactor::tests::many_waiters_one_reactor ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3591730Z test net::tests::shim_lost_race_returns_within_budget ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3603620Z test scratch::tests::a_nested_use_gets_its_own_buffer ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3608930Z test scratch::tests::the_buffer_is_reused_and_grows_once ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3616470Z test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3618070Z test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3619450Z test signal::tests::disposition_of_a_bad_set_is_io ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3620410Z test signal::tests::disposition_one_rows ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3621270Z test signal::tests::empty_set_is_io_not_a_hang ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3622170Z test signal::tests::group_and_all_shape_rows ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3622980Z test signal::tests::host_numbers ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3623800Z test signal::tests::ignored_reads_the_disposition ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3625450Z test signal::tests::new_meanings_round_trip_by_index ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.3626820Z test signal::tests::number_rows ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.4223530Z test reactor::tests::timers_fire_in_deadline_order ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.4224500Z test reactor::tests::readiness_completes_wait_and_emits_io_arrive ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.5184290Z test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.5186390Z test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.5544350Z test signal::tests::poll_right_after_raise_never_misses ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.5562900Z test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.5564450Z test signal::tests::raise_unmapped_is_io ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6220490Z test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6223060Z test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6224950Z test signal::tests::self_raise_delivers_the_meaning ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6227450Z test signal::tests::set_pgid_shape_rows ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6228520Z test signal::tests::text_rows ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6288970Z test signal::tests::send_rows ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6291820Z test signal::tests::the_eleven_new_meanings_round_trip ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.6293550Z test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:07.8260660Z test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2371230Z test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... FAILED
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2645630Z test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2646480Z test stdfd::tests::a_descriptor_above_two_stays_where_it_is ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2771210Z test str::tests::a_dead_threads_strings_outlive_it ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2772660Z test str::tests::byte_view_is_the_receiver_pair ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2774290Z test str::tests::char_boundary_rule_is_the_two_bit_test ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2780090Z test str::tests::chars_are_the_scalars_in_order ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.2922100Z test signal::tests::wait_fds_answers_write_readiness ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.3053290Z test str::tests::from_utf8_accepts_text_and_refuses_the_ugly_inputs ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:11.3161540Z test signal::tests::wait_filters_by_set ... ok
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:15.3449780Z thread 'signal::tests::wait_fd_wakes_for_a_signal_while_parked' (660995) panicked at crates/wolf_rt/src/signal.rs:3396:9:
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:15.3451120Z assertion `left == right` failed: 1 of 200 waits took over 50 ms
+build + test (macos-latest)	UNKNOWN STEP	2026-11-02T17:40:15.3455370Z test result: FAILED. 345 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.38s

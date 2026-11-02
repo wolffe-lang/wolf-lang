@@ -1,0 +1,14 @@
+waiting for the Mac lock (holder fg04 pid 91053) 14:32:10
+waiting for the Mac lock (holder fg04 pid 91053) 14:32:40
+took the Mac lock 14:33:10, at 9f3c58827be8ca757e7a660ee7c302d25c3479e5
+8 GiB gate passed: 11936 MiB 14:33:10
+BEGIN uptime 14:33:10
+14:33  up 7 days, 23:12, 4 users, load averages: 4.67 4.18 4.14
+END uptime exit=0 14:33:10
+BEGIN head 14:33:10
+200
+END head exit=0 14:33:12
+BEGIN trunk 14:33:12
+200
+END trunk exit=0 14:33:14
+released the Mac lock 14:33:14

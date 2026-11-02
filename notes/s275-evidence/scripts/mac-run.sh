@@ -42,6 +42,14 @@ while :; do
     sleep 30
 done
 echo "8 GiB gate passed: $((bytes / 1048576)) MiB $(date +%T)"
+# The disk gate (lane rules, 2026-11-01 22:30Z): at least 15 GB free on the
+# home volume before any build; below that, stop and hand back.
+free_gb=$(df -g "$HOME" | awk 'NR == 2 {print $4}')
+if [ "${free_gb:-0}" -lt 15 ]; then
+    echo "REFUSED: disk gate: ${free_gb:-?} GB free, under 15"
+    exit 3
+fi
+echo "disk gate passed: $free_gb GB free $(date +%T)"
 cd "$B" || exit 2
 export CARGO_INCREMENTAL=0
 while IFS=$'\t' read -r name cmd; do

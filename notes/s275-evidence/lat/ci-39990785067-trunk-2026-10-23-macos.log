@@ -1,0 +1,7 @@
+# run 39990785067 (push, trunk 1f6fb786, 2026-10-23), job 120541753840 'build + test (macos-latest)': the row's lines, gh run view --log
+build + test (macos-latest)	UNKNOWN STEP	2026-10-23T17:23:36.2352500Z test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... FAILED
+build + test (macos-latest)	UNKNOWN STEP	2026-10-23T17:23:41.0706990Z ---- signal::tests::wait_fd_wakes_for_a_signal_while_parked stdout ----
+build + test (macos-latest)	UNKNOWN STEP	2026-10-23T17:23:41.0708440Z thread 'signal::tests::wait_fd_wakes_for_a_signal_while_parked' (595903) panicked at crates/wolf_rt/src/signal.rs:3214:9:
+build + test (macos-latest)	UNKNOWN STEP	2026-10-23T17:23:41.0709990Z assertion `left == right` failed: 1 of 200 waits took over 50 ms
+build + test (macos-latest)	UNKNOWN STEP	2026-10-23T17:23:41.0714050Z     signal::tests::wait_fd_wakes_for_a_signal_while_parked
+build + test (macos-latest)	UNKNOWN STEP	2026-10-23T17:23:41.0715400Z test result: FAILED. 337 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.16s

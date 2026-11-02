@@ -1,0 +1,23 @@
+run 1 head   n=  200 median=  3.05ms p99=   3.07ms max=    3.10ms over50=0 ok
+run 1 trunk  n=  200 median=  3.04ms p99=   3.10ms max=    3.11ms over50=0 ok
+run 2 head   n=  200 median=  2.54ms p99=   2.61ms max=    2.62ms over50=0 ok
+run 2 trunk  n=  200 median=  2.54ms p99=   2.61ms max=    2.62ms over50=0 ok
+run 3 head   n=  200 median=  2.53ms p99=   2.61ms max=    2.61ms over50=0 ok
+run 3 trunk  n=  200 median=  2.54ms p99=   2.60ms max=    2.61ms over50=0 ok
+run 4 head   n=  200 median=  2.54ms p99=   2.61ms max=    2.62ms over50=0 ok
+run 4 trunk  n=  200 median=  2.54ms p99=   2.61ms max=    2.64ms over50=0 ok
+run 5 head   n=  200 median=  3.04ms p99=   3.11ms max=    3.11ms over50=0 ok
+run 5 trunk  n=  200 median=  3.04ms p99=   3.11ms max=    3.13ms over50=0 ok
+run 6 head   n=  200 median=  2.54ms p99=   2.62ms max=    2.66ms over50=0 ok
+run 6 trunk  n=  200 median=  2.54ms p99=   2.60ms max=    2.63ms over50=0 ok
+run 7 head   n=  200 median=  2.54ms p99=   2.62ms max=    2.64ms over50=0 ok
+run 7 trunk  n=  200 median=  2.54ms p99=   2.59ms max=    2.63ms over50=0 ok
+run 8 head   n=  200 median=  2.54ms p99=   2.61ms max=    2.62ms over50=0 ok
+run 8 trunk  n=  200 median=  2.53ms p99=   2.59ms max=    2.62ms over50=0 ok
+run 9 head   n=  200 median=  2.55ms p99=   2.58ms max=    2.58ms over50=0 ok
+run 9 trunk  n=  200 median=  2.55ms p99=   2.61ms max=    2.62ms over50=0 ok
+run 10 head  n=  200 median=  2.55ms p99=   2.62ms max=    2.63ms over50=0 ok
+run 10 trunk n=  200 median=  2.55ms p99=   2.61ms max=    2.63ms over50=0 ok
+
+trunk all    n= 2000 median=  2.54ms p99=   3.09ms max=    3.13ms over50=0
+head all     n= 2000 median=  2.54ms p99=   3.09ms max=    3.11ms over50=0

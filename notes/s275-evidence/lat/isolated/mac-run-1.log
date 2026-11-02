@@ -1,0 +1,17 @@
+waiting for the Mac lock (holder fg04 pid 71099) 13:45:28
+waiting for the Mac lock (holder sh35 pid 73904) 13:45:58
+waiting for the Mac lock (holder fg04 pid 72083) 13:46:28
+waiting for the Mac lock (holder fg04 pid 74691) 13:46:58
+waiting for the Mac lock (holder fg04 pid 74691) 13:47:28
+took the Mac lock 13:47:58, at 9f3c58827be8ca757e7a660ee7c302d25c3479e5
+8 GiB gate passed: 12257 MiB 13:47:58
+BEGIN uptime 13:47:58
+13:47  up 7 days, 22:26, 4 users, load averages: 4.62 5.91 5.69
+END uptime exit=0 13:47:58
+BEGIN trunk 13:47:58
+200
+END trunk exit=0 13:47:59
+BEGIN head 13:47:59
+200
+END head exit=0 13:48:00
+released the Mac lock 13:48:00
