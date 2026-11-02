@@ -1,0 +1,29 @@
+s276 — prediction before changes, 2026-11-02
+Base bb728d66, wolf-lang#1008. Tests only.
+
+P1: Linux wait4 ru_maxrss has the harness's inherited fork/exec floor;
+flat cwd and outer-region readings will often be equal around 3 MB.
+That floor need not hide the original regression at each row's current size.
+P2: cwd's original root-retained name, planted by asking cwd outside the
+per-turn region, exceeds the 4 B/turn bound at N=200000 (expect tens of B/turn).
+P3: outer_write's missing per-turn region exceeds 4 B/turn at N=100000;
+its existing no-region control already exercises precisely this shape.
+P4: materializing map.pairs() before each get restores the original N^2
+retention and exceeds both native 1024 B/entry and checked 16 KiB/entry
+bounds, at N=2000 and N=500 respectively; expect hundreds of MB natively.
+P5: materializing rest.bytes() before indexing restores checked_budget's
+quadratic retention; expect >200 MiB at n=8192 and >64 MiB extra vs 1024.
+Its doubling-budget sibling already allocates far beyond a 3 MB floor;
+plant the budget check after allocation to test its 1.5 GiB ceiling.
+P6: Each original regression plant will fail 20/20; each unmodified row
+will pass 200/200 under competing load at four CPUs. If P2–P5 hold,
+recommend leaving that instrument (contract item 2) and correct comments
+that currently promise the witness's own peak without mentioning the floor.
+If any plant fails to redden reliably, replace that row with s274's
+one-process smaps_rollup Anonymous+Swap reading, with bounds unchanged.
+P7: Run every Linux row in hasu's rootless container, both locks held;
+compile from committed clean snapshots. Record baseline and plant values,
+raw failures by test name, every final-gauntlet END, and loud SKIPs.
+One off-line plant branch/draft PR holds all independent shape plants.
+README will be checked against the final diff. No runtime/codegen/CI/pin
+change belongs on s276; deliberate implementation breaks only on plant.
