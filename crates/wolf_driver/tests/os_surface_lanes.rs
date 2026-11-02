@@ -821,15 +821,19 @@ fn host_oracle() -> Option<Oracle> {
 const STATFS_TRIPLES: usize = 40;
 
 /// One machine's record against the oracle, in triples: the oracle's
-/// read of each open path, the machine's, the oracle's again. Every word
-/// the host keeps still (the sizes, the totals, name max, type, id, the
-/// flags) equals both reads in every triple, or the row fails at once. A
-/// count the host moves while it writes (free, available, free files)
-/// settles a path only when all three reads are EQUAL: the oracle's two
-/// reads agreeing do not prove the disk still between them (a write and
-/// its removal fit inside the window), and a read between two others is
-/// no proof either (a disk written and freed is not monotonic). A path
-/// that agrees is settled; the others go round again, up to
+/// read of each open path, the machine's, the oracle's again. The words
+/// the oracle does not print (the flags, `have`, macOS's name max) are
+/// checked in every triple, and a miss fails the row at once. Every word
+/// it prints settles a path only in a triple whose three reads are EQUAL,
+/// the words a host keeps still (sizes, totals, name max, type, id) and
+/// the counts it moves while it writes (free, available, free files)
+/// alike: the oracle's two reads agreeing do not prove the disk still
+/// between them (a write and its removal fit inside the window), a read
+/// between two others is no proof either (a disk written and freed is not
+/// monotonic), and a word kept still on one file system moves on another
+/// (macOS's devfs grows by a block while a test makes terminals: nomad
+/// mac-job8, `/dev: 1024-blocks wolf=215 df-before=214 df-after=215`). A
+/// path that agrees is settled; the others go round again, up to
 /// `STATFS_TRIPLES`, with a pause that grows. `disturb` runs between the
 /// reads (the churn row's writer). Answers the triple each path settled
 /// in, or every unsettled path with its tally and last disagreement.
@@ -868,36 +872,28 @@ fn judge_record(
             report(&format!(
                 "REPORT {machine} {p} triple {attempt}: wolf {w:?} as {t} {mine:?} {t}-before {b:?} {t}-after {a:?}"
             ));
-            let mut fixed_bad = Vec::new();
-            for (k, name) in oracle.names.iter().enumerate() {
-                if !oracle.moving.contains(&k) && (mine[k] != b[k] || mine[k] != a[k]) {
-                    fixed_bad.push(format!(
-                        "{p}: {name} wolf={} {t}-before={} {t}-after={}",
-                        mine[k], b[k], a[k]
-                    ));
-                }
+            let others = (oracle.others)(p, w);
+            if !others.is_empty() {
+                return Err(others.join("\n"));
             }
-            fixed_bad.extend((oracle.others)(p, w));
-            if !fixed_bad.is_empty() {
-                return Err(fixed_bad.join("\n"));
-            }
-            let still = oracle.moving.iter().all(|&k| b[k] == a[k]);
-            let agree = oracle
-                .moving
-                .iter()
-                .all(|&k| mine[k] == b[k] && mine[k] == a[k]);
+            let n = oracle.names.len();
+            let still = (0..n).all(|k| b[k] == a[k]);
+            let agree = (0..n).all(|k| mine[k] == b[k] && mine[k] == a[k]);
             if agree {
                 report(&format!("REPORT {machine} {p}: agreed in triple {attempt}"));
                 settled.push((p.clone(), attempt));
                 continue;
             }
-            let apart: Vec<String> = oracle
-                .moving
-                .iter()
-                .filter(|&&k| !(mine[k] == b[k] && mine[k] == a[k]))
-                .map(|&k| {
+            let apart: Vec<String> = (0..n)
+                .filter(|&k| !(mine[k] == b[k] && mine[k] == a[k]))
+                .map(|k| {
+                    let kind = if oracle.moving.contains(&k) {
+                        ""
+                    } else {
+                        " (a word the host keeps still)"
+                    };
                     format!(
-                        "{p}: {} wolf={} {t}-before={} {t}-after={}",
+                        "{p}: {} wolf={} {t}-before={} {t}-after={}{kind}",
                         oracle.names[k], mine[k], b[k], a[k]
                     )
                 })
