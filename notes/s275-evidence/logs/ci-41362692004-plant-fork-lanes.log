@@ -1,0 +1,58 @@
+2026-11-01T23:43:53.2901347Z REPORT tasks.lu native taskset -c 0-3: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+2026-11-01T23:43:53.3380679Z REPORT census.lu native taskset -c 0-3 (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 9 | census: inside a task: 7 | census: every task ended, 200 ms later: 7 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 7, child status 0 | rc=0 |  || 
+2026-11-01T23:43:54.2671459Z REPORT census.lu release (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 9 | census: inside a task: 7 | census: every task ended, 200 ms later: 7 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 7, child status 0 | rc=0 |  || 
+2026-11-01T23:43:54.5671828Z REPORT tasks.lu release: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+2026-11-01T23:43:54.7673741Z REPORT drain.lu native: drain: round 805: threads 1 of 2 after 8 forks: the drain thread is gone | rc=1 |  || 
+2026-11-01T23:43:54.7678077Z test the_drain_thread_outlives_every_fork ... FAILED
+2026-11-01T23:43:54.8559436Z REPORT the host allocator across a fork (linux): mallocfork: 300 forks while 3 threads malloc: 300 children ran their own malloc and ended 0, 0 stuck (killed at 2 s), 0 other || 
+2026-11-01T23:43:54.8560890Z test the_host_allocator_across_a_fork_a_control ... ok
+2026-11-01T23:43:55.0229748Z REPORT tasks.lu release taskset -c 0-3: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+2026-11-01T23:43:55.0233484Z test the_busy_rule_and_the_pool ... ok
+2026-11-01T23:43:55.2205686Z REPORT census.lu release taskset -c 0-3 (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 9 | census: inside a task: 7 | census: every task ended, 200 ms later: 7 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 7, child status 0 | rc=0 |  || 
+2026-11-01T23:43:55.2207141Z test the_child_is_one_thread ... ok
+2026-11-01T23:43:55.9578785Z REPORT loop.lu native exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 50 ms | 
+2026-11-01T23:43:56.1850637Z REPORT loop.lu native exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 120 ms | 
+2026-11-01T23:43:56.3665620Z REPORT loop.lu native spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 77 ms | 
+2026-11-01T23:43:56.4374907Z REPORT hub.lu native: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+2026-11-01T23:43:56.4410611Z REPORT reactor.lu native: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+2026-11-01T23:43:56.5631811Z REPORT loop.lu native taskset -c 0-3 exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 79 ms | 
+2026-11-01T23:43:56.7769681Z REPORT reactor.lu native taskset -c 0-3: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+2026-11-01T23:43:56.7822944Z REPORT loop.lu native taskset -c 0-3 exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 113 ms | 
+2026-11-01T23:43:56.9710199Z REPORT loop.lu native taskset -c 0-3 spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 75 ms | 
+2026-11-01T23:43:57.0844433Z REPORT hub.lu native taskset -c 0-3: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+2026-11-01T23:43:57.1095440Z REPORT reactor.lu release: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+2026-11-01T23:43:57.1555740Z REPORT loop.lu release exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 65 ms | 
+2026-11-01T23:43:57.3805901Z REPORT loop.lu release exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 110 ms | 
+2026-11-01T23:43:57.4459526Z REPORT reactor.lu release taskset -c 0-3: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+2026-11-01T23:43:57.4460544Z test the_readiness_set_is_the_childs_own ... ok
+2026-11-01T23:43:57.5607262Z REPORT loop.lu release spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 74 ms | 
+2026-11-01T23:43:57.7091828Z REPORT loop.lu release taskset -c 0-3 exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 44 ms | 
+2026-11-01T23:43:57.7358956Z REPORT hub.lu release: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+2026-11-01T23:43:57.9489903Z REPORT loop.lu release taskset -c 0-3 exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 115 ms | 
+2026-11-01T23:43:58.1270277Z REPORT loop.lu release taskset -c 0-3 spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 73 ms | 
+2026-11-01T23:43:58.3565496Z REPORT dash beside it: dash x=$(true) x 200: 30 ms | dash x=$(/bin/true) x 200: 87 ms | 
+2026-11-01T23:43:58.3566188Z test the_pelt_shape_loop ... ok
+2026-11-01T23:43:58.3708663Z REPORT hub.lu release taskset -c 0-3: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+2026-11-01T23:43:59.8718370Z REPORT hub.lu with TERMINATE blocked from the start, native: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+2026-11-01T23:44:00.4889191Z REPORT hub.lu with TERMINATE blocked from the start, native taskset -c 0-3: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+2026-11-01T23:44:01.1035442Z REPORT hub.lu with TERMINATE blocked from the start, release: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+2026-11-01T23:44:01.7204018Z REPORT hub.lu with TERMINATE blocked from the start, release taskset -c 0-3: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+2026-11-01T23:44:01.7204842Z test the_hub_is_the_childs_own ... ok
+2026-11-01T23:44:01.7204959Z 
+2026-11-01T23:44:01.7205022Z failures:
+2026-11-01T23:44:01.7205093Z 
+2026-11-01T23:44:01.7205210Z ---- the_drain_thread_outlives_every_fork stdout ----
+2026-11-01T23:44:01.7205400Z 
+2026-11-01T23:44:01.7205665Z thread 'the_drain_thread_outlives_every_fork' (96610) panicked at crates/wolf_driver/tests/fork_lanes.rs:440:9:
+2026-11-01T23:44:01.7206133Z assertion `left == right` failed: drain.lu, the native binary
+2026-11-01T23:44:01.7206407Z   left: "drain: round 805: threads 1 of 2 after 8 forks: the drain thread is gone\nrc=1\n"
+2026-11-01T23:44:01.7206701Z  right: "drain: 1000 rounds of 8 forks, the drain thread at every one true\nrc=0\n"
+2026-11-01T23:44:01.7206984Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+2026-11-01T23:44:01.7207143Z 
+2026-11-01T23:44:01.7207149Z 
+2026-11-01T23:44:01.7207198Z failures:
+2026-11-01T23:44:01.7207460Z     the_drain_thread_outlives_every_fork
+2026-11-01T23:44:01.7207780Z 
+2026-11-01T23:44:01.7207929Z test result: FAILED. 14 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.87s
+2026-11-01T23:44:01.7208125Z 
+2026-11-01T23:44:01.7235080Z ^[[1m^[[91merror^[[0m: test failed, to rerun pass `-p wolf_driver --test fork_lanes`

@@ -1,0 +1,8 @@
+2026-11-01T23:47:21.5008202Z REPORT drain.lu native: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+2026-11-01T23:47:25.3503494Z REPORT drain.lu native taskset -c 0-3: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+2026-11-01T23:47:28.4541299Z REPORT drain.lu release: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+2026-11-01T23:47:30.8472068Z REPORT drain.lu release taskset -c 0-3: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+2026-11-01T23:47:30.8477019Z test the_drain_thread_outlives_every_fork ... ok
+2026-11-02T00:37:34.8104261Z test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+2026-11-02T00:37:34.8210211Z test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+2026-11-02T00:37:34.9107544Z test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok

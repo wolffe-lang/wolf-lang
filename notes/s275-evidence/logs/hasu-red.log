@@ -1,0 +1,295 @@
+queued 2026-11-01T16:48:06-05:00 on hasu-block-B.lock then hasu-B.lock
+BEGIN red 2026-11-01T18:36:39-05:00 host hasu block B six 6-11 four 6-9 sha fafb1a0685d949df8865db222d9e5244c66c5ac7 kernel 7.2.4
+BEGIN build 2026-11-01T18:36:40-05:00
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling find-msvc-tools v0.1.10
+   Compiling hashbrown v0.17.1
+   Compiling cfg-if v1.0.4
+   Compiling shlex v2.0.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling wolf_lex v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_lex)
+   Compiling arrayvec v0.7.8
+   Compiling blake3 v1.8.6
+   Compiling smallvec v1.15.2
+   Compiling constant_time_eq v0.4.2
+   Compiling rayon-core v1.13.0
+   Compiling cpufeatures v0.3.0
+   Compiling cranelift-srcgen v0.134.3
+   Compiling arrayref v0.3.9
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling wolf_ast v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerofrom v0.1.8
+   Compiling zerovec-derive v0.11.3
+   Compiling wolf_parse v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_parse)
+   Compiling yoke v0.8.3
+   Compiling either v1.17.0
+   Compiling rayon v1.12.0
+   Compiling zerovec v0.11.6
+   Compiling indexmap v2.14.0
+   Compiling tinystr v0.8.3
+   Compiling cranelift-isle v0.134.3
+   Compiling litemap v0.8.2
+   Compiling writeable v0.6.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_locale_core v2.2.0
+   Compiling zerotrie v0.2.4
+   Compiling serde_core v1.0.229
+   Compiling hashbrown v0.16.1
+   Compiling utf8_iter v1.0.4
+   Compiling wolf_sema v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_sema)
+   Compiling icu_properties_data v2.2.0
+   Compiling libc v0.2.189
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling heck v0.5.0
+   Compiling log v0.4.33
+   Compiling icu_normalizer_data v2.2.0
+   Compiling fnv v1.0.7
+   Compiling gimli v0.33.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling cranelift-bitset v0.134.3
+   Compiling icu_provider v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling allocator-api2 v0.2.21
+   Compiling memchr v2.8.3
+   Compiling target-lexicon v0.13.5
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling arbitrary v1.4.2
+   Compiling cranelift-codegen v0.134.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling rustc-hash v2.1.3
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-control v0.134.3
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling serde_derive v1.0.229
+   Compiling crc32fast v1.5.0
+   Compiling serde_json v1.0.151
+   Compiling anyhow v1.0.104
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_mem)
+   Compiling percent-encoding v2.3.2
+   Compiling object v0.39.1
+   Compiling itoa v1.0.18
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_fmt)
+   Compiling wolf_query v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_query)
+   Compiling wolf_wir v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_wir)
+   Compiling url v2.5.8
+   Compiling wolf_rt v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_rt)
+   Compiling wolf_backend v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_backend)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling lsp-server v0.10.0
+   Compiling wolf_cimport v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_cimport)
+   Compiling wolf_pkg v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_pkg)
+   Compiling wolf_lsp v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_lsp)
+   Compiling wolf_codegen_clif v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_codegen_llvm)
+   Compiling wolf_doc v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_doc)
+   Compiling wolf_driver v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 51s
+END build exit=0 2026-11-01T18:39:05-05:00
+BEGIN rows-build 2026-11-01T18:39:05-05:00
+   Compiling libc v0.2.189
+   Compiling wolf_rt v0.2.36 (/home/mfwolffe/lanes/s275/b-fafb1a0685d949df8865db222d9e5244c66c5ac7/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.86s
+  Executable unittests src/lib.rs (target/debug/deps/wolf_rt-d8b141046c575b54)
+END rows-build exit=0 2026-11-01T18:39:10-05:00
+BEGIN rows 2026-11-01T18:39:10-05:00
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-d8b141046c575b54)
+
+running 3 tests
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... FAILED
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... FAILED
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... FAILED
+
+failures:
+
+---- signal::tests::s275_a_drain_thread_that_ends_is_made_again stdout ----
+
+thread 'signal::tests::s275_a_drain_thread_that_ends_is_made_again' (10) panicked at crates/wolf_rt/src/signal.rs:3467:9:
+assertion `left == right` failed: s275_a_drain_thread_that_ends_is_made_again, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_drain_thread_that_ends_is_made_again
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 350 filtered out; finished in 20.10s
+
+
+thread 'signal::tests::s275_a_drain_thread_that_ends_is_made_again' (12) panicked at crates/wolf_rt/src/signal.rs:3622:13:
+a new drain thread after the first ended (state 5, running true)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread stdout ----
+
+thread 'signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread' (15) panicked at crates/wolf_rt/src/signal.rs:3467:9:
+assertion `left == right` failed: s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 350 filtered out; finished in 0.00s
+
+
+thread 'signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread' (17) panicked at crates/wolf_rt/src/signal.rs:3544:17:
+the drain thread moved the signal's byte after the fork's hold (state 5, 5 = gone: it read the park's EAGAIN for the poll's EINTR, wolf-lang#1006)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+
+---- signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread stdout ----
+
+thread 'signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread' (19) panicked at crates/wolf_rt/src/signal.rs:3467:9:
+assertion `left == right` failed: s275_a_transient_poll_failure_keeps_the_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+
+running 1 test
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... FAILED
+
+failures:
+
+failures:
+    signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 350 filtered out; finished in 0.00s
+
+
+thread 'signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread' (21) panicked at crates/wolf_rt/src/signal.rs:3576:17:
+the drain thread moved the byte after a transient poll failure (state 5, 5 = gone)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  left: Some(101)
+ right: Some(0)
+
+
+failures:
+    signal::tests::s275_a_drain_thread_that_ends_is_made_again
+    signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread
+    signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 348 filtered out; finished in 20.13s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+END rows exit=101 2026-11-01T18:39:30-05:00
+BEGIN witness-build-native 2026-11-01T18:39:30-05:00
+END witness-build-native exit=0 2026-11-01T18:39:32-05:00
+BEGIN witness-build-release 2026-11-01T18:39:32-05:00
+END witness-build-release exit=0 2026-11-01T18:39:33-05:00
+BEGIN witness-native 2026-11-01T18:39:33-05:00
+witness trunk-native: /home/mfwolffe/lanes/s275/out/red-fafb1a0685d949df8865db222d9e5244c66c5ac7/drain-native, 30 runs of 3000 rounds, cap 60s, 2026-11-01T23:39:33+00:00
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	6-9
+run 1 exit=124 60005ms 
+run 2 exit=1 15ms drain: round 13: threads 1 of 2 after 8 forks: the drain thread is gone
+run 3 exit=1 4ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 4 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 5 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 6 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 7 exit=1 2ms drain: round 1: threads 1 of 2 after 8 forks: the drain thread is gone
+run 8 exit=1 5ms drain: round 7: threads 1 of 2 after 8 forks: the drain thread is gone
+run 9 exit=1 5ms drain: round 8: threads 1 of 2 after 8 forks: the drain thread is gone
+run 10 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 11 exit=1 2ms drain: round 1: threads 1 of 2 after 8 forks: the drain thread is gone
+run 12 exit=1 9ms drain: round 16: threads 1 of 2 after 8 forks: the drain thread is gone
+run 13 exit=1 5ms drain: round 7: threads 1 of 2 after 8 forks: the drain thread is gone
+run 14 exit=1 6ms drain: round 9: threads 1 of 2 after 8 forks: the drain thread is gone
+run 15 exit=1 3ms drain: round 3: threads 1 of 2 after 8 forks: the drain thread is gone
+run 16 exit=1 3ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 17 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 18 exit=1 3ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 19 exit=1 7ms drain: round 10: threads 1 of 2 after 8 forks: the drain thread is gone
+run 20 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 21 exit=1 3ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 22 exit=1 4ms drain: round 5: threads 1 of 2 after 8 forks: the drain thread is gone
+run 23 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 24 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 25 exit=1 3ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 26 exit=1 2ms drain: round 1: threads 1 of 2 after 8 forks: the drain thread is gone
+run 27 exit=1 6ms drain: round 10: threads 1 of 2 after 8 forks: the drain thread is gone
+run 28 exit=1 4ms drain: round 5: threads 1 of 2 after 8 forks: the drain thread is gone
+run 29 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 30 exit=1 16ms drain: round 28: threads 1 of 2 after 8 forks: the drain thread is gone
+witness trunk-native: runs 30 green 0 red 29 stalled 1 other 0
+END witness-native exit=0 2026-11-01T18:40:34-05:00
+BEGIN witness-release 2026-11-01T18:40:34-05:00
+witness trunk-release: /home/mfwolffe/lanes/s275/out/red-fafb1a0685d949df8865db222d9e5244c66c5ac7/drain-release, 30 runs of 3000 rounds, cap 60s, 2026-11-01T23:40:34+00:00
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	6-9
+run 1 exit=1 2ms drain: round 1: threads 1 of 2 after 8 forks: the drain thread is gone
+run 2 exit=1 4ms drain: round 6: threads 1 of 2 after 8 forks: the drain thread is gone
+run 3 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 4 exit=124 60001ms 
+run 5 exit=124 60001ms 
+run 6 exit=1 5ms drain: round 7: threads 1 of 2 after 8 forks: the drain thread is gone
+run 7 exit=1 5ms drain: round 5: threads 1 of 2 after 8 forks: the drain thread is gone
+run 8 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 9 exit=1 3ms drain: round 3: threads 1 of 2 after 8 forks: the drain thread is gone
+run 10 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 11 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 12 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 13 exit=1 4ms drain: round 6: threads 1 of 2 after 8 forks: the drain thread is gone
+run 14 exit=1 9ms drain: round 14: threads 1 of 2 after 8 forks: the drain thread is gone
+run 15 exit=1 5ms drain: round 7: threads 1 of 2 after 8 forks: the drain thread is gone
+run 16 exit=1 6ms drain: round 9: threads 1 of 2 after 8 forks: the drain thread is gone
+run 17 exit=1 3ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 18 exit=1 2ms drain: round 1: threads 1 of 2 after 8 forks: the drain thread is gone
+run 19 exit=124 60001ms 
+run 20 exit=1 5ms drain: round 7: threads 1 of 2 after 8 forks: the drain thread is gone
+run 21 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 22 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 23 exit=1 4ms drain: round 6: threads 1 of 2 after 8 forks: the drain thread is gone
+run 24 exit=1 7ms drain: round 11: threads 1 of 2 after 8 forks: the drain thread is gone
+run 25 exit=1 5ms drain: round 6: threads 1 of 2 after 8 forks: the drain thread is gone
+run 26 exit=1 3ms drain: round 4: threads 1 of 2 after 8 forks: the drain thread is gone
+run 27 exit=1 2ms drain: round 2: threads 1 of 2 after 8 forks: the drain thread is gone
+run 28 exit=1 1ms drain: round 0: threads 1 of 2 after 8 forks: the drain thread is gone
+run 29 exit=1 12ms drain: round 21: threads 1 of 2 after 8 forks: the drain thread is gone
+run 30 exit=1 8ms drain: round 14: threads 1 of 2 after 8 forks: the drain thread is gone
+witness trunk-release: runs 30 green 0 red 27 stalled 3 other 0
+END witness-release exit=0 2026-11-01T18:43:37-05:00
+END red 2026-11-01T18:43:37-05:00

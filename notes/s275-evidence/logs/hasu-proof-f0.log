@@ -1,0 +1,222 @@
+queued 2026-11-01T16:56:25-05:00 on hasu-block-B.lock then hasu-B.lock
+BEGIN proof-f0 2026-11-01T19:22:33-05:00 host hasu block B six 6-11 four 6-9 head dd289a60b93740bbdb1d8848d6229401322506a9 tiers native static
+BEGIN build-head 2026-11-01T19:22:33-05:00
+built already at dd289a60b93740bbdb1d8848d6229401322506a9: 2026-11-01T18:46:45-05:00
+END build-head exit=0 2026-11-01T19:22:37-05:00
+pelt at 81562fd3d8e667ed3e09c54bd20de42990827027
+wait-replay from pelt 7908f94: cd7476566cca1b32e57ec59153cd817836720961384ac03aaf15f0050ac491eb  /home/mfwolffe/lanes/s275/pelt-tools/wait-replay
+BEGIN pelt-build-native 2026-11-01T19:22:39-05:00
+END pelt-build-native exit=0 2026-11-01T19:22:48-05:00
+BEGIN replay-native 2026-11-01T19:22:48-05:00
+wait-replay: /home/mfwolffe/lanes/s275/out/f0-dd289a60b93740bbdb1d8848d6229401322506a9/pelt-native, 100 runs, 26 steps, cpus 6,7,8,9, load 0, out /home/mfwolffe/lanes/s275/out/f0-dd289a60b93740bbdb1d8848d6229401322506a9/replay-native
+run 1: green 35.0s  watch: tasks 2 at every prompt
+run 2: green 34.3s  watch: tasks 2 at every prompt
+run 3: green 34.1s  watch: tasks 2 at every prompt
+run 4: green 34.2s  watch: tasks 2 at every prompt
+run 5: green 34.2s  watch: tasks 2 at every prompt
+run 6: green 34.4s  watch: tasks 2 at every prompt
+run 7: green 34.0s  watch: tasks 2 at every prompt
+run 8: green 33.9s  watch: tasks 2 at every prompt
+run 9: green 33.9s  watch: tasks 2 at every prompt
+run 10: green 34.0s  watch: tasks 2 at every prompt
+run 11: green 34.0s  watch: tasks 2 at every prompt
+run 12: green 34.0s  watch: tasks 2 at every prompt
+run 13: green 34.0s  watch: tasks 2 at every prompt
+run 14: green 34.0s  watch: tasks 2 at every prompt
+run 15: green 34.0s  watch: tasks 2 at every prompt
+run 16: green 34.0s  watch: tasks 2 at every prompt
+run 17: green 34.0s  watch: tasks 2 at every prompt
+run 18: green 34.0s  watch: tasks 2 at every prompt
+run 19: green 34.0s  watch: tasks 2 at every prompt
+run 20: green 34.0s  watch: tasks 2 at every prompt
+run 21: green 34.1s  watch: tasks 2 at every prompt
+run 22: green 34.1s  watch: tasks 2 at every prompt
+run 23: green 34.1s  watch: tasks 2 at every prompt
+run 24: green 34.2s  watch: tasks 2 at every prompt
+run 25: green 34.1s  watch: tasks 2 at every prompt
+run 26: green 34.0s  watch: tasks 2 at every prompt
+run 27: green 34.1s  watch: tasks 2 at every prompt
+run 28: green 34.1s  watch: tasks 2 at every prompt
+run 29: green 34.2s  watch: tasks 2 at every prompt
+run 30: green 34.1s  watch: tasks 2 at every prompt
+run 31: green 34.0s  watch: tasks 2 at every prompt
+run 32: green 34.0s  watch: tasks 2 at every prompt
+run 33: green 34.0s  watch: tasks 2 at every prompt
+run 34: green 34.0s  watch: tasks 2 at every prompt
+run 35: green 34.0s  watch: tasks 2 at every prompt
+run 36: green 34.0s  watch: tasks 2 at every prompt
+run 37: green 34.0s  watch: tasks 2 at every prompt
+run 38: green 34.1s  watch: tasks 2 at every prompt
+run 39: green 34.2s  watch: tasks 2 at every prompt
+run 40: green 34.1s  watch: tasks 2 at every prompt
+run 41: green 34.0s  watch: tasks 2 at every prompt
+run 42: green 34.0s  watch: tasks 2 at every prompt
+run 43: green 34.0s  watch: tasks 2 at every prompt
+run 44: green 34.0s  watch: tasks 2 at every prompt
+run 45: green 34.0s  watch: tasks 2 at every prompt
+run 46: green 34.0s  watch: tasks 2 at every prompt
+run 47: green 34.3s  watch: tasks 2 at every prompt
+run 48: green 34.6s  watch: tasks 2 at every prompt
+run 49: green 34.6s  watch: tasks 2 at every prompt
+run 50: green 34.2s  watch: tasks 2 at every prompt
+run 51: green 34.2s  watch: tasks 2 at every prompt
+run 52: green 34.0s  watch: tasks 2 at every prompt
+run 53: green 34.1s  watch: tasks 2 at every prompt
+run 54: green 34.1s  watch: tasks 2 at every prompt
+run 55: green 34.2s  watch: tasks 2 at every prompt
+run 56: green 34.1s  watch: tasks 2 at every prompt
+run 57: green 34.1s  watch: tasks 2 at every prompt
+run 58: green 34.1s  watch: tasks 2 at every prompt
+run 59: green 34.1s  watch: tasks 2 at every prompt
+run 60: green 34.1s  watch: tasks 2 at every prompt
+run 61: green 34.1s  watch: tasks 2 at every prompt
+run 62: green 34.2s  watch: tasks 2 at every prompt
+run 63: green 34.2s  watch: tasks 2 at every prompt
+run 64: green 34.1s  watch: tasks 2 at every prompt
+run 65: green 34.1s  watch: tasks 2 at every prompt
+run 66: green 34.1s  watch: tasks 2 at every prompt
+run 67: green 34.1s  watch: tasks 2 at every prompt
+run 68: green 34.1s  watch: tasks 2 at every prompt
+run 69: green 34.2s  watch: tasks 2 at every prompt
+run 70: green 34.2s  watch: tasks 2 at every prompt
+run 71: green 34.2s  watch: tasks 2 at every prompt
+run 72: green 34.1s  watch: tasks 2 at every prompt
+run 73: green 34.1s  watch: tasks 2 at every prompt
+run 74: green 34.1s  watch: tasks 2 at every prompt
+run 75: green 34.1s  watch: tasks 2 at every prompt
+run 76: green 34.0s  watch: tasks 2 at every prompt
+run 77: green 34.0s  watch: tasks 2 at every prompt
+run 78: green 34.0s  watch: tasks 2 at every prompt
+run 79: green 34.0s  watch: tasks 2 at every prompt
+run 80: green 34.0s  watch: tasks 2 at every prompt
+run 81: green 34.0s  watch: tasks 2 at every prompt
+run 82: green 34.0s  watch: tasks 2 at every prompt
+run 83: green 34.1s  watch: tasks 2 at every prompt
+run 84: green 34.0s  watch: tasks 2 at every prompt
+run 85: green 34.0s  watch: tasks 2 at every prompt
+run 86: green 34.2s  watch: tasks 2 at every prompt
+run 87: green 34.2s  watch: tasks 2 at every prompt
+run 88: green 34.2s  watch: tasks 2 at every prompt
+run 89: green 34.2s  watch: tasks 2 at every prompt
+run 90: green 34.2s  watch: tasks 2 at every prompt
+run 91: green 34.2s  watch: tasks 2 at every prompt
+run 92: green 34.2s  watch: tasks 2 at every prompt
+run 93: green 34.2s  watch: tasks 2 at every prompt
+run 94: green 34.2s  watch: tasks 2 at every prompt
+run 95: green 34.1s  watch: tasks 2 at every prompt
+run 96: green 34.2s  watch: tasks 2 at every prompt
+run 97: green 34.2s  watch: tasks 2 at every prompt
+run 98: green 34.2s  watch: tasks 2 at every prompt
+run 99: green 34.2s  watch: tasks 2 at every prompt
+run 100: green 34.3s  watch: tasks 2 at every prompt
+wait-replay: runs 100 green 100 stalled 0 failed 0
+END replay-native exit=0 2026-11-01T20:19:40-05:00
+BEGIN pelt-build-static 2026-11-01T20:19:40-05:00
+wolf build: still in midend/simplify of sh (30 s)
+wolf build: finished release in 44.716s
+END pelt-build-static exit=0 2026-11-01T20:20:26-05:00
+BEGIN replay-static 2026-11-01T20:20:26-05:00
+wait-replay: /home/mfwolffe/lanes/s275/out/f0-dd289a60b93740bbdb1d8848d6229401322506a9/pelt-static, 100 runs, 26 steps, cpus 6,7,8,9, load 0, out /home/mfwolffe/lanes/s275/out/f0-dd289a60b93740bbdb1d8848d6229401322506a9/replay-static
+run 1: green 34.1s  watch: tasks 2 at every prompt
+run 2: green 34.0s  watch: tasks 2 at every prompt
+run 3: green 34.1s  watch: tasks 2 at every prompt
+run 4: green 34.1s  watch: tasks 2 at every prompt
+run 5: green 34.1s  watch: tasks 2 at every prompt
+run 6: green 34.0s  watch: tasks 2 at every prompt
+run 7: green 34.1s  watch: tasks 2 at every prompt
+run 8: green 34.1s  watch: tasks 2 at every prompt
+run 9: green 34.1s  watch: tasks 2 at every prompt
+run 10: green 34.1s  watch: tasks 2 at every prompt
+run 11: green 34.2s  watch: tasks 2 at every prompt
+run 12: green 34.2s  watch: tasks 2 at every prompt
+run 13: green 34.2s  watch: tasks 2 at every prompt
+run 14: green 34.1s  watch: tasks 2 at every prompt
+run 15: green 34.2s  watch: tasks 2 at every prompt
+run 16: green 34.1s  watch: tasks 2 at every prompt
+run 17: green 34.2s  watch: tasks 2 at every prompt
+run 18: green 34.1s  watch: tasks 2 at every prompt
+run 19: green 34.2s  watch: tasks 2 at every prompt
+run 20: green 34.2s  watch: tasks 2 at every prompt
+run 21: green 34.2s  watch: tasks 2 at every prompt
+run 22: green 34.1s  watch: tasks 2 at every prompt
+run 23: green 34.2s  watch: tasks 2 at every prompt
+run 24: green 34.2s  watch: tasks 2 at every prompt
+run 25: green 34.2s  watch: tasks 2 at every prompt
+run 26: green 34.1s  watch: tasks 2 at every prompt
+run 27: green 34.0s  watch: tasks 2 at every prompt
+run 28: green 34.2s  watch: tasks 2 at every prompt
+run 29: green 34.1s  watch: tasks 2 at every prompt
+run 30: green 34.1s  watch: tasks 2 at every prompt
+run 31: green 34.2s  watch: tasks 2 at every prompt
+run 32: green 34.1s  watch: tasks 2 at every prompt
+run 33: green 34.1s  watch: tasks 2 at every prompt
+run 34: green 34.1s  watch: tasks 2 at every prompt
+run 35: green 34.2s  watch: tasks 2 at every prompt
+run 36: green 34.2s  watch: tasks 2 at every prompt
+run 37: green 34.1s  watch: tasks 2 at every prompt
+run 38: green 34.1s  watch: tasks 2 at every prompt
+run 39: green 34.1s  watch: tasks 2 at every prompt
+run 40: green 34.2s  watch: tasks 2 at every prompt
+run 41: green 34.1s  watch: tasks 2 at every prompt
+run 42: green 34.1s  watch: tasks 2 at every prompt
+run 43: green 34.2s  watch: tasks 2 at every prompt
+run 44: green 34.2s  watch: tasks 2 at every prompt
+run 45: green 34.1s  watch: tasks 2 at every prompt
+run 46: green 34.2s  watch: tasks 2 at every prompt
+run 47: green 34.1s  watch: tasks 2 at every prompt
+run 48: green 34.2s  watch: tasks 2 at every prompt
+run 49: green 34.2s  watch: tasks 2 at every prompt
+run 50: green 34.1s  watch: tasks 2 at every prompt
+run 51: green 34.2s  watch: tasks 2 at every prompt
+run 52: green 34.2s  watch: tasks 2 at every prompt
+run 53: green 34.2s  watch: tasks 2 at every prompt
+run 54: green 34.1s  watch: tasks 2 at every prompt
+run 55: green 34.2s  watch: tasks 2 at every prompt
+run 56: green 34.1s  watch: tasks 2 at every prompt
+run 57: green 34.1s  watch: tasks 2 at every prompt
+run 58: green 34.2s  watch: tasks 2 at every prompt
+run 59: green 34.2s  watch: tasks 2 at every prompt
+run 60: green 34.2s  watch: tasks 2 at every prompt
+run 61: green 34.1s  watch: tasks 2 at every prompt
+run 62: green 34.2s  watch: tasks 2 at every prompt
+run 63: green 34.2s  watch: tasks 2 at every prompt
+run 64: green 34.2s  watch: tasks 2 at every prompt
+run 65: green 34.1s  watch: tasks 2 at every prompt
+run 66: green 34.2s  watch: tasks 2 at every prompt
+run 67: green 34.2s  watch: tasks 2 at every prompt
+run 68: green 34.2s  watch: tasks 2 at every prompt
+run 69: green 34.1s  watch: tasks 2 at every prompt
+run 70: green 34.2s  watch: tasks 2 at every prompt
+run 71: green 34.2s  watch: tasks 2 at every prompt
+run 72: green 34.2s  watch: tasks 2 at every prompt
+run 73: green 34.1s  watch: tasks 2 at every prompt
+run 74: green 34.1s  watch: tasks 2 at every prompt
+run 75: green 34.2s  watch: tasks 2 at every prompt
+run 76: green 34.2s  watch: tasks 2 at every prompt
+run 77: green 34.1s  watch: tasks 2 at every prompt
+run 78: green 34.2s  watch: tasks 2 at every prompt
+run 79: green 34.1s  watch: tasks 2 at every prompt
+run 80: green 34.1s  watch: tasks 2 at every prompt
+run 81: green 34.1s  watch: tasks 2 at every prompt
+run 82: green 34.2s  watch: tasks 2 at every prompt
+run 83: green 34.2s  watch: tasks 2 at every prompt
+run 84: green 34.2s  watch: tasks 2 at every prompt
+run 85: green 34.1s  watch: tasks 2 at every prompt
+run 86: green 34.1s  watch: tasks 2 at every prompt
+run 87: green 34.2s  watch: tasks 2 at every prompt
+run 88: green 34.2s  watch: tasks 2 at every prompt
+run 89: green 34.1s  watch: tasks 2 at every prompt
+run 90: green 34.2s  watch: tasks 2 at every prompt
+run 91: green 34.2s  watch: tasks 2 at every prompt
+run 92: green 34.1s  watch: tasks 2 at every prompt
+run 93: green 34.1s  watch: tasks 2 at every prompt
+run 94: green 34.2s  watch: tasks 2 at every prompt
+run 95: green 34.2s  watch: tasks 2 at every prompt
+run 96: green 34.1s  watch: tasks 2 at every prompt
+run 97: green 34.2s  watch: tasks 2 at every prompt
+run 98: green 34.2s  watch: tasks 2 at every prompt
+run 99: green 34.2s  watch: tasks 2 at every prompt
+run 100: green 34.2s  watch: tasks 2 at every prompt
+wait-replay: runs 100 green 100 stalled 0 failed 0
+END replay-static exit=0 2026-11-01T21:17:20-05:00
+END proof-f0 2026-11-01T21:17:20-05:00
