@@ -18,12 +18,13 @@
 //! The resident-set rows (`[mem.region.outer-write]`'s point): the
 //! fixture `fixtures/outer_write/main.lu` is `region_outer_write_call.lu`
 //! taking its turn count from the command line; a turn's cost is what
-//! the extra N turns add to the peak resident set, divided by N — the
-//! OS's own high-water mark of exactly this child (`wait4(2)`'s
-//! `ru_maxrss`), never a ledger. The control without the block keeps
-//! every turn's string (yew's measured shape, #839: hundreds of bytes
-//! a key); the block keeps nothing, so the row's bound is 4 B a turn on
-//! both tiers.
+//! the extra N turns add to `wait4(2)`'s `ru_maxrss`, divided by N,
+//! never a ledger. On Linux this reading has the harness's high-water
+//! floor (#1008), so it cannot resolve arbitrary sub-floor growth. The
+//! control without the block keeps every turn's string (yew's measured
+//! shape, #839: hundreds of bytes a key) and must exceed the SAME bound:
+//! that is also a sensitivity check for the missing-turn-region leak.
+//! The block keeps nothing, so the row's bound is 4 B a turn on both tiers.
 //!
 //! s270b (wolf-lang#948) adds the stores the clause refuses that s255's
 //! push left open — a PLAIN `push` of a value whose copy reaches the heap
