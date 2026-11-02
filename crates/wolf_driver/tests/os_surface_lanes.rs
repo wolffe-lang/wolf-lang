@@ -643,6 +643,237 @@ fn mount_flags(p: &str) -> (bool, bool) {
     best.map_or((false, false), |(_, ro, ns)| (ro, ns))
 }
 
+/// When a triple's disturbance runs (the churn row): after the oracle's
+/// first read, or after the machine's.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Phase {
+    OracleRead,
+    MachineRead,
+}
+
+/// One host's oracle of the record: its name and its lines' tag, its
+/// read of a path's words, the machine's twelve words put in its order,
+/// the words' names, which of them move while the host writes (the rest
+/// it keeps still), and the checks of the words it does not print.
+struct Oracle {
+    name: &'static str,
+    tag: &'static str,
+    read: Box<dyn Fn(&str) -> Option<Vec<i64>>>,
+    project: Box<dyn Fn(&[i64]) -> Vec<i64>>,
+    names: &'static [&'static str],
+    moving: &'static [usize],
+    others: Box<dyn Fn(&str, &[i64]) -> Vec<String>>,
+}
+
+/// linux: GNU `stat -f` (its order: %s %S %b %f %a %c %d %l %t %i, the
+/// record's words 1..8, 10, 11) and the mount's flags; `None`, with a loud
+/// skip, when there is no GNU `stat` (a failure under
+/// `WOLF_STATFS_REQUIRE_GNU`).
+#[cfg(target_os = "linux")]
+fn host_oracle() -> Option<Oracle> {
+    let gnu_present = Command::new("stat")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("GNU coreutils"));
+    if !gnu_present {
+        assert!(
+            std::env::var_os("WOLF_STATFS_REQUIRE_GNU").is_none(),
+            "WOLF_STATFS_REQUIRE_GNU is set and no GNU stat is on PATH"
+        );
+        eprintln!("SKIP: fs_statfs: no GNU stat on PATH — the oracle is absent");
+        return None;
+    }
+    Some(Oracle {
+        name: "GNU stat -f",
+        tag: "gnu",
+        read: Box::new(gnu_words),
+        project: Box::new(|w| {
+            [1usize, 2, 3, 4, 5, 6, 7, 8, 10, 11]
+                .iter()
+                .map(|&i| w[i])
+                .collect()
+        }),
+        names: &[
+            "block_size",
+            "fragment_size",
+            "blocks",
+            "free",
+            "available",
+            "files",
+            "free_files",
+            "name_max",
+            "type",
+            "fsid",
+        ],
+        moving: &[3, 4, 6],
+        others: Box::new(|p, w| {
+            let mut bad = Vec::new();
+            let (ro, nosuid) = mount_flags(p);
+            let want_flags = i64::from(ro) | (i64::from(nosuid) << 1);
+            if w[9] != want_flags {
+                bad.push(format!("{p}: flags wolf={} mount={want_flags}", w[9]));
+            }
+            if w[0] != 0xfff {
+                bad.push(format!("{p}: have wolf={:#x} want 0xfff", w[0]));
+            }
+            bad
+        }),
+    })
+}
+
+/// macOS `/bin/df -k`: Filesystem 1024-blocks Used Available Capacity
+/// iused ifree %iused Mounted-on. Used is NOT read: on APFS it is the
+/// volume's own allocation, not total less free — its volumes share the
+/// container's free space (measured on nomad: `/` reads 12 GB used in a
+/// container of 926 GiB with 23 GiB free), so statfs cannot answer it and
+/// the record does not carry it. Name max is `getconf NAME_MAX`'s, the
+/// flags `mount`'s.
+#[cfg(target_os = "macos")]
+fn host_oracle() -> Option<Oracle> {
+    fn df(p: &str) -> Option<Vec<i64>> {
+        let out = Command::new("/bin/df").args(["-k", p]).output().ok()?;
+        let t = String::from_utf8_lossy(&out.stdout).to_string();
+        let line = t.lines().nth(1)?;
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let num = |i: usize| f.get(i).and_then(|s| s.parse::<i64>().ok());
+        Some(vec![num(1)?, num(3)?, num(5)?, num(6)?])
+    }
+    // The mount that holds `p`: `df`'s own "Mounted on" column (a path
+    // under `/Users` reaches the Data volume through a firmlink, so a
+    // prefix of the path names the wrong mount), then that mount point's
+    // options in `mount`'s `<dev> on <dir> (<opts>)`: (read-only, nosuid).
+    fn mount_flags(p: &str) -> (bool, bool) {
+        let out = Command::new("/bin/df")
+            .args(["-k", p])
+            .output()
+            .expect("df runs");
+        let t = String::from_utf8_lossy(&out.stdout).to_string();
+        let line = t.lines().nth(1).unwrap_or("");
+        let f: Vec<&str> = line.split_whitespace().collect();
+        let mp = f.get(8..).map(|r| r.join(" ")).unwrap_or_default();
+        let out = Command::new("/sbin/mount").output().expect("mount runs");
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            let Some((_, rest)) = line.split_once(" on ") else {
+                continue;
+            };
+            let Some((dir, opts)) = rest.rsplit_once(" (") else {
+                continue;
+            };
+            if dir == mp {
+                let o: Vec<&str> = opts.trim_end_matches(')').split(", ").collect();
+                return (o.contains(&"read-only"), o.contains(&"nosuid"));
+            }
+        }
+        (false, false)
+    }
+    fn name_max(p: &str) -> Option<i64> {
+        let out = Command::new("getconf")
+            .args(["NAME_MAX", p])
+            .output()
+            .ok()?;
+        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+    }
+    Some(Oracle {
+        name: "df -k",
+        tag: "df",
+        read: Box::new(df),
+        project: Box::new(|w| {
+            let k = |n: i64| n * w[2] / 1024;
+            vec![k(w[3]), k(w[5]), w[6] - w[7], w[7]]
+        }),
+        names: &["1024-blocks", "available", "iused", "ifree"],
+        moving: &[1, 2, 3],
+        others: Box::new(|p, w| {
+            let mut bad = Vec::new();
+            if let Some(n) = name_max(p)
+                && w[8] != n
+            {
+                bad.push(format!("{p}: name_max wolf={} getconf={n}", w[8]));
+            }
+            let (ro, nosuid) = mount_flags(p);
+            let want_flags = i64::from(ro) | (i64::from(nosuid) << 1);
+            if w[9] != want_flags {
+                bad.push(format!("{p}: flags wolf={} mount={want_flags}", w[9]));
+            }
+            if w[0] != 0xfff {
+                bad.push(format!("{p}: have wolf={:#x} want 0xfff", w[0]));
+            }
+            bad
+        }),
+    })
+}
+
+/// Every other host: no oracle (windows is held by the corpus row).
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn host_oracle() -> Option<Oracle> {
+    eprintln!("SKIP: fs_statfs: no oracle on this host (windows: the corpus row)");
+    None
+}
+
+/// One machine's record against the oracle, in up to three triples (the
+/// oracle's read of every path, the machine's, the oracle's again):
+/// every word the host keeps still equals both reads, and every count
+/// that moves lies between them. `disturb` runs between the reads (the
+/// churn row's writer). The last attempt's misses on failure.
+fn judge_record(
+    machine: &str,
+    read: &Reader,
+    dir: &Path,
+    paths: &[String],
+    oracle: &Oracle,
+    disturb: &dyn Fn(Phase, usize),
+) -> Result<(), String> {
+    let mut last = String::new();
+    for attempt in 0..3 {
+        std::fs::write(dir.join("s272.paths"), paths.join("\n") + "\n").expect("paths written");
+        let before: Vec<Option<Vec<i64>>> = paths.iter().map(|p| (oracle.read)(p)).collect();
+        disturb(Phase::OracleRead, attempt);
+        let got = records_of(&read());
+        disturb(Phase::MachineRead, attempt);
+        let after: Vec<Option<Vec<i64>>> = paths.iter().map(|p| (oracle.read)(p)).collect();
+        let mut bad = Vec::new();
+        for (i, p) in paths.iter().enumerate() {
+            let (Some(b), Some(a)) = (&before[i], &after[i]) else {
+                eprintln!("SKIP: {p}: {} did not answer", oracle.name);
+                continue;
+            };
+            let Some((_, w)) = got.iter().find(|(q, _)| q == p) else {
+                bad.push(format!("{p}: no record from {machine}"));
+                continue;
+            };
+            assert_eq!(w.len(), 12, "{machine}: twelve words for {p}: {w:?}");
+            let mine = (oracle.project)(w);
+            let t = oracle.tag;
+            report(&format!(
+                "REPORT {machine} {p}: wolf {w:?} as {t} {mine:?} {t}-before {b:?} {t}-after {a:?}"
+            ));
+            for (k, name) in oracle.names.iter().enumerate() {
+                let fine = if oracle.moving.contains(&k) {
+                    bracketed(b[k], mine[k], a[k])
+                } else {
+                    mine[k] == b[k] && mine[k] == a[k]
+                };
+                if !fine {
+                    bad.push(format!(
+                        "{p}: {name} wolf={} {t}-before={} {t}-after={}",
+                        mine[k], b[k], a[k]
+                    ));
+                }
+            }
+            bad.extend((oracle.others)(p, w));
+        }
+        if bad.is_empty() {
+            return Ok(());
+        }
+        last = bad.join("\n");
+        eprintln!(
+            "{machine}: attempt {attempt} outside {}'s reads:\n{last}",
+            oracle.name
+        );
+    }
+    Err(last)
+}
+
 /// #686: every word `fs_statfs` answers equals GNU `stat -f`'s (linux) —
 /// the block size, the fragment size, the totals, name max, type and id
 /// exactly, the free counts between GNU's read before and after the
@@ -656,213 +887,70 @@ fn mount_flags(p: &str) -> (bool, bool) {
 fn fs_statfs_matches_gnu_stat_f() {
     let dir = scratch("statfs_gnu");
     let paths = measured_paths(&dir);
-    std::fs::write(dir.join("s272.paths"), paths.join("\n") + "\n").expect("paths written");
     report(&format!("REPORT statfs paths: {paths:?}"));
-    #[cfg(target_os = "linux")]
-    {
-        let gnu_present = Command::new("stat")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("GNU coreutils"));
-        if !gnu_present {
-            assert!(
-                std::env::var_os("WOLF_STATFS_REQUIRE_GNU").is_none(),
-                "WOLF_STATFS_REQUIRE_GNU is set and no GNU stat is on PATH"
-            );
-            eprintln!(
-                "SKIP: fs_statfs_matches_gnu_stat_f: no GNU stat on PATH — the oracle is absent"
-            );
+    let Some(oracle) = host_oracle() else {
+        return;
+    };
+    for (machine, read) in record_machines(&dir) {
+        if let Err(last) = judge_record(&machine, &read, &dir, &paths, &oracle, &|_, _| {}) {
+            panic!("{machine}: fs_statfs against {}:\n{last}", oracle.name);
+        }
+    }
+}
+
+/// The churn row's file: 16 MiB that no file system compresses (an
+/// xorshift stream), 4096 blocks of 4 KiB.
+fn churn_bytes() -> Vec<u8> {
+    let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+    let mut out = Vec::with_capacity(16 << 20);
+    while out.len() < 16 << 20 {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        out.extend_from_slice(&x.to_le_bytes());
+    }
+    out
+}
+
+/// The triples the churn row disturbs, more than the comparison's first
+/// tries.
+const CHURNED: usize = 5;
+
+/// s272 (hasu block A at `0c10fdea`: `fs_statfs_matches_gnu_stat_f` red
+/// on a disk every lane's gauntlet writes, `/tmp: free wolf=151353679
+/// gnu-before=151352615 gnu-after=151352630`): the comparison holds while
+/// something else writes the measured file system. In each of the first
+/// `CHURNED` triples a 16 MiB file is written in the test's own directory
+/// after the oracle's first read and removed after the machine's, so the
+/// machine reads 4096 blocks fewer free than the two oracle reads around
+/// it, which agree: a write and its removal inside the window, the shape
+/// a busy disk gives. The machine is right each time; a comparison that
+/// takes a still oracle for a still disk calls it wrong.
+#[test]
+fn fs_statfs_holds_while_a_writer_churns() {
+    let dir = scratch("statfs_churn");
+    let paths = measured_paths(&dir);
+    let Some(oracle) = host_oracle() else {
+        return;
+    };
+    let junk = dir.join("churn.bin");
+    let bytes = churn_bytes();
+    let disturb = |phase: Phase, attempt: usize| {
+        if attempt >= CHURNED {
             return;
         }
-        for (machine, read) in record_machines(&dir) {
-            let mut ok = false;
-            let mut last = String::new();
-            for attempt in 0..3 {
-                let before: Vec<Option<Vec<i64>>> = paths.iter().map(|p| gnu_words(p)).collect();
-                let got = records_of(&read());
-                let after: Vec<Option<Vec<i64>>> = paths.iter().map(|p| gnu_words(p)).collect();
-                let mut bad = Vec::new();
-                for (i, p) in paths.iter().enumerate() {
-                    let (Some(b), Some(a)) = (&before[i], &after[i]) else {
-                        eprintln!("SKIP: {p}: GNU stat -f did not answer");
-                        continue;
-                    };
-                    let Some((_, w)) = got.iter().find(|(q, _)| q == p) else {
-                        bad.push(format!("{p}: no record from {machine}"));
-                        continue;
-                    };
-                    assert_eq!(w.len(), 12, "{machine}: twelve words for {p}: {w:?}");
-                    report(&format!(
-                        "REPORT {machine} {p}: wolf {w:?} gnu-before {b:?} gnu-after {a:?}"
-                    ));
-                    // GNU's order: %s %S %b %f %a %c %d %l %t %i; the record's
-                    // words 1..8, 10, 11 (word 9 is the flags).
-                    let at = [1usize, 2, 3, 4, 5, 6, 7, 8, 10, 11];
-                    let names = [
-                        "block_size",
-                        "fragment_size",
-                        "blocks",
-                        "free",
-                        "available",
-                        "files",
-                        "free_files",
-                        "name_max",
-                        "type",
-                        "fsid",
-                    ];
-                    let moving = [3usize, 4, 6];
-                    for (k, &wi) in at.iter().enumerate() {
-                        let fine = if moving.contains(&k) {
-                            bracketed(b[k], w[wi], a[k])
-                        } else {
-                            w[wi] == b[k] && w[wi] == a[k]
-                        };
-                        if !fine {
-                            bad.push(format!(
-                                "{p}: {} wolf={} gnu-before={} gnu-after={}",
-                                names[k], w[wi], b[k], a[k]
-                            ));
-                        }
-                    }
-                    let (ro, nosuid) = mount_flags(p);
-                    let want_flags = i64::from(ro) | (i64::from(nosuid) << 1);
-                    if w[9] != want_flags {
-                        bad.push(format!("{p}: flags wolf={} mount={want_flags}", w[9]));
-                    }
-                    if w[0] != 0xfff {
-                        bad.push(format!("{p}: have wolf={:#x} want 0xfff", w[0]));
-                    }
-                }
-                if bad.is_empty() {
-                    ok = true;
-                    break;
-                }
-                last = bad.join("\n");
-                eprintln!("{machine}: attempt {attempt} outside GNU's reads:\n{last}");
-            }
-            assert!(ok, "{machine}: fs_statfs against GNU stat -f:\n{last}");
+        match phase {
+            Phase::OracleRead => std::fs::write(&junk, &bytes).expect("the churn written"),
+            Phase::MachineRead => std::fs::remove_file(&junk).expect("the churn removed"),
         }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        // macOS `df -k`: Filesystem 1024-blocks Used Available Capacity
-        // iused ifree %iused Mounted-on. Used is NOT read: on APFS it is the
-        // volume's own allocation, not total less free — its volumes share
-        // the container's free space (measured on nomad: `/` reads 12 GB used
-        // in a container of 926 GiB with 23 GiB free), so statfs cannot
-        // answer it and the record does not carry it.
-        let df = |p: &str| -> Option<Vec<i64>> {
-            let out = Command::new("/bin/df").args(["-k", p]).output().ok()?;
-            let t = String::from_utf8_lossy(&out.stdout).to_string();
-            let line = t.lines().nth(1)?;
-            let f: Vec<&str> = line.split_whitespace().collect();
-            let num = |i: usize| f.get(i).and_then(|s| s.parse::<i64>().ok());
-            Some(vec![num(1)?, num(3)?, num(5)?, num(6)?])
-        };
-        // The mount that holds `p`: `df`'s own "Mounted on" column (a path
-        // under `/Users` reaches the Data volume through a firmlink, so a
-        // prefix of the path names the wrong mount), then that mount point's
-        // options in `mount`'s `<dev> on <dir> (<opts>)`: (read-only, nosuid).
-        let mount_flags = |p: &str| -> (bool, bool) {
-            let out = Command::new("/bin/df")
-                .args(["-k", p])
-                .output()
-                .expect("df runs");
-            let t = String::from_utf8_lossy(&out.stdout).to_string();
-            let line = t.lines().nth(1).unwrap_or("");
-            let f: Vec<&str> = line.split_whitespace().collect();
-            let mp = f.get(8..).map(|r| r.join(" ")).unwrap_or_default();
-            let out = Command::new("/sbin/mount").output().expect("mount runs");
-            for line in String::from_utf8_lossy(&out.stdout).lines() {
-                let Some((_, rest)) = line.split_once(" on ") else {
-                    continue;
-                };
-                let Some((dir, opts)) = rest.rsplit_once(" (") else {
-                    continue;
-                };
-                if dir == mp {
-                    let o: Vec<&str> = opts.trim_end_matches(')').split(", ").collect();
-                    return (o.contains(&"read-only"), o.contains(&"nosuid"));
-                }
-            }
-            (false, false)
-        };
-        let name_max = |p: &str| -> Option<i64> {
-            let out = Command::new("getconf")
-                .args(["NAME_MAX", p])
-                .output()
-                .ok()?;
-            String::from_utf8_lossy(&out.stdout).trim().parse().ok()
-        };
-        for (machine, read) in record_machines(&dir) {
-            let mut ok = false;
-            let mut last = String::new();
-            for attempt in 0..3 {
-                let before: Vec<Option<Vec<i64>>> = paths.iter().map(|p| df(p)).collect();
-                let got = records_of(&read());
-                let after: Vec<Option<Vec<i64>>> = paths.iter().map(|p| df(p)).collect();
-                let mut bad = Vec::new();
-                for (i, p) in paths.iter().enumerate() {
-                    let (Some(b), Some(a)) = (&before[i], &after[i]) else {
-                        eprintln!("SKIP: {p}: df -k did not answer");
-                        continue;
-                    };
-                    let Some((_, w)) = got.iter().find(|(q, _)| q == p) else {
-                        bad.push(format!("{p}: no record from {machine}"));
-                        continue;
-                    };
-                    assert_eq!(w.len(), 12, "{machine}: twelve words for {p}: {w:?}");
-                    let k = |n: i64| n * w[2] / 1024;
-                    let mine = [k(w[3]), k(w[5]), w[6] - w[7], w[7]];
-                    report(&format!(
-                        "REPORT {machine} {p}: wolf {w:?} as df {mine:?} df-before {b:?} df-after {a:?}"
-                    ));
-                    let names = ["1024-blocks", "available", "iused", "ifree"];
-                    for (j, name) in names.iter().enumerate() {
-                        let fine = if j == 0 {
-                            mine[j] == b[j] && mine[j] == a[j]
-                        } else {
-                            bracketed(b[j], mine[j], a[j])
-                        };
-                        if !fine {
-                            bad.push(format!(
-                                "{p}: {name} wolf={} df-before={} df-after={}",
-                                mine[j], b[j], a[j]
-                            ));
-                        }
-                    }
-                    if let Some(n) = name_max(p)
-                        && w[8] != n
-                    {
-                        bad.push(format!("{p}: name_max wolf={} getconf={n}", w[8]));
-                    }
-                    let (ro, nosuid) = mount_flags(p);
-                    let want_flags = i64::from(ro) | (i64::from(nosuid) << 1);
-                    if w[9] != want_flags {
-                        bad.push(format!("{p}: flags wolf={} mount={want_flags}", w[9]));
-                    }
-                    if w[0] != 0xfff {
-                        bad.push(format!("{p}: have wolf={:#x} want 0xfff", w[0]));
-                    }
-                }
-                if bad.is_empty() {
-                    ok = true;
-                    break;
-                }
-                last = bad.join("\n");
-                eprintln!("{machine}: attempt {attempt} outside df's reads:\n{last}");
-            }
-            assert!(ok, "{machine}: fs_statfs against df -k:\n{last}");
+    };
+    for (machine, read) in record_machines(&dir) {
+        if let Err(last) = judge_record(&machine, &read, &dir, &paths, &oracle, &disturb) {
+            panic!(
+                "{machine}: fs_statfs against {} while a writer churns:\n{last}",
+                oracle.name
+            );
         }
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        let _ = record_machines;
-        let _ = records_of;
-        let _ = bracketed;
-        eprintln!(
-            "SKIP: fs_statfs_matches_gnu_stat_f: no oracle on this host (windows: the corpus row)"
-        );
     }
 }
 
