@@ -9,7 +9,9 @@ unset CARGO_TARGET_DIR
 case "${S272_BLOCK:-}" in
   A) export WOLF_TEST_CPUS=0-3 ;;
   B) export WOLF_TEST_CPUS=6-9 ;;
-  K) export WOLF_TEST_CPUS=0-3 CARGO_BUILD_JOBS=4 ;;
+  # kasumi: the CPUs this process may run on (the slot taskset.real gave
+  # it), never a list carried from another host's block.
+  K) export WOLF_TEST_CPUS=$(awk '/^Cpus_allowed_list/{print $2}' /proc/self/status) CARGO_BUILD_JOBS=4 ;;
   *) echo "s272: no block" >&2; exit 2 ;;
 esac
 export RUST_TEST_NOCAPTURE=1

@@ -83,3 +83,9 @@ nomad/mac-job9-261a9293.log
                   nomad at 261a9293: the statfs rows alone, os_surface_lanes whole three times (the pty row
                   beside them: /dev agreed in triple 1 where it moved), fmt, clippy -D warnings on wolf_driver:
                   every END 0
+rig/kasumi/ (after 11cfa83f's first kasumi gauntlet)
+                  that gauntlet was red at test, in atomic_witness's two rows: WOLF_TEST_CPUS=0-3 names CPU(s)
+                  0-3 this process may not run on (its affinity is 8-11) — the rig carried hasu block A's list
+                  into slot 8-11. The rig now takes the slot (4-7 or 8-11) as an argument, sets WOLF_TEST_CPUS to
+                  the process's own affinity, runs a shim (taskset-shim-slot.c) that runs a list inside the slot
+                  as asked, moves 0-3 into it and refuses any other, and checks all of it before prep (END cpus)

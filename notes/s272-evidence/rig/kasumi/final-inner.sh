@@ -9,7 +9,7 @@
 #      (s273's gauntlet-inner, copied).
 # A nonzero prep or gauntlet step is the run's exit code; the plant's is a
 # measurement.
-# usage: final-inner.sh <final-sha> <plant-sha>
+# usage: final-inner.sh <final-sha> <plant-sha|->
 set -uo pipefail
 source /lane/scripts/gate-env.sh
 final=${1:?final sha} plant=${2:?plant sha}
@@ -23,7 +23,29 @@ rustc --version
 R=/lane/records/final
 mkdir -p "$R"
 
-if git checkout -q --detach "$plant" && [ "$(git rev-parse HEAD)" = "$plant" ]; then
+# The CPUs: WOLF_TEST_CPUS must be exactly this process's affinity (the slot
+# held), and the shim must run a list inside the slot as asked and move 0-3
+# into it, refusing any other: the run stops here otherwise (11cfa83f's first
+# kasumi gauntlet carried hasu's 0-3 into slot 8-11, and atomic_witness refused
+# it by name).
+own=$(awk '/^Cpus_allowed_list/{print $2}' /proc/self/status)
+echo "== STEP cpus $(date -u +%T) WOLF_TEST_CPUS=${WOLF_TEST_CPUS:-unset} affinity=$own slot=$S272_CPUS"
+cpus_ok=1
+[ "${WOLF_TEST_CPUS:-}" = "$own" ] && [ "$own" = "$S272_CPUS" ] || cpus_ok=0
+lo=${S272_CPUS%-*}
+for want in "$S272_CPUS:$S272_CPUS" "$lo:$lo" "0-3:$S272_CPUS" "0:$lo"; do
+  req=${want%%:*} exp=${want#*:}
+  got=$(taskset -c "$req" awk '/^Cpus_allowed_list/{print $2}' /proc/self/status 2>&1)
+  echo "  taskset -c $req -> $got (want $exp)"
+  [ "$got" = "$exp" ] || cpus_ok=0
+done
+if taskset -c 12 true 2>/dev/null; then echo "  taskset -c 12 ran (want a refusal)"; cpus_ok=0; else echo "  taskset -c 12 refused"; fi
+echo "END cpus exit=$((1 - cpus_ok))"
+[ "$cpus_ok" = 1 ] || { echo "S272_REFUSED the CPU list"; exit 2; }
+
+if [ "$plant" = - ]; then
+  echo "SKIP plant (red by name at this plant in the run before: records/final-11cfa83f-cpus)"
+elif git checkout -q --detach "$plant" && [ "$(git rev-parse HEAD)" = "$plant" ]; then
   echo "== STEP plant $(date -u +%T) head=$(git rev-parse HEAD)"
   cargo build --locked -p wolf_driver -p wolf_rt > "$R/plant-build.log" 2>&1
   cargo test --locked -p wolf_driver --test os_surface_lanes fs_statfs_matches_gnu_stat_f -- --nocapture --exact > "$R/plant.log" 2>&1
