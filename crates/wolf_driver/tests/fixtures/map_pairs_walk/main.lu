@@ -20,7 +20,9 @@ fn set[K, V](mut m: Map[K, V], k: K, v: V) {
 }
 
 fn get[K: Eq, V](m: Map[K, V], k: K) -> V ! {none} {
-    for pair in m.pairs() {
+    // s276 plant: #972 materialized and retained the entries per get.
+    let snapshot = m.pairs()
+    for pair in snapshot {
         if Eq.eq(pair.0, k) {
             return pair.1
         }

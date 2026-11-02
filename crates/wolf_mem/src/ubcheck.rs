@@ -1940,7 +1940,10 @@ impl<'t> Machine<'t> {
         let Value::Str(s) = sv else {
             return Ok(Found::Not);
         };
-        Ok(Found::At(s.into_bytes()))
+        // s276 plant: #308 retained an uncharged Value list per consumed view.
+        let octets = s.into_bytes();
+        self.lists.push(octets.iter().copied().map(Value::Byte).collect());
+        Ok(Found::At(octets))
     }
 
     /// The `pairs()` walk as a view (s273, wolf-lang#972): a `for pat in
