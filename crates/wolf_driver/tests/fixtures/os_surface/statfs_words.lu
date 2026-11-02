@@ -3,8 +3,8 @@
 //! the file `s272.paths` names (one a line; `conform-run` passes no
 //! arguments), one line a path: `<path>: w0 w1 … w11`, or `<path>: <tag>`
 //! for a refusal. The test reads GNU `stat -f` (linux) or `df -k`
-//! (macOS) before and after this program, in the same second, and holds
-//! every word to theirs.
+//! (macOS) before and after this program and holds every word to
+//! theirs (the free counts in a triple whose three reads agree).
 
 fn main() -> int {
     let text = fs_read_text("s272.paths") else |_| ""
