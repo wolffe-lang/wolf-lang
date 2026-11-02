@@ -27,8 +27,9 @@ to R-s272-11), each one what is built.
   `pathconf` for the name length), `statvfs` on the other unixes;
   windows answers the space words in bytes from `GetDiskFreeSpaceExW`
   and nothing else. Every word equals GNU `stat -f`'s on ext4, tmpfs,
-  overlay and proc, the free counts within GNU's reads before and after
-  in the same second, and `df -k`'s on macOS.
+  overlay, proc and btrfs, in a read of GNU's, the program's and GNU's
+  again that all agree (the test holds that while a writer churns the
+  measured disk), and `df -k`'s on macOS.
 - **`os_chroot(path) -> () ! {denied, io, not_found, unsupported}`**
   (#921, `[os.proc.chroot]`): `chroot(2)` alone; the working directory is
   left where it is (call `os_chdir("/")` next, as coreutils' `chroot`
