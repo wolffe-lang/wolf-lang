@@ -29,10 +29,13 @@
 //! shadow-memory budget exhausted` — with the resident set bounded by a
 //! few copies of the largest string it did build.
 //!
-//! How peak is measured, per host — the OS's own high-water mark of the
-//! child process (the number `/usr/bin/time -l` prints), never the
-//! machine's ledger:
-//! - unix: `wait4(2)`'s `ru_maxrss` for exactly this child — bytes on
+//! How peak is measured, per host — never the machine's ledger. On Linux
+//! `ru_maxrss` has the harness's high-water floor (#1008): it does not
+//! resolve arbitrary sub-floor growth. These rows guard #308's retained
+//! quadratic byte lists and the doubling budget's GiB-scale runaway,
+//! not small leaks. s276's off-line plant restores the uncharged retained
+//! byte-view lists, leaving the source and all bounds unchanged.
+//! - unix: `wait4(2)`'s `ru_maxrss` — bytes on
 //!   macOS, kibibytes on linux and the BSDs;
 //! - windows: `K32GetProcessMemoryInfo`'s `PeakWorkingSetSize` on the
 //!   child's handle, read after it exits and before the handle closes.
