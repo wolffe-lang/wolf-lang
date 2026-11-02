@@ -1,0 +1,152 @@
+S272 rows waiting for kasumi slot 8-11 at 2026-11-02T18:19:33Z
+S272 acquired kasumi slot 8-11 at 2026-11-02T18:19:33Z
+/dev/nvme0n1p2  928G  868G   57G  94% /home
+S272 rows-tmpfs container start at 2026-11-02T18:19:33Z (tmpfs scratch 1)
+S272 in the container at 2026-11-02T18:19:34Z
+S272_ROWS_START 2026-11-02T18:19:34Z block=K scratch=tmpfs
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	8-11
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+stat (GNU coreutils) 9.4
+== STEP red-build 18:19:34 head=8c212681017518cb636c8b7d5d16d3f6724a54fc
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.29s
+  Executable tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-2a825e9ce4f74f98)
+END red-build exit=0
+== STEP red-fs_statfs_holds_while_a_writer_churns 18:19:56
+checked: attempt 0 outside GNU stat -f's reads:
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: available wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free_files wolf=4084796 gnu-before=4084797 gnu-after=4084797
+checked: attempt 1 outside GNU stat -f's reads:
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: available wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free_files wolf=4084796 gnu-before=4084797 gnu-after=4084797
+checked: attempt 2 outside GNU stat -f's reads:
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: available wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free_files wolf=4084796 gnu-before=4084797 gnu-after=4084797
+thread 'fs_statfs_holds_while_a_writer_churns' (1978) panicked at crates/wolf_driver/tests/os_surface_lanes.rs:949:13:
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: available wolf=779960 gnu-before=784056 gnu-after=784056
+/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: free_files wolf=4084796 gnu-before=4084797 gnu-after=4084797
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.29s
+END red-fs_statfs_holds_while_a_writer_churns exit=101
+== STEP red-fs_statfs_matches_gnu_stat_f 18:19:57
+REPORT statfs paths: ["/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu", "/", "/dev/shm", "/proc", "/tmp", "/dev"]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.19s
+END red-fs_statfs_matches_gnu_stat_f exit=0
+== STEP fix-build 18:19:57 head=138183282ec6ee1f495c64b11f1e64d96f1dddbe
+   Compiling wolf_driver v0.2.36 (/lane/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.29s
+  Executable tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-2a825e9ce4f74f98)
+END fix-build exit=0
+== STEP fix-fs_statfs_holds_while_a_writer_churns 18:19:57
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 5
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.48s
+END fix-fs_statfs_holds_while_a_writer_churns exit=0
+== STEP fix-fs_statfs_matches_gnu_stat_f 18:19:59
+REPORT statfs paths: ["/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu", "/", "/dev/shm", "/proc", "/tmp", "/dev"]
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.20s
+END fix-fs_statfs_matches_gnu_stat_f exit=0
+S272_ROWS_END 2026-11-02T18:19:59Z
+S272 rows-tmpfs END exit=0 at 2026-11-02T18:19:59Z
+S272 rows-btrfs container start at 2026-11-02T18:19:59Z (tmpfs scratch 0)
+S272 in the container at 2026-11-02T18:19:59Z
+S272_ROWS_START 2026-11-02T18:20:00Z block=K scratch=btrfs
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	8-11
+pid1 uid=0 self uid=1000
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+stat (GNU coreutils) 9.4
+== STEP fix-build 18:20:00 head=138183282ec6ee1f495c64b11f1e64d96f1dddbe
+    Finished `dev` profile [unoptimized] target(s) in 0.04s
+    Finished `test` profile [unoptimized] target(s) in 0.04s
+  Executable tests/os_surface_lanes.rs (target/debug/deps/os_surface_lanes-2a825e9ce4f74f98)
+END fix-build exit=0
+== STEP fix-fs_statfs_holds_while_a_writer_churns 18:20:00
+REPORT the churn: /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn's file system did not count 16 MiB written unsynced; the churned triples cannot disagree here
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 0
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 0
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_churn: agreed in triple 0
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.24s
+END fix-fs_statfs_holds_while_a_writer_churns exit=0
+== STEP fix-fs_statfs_matches_gnu_stat_f 18:20:00
+REPORT statfs paths: ["/lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu", "/", "/dev/shm", "/proc", "/tmp", "/dev"]
+REPORT checked /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT checked /: agreed in triple 0
+REPORT checked /dev/shm: agreed in triple 0
+REPORT checked /proc: agreed in triple 0
+REPORT checked /tmp: agreed in triple 0
+REPORT checked /dev: agreed in triple 0
+REPORT native /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT native /: agreed in triple 0
+REPORT native /dev/shm: agreed in triple 0
+REPORT native /proc: agreed in triple 0
+REPORT native /tmp: agreed in triple 0
+REPORT native /dev: agreed in triple 0
+REPORT release /lane/wolf-lang/target/tmp/os_surface_lanes/statfs_gnu: agreed in triple 0
+REPORT release /: agreed in triple 0
+REPORT release /dev/shm: agreed in triple 0
+REPORT release /proc: agreed in triple 0
+REPORT release /tmp: agreed in triple 0
+REPORT release /dev: agreed in triple 0
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.18s
+END fix-fs_statfs_matches_gnu_stat_f exit=0
+S272_ROWS_END 2026-11-02T18:20:00Z
+S272 rows-btrfs END exit=0 at 2026-11-02T18:20:00Z
+S272 chain-rows tmpfs=0 btrfs=0
+S272 rows chain END exit=0 at 2026-11-02T18:20:00Z

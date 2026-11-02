@@ -48,3 +48,20 @@ nomad/ptyprobe/   ptyprobe.c (eight threads open pairs: unlocked, ptsname under 
 nomad/mac-job7-c256e664.log
                   at the fix (jobs 5 and 6 in one hold of the lock): the pty helper's row 0 of 40 runs failed,
                   the term tests 0 of 20, wolf_rt's unit tests whole 353/353 in each of 3 runs, fmt, clippy
+hasu/blocka-0c10fdea-excerpt.log
+                  block A's run at 0c10fdea (an excerpt: the probe, the loops at 617860a3 and c256e664, the
+                  plant red by name on ext4, every END, and os_surface_lanes): the gauntlet red at test, in
+                  fs_statfs_matches_gnu_stat_f on hasu's shared disk — /tmp: free wolf=151353679
+                  gnu-before=151352615 gnu-after=151352630, wolf above both of GNU's reads (other lanes' gauntlets
+                  write and free that disk: a free count between two reads is no proof)
+kasumi/rows-8c212681-13818328.log
+                  kasumi slot 8-11, r41-toolchain (loaded from hasu), GNU coreutils 9.4: the statfs rows with
+                  the scratch on a private tmpfs, at the red row 8c212681 (the churn row red in every triple:
+                  free wolf=779960 gnu-before=784056 gnu-after=784056, 4096 blocks, free_files one apart) and at
+                  the fix 13818328 (the test's own directory agreed in triple 5, after the churn, every other path
+                  in triple 0, on checked, native and release); then the fix with the scratch on kasumi's btrfs:
+                  btrfs does not count an unsynced write until its commit (the churn row says so by name), and
+                  every word equals GNU's on btrfs in triple 0
+rig/kasumi/       kasumi's rig: the container (slot 8-11's one lock taken by job.sh, the shim moving 0-5 by 8,
+                  the scratch on a tmpfs when asked), the rows chain, and the final chain (the plant's row, prep,
+                  the gauntlet: hasu's prep and gauntlet scripts, copied)

@@ -4,6 +4,7 @@
 #   1. probe: eight threads open pty pairs (ptyprobe.c), unlocked and locked;
 #   2. stress at the red row's commit and at the fix's: the pty helper's row
 #      10 runs, wolf_rt's term tests 20 runs, head4's rt-unit filter 10 runs;
+#   2b. the plant's named row at the plant's commit (expected red by name);
 #   3. prep at the final head (s273's prep-inner, copied);
 #   4. the gauntlet at the final head: CI_STEPS read from xtask/src/main.rs at
 #      that head, one `END <step> exit=N` each, stopping at the first red
@@ -14,6 +15,7 @@
 set -uo pipefail
 source /lane/scripts/gate-env.sh
 red=${1:?red sha} fix=${2:?fix sha} final=${3:?final sha}
+plant=${4:-99314b58e7ca3d7c3a1b77dc942e135d0089b461}
 cd /lane/wolf-lang || exit 2
 printf 'S272_BLOCKA_START %s block=%s cpus=%s\n' "$(date -u +%FT%TZ)" "$S272_BLOCK" "$S272_CPUS"
 grep -E 'Cpus_allowed_list|SigBlk|SigIgn' /proc/self/status
@@ -58,6 +60,20 @@ stress() {
 }
 stress red "$red"
 stress fix "$fix"
+
+# The plant's named row on linux, from this clone (plant1 on block B was no
+# witness: its worktree's .git named a host path the container cannot see, and
+# with no libwolf_rt.a built there native and release skipped, so the checked
+# machine alone, which the plant does not break, passed). Expected red by name.
+git checkout -q --detach "$plant" && test "$(git rev-parse HEAD)" = "$plant" || { echo "END plant exit=2 (checkout)"; }
+if [ "$(git rev-parse HEAD)" = "$plant" ]; then
+  echo "== STEP plant $(date -u +%T) head=$(git rev-parse HEAD)"
+  cargo build --locked -p wolf_driver -p wolf_rt 2>&1 | tail -2
+  cargo test --locked -p wolf_driver --test os_surface_lanes fs_statfs_matches_gnu_stat_f -- --nocapture --exact > "$R/plant.log" 2>&1
+  prc=$?
+  grep -E "^SKIP|available wolf|panicked at|^test |test result" "$R/plant.log" | head -12
+  echo "END plant exit=$prc (the plant: nonzero expected, red by name)"
+fi
 
 git checkout -q --detach "$final" || { echo "S272_REFUSED checkout $final"; exit 2; }
 test "$(git rev-parse HEAD)" = "$final" || { echo "S272_REFUSED head != $final"; exit 2; }
