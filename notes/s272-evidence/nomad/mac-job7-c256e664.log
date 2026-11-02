@@ -1,0 +1,66 @@
+s272: building at c256e664 in /Users/mfwolffe/lanes/s272/build
+s272: lock taken, 9889 MiB free; running: /Users/mfwolffe/lanes/s272/mac-job7.sh
+head c256e6640ff29a5fe5c98a627caf78d50fba4bf8 2026-11-02T17:19:00Z rustc 1.97.1 (8bab26f4f 2026-07-14)
+== STEP build 17:19:00
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.26s
+  Executable unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+END build exit=0
+== STEP pair-row 17:19:02
+LOOP pair-row fails=0 of 10
+END pair-row exit=0
+== STEP term-tests 17:19:04
+LOOP term-tests fails=0 of 20
+END term-tests exit=0
+== STEP fmt 17:19:06
+END fmt exit=0
+== STEP clippy-rt 17:19:07
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_rt)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.32s
+END clippy-rt exit=0
+clean:        0 paths
+ALL rc=0 2026-11-02T17:19:09Z
+head c256e6640ff29a5fe5c98a627caf78d50fba4bf8 2026-11-02T17:19:09Z rustc 1.97.1 (8bab26f4f 2026-07-14)
+== STEP rt-lib 17:19:09
+  run 1: test result: ok. 353 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.36s
+  run 2: test result: ok. 353 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s
+  run 3: test result: ok. 353 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.35s
+LOOP rt-lib fails=0 of 3
+END rt-lib exit=0
+== STEP pair-row 17:19:16
+  run 1: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.09s
+  run 2: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 3: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 4: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 5: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 6: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 7: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 8: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 9: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 10: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 11: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 12: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+  run 13: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 14: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 15: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 16: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 17: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 18: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 19: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 20: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 21: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 22: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 23: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 24: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 25: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 26: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 27: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 28: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 29: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.08s
+  run 30: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.07s
+LOOP pair-row fails=0 of 30
+END pair-row exit=0
+clean:        0 paths
+ALL rc=0 2026-11-02T17:19:20Z
+JOB7 job5=0 job6=0
+s272: END exit=0

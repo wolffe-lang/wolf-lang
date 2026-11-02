@@ -1,0 +1,181 @@
+s272: 12:11:00 released under 60 s ago; waiting my turn
+s272: 12:11:10 released under 60 s ago; waiting my turn
+s272: 12:11:20 released under 60 s ago; waiting my turn
+s272: 12:11:30 released under 60 s ago; waiting my turn
+s272: 12:11:40 released under 60 s ago; waiting my turn
+s272: building at 617860a3 in /Users/mfwolffe/lanes/s272/build
+s272: lock taken, 9618 MiB free; running: /Users/mfwolffe/lanes/s272/mac-job5.sh
+head 617860a3ce583b08009bf6d4217871fdcfffbd84 2026-11-02T17:11:50Z rustc 1.97.1 (8bab26f4f 2026-07-14)
+== STEP build 17:11:50
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.69s
+  Executable unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+END build exit=0
+== STEP pair-row 17:11:53
+  run 5: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 5: thread '<unnamed>' (87951022) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 5: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951016) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 5: assertion `left == right` failed: pairs whose slave was another pair's
+  run 5:   left: 1
+  run 5:  right: 0
+  run 5: test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.43s
+  run 6: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 6: thread '<unnamed>' (87951058) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 6: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951051) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 6: assertion `left == right` failed: pairs whose slave was another pair's
+  run 6:   left: 1
+  run 6:  right: 0
+  run 6: test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.43s
+  run 10: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 10: thread '<unnamed>' (87951287) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 10: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951280) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 10: assertion `left == right` failed: pairs whose slave was another pair's
+  run 10:   left: 1
+  run 10:  right: 0
+  run 10: test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.43s
+LOOP pair-row fails=3 of 10
+END pair-row exit=1
+== STEP term-tests 17:11:57
+  run 1: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 1: thread '<unnamed>' (87951332) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 1: thread '<unnamed>' (87951330) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 1: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951324) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 1: assertion `left == right` failed: pairs whose slave was another pair's
+  run 1:   left: 2
+  run 1:  right: 0
+  run 1: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.46s
+  run 2: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 2: thread '<unnamed>' (87951403) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 2: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951396) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 2: assertion `left == right` failed: pairs whose slave was another pair's
+  run 2:   left: 1
+  run 2:  right: 0
+  run 2: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 4: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 4: thread '<unnamed>' (87951559) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 4: thread '<unnamed>' (87951556) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 4: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951552) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 4: assertion `left == right` failed: pairs whose slave was another pair's
+  run 4:   left: 2
+  run 4:  right: 0
+  run 4: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 5: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 5: thread '<unnamed>' (87951622) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 5: thread '<unnamed>' (87951624) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 5: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951614) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 5: assertion `left == right` failed: pairs whose slave was another pair's
+  run 5:   left: 2
+  run 5:  right: 0
+  run 5: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 6: term::tests::the_restore_sets_the_mode_and_writes_the_bytes_once --- FAILED
+  run 6: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 6: thread 'term::tests::the_restore_sets_the_mode_and_writes_the_bytes_once' (87951743) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 6: thread '<unnamed>' (87951750) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 6: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951742) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 6: assertion `left == right` failed: pairs whose slave was another pair's
+  run 6:   left: 1
+  run 6:  right: 0
+  run 7: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 7: thread '<unnamed>' (87951795) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 7: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951786) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 7: assertion `left == right` failed: pairs whose slave was another pair's
+  run 7:   left: 1
+  run 7:  right: 0
+  run 7: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.41s
+  run 8: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 8: thread '<unnamed>' (87951836) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 8: thread '<unnamed>' (87951837) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 8: thread '<unnamed>' (87951835) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 8: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951832) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 8: assertion `left == right` failed: pairs whose slave was another pair's
+  run 8:   left: 3
+  run 8:  right: 0
+  run 9: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 9: thread '<unnamed>' (87951883) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 9: thread '<unnamed>' (87951886) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 9: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951876) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 9: assertion `left == right` failed: pairs whose slave was another pair's
+  run 9:   left: 2
+  run 9:  right: 0
+  run 9: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 10: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 10: thread '<unnamed>' (87951928) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 10: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951918) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 10: assertion `left == right` failed: pairs whose slave was another pair's
+  run 10:   left: 1
+  run 10:  right: 0
+  run 10: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.41s
+  run 11: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 11: thread '<unnamed>' (87951966) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 11: thread '<unnamed>' (87951967) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 11: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87951959) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 11: assertion `left == right` failed: pairs whose slave was another pair's
+  run 11:   left: 2
+  run 11:  right: 0
+  run 11: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 13: term::tests::size_reads_what_the_terminal_was_told --- FAILED
+  run 13: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 13: thread 'term::tests::size_reads_what_the_terminal_was_told' (87952124) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 13: thread '<unnamed>' (87952130) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 13: thread '<unnamed>' (87952131) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 13: thread '<unnamed>' (87952129) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 13: thread '<unnamed>' (87952135) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 13: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952125) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 14: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 14: thread '<unnamed>' (87952172) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 14: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952168) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 14: assertion `left == right` failed: pairs whose slave was another pair's
+  run 14:   left: 1
+  run 14:  right: 0
+  run 14: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 15: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 15: thread '<unnamed>' (87952217) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 15: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952210) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 15: assertion `left == right` failed: pairs whose slave was another pair's
+  run 15:   left: 1
+  run 15:  right: 0
+  run 15: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 16: term::tests::raw_lf_reads_and_sets_onlcr --- FAILED
+  run 16: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 16: thread 'term::tests::raw_lf_reads_and_sets_onlcr' (87952339) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 16: thread '<unnamed>' (87952347) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 16: thread '<unnamed>' (87952350) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 16: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952341) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 16: assertion `left == right` failed: pairs whose slave was another pair's
+  run 16:   left: 2
+  run 17: term::tests::size_reads_what_the_terminal_was_told --- FAILED
+  run 17: thread 'term::tests::size_reads_what_the_terminal_was_told' (87952384) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 17: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 18: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 18: thread '<unnamed>' (87952436) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 18: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952430) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 18: assertion `left == right` failed: pairs whose slave was another pair's
+  run 18:   left: 1
+  run 18:  right: 0
+  run 18: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 19: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 19: thread '<unnamed>' (87952489) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 19: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952481) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 19: assertion `left == right` failed: pairs whose slave was another pair's
+  run 19:   left: 1
+  run 19:  right: 0
+  run 19: test result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 344 filtered out; finished in 0.43s
+  run 20: term::tests::the_three_raw_bits --- FAILED
+  run 20: term::tests::the_pty_helper_answers_its_own_pair --- FAILED
+  run 20: thread 'term::tests::the_three_raw_bits' (87952524) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 20: thread '<unnamed>' (87952527) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 20: thread '<unnamed>' (87952529) panicked at crates/wolf_rt/src/term.rs:757:13:
+  run 20: thread 'term::tests::the_pty_helper_answers_its_own_pair' (87952522) panicked at crates/wolf_rt/src/term.rs:810:9:
+  run 20: assertion `left == right` failed: pairs whose slave was another pair's
+  run 20:   left: 2
+LOOP term-tests fails=18 of 20
+END term-tests exit=1
+== STEP fmt 17:12:07
+END fmt exit=0
+== STEP clippy-rt 17:12:08
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s272/build/crates/wolf_rt)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.33s
+END clippy-rt exit=0
+clean:        0 paths
+ALL rc=1 2026-11-02T17:12:10Z
+s272: END exit=1
