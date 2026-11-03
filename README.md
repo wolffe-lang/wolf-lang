@@ -42,7 +42,10 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-The current release is v0.2.36, under the codename wolfgang.
+The current release is v0.2.37, under the codename wolfgang.
+See the [0.2.37 release note](docs/releases/0.2.37.md) for descriptor-relative
+filesystem calls, OS records, signal-drain recovery, compiler corrections
+and the paired interpreter's unsupported cells.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -78,7 +81,7 @@ needs a matching musl runtime (`WOLF_RT_LIB`) and sysroot
 add hosted Windows, Mach-O or foreign-target linking. See
 [linker control](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/04-abi.md#7-linker-control-abilink).
 
-On trunk, long compilations show the current unit and phase on a terminal.
+From 0.2.37, long compilations show the current unit and phase on a terminal.
 Non-interactive builds add no output until 30 seconds without output, then
 heartbeat every 60 seconds. `--quiet` hides this reporter, not diagnostics;
 `--timings` and `--timings=json:<file>` record where compilation time went.
@@ -103,7 +106,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.36 by campaign, and
+tells the history of v0.2.37 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 
