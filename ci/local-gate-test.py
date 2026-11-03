@@ -78,6 +78,20 @@ class Gate(unittest.TestCase):
         original_steps = len(re.findall(r"^      - ", BASE["workflows"]["ci.yml"][root], re.M))
         self.assertEqual(b[root].count("        if: ${{ " + GATE + " }}"), original_steps + 1)
 
+    def test_auxiliary_pr_workflows_follow_gate(self):
+        for name in BASE["pr_workflows"]:
+            if name == "ci.yml":
+                continue
+            text = (ROOT / ".github/workflows" / name).read_text()
+            for job, body in blocks(text).items():
+                self.assertIn("    if: ${{ (" + GATE + ")", body, (name, job))
+                self.assertFalse(expression(GATE, "pull_request"))
+                self.assertTrue(expression(GATE, "pull_request", ["ci"]))
+            if on_block(text, "push") is not None:
+                self.assertIsNotNone(patterns(text))
+                self.assertFalse(matches(BASE["module_path"], patterns(text)))
+                self.assertTrue(matches(".github/workflows/ci.yml", patterns(text)))
+
     def test_labelled_means_full_set(self):
         text = self.main()
         root = blocks(text)[BASE["root"]]
