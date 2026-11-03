@@ -1,11 +1,12 @@
 wolf 0.2.37 prediction, recorded before implementation
 
 Inputs re-derived 2026-11-03:
-compiler base: 63c1278da2f7767594e6416083705927c7df841f (origin/trunk)
-This is provisional: the final candidate must include the pending macOS
-chroot/signal corpus portability correction. No final full build or gauntlet
-will be submitted before that dependency lands; targeted published-binary
-measurements and the unrelated pairing regressions may run meanwhile.
+compiler base: 5f1f1c949582f53121e4047bc83c86f23ff72240 (fresh origin/trunk)
+The macOS chroot/signal corpus portability correction is included in this
+base. Nineteen release commits rebased cleanly onto it; neither corpus
+file nor its snapshots were changed by the rebase. The OS lane gate keeps
+the base's host-specific expectations alongside the pairing corrections.
+This is a host-aware test baseline, not new runtime behavior.
 compiler control v0.2.36: 5adf3d91f75b3545ff8d38e5b6693b0b9f367a05
 base posture: workspace 0.2.36, development version; pairing 0.1.58/a5378e3
 published interpreter v0.1.59: 668fb752c690f33cf124c052cc9bae2e9696eeef
@@ -87,4 +88,16 @@ Exercise its actual published 0.1.59 restore fixture and commit the oracle
 regression before correcting that list. Expect the older mode-word shape,
 but retain the actual stdout from the run rather than infer it. This is
 still a targeted pairing check, not the final candidate gauntlet; the
-macOS corpus dependency hold remains in force.
+macOS corpus dependency was subsequently satisfied by the fresh base above.
+
+Post-rebase verification input:
+Fresh fetch and ancestry check selected 5f1f1c949582f53121e4047bc83c86f23ff72240.
+The release commits initially replayed to 5baada8b7f63cd940c8d58907f49ea02209adf00;
+this prediction update and committed runner refinements precede new builds.
+Exact std 5b3a599 and published lupin 0.1.59 remain unchanged. The new base
+changes only host-aware test expectations and snapshots; no extra compiler
+or interpreter runtime mover is predicted. Record later measurements in
+external verification records, not new source commits after final gauntlets.
+Choose the fewer-waiter hasu block before every submission, preferring B
+on a tie; do not take both blocks for this release stage. Separate debug
+and release takes retain the two-hour outer-held limit and hard deadline.

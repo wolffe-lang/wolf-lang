@@ -36,8 +36,14 @@ elif [[ "$mode" = red ]]; then
     done
     echo "END red-sensitivity exit=$failed"
     exit "$failed"
-elif [[ "$mode" = pairing-red-restore || "$mode" = green ]]; then
+elif [[ "$mode" = pairing-red-restore || "$mode" = green || "$mode" = postrebase ]]; then
     export WOLF_PAIRING_REQUIRE_SIBLING=1
+    if [[ "$mode" = postrebase ]]; then
+        step postrebase-metadata python3 -I ci/r42/release-posture.py || exit $?
+        step postrebase-userland cat /etc/os-release || exit $?
+        step postrebase-build cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+        export WOLF_RT_LIB="$PWD/target/debug/libwolf_rt.a"
+    fi
     step focused-format cargo fmt --all --check || exit $?
     step compile-focused-tests cargo test -p wolf_driver --test os_surface_lanes --test descriptor_walk_lanes --test editor_calls_lanes --no-run || exit $?
     for version in 0.1.58 0.1.59; do
@@ -61,6 +67,12 @@ elif [[ "$mode" = pairing-red-restore || "$mode" = green ]]; then
             step "focused-$version-editor-restore" cargo test -p wolf_driver --test editor_calls_lanes published_pairing_ -- --nocapture || exit $?
         fi
     done
+    if [[ "$mode" = postrebase ]]; then
+        export LUPIN WOLF_TEST_NATIVE_REQUIRE=1
+        LUPIN=$(find "$inputs/lupin-0.1.59" -type f -name lupin -print -quit)
+        step postrebase-host-corpus-expectations cargo test --locked -p wolf_driver --test os_surface_lanes -- --nocapture --test-threads=1 the_root_rows_on_every_host the_signal_action_rows_on_every_host || exit $?
+        step postrebase-clean git diff --exit-code HEAD || exit $?
+    fi
 elif [[ "$mode" = plant ]]; then
     export WOLF_PAIRING_REQUIRE_SIBLING=1 LUPIN
     LUPIN=$(find "$inputs/lupin-0.1.58" -type f -name lupin -print -quit)
