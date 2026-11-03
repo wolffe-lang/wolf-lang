@@ -256,6 +256,19 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_mkfifo"),
     host("fs_set_nonblock"),
     host("fs_write_some"),
+    // s277 (wolf-lang#707, #1029, #1030, #1031, #1033): the descriptor walk —
+    // the calls relative to a held directory (`[os.fs.at]`) and the mode set
+    // on a handle (`[os.fs.mode.fd]`). `fs`.
+    host("fs_open_at"),
+    host("fs_stat_at"),
+    host("fs_lstat_at"),
+    host("fs_remove_at"),
+    host("fs_remove_dir_at"),
+    host("fs_create_dir_at"),
+    host("fs_symlink_at"),
+    host("fs_link_at"),
+    host("fs_read_dir_entries_at"),
+    host("fs_set_mode_fd"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),

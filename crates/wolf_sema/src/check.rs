@@ -14457,6 +14457,125 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, int_, &["busy", "invalid", "io"]),
             )
         }
+        // s277 (#707, `[os.fs.at.open]`; R-s277-2): `openat` relative to a
+        // held directory — `fs_open_perm`'s open word, permission and rows;
+        // `invalid` is also a name that is empty or absolute, and the host's
+        // ENOTDIR or ELOOP; `unsupported` windows.
+        "fs_open_at" => (
+            vec![int_, str_, int_, int_],
+            rowed(
+                table,
+                int_,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // s277 (#707, `[os.fs.at.stat]`, `[os.fs.at.lstat]`): the record of
+        // a name relative to a held directory, following a final link or
+        // not — `fs_stat`'s twenty words and rows, with the family's
+        // `invalid` and `unsupported`.
+        "fs_stat_at" | "fs_lstat_at" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![int_, str_],
+                rowed(
+                    table,
+                    list_int,
+                    &["not_found", "denied", "invalid", "unsupported", "io"],
+                ),
+            )
+        }
+        // s277 (#707, `[os.fs.at.remove]`, `[os.fs.at.remove.dir]`):
+        // `unlinkat`, plain and with `AT_REMOVEDIR` — `fs_remove`'s and
+        // `fs_remove_dir`'s rows, with the family's two.
+        "fs_remove_at" | "fs_remove_dir_at" => (
+            vec![int_, str_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "invalid", "unsupported", "io"],
+            ),
+        ),
+        // s277 (#1029, `[os.fs.at.mkdir]`): `mkdirat` — `fs_create_dir_mode`'s
+        // mode and rows.
+        "fs_create_dir_at" => (
+            vec![int_, str_, int_],
+            rowed(
+                table,
+                unit,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // s277 (#1030, `[os.fs.at.symlink]`): `symlinkat(target, dir, name)`
+        // — `fs_symlink`'s verbatim target and rows.
+        "fs_symlink_at" => (
+            vec![str_, int_, str_],
+            rowed(
+                table,
+                unit,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // s277 (#1031, #910, `[os.fs.at.link]`): `linkat` between two held
+        // directories, `follow` the final link's choice — `fs_link`'s rows,
+        // with the family's two.
+        "fs_link_at" => (
+            vec![int_, str_, int_, str_, bool_],
+            rowed(
+                table,
+                unit,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "cross_device",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // s277 (#707, `[os.fs.at.readdir]`): the held directory's own
+        // entries — `fs_read_dir_entries`' shape and rows, with the
+        // family's two.
+        "fs_read_dir_entries_at" => {
+            let list_byte = byte_list(table);
+            let entries = table.intern(TyKind::List(list_byte));
+            (
+                vec![int_],
+                rowed(
+                    table,
+                    entries,
+                    &["not_found", "denied", "invalid", "unsupported", "io"],
+                ),
+            )
+        }
+        // s277 (#1033, `[os.fs.mode.fd]`; R-s277-9): `fchmod` — the mode of
+        // the file a handle holds; `fs_set_owner_fd`'s rows.
+        "fs_set_mode_fd" => (
+            vec![int_, int_],
+            rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
+        ),
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag
