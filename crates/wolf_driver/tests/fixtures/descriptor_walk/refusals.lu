@@ -1,0 +1,253 @@
+//! member: false
+//! s277 (`[os.fs.at]`, `[os.fs.open.directory]`, `[os.fs.mode.fd]`) — every
+//! refusal of the family by name, unix: one line per row, `row=tag
+//! number=N` with the host's number from `os_error()` (0 where the call
+//! decided before the host). The test holds each line to its host's answer
+//! and names a wrong one `FAIL <row>`. The program makes its own tree under
+//! `r/`: a file `f`, directories `sub` and `full` (not empty), links `lfile`
+//! (to `f`), `ldir` (to `sub`) and `dangling`.
+
+fn open_mode_row(path: str, mode: int) -> str {
+    let fd = fs_open_mode(path, mode) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn open_at_row(dir: int, name: str, open: int, perm: int) -> str {
+    let fd = fs_open_at(dir, name, open, perm) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn stat_at_row(dir: int, name: str, follow: bool) -> str {
+    let r = if follow {
+        fs_stat_at(dir, name) else |e| {
+            return match e {
+                denied => "denied",
+                invalid => "invalid",
+                io => "io",
+                not_found => "not_found",
+                unsupported => "unsupported",
+            }
+        }
+    } else {
+        fs_lstat_at(dir, name) else |e| {
+            return match e {
+                denied => "denied",
+                invalid => "invalid",
+                io => "io",
+                not_found => "not_found",
+                unsupported => "unsupported",
+            }
+        }
+    }
+    "kind{r[0]}"
+}
+
+fn remove_at_row(dir: int, name: str) -> str {
+    fs_remove_at(dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn remove_dir_at_row(dir: int, name: str) -> str {
+    fs_remove_dir_at(dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn mkdir_at_row(dir: int, name: str, mode: int) -> str {
+    fs_create_dir_at(dir, name, mode) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn symlink_at_row(target: str, dir: int, name: str) -> str {
+    fs_symlink_at(target, dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn link_at_row(a: int, src: str, b: int, dst: str, follow: bool) -> str {
+    fs_link_at(a, src, b, dst, follow) else |e| {
+        return match e {
+            cross_device => "cross_device",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn mode_fd_row(fd: int, mode: int) -> str {
+    fs_set_mode_fd(fd, mode) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn listing_row(dir: int) -> str {
+    let es = fs_read_dir_entries_at(dir) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "entries{es.len}"
+}
+
+fn row(name: str, tag: str) {
+    print("{name}={tag} number={os_error()}")
+}
+
+fn main() -> !int {
+    fs_remove_dir_all("r") else |_| {}
+    fs_create_dir_all("r/sub")?
+    fs_create_dir_all("r/full")?
+    fs_write_text("r/full/x", "x")?
+    fs_write_text("r/f", "file")?
+    fs_symlink("f", "r/lfile")?
+    fs_symlink("sub", "r/ldir")?
+    fs_symlink("nowhere", "r/dangling")?
+    let d = fs_open_mode("r", 32)?
+    let ff = fs_open_mode("r/f", 0)?
+
+    row("open_dir_file", open_mode_row("r/f", 32))
+    row("open_dir_nofollow_link", open_mode_row("r/ldir", 48))
+    row("open_dir_link_followed", open_mode_row("r/ldir", 32))
+    row("open_nofollow_link", open_mode_row("r/lfile", 16))
+    row("open_dir_write", open_mode_row("r/sub", 35))
+    row("open_bit_64", open_mode_row("r/sub", 64))
+
+    row("open_at_nofollow", open_at_row(d, "lfile", 16, 0))
+    row("open_at_dir_file", open_at_row(d, "f", 32, 0))
+    row("open_at_dir_nofollow_link", open_at_row(d, "ldir", 48, 0))
+    row("open_at_dir_write", open_at_row(d, "sub", 33, 0))
+    row("open_at_absolute", open_at_row(d, "/", 32, 0))
+    row("open_at_empty", open_at_row(d, "", 0, 0))
+    row("open_at_perm", open_at_row(d, "new", 4, 0o1000))
+    row("open_at_mode", open_at_row(d, "new", 6, 0))
+    row("open_at_file_handle", open_at_row(ff, "x", 0, 0))
+    row("open_at_forged", open_at_row(1000000, "x", 0, 0))
+    row("open_at_missing", open_at_row(d, "missing", 0, 0))
+    row("open_at_exists", open_at_row(d, "f", 4, 0o600))
+    row("open_at_dangling_create", open_at_row(d, "dangling", 17, 0o600))
+    row("open_at_created", open_at_row(d, "made", 4, 0o600))
+    let m = fs_lstat("r/made")?
+    row("open_at_created_mode", "{m[4] == 0o600}")
+    row("open_at_dotdot", open_at_row(d, "ldir/..", 32, 0))
+
+    row("lstat_at_missing", stat_at_row(d, "missing", false))
+    row("lstat_at_link", stat_at_row(d, "lfile", false))
+    row("stat_at_link", stat_at_row(d, "lfile", true))
+    row("stat_at_dangling", stat_at_row(d, "dangling", true))
+    row("lstat_at_dangling", stat_at_row(d, "dangling", false))
+    row("stat_at_under_a_file", stat_at_row(d, "f/x", true))
+    row("lstat_at_file_handle", stat_at_row(ff, "x", false))
+    row("lstat_at_forged", stat_at_row(1000000, "x", false))
+    row("lstat_at_absolute", stat_at_row(d, "/", false))
+
+    row("remove_at_a_directory", remove_at_row(d, "sub"))
+    row("remove_at_missing", remove_at_row(d, "missing"))
+    row("remove_at_file_handle", remove_at_row(ff, "x"))
+    row("remove_dir_at_a_file", remove_dir_at_row(d, "f"))
+    row("remove_dir_at_a_link", remove_dir_at_row(d, "ldir"))
+    row("remove_dir_at_not_empty", remove_dir_at_row(d, "full"))
+    row("remove_dir_at_missing", remove_dir_at_row(d, "missing"))
+
+    row("mkdir_at_exists", mkdir_at_row(d, "sub", 0o700))
+    row("mkdir_at_dangling", mkdir_at_row(d, "dangling", 0o700))
+    row("mkdir_at_missing_parent", mkdir_at_row(d, "no/such", 0o700))
+    row("mkdir_at_file_handle", mkdir_at_row(ff, "x", 0o700))
+    row("mkdir_at_mode", mkdir_at_row(d, "wide", 0o1000))
+
+    row("symlink_at_empty", symlink_at_row("", d, "e"))
+    row("symlink_at_exists", symlink_at_row("t", d, "sub"))
+    row("symlink_at_file_handle", symlink_at_row("t", ff, "x"))
+
+    row("link_at_a_directory", link_at_row(d, "sub", d, "h", false))
+    row("link_at_exists", link_at_row(d, "f", d, "sub", false))
+    row("link_at_dangling_followed", link_at_row(d, "dangling", d, "h2", true))
+    row("link_at_dangling_itself", link_at_row(d, "dangling", d, "h3", false))
+    row("link_at_file_handle", link_at_row(d, "f", ff, "x", false))
+    row("link_at_missing", link_at_row(d, "missing", d, "h4", false))
+
+    let (pr, pw) = os_pipe()?
+    row("mode_fd_pipe", mode_fd_row(pr, 0o600))
+    row("mode_fd_directory", mode_fd_row(d, 0o755))
+    row("mode_fd_bits", mode_fd_row(ff, 0o4755))
+    let s = fs_fstat_record(ff)?
+    row("mode_fd_bits_kept", "{s[4] == 0o4755}")
+    row("mode_fd_past_07777", mode_fd_row(ff, 0o10000))
+    row("mode_fd_forged", mode_fd_row(1000000, 0o600))
+
+    row("listing_file_handle", listing_row(ff))
+    row("listing_forged", listing_row(1000000))
+
+    fs_close(pr)?
+    fs_close(pw)?
+    fs_close(ff)?
+    fs_close(d)?
+    fs_set_mode("r/f", 0o644)?
+    fs_remove_dir_all("r")?
+    0
+}

@@ -1,0 +1,110 @@
+//! member: false
+//! s277 (`[os.fs.at]`, `[os.fs.mode.fd]`) — the privileged forms, run in a
+//! throwaway container once as a user (4242) and once as root inside it.
+//! The case's script, as the container's root, lays out
+//! `/tmp/s277-priv/`: `rootdir/` (root's, 0755) holding `rootfile` and
+//! `rootfile2` (root's, 0644), `sticky/` (1777) holding root's `rootfile`,
+//! and `userdir/` (4242's, 0755) holding 4242's `userfile`; then it runs
+//! this program as root, or drops to 4242 first. One line per row,
+//! `row=tag number=N`: a hard link across owners each way, a mode change
+//! on root's file through a read handle, a directory, a removal and a
+//! link made under root's directory, and a removal of root's file in the
+//! sticky directory. Root answers each `ok`; the user each the host's
+//! refusal (`denied`: EPERM 1 or EACCES 13; the first link where the host
+//! protects hard links, `/proc/sys/fs/protected_hardlinks`).
+
+fn link_row(a: int, src: str, b: int, dst: str) -> str {
+    fs_link_at(a, src, b, dst, false) else |e| {
+        return match e {
+            cross_device => "cross_device",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn mode_row(fd: int, mode: int) -> str {
+    fs_set_mode_fd(fd, mode) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn mkdir_row(dir: int, name: str) -> str {
+    fs_create_dir_at(dir, name, 0o700) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn remove_row(dir: int, name: str) -> str {
+    fs_remove_at(dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn symlink_row(dir: int, name: str) -> str {
+    fs_symlink_at("t", dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn row(name: str, tag: str) {
+    print("{name}={tag} number={os_error()}")
+}
+
+fn main() -> !int {
+    let euid = os_euid() else |_| { -1 }
+    print("euid={euid}")
+    let p = "/tmp/s277-priv"
+    let r = fs_open_mode(p + "/rootdir", 48)?
+    let s = fs_open_mode(p + "/sticky", 48)?
+    let u = fs_open_mode(p + "/userdir", 48)?
+    row("link_across_owners", link_row(r, "rootfile", u, "mine"))
+    row("link_into_roots_dir", link_row(u, "userfile", r, "theirs"))
+    let fd = fs_open_mode(p + "/rootdir/rootfile", 0)?
+    row("mode_on_roots_file", mode_row(fd, 0o600))
+    let rec = fs_fstat_record(fd)?
+    print("mode_now={rec[4]}")
+    row("mkdir_in_roots_dir", mkdir_row(r, "x"))
+    row("remove_in_roots_dir", remove_row(r, "rootfile2"))
+    row("symlink_in_roots_dir", symlink_row(r, "ln"))
+    row("remove_in_sticky", remove_row(s, "rootfile"))
+    fs_close(fd)?
+    fs_close(u)?
+    fs_close(s)?
+    fs_close(r)?
+    0
+}

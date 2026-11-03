@@ -1,0 +1,87 @@
+//! member: false
+//! s277 (wolf-lang#707; `[os.fs.at]`) — the race row's program. The test
+//! lays out `tree/d/x`, `tree/e/y`, `tree/f/z` and `outside/{x,y,z}`, runs
+//! this program in that directory, and is the second process: it waits for
+//! `READY`, moves `d`, `e` and `f` aside and puts a link to `../outside` in
+//! each place, then writes `GO`. The program's checks come before `READY`
+//! and its uses after `GO`, so every use meets the swapped tree:
+//!
+//!   held     `tree/d` held by handle before the swap; `x` removed through
+//!            that handle is the moved directory's `x`.
+//!   asked    `tree/e` asked by `fs_lstat_at` (a directory) before the swap;
+//!            after it, the walk opens `e` relative to `tree`'s handle with
+//!            the directory and no-follow bits, which refuses the link
+//!            (`invalid`, ENOTDIR), so nothing outside is touched.
+//!   path     `tree/f` asked by path (a directory) before the swap; after
+//!            it, `tree/f/z` removed by name follows the link and removes
+//!            the outside's `z` — the escape the handle walk does not have.
+
+fn remove_at_row(dir: int, name: str) -> str {
+    fs_remove_at(dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn open_dir_row(dir: int, name: str) -> int {
+    fs_open_at(dir, name, 48, 0) else |e| {
+        return match e {
+            denied => -2,
+            exists => -3,
+            invalid => -1,
+            io => -4,
+            not_found => -5,
+            unsupported => -6,
+        }
+    }
+}
+
+fn path_remove_row(path: str) -> str {
+    fs_remove(path) else |e| {
+        return match e {
+            denied => "denied",
+            io => "io",
+            not_found => "not_found",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    // 48 = 32 (a directory only) + 16 (no final link followed).
+    let root = fs_open_mode("tree", 48)?
+    let d = fs_open_at(root, "d", 48, 0)?
+    let e = fs_lstat_at(root, "e")?
+    let f = fs_lstat("tree/f")?
+    print("checked: d={d >= 3} e_kind={e[0]} f_kind={f[0]}")
+    fs_write_text("READY", "checked")?
+    var waited = 0
+    while !fs_exists("GO") {
+        time_sleep_ms(5)
+        waited = waited + 1
+        if waited > 12000 {
+            print("no GO within 60 s")
+            return 3
+        }
+    }
+
+    print("held_remove={remove_at_row(d, "x")}")
+    let eh = open_dir_row(root, "e")
+    let number = os_error()
+    var asked = "refused"
+    if eh >= 3 {
+        asked = "opened, then remove={remove_at_row(eh, "y")}"
+        fs_close(eh)?
+    }
+    print("asked_open_refused={eh == -1} number={number} {asked}")
+    print("path_remove={path_remove_row("tree/f/z")}")
+    fs_close(d)?
+    fs_close(root)?
+    0
+}

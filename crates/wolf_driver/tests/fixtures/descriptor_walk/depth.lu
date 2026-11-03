@@ -1,0 +1,73 @@
+//! member: false
+//! s277 (wolf-lang#707; `[os.fs.at]`) — a tree deeper than `PATH_MAX` (4096
+//! bytes on linux, 1024 on macOS): 80 levels of 64-byte names, 5204 bytes of
+//! path, made one level at a time through the handle of the level above,
+//! then a directory made and removed at the bottom by handle, where the
+//! whole path's `fs_stat` and `fs_create_dir` are refused (`io`, the host's
+//! ENAMETOOLONG beside the row), and the tree removed level by level from
+//! the bottom by handle. Every handle is closed before its directory goes.
+
+fn stat_row(path: str) -> str {
+    let r = fs_stat(path) else |e| {
+        return match e {
+            denied => "denied",
+            io => "io",
+            not_found => "not_found",
+        }
+    }
+    "kind {r[0]}"
+}
+
+fn mkdir_row(path: str) -> str {
+    fs_create_dir(path) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            io => "io",
+            not_found => "not_found",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let seg = "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz01"
+    fs_remove_dir_all("deep") else |_| {}
+    fs_create_dir("deep")?
+    let root = fs_open_mode("deep", 48)?
+    var held = List[int]()
+    (mut held).push(root)
+    var path = "deep"
+    var n = 0
+    while n < 80 {
+        let cur = held[n]
+        fs_create_dir_at(cur, seg, 0o700)?
+        let next = fs_open_at(cur, seg, 48, 0)?
+        (mut held).push(next)
+        path = path + "/" + seg
+        n = n + 1
+    }
+    print("levels={n} path_bytes={4 + n * 65}")
+    let deepest = held[n]
+    let r = fs_stat_at(deepest, ".")?
+    print("bottom_is_a_directory: {r[0] == 1}")
+    print("path_stat={stat_row(path)} number_set={os_error() != 0}")
+    print("path_mkdir={mkdir_row(path + "/x")} number_set={os_error() != 0}")
+    fs_create_dir_at(deepest, "x", 0o700)?
+    let x = fs_lstat_at(deepest, "x")?
+    print("made_at_the_bottom: {x[0] == 1}")
+    fs_remove_dir_at(deepest, "x")?
+
+    var removed = 0
+    var i = n
+    while i > 0 {
+        fs_close(held[i])?
+        fs_remove_dir_at(held[i - 1], seg)?
+        removed = removed + 1
+        i = i - 1
+    }
+    fs_close(root)?
+    fs_remove_dir("deep")?
+    print("removed={removed} gone={!fs_exists("deep")}")
+    0
+}
