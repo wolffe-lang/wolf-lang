@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Run one immutable compiler snapshot, with both lock names and one deadline.
 set -uo pipefail
-mode=${1:?observe or red}
+mode=${1:?observe, red, pairing-red-restore, green or plant}
 head=${2:?full head}
 base=/home/mfwolffe/lanes/r42
 [[ "$head" =~ ^[0-9a-f]{40}$ ]] || exit 2
-case "$mode" in observe|red) ;; *) exit 2 ;; esac
+case "$mode" in observe|red|pairing-red-restore|green|plant) ;; *) exit 2 ;; esac
 name="wolf-$mode-$head"
 snapshot="$base/builds/$name"
 records="$base/records/$name"

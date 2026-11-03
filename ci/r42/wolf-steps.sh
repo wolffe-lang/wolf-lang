@@ -36,6 +36,47 @@ elif [[ "$mode" = red ]]; then
     done
     echo "END red-sensitivity exit=$failed"
     exit "$failed"
+elif [[ "$mode" = pairing-red-restore || "$mode" = green ]]; then
+    export WOLF_PAIRING_REQUIRE_SIBLING=1
+    step focused-format cargo fmt --all --check || exit $?
+    step compile-focused-tests cargo test -p wolf_driver --test os_surface_lanes --test descriptor_walk_lanes --test editor_calls_lanes --no-run || exit $?
+    for version in 0.1.58 0.1.59; do
+        export LUPIN
+        LUPIN=$(find "$inputs/lupin-$version" -type f -name lupin -print -quit)
+        [[ "$LUPIN" = /* && -x "$LUPIN" ]] || exit 2
+        for gate in os_surface_lanes descriptor_walk_lanes; do
+            step "focused-$version-$gate" cargo test -p wolf_driver --test "$gate" published_pairing_ -- --nocapture || exit $?
+        done
+        if [[ "$mode" = pairing-red-restore && "$version" = 0.1.59 ]]; then
+            name="red-$version-editor-restore"
+            step "$name" cargo test -p wolf_driver --test editor_calls_lanes published_pairing_ -- --nocapture
+            rc=$?
+            printf '%s\n' "$rc" > "$records/$name.exit"
+            if ((rc == 0)) || ! grep -q 'test result: FAILED. 0 passed; 1 failed;' "$records/$name.log"; then
+                echo 'FAIL expected the named published restore regression'
+                exit 1
+            fi
+            echo 'END restore-red-sensitivity exit=0'
+        else
+            step "focused-$version-editor-restore" cargo test -p wolf_driver --test editor_calls_lanes published_pairing_ -- --nocapture || exit $?
+        fi
+    done
+elif [[ "$mode" = plant ]]; then
+    export WOLF_PAIRING_REQUIRE_SIBLING=1 LUPIN
+    LUPIN=$(find "$inputs/lupin-0.1.58" -type f -name lupin -print -quit)
+    [[ "$LUPIN" = /* && -x "$LUPIN" ]] || exit 2
+    step compile-plant-tests cargo test -p wolf_driver --test os_surface_lanes --test descriptor_walk_lanes --no-run || exit $?
+    for gate in os_surface_lanes descriptor_walk_lanes; do
+        name="plant-$gate"
+        step "$name" cargo test -p wolf_driver --test "$gate" published_pairing_keeps -- --nocapture
+        rc=$?
+        printf '%s\n' "$rc" > "$records/$name.exit"
+        if ((rc == 0)) || ! grep -q 'test result: FAILED. 0 passed; 1 failed;' "$records/$name.log"; then
+            echo "FAIL expected named plant red in $gate"
+            exit 1
+        fi
+    done
+    echo 'END plant-sensitivity exit=0'
 else
     exit 2
 fi
