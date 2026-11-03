@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="held: true\nlinked_under_the_handle: true\ntarget_verbatim: true\nis_a_link: true\nagain=exists_or_unsupported: true\nempty_target=invalid\nabsolute=invalid\ncleaned=true")
 //! phase: run
-//! conforms: os.fs.at, os.fs.at.symlink, os.fs.readlink, os.fs.open.directory, err.union
+//! conforms: os.fs.at, os.fs.at.symlink, os.fs.readlink, os.fs.open.directory, os.uname, err.union
 //!
 //! s277 (wolf-lang#1030; `[os.fs.at.symlink]`) — `fs_symlink_at(target, dir,
 //! name)` makes a symbolic link in the directory a handle HOLDS, in
@@ -49,7 +49,8 @@ fn main() -> !int {
         -1
     }
     let served = held >= 3
-    print("held: {served || refused == "invalid"}")
+    let unix = os_name() != "windows"
+    print("held: {served == unix && (served || refused == "invalid")}")
     fs_rename(dir + "/p", dir + "/q")?
     let h = if served { held } else { 3 }
 

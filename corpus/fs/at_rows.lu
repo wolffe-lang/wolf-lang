@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="witness: true\nheld: true\nopen_at: true\nlstat_at: true\nstat_at: true\nremove_at: true\nremove_dir_at: true\nlisting: true\nlisting_again: true\ncleaned=true")
 //! phase: run
-//! conforms: os.fs.at, os.fs.at.open, os.fs.at.lstat, os.fs.at.stat, os.fs.at.remove, os.fs.at.remove.dir, os.fs.at.readdir, os.fs.open.directory, err.union
+//! conforms: os.fs.at, os.fs.at.open, os.fs.at.lstat, os.fs.at.stat, os.fs.at.remove, os.fs.at.remove.dir, os.fs.at.readdir, os.fs.open.directory, os.uname, err.union
 //!
 //! s277 (wolf-lang#707; `[os.fs.at]`) — calls relative to a directory the
 //! program HOLDS, so a name is looked up in the directory the handle names
@@ -10,9 +10,9 @@
 //!                  no open has answered 3 yet, so it is a forged handle,
 //!                  `io` (windows: `unsupported`, after the shape);
 //!   held           `inner` opened as a directory (bit 32, beside bit 16's
-//!                  no-follow), then renamed to `moved` — windows refuses
-//!                  the bit `invalid`, and every line after says
-//!                  `unsupported` there;
+//!                  no-follow), then renamed to `moved` — on unix (by
+//!                  `os_name`), and windows refuses the bit `invalid`, every
+//!                  line after saying `unsupported` there;
 //!   open_at ..     each call through the held handle reaches `moved`'s
 //!                  entries: the open reads the file's bytes, the two stats
 //!                  answer its record (kind, size, identity, mode), the
@@ -153,9 +153,11 @@ fn main() -> !int {
         -1
     }
     let served = held >= 3
+    // Each host's side, named: unix serves the family, windows refuses it.
+    let unix = os_name() != "windows"
     fs_rename(dir + "/inner", dir + "/moved")?
     let moved = dir + "/moved"
-    print("held: {served || refused == "invalid"}")
+    print("held: {served == unix && (served || refused == "invalid")}")
 
     let probe = if served { held } else { 3 }
     let read = open_row(probe, "f", 0)

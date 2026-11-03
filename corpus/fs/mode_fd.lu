@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="probe: true\nheld_file_changed: true\nnamed_file_kept: true\nnamed_file_is_the_other: true\nmode_past_07777=invalid\nforged: true\ncleaned=true")
 //! phase: run
-//! conforms: os.fs.mode.fd, os.fs.mode, os.fs.fstat.record, os.fs.std, err.union
+//! conforms: os.fs.mode.fd, os.fs.mode, os.fs.fstat.record, os.fs.std, os.uname, err.union
 //!
 //! s277 (wolf-lang#1033; `[os.fs.mode.fd]`) — `fs_set_mode_fd(fd, mode)` is
 //! `fchmod`: the mode of the file a handle HOLDS, whatever its name is by
@@ -33,7 +33,8 @@ fn main() -> !int {
     fs_write(fd, "held")?
     let probe = mode_row(fd, 0o640)
     let served = probe == "ok"
-    print("probe: {served || probe == "unsupported"}")
+    let unix = os_name() != "windows"
+    print("probe: {served == unix && (served || probe == "unsupported")}")
     var held_truth = !served
     var kept_truth = !served
     var other_truth = !served

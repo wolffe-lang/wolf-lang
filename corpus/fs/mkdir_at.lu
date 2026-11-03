@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="held: true\nmade_under_the_handle: true\nnot_under_the_old_name: true\nmode: true\nagain=exists_or_unsupported: true\nmissing_parent: true\nmode_past_0777=invalid\nabsolute=invalid\nempty=invalid\ncleaned=true")
 //! phase: run
-//! conforms: os.fs.at, os.fs.at.mkdir, os.fs.open.directory, os.fs.stat, err.union
+//! conforms: os.fs.at, os.fs.at.mkdir, os.fs.open.directory, os.fs.stat, os.uname, err.union
 //!
 //! s277 (wolf-lang#1029; `[os.fs.at.mkdir]`) — `fs_create_dir_at(dir, name,
 //! mode)` makes a directory in the directory a handle HOLDS: the parent is
@@ -42,7 +42,8 @@ fn main() -> !int {
         -1
     }
     let served = held >= 3
-    print("held: {served || refused == "invalid"}")
+    let unix = os_name() != "windows"
+    print("held: {served == unix && (served || refused == "invalid")}")
     fs_rename(dir + "/p", dir + "/q")?
     let h = if served { held } else { 3 }
 

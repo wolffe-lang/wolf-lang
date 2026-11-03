@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="held: true\nlinked_between_handles: true\none_file: true\nagain=exists_or_unsupported: true\nmissing_source: true\nlink_itself: true\nlink_followed: true\nabsolute=invalid\ncleaned=true")
 //! phase: run
-//! conforms: os.fs.at, os.fs.at.link, os.fs.link, os.fs.stat, os.fs.open.directory, err.union
+//! conforms: os.fs.at, os.fs.at.link, os.fs.link, os.fs.stat, os.fs.open.directory, os.uname, err.union
 //!
 //! s277 (wolf-lang#1031, #910; `[os.fs.at.link]`) — `fs_link_at(src_dir,
 //! src, dst_dir, dst, follow)` makes a second name of a file between two
@@ -49,7 +49,8 @@ fn main() -> !int {
     let ha = hold(dir + "/a")
     let hb = hold(dir + "/b")
     let served = ha >= 3 && hb >= 3
-    print("held: {served || (ha == -1 && hb == -1)}")
+    let unix = os_name() != "windows"
+    print("held: {served == unix && (served || (ha == -1 && hb == -1))}")
     fs_rename(dir + "/a", dir + "/a2")?
     fs_rename(dir + "/b", dir + "/b2")?
     let x = if served { ha } else { 3 }

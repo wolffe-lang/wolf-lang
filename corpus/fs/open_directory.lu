@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="file=invalid\nfile_number: true\ndirectory: true\na_directory_handle: true\nwith_nofollow: true\nwith_a_write_mode=invalid\nwith_create_new=invalid\nbit_64=invalid\nunmoved=ok\ncleaned=true")
 //! phase: run
-//! conforms: os.fs.open.directory, os.fs.open, os.fs.open.nofollow, os.fs.fstat.record, os.fs.error, err.union
+//! conforms: os.fs.open.directory, os.fs.open, os.fs.open.nofollow, os.fs.fstat.record, os.fs.error, os.uname, err.union
 //!
 //! s277 (wolf-lang#1032; `[os.fs.open.directory]`) — bit 32 of the open
 //! word asks for a directory: a regular file opened with it is refused
@@ -37,8 +37,10 @@ fn main() -> !int {
     let n = os_error()
     let d = open_row(dir + "/sub", 32)
     let served = d == "ok"
+    // Each host's side, named: unix opens a directory, windows refuses the bit.
+    let unix = os_name() != "windows"
     print("file_number: {(served && n == 20) || (!served && n == 0)}")
-    print("directory: {served || d == "invalid"}")
+    print("directory: {served == unix && (served || d == "invalid")}")
     var kind_truth = !served
     if served {
         let h = fs_open_mode(dir + "/sub", 32)?
