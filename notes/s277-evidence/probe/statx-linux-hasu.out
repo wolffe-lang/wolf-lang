@@ -1,0 +1,8 @@
+sizeof(our struct)=256
+file       flags=0 mask=0x1fff btime=1793708104.187392082 words-equal=yes
+sub        flags=0 mask=0x1fff btime=1793708104.187392082 words-equal=yes
+lfile      flags=0x100 mask=0x1fff btime=1793708104.187392082 words-equal=yes
+lfile      flags=0 mask=0x1fff btime=1793708104.187392082 words-equal=yes
+fifo       flags=0x100 mask=0x1fff btime=1793708104.187392082 words-equal=yes
+null       flags=0 mask=0x1fff btime=1792166446.314999999 words-equal=yes
+mismatches=0

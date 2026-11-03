@@ -1,0 +1,84 @@
+== O_DIRECTORY on open(2)
+open(file, RDONLY|DIRECTORY)                               rc=-1 errno=20 (Not a directory)
+open(sub, RDONLY|DIRECTORY)                                rc=3
+open(ldir, RDONLY|DIRECTORY)                               rc=3
+open(ldir, RDONLY|DIRECTORY|NOFOLLOW)                      rc=-1 errno=20 (Not a directory)
+open(lfile, RDONLY|DIRECTORY|NOFOLLOW)                     rc=-1 errno=20 (Not a directory)
+open(lfile, RDONLY|DIRECTORY)                              rc=-1 errno=20 (Not a directory)
+open(dangling, RDONLY|DIRECTORY)                           rc=-1 errno=2 (No such file or directory)
+open(fifo, RDONLY|DIRECTORY) (no writer)                   rc=-1 errno=20 (Not a directory)
+open(sub, WRONLY|DIRECTORY)                                rc=-1 errno=21 (Is a directory)
+open(sub, RDWR|DIRECTORY)                                  rc=-1 errno=21 (Is a directory)
+open(newname, RDWR|CREAT|DIRECTORY)                        rc=-1 errno=22 (Invalid argument)
+  then lstat(newname)                                      rc=-1 errno=2 (No such file or directory)
+open(sub, RDONLY|NONBLOCK|DIRECTORY)                       rc=3
+open(file/x, RDONLY|DIRECTORY)                             rc=-1 errno=20 (Not a directory)
+== openat
+openat(d, file, RDONLY)                                    rc=5
+openat(file-fd, x, RDONLY)                                 rc=-1 errno=20 (Not a directory)
+openat(d, "", RDONLY)                                      rc=-1 errno=2 (No such file or directory)
+openat(d, /, RDONLY|DIRECTORY) (absolute: dirfd ignored)   rc=5
+openat(d, lfile, RDONLY|NOFOLLOW)                          rc=-1 errno=62 (Too many levels of symbolic links)
+openat(d, ldir/.., RDONLY|DIRECTORY)                       rc=5
+openat(d, lfile, RDWR|CREAT|EXCL|NOFOLLOW)                 rc=-1 errno=17 (File exists)
+openat(d, dangling, WRONLY|CREAT|NOFOLLOW)                 rc=-1 errno=62 (Too many levels of symbolic links)
+openat(-1, file, RDONLY) (EBADF)                           rc=-1 errno=9 (Bad file descriptor)
+== fstatat
+fstatat(d, lfile, NOFOLLOW)                                rc=0
+   kind=link size=4
+fstatat(d, lfile, 0)                                       rc=0
+   kind=file size=3
+fstatat(d, dangling, 0)                                    rc=-1 errno=2 (No such file or directory)
+fstatat(d, dangling, NOFOLLOW)                             rc=0
+fstatat(d, file/x, NOFOLLOW)                               rc=-1 errno=20 (Not a directory)
+fstatat(file-fd, x, NOFOLLOW)                              rc=-1 errno=20 (Not a directory)
+fstatat(d, missing, NOFOLLOW)                              rc=-1 errno=2 (No such file or directory)
+fstatat(d, "", NOFOLLOW)                                   rc=-1 errno=2 (No such file or directory)
+== unlinkat
+unlinkat(d, sub, 0) (a directory)                          rc=-1 errno=1 (Operation not permitted)
+unlinkat(d, file, REMOVEDIR) (a file)                      rc=-1 errno=20 (Not a directory)
+unlinkat(d, ldir, REMOVEDIR) (a link to a dir)             rc=-1 errno=20 (Not a directory)
+unlinkat(d, full, REMOVEDIR) (not empty)                   rc=-1 errno=66 (Directory not empty)
+unlinkat(d, missing, 0)                                    rc=-1 errno=2 (No such file or directory)
+unlinkat(file-fd, x, 0)                                    rc=-1 errno=20 (Not a directory)
+unlinkat(d, ., REMOVEDIR)                                  rc=-1 errno=22 (Invalid argument)
+== mkdirat
+mkdirat(d, sub, 0700) (exists)                             rc=-1 errno=17 (File exists)
+mkdirat(d, dangling, 0700) (a dangling link)               rc=-1 errno=17 (File exists)
+mkdirat(d, no/such, 0700)                                  rc=-1 errno=2 (No such file or directory)
+mkdirat(d, made, 0700)                                     rc=0
+mkdirat(file-fd, x, 0700)                                  rc=-1 errno=20 (Not a directory)
+== symlinkat
+symlinkat("", d, empty)                                    rc=0
+symlinkat(t, d, sub) (exists)                              rc=-1 errno=17 (File exists)
+symlinkat(no/such/place, d, s1)                            rc=0
+   readlinkat(d, s1) = no/such/place
+symlinkat(t, file-fd, x)                                   rc=-1 errno=20 (Not a directory)
+== linkat
+linkat(d, lfile, d, h0, 0)                                 rc=0
+   h0 kind=link nlink=2
+linkat(d, lfile, d, h1, SYMLINK_FOLLOW)                    rc=0
+   h1 kind=file nlink=2
+linkat(d, dangling, d, h2, SYMLINK_FOLLOW)                 rc=-1 errno=2 (No such file or directory)
+linkat(d, dangling, d, h3, 0)                              rc=0
+linkat(d, sub, d, h4, 0) (a directory)                     rc=-1 errno=1 (Operation not permitted)
+linkat(d, file, d, sub, 0) (exists)                        rc=-1 errno=17 (File exists)
+linkat(d, file, file-fd, x, 0)                             rc=-1 errno=20 (Not a directory)
+linkat(d, missing, d, h5, 0)                               rc=-1 errno=2 (No such file or directory)
+== fchmod
+fchmod(pipe-read-end, 0600)                                rc=-1 errno=22 (Invalid argument)
+fchmod(d, 0700) (a directory handle)                       rc=0
+fchmod(file-fd O_RDONLY, 04755)                            rc=0
+   mode=4755
+fchmod(-1, 0600)                                           rc=-1 errno=9 (Bad file descriptor)
+== fdopendir on a dup, twice
+   pass 1: 13 entries, 13 typed by d_type
+   pass 2: 13 entries, 13 typed by d_type
+fdopendir(dup(file-fd))                                    rc=-1 errno=20 (Not a directory)
+== depth past PATH_MAX (1024)
+   made 100 levels of 65 bytes: 6504 bytes of path
+stat(the whole path)                                       rc=-1 errno=63 (File name too long)
+rmdir(the whole path)                                      rc=-1 errno=63 (File name too long)
+   removed 100 of 100 levels by handle
+unlinkat(d, deep, REMOVEDIR)                               rc=0
+ProductName:		macOS ProductVersion:		26.4.1 BuildVersion:		25E253 arm64

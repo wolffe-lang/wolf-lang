@@ -1,0 +1,4 @@
+// #707: the held directory's own listing.
+fn main() {
+    let _ = fs_read_dir_entries_at(3)
+}

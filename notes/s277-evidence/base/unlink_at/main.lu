@@ -1,0 +1,4 @@
+// #707: bu21's census witness (boreutils notes/bu21/census/missing/unlink_at/p.lu), verbatim.
+fn main() {
+    let _ = fs_remove_at(3, "name")
+}

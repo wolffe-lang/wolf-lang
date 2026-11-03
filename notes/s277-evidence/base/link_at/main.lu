@@ -1,0 +1,4 @@
+// #1031: linkat between two held directory handles, with a follow flag (#910).
+fn main() {
+    let _ = fs_link_at(3, "a", 4, "b", false)
+}

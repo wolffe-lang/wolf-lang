@@ -1,0 +1,4 @@
+// #1029: mkdirat on a held directory handle.
+fn main() {
+    let _ = fs_create_dir_at(3, "name", 0o700)
+}

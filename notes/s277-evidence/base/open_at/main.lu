@@ -1,0 +1,4 @@
+// #707: openat on a held directory handle.
+fn main() {
+    let _ = fs_open_at(3, "name", 0, 0)
+}

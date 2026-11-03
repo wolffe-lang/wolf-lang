@@ -1,0 +1,4 @@
+// #707: fstatat(AT_SYMLINK_NOFOLLOW) on a held directory handle.
+fn main() {
+    let _ = fs_lstat_at(3, "name")
+}

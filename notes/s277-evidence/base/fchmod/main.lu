@@ -1,0 +1,4 @@
+// #1033: fchmod on a handle.
+fn main() {
+    let _ = fs_set_mode_fd(3, 0o600)
+}

@@ -1,0 +1,4 @@
+// #1030: symlinkat on a held directory handle.
+fn main() {
+    let _ = fs_symlink_at("target", 3, "name")
+}

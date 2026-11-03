@@ -1,0 +1,32 @@
+== build at 0d6b3a640dc62ef47a9bbb8d485ecb7ff154b282 07:07:57
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+END build exit=0
+== fchmod/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_set_mode_fd` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_set_mode_fd` is in scope
+== link_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_link_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_link_at` is in scope
+== lstat_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_lstat_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_lstat_at` is in scope
+== mkdir_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_create_dir_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_create_dir_at` is in scope
+== o_directory/main.lu
+   native: wolf build exit 0 — 
+   native run exit 0: invalid errno=0 
+   checked: conform-run exit 0 — "verdict":"exit(0)" 
+== open_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_open_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_open_at` is in scope
+== read_dir_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_read_dir_entries_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_read_dir_entries_at` is in scope
+== symlink_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_symlink_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_symlink_at` is in scope
+== unlink_at/main.lu
+   native: wolf build exit 2 — error[E0301]: nothing named `fs_remove_at` is in scope
+   checked: conform-run exit 0 — "verdict":"fail(E0301)" error[E0301]: nothing named `fs_remove_at` is in scope

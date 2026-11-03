@@ -1,0 +1,19 @@
+// #1032: an open that refuses a non-directory: bit 32 beside O_NOFOLLOW's 16.
+fn main() -> !int {
+    fs_write_text("o_directory.txt", "x")?
+    let fd = fs_open_mode("o_directory.txt", 32) else |e| {
+        print(match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+        })
+        print("errno={os_error()}")
+        fs_remove("o_directory.txt")?
+        return 0
+    }
+    print("opened {fd}")
+    fs_remove("o_directory.txt")?
+    0
+}
