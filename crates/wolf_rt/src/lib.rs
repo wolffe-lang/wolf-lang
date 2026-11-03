@@ -33,6 +33,10 @@ pub mod fs_save;
 // `[os.fs.lock]`, `[os.fs.fstat.record]`, `[os.fs.mkfifo]`,
 // `[os.fs.nonblock]`.
 pub mod fs_gaps;
+// s277 (wolf-lang#707, #1029, #1030, #1031, #1033): the descriptor walk —
+// calls relative to a held directory and the mode set on a handle —
+// `[os.fs.at]` and its clauses, `[os.fs.mode.fd]`.
+pub mod fs_at;
 // s253 (wolf-lang#819): which OS and architecture the program runs on, as
 // the kernel answers — `[os.uname]`.
 pub mod host;
