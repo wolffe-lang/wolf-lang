@@ -177,15 +177,21 @@ fn main() -> !int {
     print("stat_at: {stat_truth}")
 
     let gone = remove_row(probe, "f")
-    print("remove_at: {(served && gone == "ok" && !fs_exists(moved + "/f")) || (!served && gone == "unsupported" && fs_exists(moved + "/f"))}")
+    print(
+        "remove_at: {(served && gone == "ok" && !fs_exists(moved + "/f")) || (!served && gone == "unsupported" && fs_exists(moved + "/f"))}",
+    )
 
     let rd = remove_dir_row(probe, "sub")
-    print("remove_dir_at: {(served && rd == "ok" && !fs_exists(moved + "/sub")) || (!served && rd == "unsupported" && fs_is_dir(moved + "/sub"))}")
+    print(
+        "remove_dir_at: {(served && rd == "ok" && !fs_exists(moved + "/sub")) || (!served && rd == "unsupported" && fs_is_dir(moved + "/sub"))}",
+    )
 
     fs_write_text(moved + "/a", "1")?
     fs_write_text(moved + "/b", "2")?
     let listed = names_of(probe)
-    print("listing: {(served && listed == "2 true true 0") || (!served && listed == "unsupported")}")
+    print(
+        "listing: {(served && listed == "2 true true 0") || (!served && listed == "unsupported")}",
+    )
     let again = names_of(probe)
     print("listing_again: {again == listed}")
 

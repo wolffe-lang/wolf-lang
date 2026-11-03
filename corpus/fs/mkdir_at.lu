@@ -48,7 +48,9 @@ fn main() -> !int {
     let h = if served { held } else { 3 }
 
     let made = mkdir_row(h, "made", 0o700)
-    print("made_under_the_handle: {(served && made == "ok" && fs_is_dir(dir + "/q/made")) || (!served && made == "unsupported")}")
+    print(
+        "made_under_the_handle: {(served && made == "ok" && fs_is_dir(dir + "/q/made")) || (!served && made == "unsupported")}",
+    )
     print("not_under_the_old_name: {!fs_exists(dir + "/p")}")
     var mode_truth = !served
     if served {
@@ -57,9 +59,13 @@ fn main() -> !int {
     }
     print("mode: {mode_truth}")
     let again = mkdir_row(h, "made", 0o700)
-    print("again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}")
+    print(
+        "again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}",
+    )
     let orphan = mkdir_row(h, "no/such", 0o700)
-    print("missing_parent: {(served && orphan == "not_found") || (!served && orphan == "unsupported")}")
+    print(
+        "missing_parent: {(served && orphan == "not_found") || (!served && orphan == "unsupported")}",
+    )
     print("mode_past_0777={mkdir_row(h, "wide", 0o1000)}")
     print("absolute={mkdir_row(h, "/s277-absolute", 0o700)}")
     print("empty={mkdir_row(h, "", 0o700)}")

@@ -55,7 +55,9 @@ fn main() -> !int {
     let h = if served { held } else { 3 }
 
     let made = symlink_row("no/such/place", h, "ln")
-    print("linked_under_the_handle: {(served && made == "ok") || (!served && made == "unsupported")}")
+    print(
+        "linked_under_the_handle: {(served && made == "ok") || (!served && made == "unsupported")}",
+    )
     print("target_verbatim: {!served || link_text(dir + "/q/ln") == "no/such/place"}")
     var kind_truth = !served
     if served {
@@ -64,7 +66,9 @@ fn main() -> !int {
     }
     print("is_a_link: {kind_truth}")
     let again = symlink_row("elsewhere", h, "ln")
-    print("again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}")
+    print(
+        "again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}",
+    )
     print("empty_target={symlink_row("", h, "empty")}")
     print("absolute={symlink_row("t", h, "/s277-absolute")}")
 

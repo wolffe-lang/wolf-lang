@@ -57,7 +57,9 @@ fn main() -> !int {
     let y = if served { hb } else { 4 }
 
     let made = link_row(x, "f", y, "g", false)
-    print("linked_between_handles: {(served && made == "ok" && fs_read_text(dir + "/b2/g")? == "two names") || (!served && made == "unsupported")}")
+    print(
+        "linked_between_handles: {(served && made == "ok" && fs_read_text(dir + "/b2/g")? == "two names") || (!served && made == "unsupported")}",
+    )
     var one = !served
     if served {
         let s = fs_stat(dir + "/a2/f")?
@@ -67,7 +69,9 @@ fn main() -> !int {
     }
     print("one_file: {one}")
     let again = link_row(x, "f", y, "g", false)
-    print("again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}")
+    print(
+        "again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}",
+    )
     let gone = link_row(x, "missing", y, "h", false)
     print("missing_source: {(served && gone == "not_found") || (!served && gone == "unsupported")}")
 
