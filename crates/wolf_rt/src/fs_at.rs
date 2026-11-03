@@ -91,7 +91,7 @@ fn open_flags(mode: i64, nofollow: bool, directory: bool) -> libc::c_int {
     };
     f |= libc::O_CLOEXEC;
     if nofollow {
-        f |= libc::O_NOFOLLOW;
+        f &= !libc::O_NOFOLLOW;
     }
     if directory {
         f |= libc::O_DIRECTORY;
