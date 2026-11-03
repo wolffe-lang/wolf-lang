@@ -1,6 +1,6 @@
-//! check: run(exit=0, stdout="zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=0\nhost_number_term=0\nkill=0\nkill_number=0\nstop=0\nstop_number=0\nnothing_moved: true\nuser_ignored=1\nuser_back=0\nreload_listened=2\nreload_back=0")
+//! check: run(exit=0, stdout="zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=0\nhost_number_term=0\nkill: true\nkill_number: true\nstop: true\nstop_number: true\nnothing_moved: true\nuser_ignored=1\nuser_back=0\nreload_listened=2\nreload_back=0")
 //! phase: run
-//! conforms: os.signal.action.one, os.fs.error, err.union
+//! conforms: os.signal.action.one, os.fs.error, os.uname, err.union
 //!
 //! s272 (wolf-lang#975; R-s272-8 and R-s272-9, the recommendations
 //! implemented) — one signal's action, read and never changed: 0 the
@@ -8,10 +8,11 @@
 //! shape (`[os.signal.send]`): 0, two bits and a bit past the table are
 //! `invalid`, and a host number past every host's last is `invalid` where
 //! the host has numbers (`unsupported` on windows). `KILL` and `STOP` are
-//! asked of the host: linux answers the default, and Darwin refuses the
-//! GET itself — `io`, with `EINVAL` (22) beside the row
-//! (`crates/wolf_driver/tests/os_surface_lanes.rs` holds macOS's and
-//! windows' lines). A run of queries moves no disposition
+//! asked of the host, and each line holds the host to its own side, named
+//! by `os_name` (s278): linux answers the default (0, with 0 beside it),
+//! and Darwin refuses the GET itself — `io`, with `EINVAL` (22) beside the
+//! row (`crates/wolf_driver/tests/os_surface_lanes.rs` holds windows'
+//! lines, which stop at `term`). A run of queries moves no disposition
 //! (`os_signal_ignored` reads the same after them); an ignore reads 1 and
 //! its default 0 again; a listen reads 2, the runtime's own handler, and
 //! the default that ends it 0.
@@ -40,10 +41,19 @@ fn main() -> int {
         return 0
     }
     print("host_number_term={action(-15)}")
-    print("kill={action(1048576)}")
-    print("kill_number={os_error()}")
-    print("stop={action(2097152)}")
-    print("stop_number={os_error()}")
+    // Each host's side, named: Darwin refuses the GET on KILL and STOP
+    // (`io`, EINVAL 22 beside it); linux answers the default (0, 0).
+    let darwin = os_name() == "macos"
+    let host_row = if darwin { "io" } else { "0" }
+    let host_number = if darwin { 22 } else { 0 }
+    let kill = action(1048576)
+    let kill_number = os_error()
+    print("kill: {kill == host_row}")
+    print("kill_number: {kill_number == host_number}")
+    let stop = action(2097152)
+    let stop_number = os_error()
+    print("stop: {stop == host_row}")
+    print("stop_number: {stop_number == host_number}")
     let after = os_signal_ignored() else |e| { -2 }
     print("nothing_moved: {before == after}")
     os_signal_ignore_one(512) else |e| {
