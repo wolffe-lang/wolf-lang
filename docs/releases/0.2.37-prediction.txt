@@ -80,3 +80,11 @@ substitute a host measurement. Linux GNU import ceiling remains GLIBC_2.34.
 Debug and release gauntlets take separate locks with a two-hour outer-held
 budget. Final release workflow rehearsal and release-tier CI follow the
 final push; no tag, publication, or downstream completion is claimed here.
+
+Focused pairing follow-up prediction:
+The adjacent editor restore gate also lists only 0.1.58 as pre-RAW_LF.
+Exercise its actual published 0.1.59 restore fixture and commit the oracle
+regression before correcting that list. Expect the older mode-word shape,
+but retain the actual stdout from the run rather than infer it. This is
+still a targeted pairing check, not the final candidate gauntlet; the
+macOS corpus dependency hold remains in force.
