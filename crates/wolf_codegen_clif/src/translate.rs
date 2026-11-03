@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 262] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 270] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -273,6 +273,22 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 262] = [
     ("__wolf_rt_fs_mkfifo", 3, true),
     ("__wolf_rt_fs_set_nonblock", 2, true),
     ("__wolf_rt_fs_write_some", 3, true),
+    // s277 (#707, #1029, #1030, #1031, #1033; `[os.fs.at]`): the calls
+    // relative to a held directory — the open (handle, name pair, open
+    // word, perm; the handle or the negated code), both stats (handle,
+    // name pair, `follow`, the record through the 8-byte slot), both
+    // removals (handle, name pair, `rmdir`), the directory (handle, name
+    // pair, mode), the link (target pair, handle, name pair), the second
+    // name (two handles and name pairs, `follow`) and the listing (handle,
+    // the list through the slot); `fchmod` (handle, mode).
+    ("__wolf_rt_fs_open_at", 5, true),
+    ("__wolf_rt_fs_stat_at", 5, true),
+    ("__wolf_rt_fs_remove_at", 4, true),
+    ("__wolf_rt_fs_create_dir_at", 4, true),
+    ("__wolf_rt_fs_symlink_at", 5, true),
+    ("__wolf_rt_fs_link_at", 7, true),
+    ("__wolf_rt_fs_read_dir_entries_at", 2, true),
+    ("__wolf_rt_fs_set_mode_fd", 2, true),
     ("__wolf_rt_os_umask", 1, true),
     // s199 (#426): the handle's offset — seek (fd, off, whence, out),
     // tell (fd, out), and the positional read (fd, off, max, out).
