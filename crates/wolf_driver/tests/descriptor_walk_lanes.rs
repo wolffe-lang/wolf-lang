@@ -254,6 +254,12 @@ fn lupin_leg(entry: &Path, dir: &Path, pre: Pre<'_>, want: Option<&str>) {
         ("0.1.59", "mkdir_at.lu") => Pre::Unresolved(&["fs_create_dir_at"]),
         ("0.1.59", "symlink_at.lu") => Pre::Unresolved(&["fs_symlink_at"]),
         ("0.1.59", "link_at.lu") => Pre::Unresolved(&["fs_link_at"]),
+        // Windows already expects the directory bit's refusal; its
+        // os_name branch makes directory: true, not Linux's measured false.
+        ("0.1.59", "open_directory.lu") if cfg!(windows) => Pre::Answers(
+            "exit(0)",
+            want.expect("open_directory declares its host-independent compiler stdout"),
+        ),
         ("0.1.59", "open_directory.lu") => Pre::Answers(
             "exit(0)",
             "file=invalid\nfile_number: true\ndirectory: false\na_directory_handle: true\nwith_nofollow: true\nwith_a_write_mode=invalid\nwith_create_new=invalid\nbit_64=invalid\nunmoved=ok\ncleaned=true\n",
