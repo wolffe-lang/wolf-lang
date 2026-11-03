@@ -6881,6 +6881,15 @@ impl<'t> Machine<'t> {
             };
             if declared.contains(&t) { t } else { "io" }.to_string()
         }
+        // s277 (`[os.fs.at]`): at a held directory, `ENOTDIR` and `ELOOP`
+        // are `invalid` (the host's number kept); the rest `errtag`'s.
+        fn at_errtag(e: &std::io::Error, declared: &[&str]) -> String {
+            if checked_at::not_dir_or_loop(e) {
+                fs_host_error(e);
+                return "invalid".to_string();
+            }
+            errtag(e, declared)
+        }
         /// A `SystemTime` as ms from the Unix epoch, negative before
         /// it — `time_unix_ms`'s unit, so the two compare. `None` when
         /// it does not fit an `i64` (the `io` row). Identical to
@@ -6988,7 +6997,7 @@ impl<'t> Machine<'t> {
                     // s254 (`[os.fs.open.nofollow]`): a final link refused
                     // under the bit is `invalid`, the runtime's
                     // `open_code`.
-                    Err(e) if fs_nofollow_refused(&e, mode) => {
+                    Err(e) if fs_open_flag_refused(&e, mode) => {
                         fs_host_error(&e);
                         Ok(tag("invalid"))
                     }
@@ -7489,7 +7498,7 @@ impl<'t> Machine<'t> {
                     use std::os::unix::fs::OpenOptionsExt as _;
                     let mut opts = opts;
                     match opts.mode(mode as u32).open(&path) {
-                        Err(e) if fs_nofollow_refused(&e, open) => {
+                        Err(e) if fs_open_flag_refused(&e, open) => {
                             fs_host_error(&e);
                             Ok(tag("invalid"))
                         }
@@ -7905,6 +7914,295 @@ impl<'t> Machine<'t> {
                 let items: Vec<Value> = rec.into_iter().map(Value::Int).collect();
                 let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
+            }
+            // s277 (#707, `[os.fs.at.open]`): `openat` relative to a held
+            // directory — `wolf_rt::fs_at`'s call, in its order: the open
+            // word, the permission, the name, the host. The open may park
+            // (a fifo, no writer), as `fs_open_mode`'s may here.
+            "fs_open_at" => {
+                let (Some(dir), Some(nm), Some(open), Some(perm)) =
+                    (int_arg(0), str_arg(1), int_arg(2), int_arg(3))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(word) = checked_at::open_word(open) else {
+                    return Ok(tag("invalid"));
+                };
+                if !(0..=0o777).contains(&perm) || !checked_at::name_ok(&nm) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let Ok(c) = std::ffi::CString::new(nm) else {
+                        return Ok(tag("io"));
+                    };
+                    let r = {
+                        let Some(d) = self.fs_handle(dir) else {
+                            return Ok(tag("io"));
+                        };
+                        checked_at::open_at(d.as_raw_fd(), &c, word, perm)
+                    };
+                    match r {
+                        Err(e) if fs_open_flag_refused(&e, open) => {
+                            fs_host_error(&e);
+                            Ok(tag("invalid"))
+                        }
+                        Err(e) => Ok(tag(&at_errtag(
+                            &e,
+                            &["not_found", "denied", "exists", "io"],
+                        ))),
+                        Ok(f) => {
+                            if self.files.len() < FS_FIRST_HANDLE {
+                                self.files.resize_with(FS_FIRST_HANDLE, || None);
+                            }
+                            let fd = self.files.len() as i64;
+                            self.files.push(Some(f));
+                            Ok(Flow::Val(Value::Int(fd)))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = (dir, word);
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#707, `[os.fs.at.stat]`, `[os.fs.at.lstat]`): the record
+            // of a name relative to a held directory — `statx` on linux,
+            // `fstatat` elsewhere, the runtime's words.
+            "fs_stat_at" | "fs_lstat_at" => {
+                let (Some(dir), Some(nm)) = (int_arg(0), str_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !checked_at::name_ok(&nm) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let Ok(c) = std::ffi::CString::new(nm) else {
+                        return Ok(tag("io"));
+                    };
+                    let r = {
+                        let Some(d) = self.fs_handle(dir) else {
+                            return Ok(tag("io"));
+                        };
+                        checked_at::stat_words(d.as_raw_fd(), &c, name == "fs_stat_at")
+                    };
+                    let w = match r {
+                        Err(e) => return Ok(tag(&at_errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(w) => w,
+                    };
+                    let Some(rec) = checked_at::record_of(&w) else {
+                        return Ok(tag("io"));
+                    };
+                    self.charge_mem(8 * rec.len() as u64)?;
+                    let items: Vec<Value> = rec.into_iter().map(Value::Int).collect();
+                    let id = self.mint_list(items, span)?;
+                    Ok(Flow::Val(Value::List(id)))
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = dir;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#707, `[os.fs.at.remove]`, `[os.fs.at.remove.dir]`):
+            // `unlinkat`, plain and with `AT_REMOVEDIR`.
+            "fs_remove_at" | "fs_remove_dir_at" => {
+                let (Some(dir), Some(nm)) = (int_arg(0), str_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !checked_at::name_ok(&nm) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let Ok(c) = std::ffi::CString::new(nm) else {
+                        return Ok(tag("io"));
+                    };
+                    let Some(d) = self.fs_handle(dir) else {
+                        return Ok(tag("io"));
+                    };
+                    match checked_at::unlink_at(d.as_raw_fd(), &c, name == "fs_remove_dir_at") {
+                        Err(e) => Ok(tag(&at_errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = dir;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#1029, `[os.fs.at.mkdir]`): `mkdirat`, the mode first.
+            "fs_create_dir_at" => {
+                let (Some(dir), Some(nm), Some(mode)) = (int_arg(0), str_arg(1), int_arg(2)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !(0..=0o777).contains(&mode) || !checked_at::name_ok(&nm) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let Ok(c) = std::ffi::CString::new(nm) else {
+                        return Ok(tag("io"));
+                    };
+                    let Some(d) = self.fs_handle(dir) else {
+                        return Ok(tag("io"));
+                    };
+                    match checked_at::mkdir_at(d.as_raw_fd(), &c, mode) {
+                        Err(e) => Ok(tag(&at_errtag(
+                            &e,
+                            &["not_found", "denied", "exists", "io"],
+                        ))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = dir;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#1030, `[os.fs.at.symlink]`): `symlinkat`, the target
+            // verbatim (an empty one `invalid`), then the name.
+            "fs_symlink_at" => {
+                let (Some(target), Some(dir), Some(nm)) = (str_arg(0), int_arg(1), str_arg(2))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if target.is_empty() || !checked_at::name_ok(&nm) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let (Ok(c), Ok(t)) =
+                        (std::ffi::CString::new(nm), std::ffi::CString::new(target))
+                    else {
+                        return Ok(tag("io"));
+                    };
+                    let Some(d) = self.fs_handle(dir) else {
+                        return Ok(tag("io"));
+                    };
+                    match checked_at::symlink_at(&t, d.as_raw_fd(), &c) {
+                        Err(e) => Ok(tag(&at_errtag(
+                            &e,
+                            &["not_found", "denied", "exists", "io"],
+                        ))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = dir;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#1031, #910, `[os.fs.at.link]`): `linkat` between two
+            // held directories, `follow` the final link's choice.
+            "fs_link_at" => {
+                let (Some(sd), Some(src), Some(dd), Some(dst)) =
+                    (int_arg(0), str_arg(1), int_arg(2), str_arg(3))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(Value::Bool(follow)) = argv.get(4) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !checked_at::name_ok(&src) || !checked_at::name_ok(&dst) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let (Ok(s), Ok(t)) = (std::ffi::CString::new(src), std::ffi::CString::new(dst))
+                    else {
+                        return Ok(tag("io"));
+                    };
+                    let (Some(a), Some(b)) = (self.fs_handle(sd), self.fs_handle(dd)) else {
+                        return Ok(tag("io"));
+                    };
+                    match checked_at::link_at(a.as_raw_fd(), &s, b.as_raw_fd(), &t, *follow) {
+                        Err(e) => Ok(tag(&at_errtag(
+                            &e,
+                            &["not_found", "denied", "exists", "cross_device", "io"],
+                        ))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = (sd, dd, follow);
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#707, `[os.fs.at.readdir]`): the held directory's own
+            // entries through a duplicate of the handle, rewound first —
+            // `fs_read_dir_entries`' shape.
+            "fs_read_dir_entries_at" => {
+                let Some(dir) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                #[cfg(unix)]
+                {
+                    let dup = {
+                        let Some(d) = self.fs_handle(dir) else {
+                            return Ok(tag("io"));
+                        };
+                        d.try_clone()
+                    };
+                    let dup = match dup {
+                        Err(e) => return Ok(tag(&errtag(&e, &["io"]))),
+                        Ok(f) => f,
+                    };
+                    let rows = match checked_at::list_held(dup) {
+                        Err(e) => return Ok(tag(&at_errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(r) => r,
+                    };
+                    self.charge_mem(rows.iter().map(|r| r.len() as u64).sum())?;
+                    let mut items = Vec::with_capacity(rows.len());
+                    for row in &rows {
+                        items.push(self.byte_list_value(row, span)?);
+                    }
+                    let id = self.mint_list(items, span)?;
+                    Ok(Flow::Val(Value::List(id)))
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = dir;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s277 (#1033, `[os.fs.mode.fd]`): `fchmod` — the mode of the
+            // file a handle holds (std's `set_permissions`), the bits first.
+            "fs_set_mode_fd" => {
+                let (Some(fd), Some(mode)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !(0..=0o7777).contains(&mode) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt as _;
+                    let Some(f) = self.fs_handle(fd) else {
+                        return Ok(tag("io"));
+                    };
+                    match f.set_permissions(std::fs::Permissions::from_mode(mode as u32)) {
+                        Err(e) => Ok(tag(&errtag(&e, &["denied", "io"]))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = fd;
+                    Ok(tag("unsupported"))
+                }
             }
             // s254 (#820, `[os.fs.mkfifo]`): mkfifo(3), the bits first;
             // a file system or kernel that makes none `unsupported`;
@@ -12303,7 +12601,12 @@ impl<'t> Machine<'t> {
             | "fs_access" | "fs_lock" | "fs_unlock" | "fs_fstat_record" | "fs_mkfifo"
             | "fs_set_nonblock" | "fs_write_some"
             // s253 (#815): an inherited descriptor made a handle.
-            | "fs_adopt" => {
+            | "fs_adopt"
+            // s277 (#707, #1029, #1030, #1031, #1033): the calls relative to
+            // a held directory and the mode set on a handle.
+            | "fs_open_at" | "fs_stat_at" | "fs_lstat_at" | "fs_remove_at"
+            | "fs_remove_dir_at" | "fs_create_dir_at" | "fs_symlink_at" | "fs_link_at"
+            | "fs_read_dir_entries_at" | "fs_set_mode_fd" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -16530,6 +16833,420 @@ mod checked_sig {
     }
 }
 
+/// s277 (wolf-lang#707, #1029, #1030, #1031, #1033; `[os.fs.at]`): the
+/// descriptor walk's host calls — `wolf_rt::fs_at`'s twins (D15 keeps the
+/// runtime out of this crate's graph), so the checked machine makes the
+/// calls the compiled tiers make, word for word, on its own handles. A name
+/// is relative to the handle, never to the machine's working directory.
+mod checked_at {
+    /// An empty name or an absolute one (a leading `/`), on every host: the
+    /// `invalid` row, before the host.
+    pub(super) fn name_ok(name: &str) -> bool {
+        !name.is_empty() && !name.starts_with('/')
+    }
+
+    /// One open word with its two flags decoded (mode, no-follow,
+    /// directory); `None` is `invalid` — `wolf_rt::fs_at::open_word`.
+    pub(super) fn open_word(open: i64) -> Option<(i64, bool, bool)> {
+        let nofollow = open & super::FS_NOFOLLOW != 0;
+        let directory = open & super::FS_DIRECTORY != 0;
+        let mode = open & !(super::FS_NOFOLLOW | super::FS_DIRECTORY);
+        if !(0..=5).contains(&mode) {
+            return None;
+        }
+        if directory && mode != 0 && mode != 5 {
+            return None;
+        }
+        Some((mode, nofollow, directory))
+    }
+
+    /// Is `e` the family's `invalid` at a handle: `ENOTDIR` or `ELOOP`?
+    pub(super) fn not_dir_or_loop(e: &std::io::Error) -> bool {
+        #[cfg(unix)]
+        {
+            matches!(e.raw_os_error(), Some(libc::ENOTDIR | libc::ELOOP))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = e;
+            false
+        }
+    }
+
+    #[cfg(unix)]
+    fn rc_of(rc: libc::c_int) -> std::io::Result<()> {
+        if rc == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+
+    /// `openat(2)` of a decoded open word, close-on-exec.
+    #[cfg(unix)]
+    pub(super) fn open_at(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        word: (i64, bool, bool),
+        perm: i64,
+    ) -> std::io::Result<std::fs::File> {
+        use std::os::fd::FromRawFd as _;
+        let (mode, nofollow, directory) = word;
+        let mut f = match mode {
+            0 => libc::O_RDONLY,
+            1 => libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+            2 => libc::O_WRONLY | libc::O_APPEND | libc::O_CREAT,
+            3 => libc::O_RDWR | libc::O_CREAT,
+            4 => libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
+            _ => libc::O_RDONLY | libc::O_NONBLOCK,
+        };
+        f |= libc::O_CLOEXEC;
+        if nofollow {
+            f |= libc::O_NOFOLLOW;
+        }
+        if directory {
+            f |= libc::O_DIRECTORY;
+        }
+        // SAFETY: a live descriptor and a NUL-terminated name.
+        let raw = unsafe { libc::openat(dirfd, name.as_ptr(), f, perm as libc::c_uint) };
+        if raw < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: the descriptor the host just answered, owned from here.
+        Ok(unsafe { std::fs::File::from_raw_fd(raw) })
+    }
+
+    /// One stat's words, before they are a record.
+    #[cfg(unix)]
+    pub(super) struct Words {
+        pub(super) mode: u32,
+        size: i64,
+        nlink: i64,
+        uid: i64,
+        gid: i64,
+        blocks: i64,
+        dev: i64,
+        ino: i64,
+        rdev: i64,
+        atime: (i64, i64),
+        mtime: (i64, i64),
+        ctime: (i64, i64),
+        btime: Option<(i64, i64)>,
+    }
+
+    /// Milliseconds from the epoch for a `timespec`, toward zero on either
+    /// side — `fs_modified_ms`'s word.
+    #[cfg(unix)]
+    fn ms_of(sec: i64, nsec: i64) -> Option<i64> {
+        let total = i128::from(sec) * 1_000_000_000 + i128::from(nsec);
+        let ms = if total >= 0 {
+            total / 1_000_000
+        } else {
+            -((-total) / 1_000_000)
+        };
+        i64::try_from(ms).ok()
+    }
+
+    /// The record's kind for `st_mode`'s type bits.
+    #[cfg(unix)]
+    pub(super) fn kind_of_mode(mode: u32) -> i64 {
+        match mode & (libc::S_IFMT as u32) {
+            m if m == libc::S_IFREG as u32 => 0,
+            m if m == libc::S_IFDIR as u32 => 1,
+            m if m == libc::S_IFLNK as u32 => 3,
+            m if m == libc::S_IFIFO as u32 => 4,
+            m if m == libc::S_IFSOCK as u32 => 5,
+            m if m == libc::S_IFCHR as u32 => 6,
+            m if m == libc::S_IFBLK as u32 => 7,
+            _ => 2,
+        }
+    }
+
+    /// `[os.fs.stat]`'s twenty words — `fs_stat_record`'s, from the host's
+    /// integers; `None` a time outside `i64` milliseconds (`io`).
+    #[cfg(unix)]
+    pub(super) fn record_of(w: &Words) -> Option<Vec<i64>> {
+        let mut r = vec![0i64; 20];
+        r[0] = kind_of_mode(w.mode);
+        r[1] = w.size;
+        r[2] = ms_of(w.mtime.0, w.mtime.1)?;
+        r[4] = i64::from(w.mode & 0o7777);
+        r[5] = w.nlink;
+        r[6] = w.uid;
+        r[7] = w.gid;
+        r[8] = w.blocks;
+        r[9] = w.dev;
+        r[10] = w.ino;
+        r[11] = w.rdev;
+        (r[12], r[13]) = w.atime;
+        (r[14], r[15]) = w.mtime;
+        (r[16], r[17]) = w.ctime;
+        let mut have: i64 = (1 << 18) - 1;
+        if let Some((bs, bn)) = w.btime {
+            r[18] = bs;
+            r[19] = bn;
+            have |= (1 << 18) | (1 << 19);
+        }
+        r[3] = have;
+        Some(r)
+    }
+
+    /// One `fstatat(2)`; the birth time where the host's `stat` has one.
+    #[cfg(unix)]
+    pub(super) fn fstatat_words(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        follow: bool,
+    ) -> std::io::Result<Words> {
+        // SAFETY: `stat` is plain integers; all-zero is a valid value.
+        let mut st: libc::stat = unsafe { std::mem::zeroed() };
+        let flags = if follow { 0 } else { libc::AT_SYMLINK_NOFOLLOW };
+        // SAFETY: a live descriptor, a NUL-terminated name, a writable stat.
+        rc_of(unsafe { libc::fstatat(dirfd, name.as_ptr(), &mut st, flags) })?;
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+        let btime = Some((st.st_birthtime as i64, st.st_birthtime_nsec as i64));
+        #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "freebsd")))]
+        let btime = None;
+        Ok(Words {
+            mode: st.st_mode as u32,
+            size: st.st_size as i64,
+            nlink: st.st_nlink as i64,
+            uid: i64::from(st.st_uid),
+            gid: i64::from(st.st_gid),
+            blocks: st.st_blocks as i64,
+            dev: st.st_dev as i64,
+            ino: st.st_ino as i64,
+            rdev: st.st_rdev as i64,
+            atime: (st.st_atime as i64, st.st_atime_nsec as i64),
+            mtime: (st.st_mtime as i64, st.st_mtime_nsec as i64),
+            ctime: (st.st_ctime as i64, st.st_ctime_nsec as i64),
+            btime,
+        })
+    }
+
+    /// linux's `statx(2)` record, laid out from the man page (the
+    /// runtime's `Statx`).
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[repr(C)]
+    #[derive(Default)]
+    struct Statx {
+        mask: u32,
+        blksize: u32,
+        attributes: u64,
+        nlink: u32,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+        pad0: u16,
+        ino: u64,
+        size: u64,
+        blocks: u64,
+        attributes_mask: u64,
+        atime: StatxTime,
+        btime: StatxTime,
+        ctime: StatxTime,
+        mtime: StatxTime,
+        rdev_major: u32,
+        rdev_minor: u32,
+        dev_major: u32,
+        dev_minor: u32,
+        rest: [u64; 14],
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[repr(C)]
+    #[derive(Default, Clone, Copy)]
+    struct StatxTime {
+        sec: i64,
+        nsec: u32,
+        pad: i32,
+    }
+
+    /// One `statx(2)` relative to `dirfd` (`fstatat(2)` where the kernel
+    /// refuses it) — the runtime's `stat_words`.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    pub(super) fn stat_words(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        follow: bool,
+    ) -> std::io::Result<Words> {
+        let mut x = Statx::default();
+        let mut flags = libc::AT_NO_AUTOMOUNT;
+        if !follow {
+            flags |= libc::AT_SYMLINK_NOFOLLOW;
+        }
+        // SAFETY: a live descriptor, a NUL-terminated name and a 256-byte
+        // writable record the kernel fills.
+        let rc = unsafe {
+            libc::syscall(
+                libc::SYS_statx,
+                dirfd,
+                name.as_ptr(),
+                flags,
+                0x7ff_u32 | 0x800,
+                &raw mut x,
+            )
+        };
+        if rc != 0 {
+            let e = std::io::Error::last_os_error();
+            if matches!(e.raw_os_error(), Some(libc::ENOSYS | libc::EPERM)) {
+                return fstatat_words(dirfd, name, follow);
+            }
+            return Err(e);
+        }
+        let t = |s: StatxTime| (s.sec, i64::from(s.nsec));
+        Ok(Words {
+            mode: u32::from(x.mode),
+            size: x.size as i64,
+            nlink: i64::from(x.nlink),
+            uid: i64::from(x.uid),
+            gid: i64::from(x.gid),
+            blocks: x.blocks as i64,
+            dev: libc::makedev(x.dev_major, x.dev_minor) as i64,
+            ino: x.ino as i64,
+            rdev: libc::makedev(x.rdev_major, x.rdev_minor) as i64,
+            atime: t(x.atime),
+            mtime: t(x.mtime),
+            ctime: t(x.ctime),
+            btime: (x.mask & 0x800 != 0).then(|| t(x.btime)),
+        })
+    }
+
+    #[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+    pub(super) fn stat_words(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        follow: bool,
+    ) -> std::io::Result<Words> {
+        fstatat_words(dirfd, name, follow)
+    }
+
+    #[cfg(unix)]
+    pub(super) fn unlink_at(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        rmdir: bool,
+    ) -> std::io::Result<()> {
+        let flags = if rmdir { libc::AT_REMOVEDIR } else { 0 };
+        // SAFETY: a live descriptor and a NUL-terminated name.
+        rc_of(unsafe { libc::unlinkat(dirfd, name.as_ptr(), flags) })
+    }
+
+    #[cfg(unix)]
+    pub(super) fn mkdir_at(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        mode: i64,
+    ) -> std::io::Result<()> {
+        // SAFETY: a live descriptor and a NUL-terminated name.
+        rc_of(unsafe { libc::mkdirat(dirfd, name.as_ptr(), mode as libc::mode_t) })
+    }
+
+    #[cfg(unix)]
+    pub(super) fn symlink_at(
+        target: &std::ffi::CStr,
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+    ) -> std::io::Result<()> {
+        // SAFETY: two NUL-terminated names and a live descriptor.
+        rc_of(unsafe { libc::symlinkat(target.as_ptr(), dirfd, name.as_ptr()) })
+    }
+
+    #[cfg(unix)]
+    pub(super) fn link_at(
+        sfd: libc::c_int,
+        src: &std::ffi::CStr,
+        dfd: libc::c_int,
+        dst: &std::ffi::CStr,
+        follow: bool,
+    ) -> std::io::Result<()> {
+        let flags = if follow { libc::AT_SYMLINK_FOLLOW } else { 0 };
+        // SAFETY: two live descriptors and two NUL-terminated names.
+        rc_of(unsafe { libc::linkat(sfd, src.as_ptr(), dfd, dst.as_ptr(), flags) })
+    }
+
+    /// Clear `errno`, so `readdir(3)`'s end and its failure can be told apart.
+    #[cfg(unix)]
+    fn errno_clear() {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        // SAFETY: the calling thread's own errno word.
+        unsafe {
+            *libc::__errno_location() = 0;
+        }
+        #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
+        // SAFETY: as above.
+        unsafe {
+            *libc::__error() = 0;
+        }
+    }
+
+    /// The entries of the directory `d` (a duplicate of the held handle,
+    /// owned and closed here), rewound first — the runtime's `list_held`.
+    #[cfg(unix)]
+    pub(super) fn list_held(d: std::fs::File) -> std::io::Result<Vec<Vec<u8>>> {
+        use std::os::fd::IntoRawFd as _;
+        let raw = d.into_raw_fd();
+        // SAFETY: a descriptor this call owns; on success the stream owns it.
+        let dp = unsafe { libc::fdopendir(raw) };
+        if dp.is_null() {
+            let e = std::io::Error::last_os_error();
+            // SAFETY: still ours: fdopendir failed.
+            unsafe { libc::close(raw) };
+            return Err(e);
+        }
+        // SAFETY: a live stream.
+        unsafe { libc::rewinddir(dp) };
+        let mut rows = Vec::new();
+        let result = loop {
+            errno_clear();
+            // SAFETY: a live stream.
+            let ent = unsafe { libc::readdir(dp) };
+            if ent.is_null() {
+                let e = std::io::Error::last_os_error();
+                if e.raw_os_error().unwrap_or(0) != 0 {
+                    break Err(e);
+                }
+                break Ok(());
+            }
+            // SAFETY: the entry the stream answered, valid until the next read.
+            let (name, dtype) = unsafe {
+                (
+                    std::ffi::CStr::from_ptr((*ent).d_name.as_ptr())
+                        .to_bytes()
+                        .to_vec(),
+                    (*ent).d_type,
+                )
+            };
+            if name == b"." || name == b".." {
+                continue;
+            }
+            let kind = match dtype {
+                libc::DT_REG => 0,
+                libc::DT_DIR => 1,
+                libc::DT_LNK => 3,
+                libc::DT_FIFO => 4,
+                libc::DT_SOCK => 5,
+                libc::DT_CHR => 6,
+                libc::DT_BLK => 7,
+                libc::DT_UNKNOWN => match std::ffi::CString::new(name.clone()) {
+                    // SAFETY: the stream's own descriptor, live.
+                    Ok(c) => fstatat_words(unsafe { libc::dirfd(dp) }, &c, false)
+                        .map_or(2, |w| kind_of_mode(w.mode)),
+                    Err(_) => 2,
+                },
+                _ => 2,
+            };
+            let mut row = Vec::with_capacity(name.len() + 1);
+            row.push(kind as u8);
+            row.extend_from_slice(&name);
+            rows.push(row);
+        };
+        // SAFETY: the stream, closed once (its descriptor with it).
+        unsafe { libc::closedir(dp) };
+        result.map(|()| rows)
+    }
+}
+
 /// s219 (`[os.term]`): the terminal calls on the host descriptor a
 /// handle names. windows: `unsupported`.
 /// s236 (wolf-lang#633, #701, #742): who the process runs as, a file's
@@ -17145,10 +17862,14 @@ impl std::ops::Deref for FsHandle<'_> {
 /// `wolf_rt::fs::fs_mode::NOFOLLOW`.
 const FS_NOFOLLOW: i64 = 16;
 
-/// Did an open of `mode` fail because the bit refused a final link? The
-/// host's `ELOOP` (freebsd's `EMLINK`) under the bit — the runtime's
-/// `open_code`.
-fn fs_nofollow_refused(e: &std::io::Error, mode: i64) -> bool {
+/// s277 (`[os.fs.open.directory]`): the open mode's directory bit —
+/// `wolf_rt::fs::fs_mode::DIRECTORY`.
+const FS_DIRECTORY: i64 = 32;
+
+/// Did an open of `mode` fail because one of its two flags refused the
+/// name? The host's `ELOOP` (freebsd's `EMLINK`) under the no-follow bit,
+/// `ENOTDIR` under the directory bit (s277) — the runtime's `open_code`.
+fn fs_open_flag_refused(e: &std::io::Error, mode: i64) -> bool {
     #[cfg(unix)]
     {
         let link = if cfg!(target_os = "freebsd") {
@@ -17156,7 +17877,8 @@ fn fs_nofollow_refused(e: &std::io::Error, mode: i64) -> bool {
         } else {
             libc::ELOOP
         };
-        mode & FS_NOFOLLOW != 0 && e.raw_os_error() == Some(link)
+        (mode & FS_NOFOLLOW != 0 && e.raw_os_error() == Some(link))
+            || (mode & FS_DIRECTORY != 0 && e.raw_os_error() == Some(libc::ENOTDIR))
     }
     #[cfg(not(unix))]
     {
@@ -17278,18 +18000,35 @@ fn fs_is_disk(_f: &std::fs::File) -> bool {
 /// for a mode outside the set — `wolf_rt::fs::open_options`'s twin,
 /// shared by the open family and `fs_open_perm` (s230). s254
 /// (`[os.fs.open.nofollow]`): bit 16 adds `O_NOFOLLOW` to any of them;
-/// windows refuses the bit (`None`).
+/// windows refuses the bit (`None`). s277 (`[os.fs.open.directory]`): bit
+/// 32 adds `O_DIRECTORY` to the two read modes and is `None` beside any
+/// other; windows refuses it too.
 fn fs_open_options(mode: i64) -> Option<std::fs::OpenOptions> {
     let nofollow = mode & FS_NOFOLLOW != 0;
-    let mode = mode & !FS_NOFOLLOW;
-    if nofollow && !cfg!(unix) {
+    let directory = mode & FS_DIRECTORY != 0;
+    let mode = mode & !(FS_NOFOLLOW | FS_DIRECTORY);
+    if (nofollow || directory) && !cfg!(unix) {
+        return None;
+    }
+    if directory && mode != 0 && mode != 5 {
         return None;
     }
     let mut o = std::fs::OpenOptions::new();
     #[cfg(unix)]
-    if nofollow {
+    let extra = {
+        let mut x = 0;
+        if nofollow {
+            x |= libc::O_NOFOLLOW;
+        }
+        if directory {
+            x |= libc::O_DIRECTORY;
+        }
+        x
+    };
+    #[cfg(unix)]
+    if extra != 0 {
         use std::os::unix::fs::OpenOptionsExt as _;
-        o.custom_flags(libc::O_NOFOLLOW);
+        o.custom_flags(extra);
     }
     match mode {
         0 => o.read(true),
@@ -17306,7 +18045,6 @@ fn fs_open_options(mode: i64) -> Option<std::fs::OpenOptions> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt as _;
-                let extra = if nofollow { libc::O_NOFOLLOW } else { 0 };
                 o.read(true).custom_flags(libc::O_NONBLOCK | extra)
             }
             #[cfg(not(unix))]
