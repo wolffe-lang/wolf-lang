@@ -50,8 +50,8 @@ Pair with the actual published 0.1.59, not a branch build. It mirrors neither
 s272 nor s277 (tracked in wolf-interp issues 315 and 321). The two lane
 gates currently classify only 0.1.58 as pre-mirror and must first fail with
 0.1.59. Four s277 rows pinned to 0.1.58's unresolved os_name must be observed
-individually: at_rows, mkdir_at, symlink_at, link_at. Do not predict their
-next unresolved call. open_directory and mode_fd also need fresh answers.
+individually: mkdir_at, symlink_at, link_at, open_directory. Do not predict
+their next unresolved call. at_rows and mode_fd also need fresh answers.
 The interpreter control remains the actual published 0.1.58. Its version
 and pin, and the compiler control's version, must be read from archives.
 
