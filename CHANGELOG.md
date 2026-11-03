@@ -11,6 +11,63 @@
   timing records. See [the CLI page](docs/cli.md) for the schema and the
   distinction between wall time and overlapping contributions.
 
+s277 — the descriptor walk (wolf-lang#707, #1029, #1030, #1031, #1032,
+#1033; boreutils' `rm -r`, `chmod -R`, `cp -R`, `du` and `find`, and a
+downstream package manager staging an archive into a private
+directory). Calls relative to a directory the program holds, a directory
+bit on the open, and the mode set on a handle, on every machine; the
+shapes beyond the issues are recommendations asked at audit
+(`[os.fs.at.note]` R-s277-1 to R-s277-12), each one what is built.
+
+- **Calls relative to a held directory** (`[os.fs.at]`): each takes a
+  directory handle first — a handle of the fs table that names a
+  directory — and a name looked up in THAT directory, whatever its path
+  has become. So a walk that holds a directory cannot be carried out of
+  its tree by a directory swapped for a symbolic link between its check
+  and its use, and a tree deeper than `PATH_MAX` is made and removed one
+  level at a time:
+  - `fs_open_at(dir, name, open, perm) -> int ! {denied, exists, invalid,
+    io, not_found, unsupported}` (`openat`, `fs_open_perm`'s word);
+  - `fs_stat_at(dir, name)` and `fs_lstat_at(dir, name) -> List[int] !
+    {denied, invalid, io, not_found, unsupported}` (`fs_stat`'s twenty
+    words: `statx` on linux, the birth time answered; `fstatat`
+    elsewhere);
+  - `fs_remove_at(dir, name)` and `fs_remove_dir_at(dir, name) -> () !
+    {denied, invalid, io, not_found, unsupported}` (`unlinkat`, plain and
+    `AT_REMOVEDIR`);
+  - `fs_create_dir_at(dir, name, mode) -> () ! {denied, exists, invalid,
+    io, not_found, unsupported}` (`mkdirat`, #1029);
+  - `fs_symlink_at(target, dir, name) -> () ! {…}` (`symlinkat`, the
+    target verbatim, #1030);
+  - `fs_link_at(src_dir, src, dst_dir, dst, follow) -> () ! {cross_device,
+    denied, exists, invalid, io, not_found, unsupported}` (`linkat`
+    between two handles, #1031; `follow` is #910's flag);
+  - `fs_read_dir_entries_at(dir) -> List[List[byte]] ! {…}` (the held
+    directory's own listing, read through a rewound duplicate).
+  An empty or absolute name is `invalid` before the host; `ENOTDIR` and
+  `ELOOP` are `invalid` on every one, the host's number in `os_error()`.
+  `..` and several components are served as the host resolves them; a
+  caller that needs confinement walks one component at a time with bits
+  32 and 16. windows answers each `unsupported` after the shape.
+- **Bit 32 of the open word, `O_DIRECTORY`** (#1032,
+  `[os.fs.open.directory]`): on `fs_open_mode`, `fs_open_perm` and
+  `fs_open_at`, with the two read modes only, a name that is not a
+  directory is refused `invalid` with `ENOTDIR` (20) beside it; a fifo is
+  refused without being opened. With a write mode, or on windows, the bit
+  is `invalid` before the host. Bits 32 to 63 were `invalid` before; no
+  open without the bit answers differently (s254's `nofollow_rows` row of
+  bit 32 on a file reads `invalid` as before, now with the host's
+  `ENOTDIR`).
+- **`fs_set_mode_fd(fd, mode) -> () ! {denied, invalid, io,
+  unsupported}`** (#1033, `[os.fs.mode.fd]`): `fchmod`, `fs_set_mode`'s
+  twelve bits on the file a handle holds, so a mode set after a creation
+  cannot land on a file renamed over the name in between; windows
+  `unsupported`.
+- Charged: all ten `fs`, refused at comptime. The checked machine makes
+  each call on its own handles. lupin 0.1.58 does not resolve the ten
+  names (a mirror is drafted for wolf-interp). The host table is 177
+  lines.
+
 s272 — the OS surface (wolf-lang#686, #921, #922, #976, #975; boreutils'
 `df`, `stat -f`, `chroot`, `nice` and `env --ignore-signal`, yew's REPL).
 Four calls and one mode bit, on every machine; the shapes beyond the
