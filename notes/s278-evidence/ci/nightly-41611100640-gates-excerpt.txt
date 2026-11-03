@@ -1,0 +1,17 @@
+# excerpt of CI's job log (gh run view --job 125832961964 -R wolffe-lang/wolf-lang --log, timestamps cut): the runner, and the corpus step's end
+##[group]Operating System
+macOS
+26.6.2
+25G83
+##[endgroup]
+##[group]Runner Image
+Image: macos-26-arm64
+Version: 20261026.0455.2
+Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261026.0455/images/macos/macos-26-arm64-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261026.0455
+##[endgroup]
+corpus: corpus/os/chroot_rows.lu: expected stdout "missing=not_found\nmissing_number=2\ndot=denied\ndot_number=1" but got "missing=denied\nmissing_number=1\ndot=denied\ndot_number=1\n"
+corpus: corpus/os/signal_action_rows.lu: expected stdout "zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=0\nhost_number_term=0\nkill=0\nkill_number=0\nstop=0\nstop_number=0\nnothing_moved: true\nuser_ignored=1\nuser_back=0\nreload_listened=2\nreload_back=0" but got "zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=0\nhost_number_term=0\nkill=io\nkill_number=22\nstop=io\nstop_number=22\nnothing_moved: true\nuser_ignored=1\nuser_back=0\nreload_listened=2\nreload_back=0\n"
+corpus: 1247 file(s), 2 bad — phase ledger enforced via conform-run
+corpus: fail-pin ledger: 385 rule(s) the compiler enforces, 3 forward pin(s) it does not implement yet
+xtask ci: step `corpus` failed

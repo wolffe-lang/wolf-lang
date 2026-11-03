@@ -1,0 +1,29 @@
+S278 probe waiting for block B at 2026-11-03T20:00:30Z
+== uname Linux 7.2.4 x86_64; id uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev); SigBlk:	0000000000000000 SigIgn:	0000000000000000 CapEff:	0000000000000000 Cpus_allowed_list:	6-11 
+cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+403a87c73858b7018808842d81fd0e64968ab77041004d3fbac3001bc4655cab  probe
+479ccbf168a405d31f2b409dd85df8d6f46c43311c5b76a201f1c11aa0296a84  /lane/rig/probe.c
+uname Linux 7.2.4 x86_64
+uid=1000 euid=1000
+sigaction(SIGTERM=15, NULL, &old) rc=0 errno=0 (ok)
+  old action of SIGTERM: dfl
+sigaction(SIGKILL=9, NULL, &old) rc=0 errno=0 (ok)
+  old action of SIGKILL: dfl
+sigaction(SIGSTOP=19, NULL, &old) rc=0 errno=0 (ok)
+  old action of SIGSTOP: dfl
+sigaction(SIGKILL=9, SIG_IGN, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, SIG_DFL, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, handler, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=19, SIG_IGN, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=19, SIG_DFL, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=19, handler, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, NULL, &old) rc=0 errno=0 (ok)
+  old action of SIGKILL: dfl
+sigaction(SIGSTOP=19, NULL, &old) rc=0 errno=0 (ok)
+  old action of SIGSTOP: dfl
+chroot("s272-chroot-no-such-dir/inner") rc=-1 errno=2 (No such file or directory)
+chroot("/s278-chroot-no-such-dir/inner") rc=-1 errno=2 (No such file or directory)
+chroot(".") rc=-1 errno=1 (Operation not permitted)
+chroot("s278-probe-file") rc=-1 errno=20 (Not a directory)
+@status 0
+S278 probe END exit=0 at 2026-11-03T20:00:30Z

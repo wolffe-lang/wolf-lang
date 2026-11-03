@@ -1,0 +1,39 @@
+s278 evidence (s272's rows on macOS: os_signal_action_one for KILL and STOP, os_chroot on a missing path)
+
+ci/nightly-41611100640-gates-excerpt.txt
+                  CI's nightly at 0d6b3a64, job `native gauntlet (macOS aarch64, gates)` (macos-26-arm64,
+                  macOS 26.6.2 25G83): the corpus step's end, `1247 file(s), 2 bad`, the two rows' lines
+probe/            the C black box (probe.c; man pages and POSIX only, no libc or kernel source):
+                  sigaction(2) on SIGKILL and SIGSTOP as a query (NULL new action) and as a set (SIG_IGN,
+                  SIG_DFL, a handler), SIGTERM's query beside them; chroot(2) as an unprivileged user on
+                  the row's missing path, an absolute missing path, "." and a regular file
+  darwin-26.4.1-arm64.out
+                  nomad, uid 501: every KILL and STOP query and set -1 EINVAL (22), SIGTERM's query 0
+                  (dfl); every chroot -1 EPERM (1), the missing paths included
+  linux-7.2.4-x86_64.out
+                  hasu block B, r41-toolchain (ubuntu 24.04, gcc 13.3) as uid 1000, CapEff 0: the KILL and
+                  STOP queries 0 (dfl), every set -1 EINVAL (22); chroot on a missing path -1 ENOENT (2),
+                  "." -1 EPERM (1), a file -1 ENOTDIR (20)
+nomad/mac-job1-63c1278d.log
+                  the base, wolf built at 63c1278d on nomad (Darwin 26.4.1 arm64; the lock's wait lines
+                  dropped): the probe; each row on every machine (the corpus step's native leg, the
+                  checked machine, the native and release binaries: kill=io kill_number=22 stop=io
+                  stop_number=22, missing=denied missing_number=1; lupin 0.1.58 `does not resolve`); the
+                  corpus step whole, red by the two rows: `1253 file(s), 2 bad`, the lines CI printed.
+                  The head step's exit 1 is the probe of the shell's dispositions: macOS ps has no
+                  sigignore/sigcatch keywords (the record's head reads `sig` and `sigmask`)
+hasu/precheck1-433ec385.log
+                  linux (block B, r41-toolchain, uid 1000) at the fixed rows: each row on every machine
+                  (checked, native, release: kill: true … missing: true; lupin pinned), the two
+                  os_surface_lanes rows 2/2
+hasu/snaps1-433ec385.log
+                  wolf fmt --check of the two rows (chroot_rows re-laid: the three-way host row breaks
+                  out, d2f4672f) and the corpus snapshots at 433ec385
+hasu/snaps2-d2f4672f.log
+                  the corpus snapshots at the formatter's form: the lexer's and parser's snapshots of the
+                  two rows move (byte spans), the lowering ledger does not (32 passed, unchanged)
+rig/              the scripts as run: the Mac lock (locked.sh; lock-run.sh with its own lines on stderr,
+                  for a record), build-at.sh, Mac job 1, the macOS record's host and chunk scripts
+                  (rows, gates, plant); hasu's job, probe, pre-check, snapshot and record scripts
+                  (adapted by copy from s277's), the taskset shim (s272's). The org's gauntlet recorder
+                  is copied in, not committed.

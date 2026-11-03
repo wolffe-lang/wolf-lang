@@ -1,0 +1,20 @@
+== STEP probe 20:07:57
+uname Darwin 25.4.0 arm64
+uid=501 euid=501
+sigaction(SIGTERM=15, NULL, &old) rc=0 errno=0 (ok)
+  old action of SIGTERM: dfl
+sigaction(SIGKILL=9, NULL, &old) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=17, NULL, &old) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, SIG_IGN, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, SIG_DFL, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, handler, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=17, SIG_IGN, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=17, SIG_DFL, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=17, handler, NULL) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGKILL=9, NULL, &old) rc=-1 errno=22 (Invalid argument)
+sigaction(SIGSTOP=17, NULL, &old) rc=-1 errno=22 (Invalid argument)
+chroot("s272-chroot-no-such-dir/inner") rc=-1 errno=1 (Operation not permitted)
+chroot("/s278-chroot-no-such-dir/inner") rc=-1 errno=1 (Operation not permitted)
+chroot(".") rc=-1 errno=1 (Operation not permitted)
+chroot("s278-probe-file") rc=-1 errno=1 (Operation not permitted)
+END probe exit=0
