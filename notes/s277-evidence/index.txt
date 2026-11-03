@@ -17,6 +17,12 @@ nomad/mac-job1-5cf68a25.log
                   implementation head: the runtime's unit rows, sema, the race (checked, native, release:
                   the handle walk inside, the path walk escaping), the depth row, the refusals, clippy;
                   lupin 0.1.58's answers, pinned at b63b43da
+nomad/mac-job2-0da69942.log
+                  at the head before the rebase: the regenerations (anchors 711 -> 724, none dropped or
+                  changed; prelude.json; wolf fmt's form of four rows), every targeted row green (the
+                  lanes 9/9, fs_gaps and fs_change lanes, clippy, the runtime's windows check)
+hasu/snaps1-68e0c669.log
+                  the corpus snapshots at the formatter's form (rebased head), linux
 hasu/check1-382fa4e5.log, check2-5cf68a25.log
                   linux gnu and musl checks, wolf_rt's fs_at unit rows (the record by handle equal to the
                   path record word for word: the statx layout held), clippy -D warnings (red at 382fa4e5:

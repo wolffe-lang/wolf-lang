@@ -13,7 +13,7 @@ case $block in A) cpus=0-5 off=0 ;; B) cpus=6-11 off=6 ;; *) exit 2 ;; esac
 L=/home/mfwolffe/lanes
 side=$L/s277/records/gauntlet-$sha.side.log
 export PATH=$L/hasu-env/bin:$L/hasu-env/profile/bin:$PATH
-for chunk in prep lint test rest; do
+for chunk in ${S277_CHUNKS:-prep lint test rest}; do
   printf 'S277 chunk %s waiting for block %s at %s\n' "$chunk" "$block" "$(date -u +%FT%TZ)" >> "$side"
   flock -w 21600 $L/hasu-block-$block.lock flock -w 21600 $L/hasu-$block.lock \
     podman run --rm --name "s277-g-$chunk" --memory 12g --pids-limit 16384 --ulimit nproc=32768:32768 --ulimit core=0 \

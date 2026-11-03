@@ -92,6 +92,7 @@ case $chunk in
       gauntlet_step "ci-$(basename "$t" .py)" python3 "$t" || exit $?
     done
     ;;
+  smoke) gauntlet_step smoke-ci-steps bash -c 'python3 - <<<"" ; true' || exit $? ;;
   *) exit 2 ;;
 esac
 gauntlet_step "$chunk-clean" bash -c 'git diff --exit-code --stat && test -z "$(git status --porcelain --untracked-files=no)"' || exit $?
