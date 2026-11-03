@@ -359,7 +359,9 @@ fn the_file_system_record_on_every_host() {
 /// first (`not_found`, 2), macOS asks for the privilege first (`denied`,
 /// 1, measured on nomad), windows has no root to change; the issue's
 /// witness `os_chroot(".")` is `denied` (1) on both unixes. Red at
-/// `7332772f`: E0301.
+/// `7332772f`: E0301. Since s278 the row holds a missing path to each
+/// host's side itself (`os_name`), so both unixes read its header and
+/// windows keeps its own `dot` lines.
 #[test]
 fn the_root_rows_on_every_host() {
     if as_root() {
@@ -370,10 +372,8 @@ fn the_root_rows_on_every_host() {
     }
     let dir = scratch("chroot_rows");
     let entry = corpus("os/chroot_rows.lu");
-    let want = if cfg!(target_os = "macos") {
-        "missing=denied\nmissing_number=1\ndot=denied\ndot_number=1\n".to_string()
-    } else if cfg!(windows) {
-        "missing=unsupported\nmissing_number=0\ndot=unsupported\ndot_number=0\n".to_string()
+    let want = if cfg!(windows) {
+        "missing: true\nmissing_number: true\ndot=unsupported\ndot_number=0\n".to_string()
     } else {
         declared_stdout(&entry)
     };
@@ -411,15 +411,13 @@ fn the_priority_rows_on_every_host() {
 /// TERMINATE by bit and by number the default, KILL and STOP the host's
 /// (linux: the default; Darwin: `io` with EINVAL, 22), nothing moved by a
 /// run of queries, an ignore 1, a listen 2. Red at `7332772f`: E0301.
+/// Since s278 the row holds KILL and STOP to each host's side itself
+/// (`os_name`), so both unixes read its header; windows stops at `term`.
 #[test]
 fn the_signal_action_rows_on_every_host() {
     let dir = scratch("action_rows");
     let entry = corpus("os/signal_action_rows.lu");
-    let want = if cfg!(target_os = "macos") {
-        declared_stdout(&entry)
-            .replace("kill=0\nkill_number=0", "kill=io\nkill_number=22")
-            .replace("stop=0\nstop_number=0", "stop=io\nstop_number=22")
-    } else if cfg!(windows) {
+    let want = if cfg!(windows) {
         "zero=invalid\ntwo_bits=invalid\npast_table=invalid\nfar_host_number: true\nterm=unsupported\n"
             .to_string()
     } else {
