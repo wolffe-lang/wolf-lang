@@ -89,3 +89,15 @@ rig/kasumi/ (after 11cfa83f's first kasumi gauntlet)
                   into slot 8-11. The rig now takes the slot (4-7 or 8-11) as an argument, sets WOLF_TEST_CPUS to
                   the process's own affinity, runs a shim (taskset-shim-slot.c) that runs a list inside the slot
                   as asked, moves 0-3 into it and refuses any other, and checks all of it before prep (END cpus)
+kasumi/gauntlet-ends.txt
+                  every END of kasumi's three final holds: 11cfa83f red at test (the CPU list, above), 11cfa83f
+                  green (23 steps), and 7659deb5 green (the plant red by name first, then 23 steps)
+kasumi/drain/     the drain census for the labelled run's stall at 7659deb5 (wolf-lang#1022): s275's drain.lu
+                  native at trunk 2160b82f and at 7659deb5, `timeout 120`, interleaved; under `taskset -c 0-1`
+                  quiet (120 each), with two busy loops (97 and 98) and with two loops of the binary beside it (40
+                  each), every run rc=0; then CI's own shape, a throwaway container a run (sh as pid 1, no init),
+                  on 2 and 4 CPUs, quiet and with the forks load, 100 each, every run rc=0 (drain3-runs.txt).
+                  drain4.log's TALLY called those 200 container runs "other": its awk read the fifth field (i=)
+                  for the exit, which is the sixth; rig/kasumi/chain-drain3.sh reads the sixth now, and runs.txt
+                  holds 200 of 200 rc=0. Kasumi rebooted at about 01:33Z, which cut the second batch at busy
+                  i=38 (drain-runs2.txt keeps it; the rest was appended after)

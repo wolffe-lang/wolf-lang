@@ -1,0 +1,76 @@
+# kasumi records/final-11cfa83f-cpus/log
+S272_FINAL_START 2026-11-02T18:49:48Z block=K cpus=8-11 scratch=btrfs
+END plant exit=101 (the plant: nonzero expected, red by name)
+END prep exit=0 2026-11-02T18:53:05Z
+S272_GAUNTLET_START 2026-11-02T18:53:05Z head=11cfa83f0aa1e224d8ae7958f05c258a653541c7 tree=6a366bf84d6cf74037091a6d7b3f29c3c18f63c0
+S272_GAUNTLET_STEPS 23
+END fmt exit=0 2026-11-02T18:53:08Z
+END fmt-fixpoint exit=0 2026-11-02T18:53:13Z
+END clippy exit=0 2026-11-02T18:53:19Z
+END rt-none exit=0 2026-11-02T18:53:20Z
+END test exit=101 2026-11-02T18:54:18Z
+S272_GAUNTLET_RED 2026-11-02T18:54:18Z head=11cfa83f0aa1e224d8ae7958f05c258a653541c7 step=test exit=101
+S272_FINAL_END 2026-11-02T18:54:18Z exit=101
+# kasumi records/final-11cfa83f-green/log
+S272_FINAL_START 2026-11-02T19:01:58Z block=K cpus=8-11 scratch=btrfs
+END cpus exit=0
+END prep exit=0 2026-11-02T19:02:05Z
+S272_GAUNTLET_START 2026-11-02T19:02:05Z head=11cfa83f0aa1e224d8ae7958f05c258a653541c7 tree=6a366bf84d6cf74037091a6d7b3f29c3c18f63c0
+S272_GAUNTLET_STEPS 23
+END fmt exit=0 2026-11-02T19:02:07Z
+END fmt-fixpoint exit=0 2026-11-02T19:02:14Z
+END clippy exit=0 2026-11-02T19:02:14Z
+END rt-none exit=0 2026-11-02T19:02:14Z
+END test exit=0 2026-11-02T19:43:04Z
+END fuzz-check exit=0 2026-11-02T19:43:12Z
+END deps-check exit=0 2026-11-02T19:43:12Z
+END corpus exit=0 2026-11-02T19:44:04Z
+END abi-check exit=0 2026-11-02T19:44:14Z
+END debug-check exit=0 2026-11-02T19:44:14Z
+END midend-rate exit=0 2026-11-02T19:44:14Z
+END bench-gates exit=0 2026-11-02T19:45:22Z
+END spec-extract exit=0 2026-11-02T19:45:22Z
+END conformance exit=0 2026-11-02T19:45:22Z
+END print-gate exit=0 2026-11-02T19:45:22Z
+END diag-catalog exit=0 2026-11-02T19:45:26Z
+END doc-catalog exit=0 2026-11-02T19:45:26Z
+END fmt-lu exit=0 2026-11-02T19:45:29Z
+END fmt-fuzz exit=0 2026-11-02T19:46:05Z
+END audit-surface exit=0 2026-11-02T19:46:05Z
+END dist-smoke exit=0 2026-11-02T19:48:29Z
+END differ-self exit=0 2026-11-02T19:48:52Z
+END lane-coverage exit=0 2026-11-02T19:52:56Z
+S272_GAUNTLET_GREEN 2026-11-02T19:52:56Z head=11cfa83f0aa1e224d8ae7958f05c258a653541c7 steps=23
+S272_FINAL_END 2026-11-02T19:52:56Z exit=0
+# kasumi records/final/log
+S272_FINAL_START 2026-11-02T23:14:48Z block=K cpus=8-11 scratch=btrfs
+END cpus exit=0
+END plant exit=101 (the plant: nonzero expected, red by name)
+END prep exit=0 2026-11-02T23:15:37Z
+S272_GAUNTLET_START 2026-11-02T23:15:37Z head=7659deb5de57a44dac29e0fbc8c1a0967de5423f tree=0b8061bd767376c2b38637b6396a1bc146889f90
+S272_GAUNTLET_STEPS 23
+END fmt exit=0 2026-11-02T23:15:39Z
+END fmt-fixpoint exit=0 2026-11-02T23:15:46Z
+END clippy exit=0 2026-11-02T23:15:54Z
+END rt-none exit=0 2026-11-02T23:15:55Z
+END test exit=0 2026-11-02T23:56:24Z
+END fuzz-check exit=0 2026-11-02T23:56:25Z
+END deps-check exit=0 2026-11-02T23:56:26Z
+END corpus exit=0 2026-11-02T23:57:16Z
+END abi-check exit=0 2026-11-02T23:57:17Z
+END debug-check exit=0 2026-11-02T23:57:17Z
+END midend-rate exit=0 2026-11-02T23:57:18Z
+END bench-gates exit=0 2026-11-02T23:58:20Z
+END spec-extract exit=0 2026-11-02T23:58:20Z
+END conformance exit=0 2026-11-02T23:58:20Z
+END print-gate exit=0 2026-11-02T23:58:20Z
+END diag-catalog exit=0 2026-11-02T23:58:24Z
+END doc-catalog exit=0 2026-11-02T23:58:24Z
+END fmt-lu exit=0 2026-11-02T23:58:27Z
+END fmt-fuzz exit=0 2026-11-02T23:58:47Z
+END audit-surface exit=0 2026-11-02T23:58:47Z
+END dist-smoke exit=0 2026-11-02T23:59:14Z
+END differ-self exit=0 2026-11-02T23:59:35Z
+END lane-coverage exit=0 2026-11-03T00:03:42Z
+S272_GAUNTLET_GREEN 2026-11-03T00:03:42Z head=7659deb5de57a44dac29e0fbc8c1a0967de5423f steps=23
+S272_FINAL_END 2026-11-03T00:03:42Z exit=0

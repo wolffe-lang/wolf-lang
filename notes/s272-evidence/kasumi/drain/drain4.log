@@ -1,0 +1,41 @@
+S272 drain4 waiting for kasumi slot 8-11 at 2026-11-03T01:40:47Z
+S272 acquired kasumi slot 8-11 at 2026-11-03T01:40:47Z
+/dev/nvme0n1p2  928G  893G   32G  97% /home
+S272 drain2b container start at 2026-11-03T01:40:47Z (slot 8-11, tmpfs scratch 0)
+S272 in the container at 2026-11-03T01:40:47Z
+b6fc26f13e728c4a3c7a14af3dad14c0f0ee61ee3b02c3a65c491e7d8999e294  /lane/records/drain/bin/drain-trunk
+101d842d662b6b2323b4162175d5a9821ba15fe2bc3a439895294f5b1b773543  /lane/records/drain/bin/drain-head
+== STEP busy 01:40:48
+load busy: 18 19
+END busy exit=0 01:43:18
+== STEP forks 01:43:18
+load forks: 640823 640824
+END forks exit=0 01:46:33
+== SUMMARY
+TALLY head busy: 77 runs, 77 rc=0, 0 rc=124, 0 other, mean 2.0 s
+TALLY head forks: 40 runs, 40 rc=0, 0 rc=124, 0 other, mean 2.4 s
+TALLY head quiet: 100 runs, 100 rc=0, 0 rc=124, 0 other, mean 1.4 s
+TALLY trunk busy: 78 runs, 78 rc=0, 0 rc=124, 0 other, mean 2.1 s
+TALLY trunk forks: 40 runs, 40 rc=0, 0 rc=124, 0 other, mean 2.4 s
+TALLY trunk quiet: 100 runs, 100 rc=0, 0 rc=124, 0 other, mean 1.4 s
+END drain2 exit=0
+S272 drain2b END exit=0 at 2026-11-03T01:46:33Z
+== STEP cpus=8-9 load=quiet 01:46:33
+END cpus=8-9 load=quiet exit=0 01:47:45
+== STEP cpus=8-9 load=forks 01:47:45
+END cpus=8-9 load=forks exit=0 01:50:15
+== STEP cpus=8-11 load=quiet 01:50:15
+END cpus=8-11 load=quiet exit=0 01:51:10
+== STEP cpus=8-11 load=forks 01:51:10
+END cpus=8-11 load=forks exit=0 01:52:41
+== SUMMARY
+TALLY head cpus=8-11 load=forks: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY head cpus=8-11 load=quiet: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY head cpus=8-9 load=forks: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY head cpus=8-9 load=quiet: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY trunk cpus=8-11 load=forks: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY trunk cpus=8-11 load=quiet: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY trunk cpus=8-9 load=forks: 25 runs, 0 rc=0, 0 rc=124, 25 other
+TALLY trunk cpus=8-9 load=quiet: 25 runs, 0 rc=0, 0 rc=124, 25 other
+END drain3 exit=0
+S272 drain4 chain END exit=0 at 2026-11-03T01:52:41Z

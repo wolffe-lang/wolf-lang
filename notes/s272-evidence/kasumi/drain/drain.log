@@ -1,0 +1,22 @@
+S272 drain waiting for kasumi slot 8-11 at 2026-11-03T01:21:24Z
+S272 acquired kasumi slot 8-11 at 2026-11-03T01:21:24Z
+/dev/nvme0n1p2  928G  893G   32G  97% /home
+S272 drain container start at 2026-11-03T01:21:24Z (slot 8-11, tmpfs scratch 0)
+S272 in the container at 2026-11-03T01:21:24Z
+== STEP trunk-build 01:21:24 head=2160b82f21094470306fc7a1014dd27ee7149e12
+b6fc26f13e728c4a3c7a14af3dad14c0f0ee61ee3b02c3a65c491e7d8999e294  /lane/records/drain/bin/drain-trunk
+END trunk-build exit=0
+== STEP head-build 01:21:35 head=7659deb5de57a44dac29e0fbc8c1a0967de5423f
+101d842d662b6b2323b4162175d5a9821ba15fe2bc3a439895294f5b1b773543  /lane/records/drain/bin/drain-head
+END head-build exit=0
+== STEP quiet 01:21:46
+== STEP loaded 01:22:42
+burners: 320956 320957
+== SUMMARY
+TALLY head loaded: 20 runs, 20 rc=0, 0 rc=124, 0 other
+TALLY head quiet: 20 runs, 20 rc=0, 0 rc=124, 0 other
+TALLY trunk loaded: 20 runs, 20 rc=0, 0 rc=124, 0 other
+TALLY trunk quiet: 20 runs, 20 rc=0, 0 rc=124, 0 other
+END drain exit=0
+S272 drain END exit=0 at 2026-11-03T01:24:09Z
+S272 drain chain END exit=0 at 2026-11-03T01:24:09Z
