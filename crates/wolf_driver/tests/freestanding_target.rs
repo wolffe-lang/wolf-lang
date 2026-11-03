@@ -760,7 +760,8 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "fs_lstat_at",
             "",
             "let r = fs_lstat_at(3, \"d\") else |e| {\n        return 0\n    }\n    r.len",
-            "`fs_lstat_at`",
+            // The pair shares one runtime symbol, which the refusal names.
+            "`fs_stat_at`",
             "hosted runtime",
         ),
         (
@@ -774,7 +775,8 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "fs_remove_dir_at",
             "",
             "fs_remove_dir_at(3, \"d\") else |e| {\n        return 0\n    }\n    1",
-            "`fs_remove_dir_at`",
+            // The pair shares one runtime symbol, which the refusal names.
+            "`fs_remove_at`",
             "hosted runtime",
         ),
         (

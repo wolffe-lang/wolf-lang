@@ -63,19 +63,11 @@ fn fail_row(row: &str, why: &str) -> String {
 /// its measured answers are pinned per row.
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58"];
 
-/// Every name this lane adds, for lupin's "does not resolve" refusal.
-const NEW_NAMES: &[&str] = &[
-    "fs_open_at",
-    "fs_stat_at",
-    "fs_lstat_at",
-    "fs_remove_at",
-    "fs_remove_dir_at",
-    "fs_create_dir_at",
-    "fs_symlink_at",
-    "fs_link_at",
-    "fs_read_dir_entries_at",
-    "fs_set_mode_fd",
-];
+/// The pairing on the unix fixtures, measured on nomad: their first call is
+/// an open with bits 32 and 16, a mode outside 0.1.58's set, so `main`
+/// returns `invalid` before any new name is reached.
+#[cfg(unix)]
+const LUPIN_BIT_48: Pre<'static> = Pre::Answers("exit(1)", "error: invalid\n");
 
 #[derive(Debug)]
 struct Obs {
@@ -230,10 +222,20 @@ fn lupin_or_skip() -> Option<PathBuf> {
     found
 }
 
-/// lupin's answer to `entry`: the pairing (0.1.58) stops at a name it does
-/// not resolve, by name; a newer lupin mirrors the compiler (`want`, when
-/// the row has one stdout for every machine).
-fn lupin_leg(entry: &Path, dir: &Path, want: Option<&str>) {
+/// What the pairing (0.1.58) answers a witness, measured: it resolves a
+/// name when the program reaches the call, so it either stops there, by
+/// name, or runs to an answer of its own.
+enum Pre<'a> {
+    /// It stops at the first name it does not resolve — one of these.
+    Unresolved(&'a [&'a str]),
+    /// It runs, and answers this verdict and stdout.
+    Answers(&'a str, &'a str),
+}
+
+/// lupin's answer to `entry`: the pairing's measured answer (`pre`); a newer
+/// lupin mirrors the compiler (`want`, when the row has one stdout for every
+/// machine).
+fn lupin_leg(entry: &Path, dir: &Path, pre: Pre<'_>, want: Option<&str>) {
     let Some(l) = lupin_or_skip() else {
         return;
     };
@@ -247,25 +249,29 @@ fn lupin_leg(entry: &Path, dir: &Path, want: Option<&str>) {
         obs.version, obs.verdict, obs.reason, obs.stdout
     );
     if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) {
-        assert_eq!(
-            obs.verdict, "unsupported",
-            "lupin {} refuses {name} by name: {obs:?}",
-            obs.version
-        );
-        assert!(
-            NEW_NAMES
-                .iter()
-                .any(|c| obs.reason.contains(&format!("`{c}`"))),
-            "lupin {}'s refusal of {name} names one of the new calls: {}",
-            obs.version,
-            obs.reason
-        );
-        assert!(
-            obs.reason.contains("does not resolve"),
-            "lupin {} (pre-mirror) does not resolve the new calls: {}",
-            obs.version,
-            obs.reason
-        );
+        match pre {
+            Pre::Unresolved(calls) => {
+                assert_eq!(
+                    obs.verdict, "unsupported",
+                    "lupin {} refuses {name} by name: {obs:?}",
+                    obs.version
+                );
+                assert!(
+                    calls
+                        .iter()
+                        .any(|c| obs.reason.contains(&format!("`{c}` does not resolve"))),
+                    "lupin {} (pre-mirror) does not resolve one of {calls:?} in {name}: {}",
+                    obs.version,
+                    obs.reason
+                );
+            }
+            Pre::Answers(verdict, stdout) => assert_eq!(
+                (obs.verdict.as_str(), obs.stdout.as_str()),
+                (verdict, stdout),
+                "lupin {} (pre-mirror) on {name}, as measured: {obs:?}",
+                obs.version
+            ),
+        }
     } else if let Some(w) = want {
         assert_eq!(
             (obs.verdict.as_str(), obs.stdout.as_str()),
@@ -299,7 +305,7 @@ fn checked_in(entry: &Path, dir: &Path) -> Obs {
 /// `entry` on every machine, ON THE HOST, in `dir`: the checked machine
 /// under `conform-run`, the native and release binaries run directly, each
 /// stdout held to `want`; then lupin's leg.
-fn every_lane_answers_on_the_host(entry: &Path, dir: &Path, want: &str) {
+fn every_lane_answers_on_the_host(entry: &Path, dir: &Path, want: &str, pre: Pre<'_>) {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();
     let checked = checked_in(entry, dir);
     assert_eq!(
@@ -322,7 +328,7 @@ fn every_lane_answers_on_the_host(entry: &Path, dir: &Path, want: &str) {
         assert_eq!(out.status.code(), Some(0), "the {tier} binary on {name}");
         assert_eq!(stdout, want, "the {tier} binary on {name}");
     }
-    lupin_leg(entry, dir, Some(want));
+    lupin_leg(entry, dir, pre, Some(want));
 }
 
 /// The machines a unix row runs on the host: the checked machine (its
@@ -376,7 +382,12 @@ fn answer_of(out: &Output, record: bool, what: &str) -> String {
 fn the_at_rows_on_every_host() {
     let dir = scratch("at_rows");
     let entry = corpus("fs/at_rows.lu");
-    every_lane_answers_on_the_host(&entry, &dir, &declared_stdout(&entry));
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &declared_stdout(&entry),
+        Pre::Unresolved(&["fs_remove_at"]),
+    );
 }
 
 /// #1029: a directory made under a held parent after the parent's path
@@ -386,7 +397,12 @@ fn the_at_rows_on_every_host() {
 fn the_mkdir_at_rows_on_every_host() {
     let dir = scratch("mkdir_at");
     let entry = corpus("fs/mkdir_at.lu");
-    every_lane_answers_on_the_host(&entry, &dir, &declared_stdout(&entry));
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &declared_stdout(&entry),
+        Pre::Unresolved(&["os_name"]),
+    );
 }
 
 /// #1030: a link made under a held parent after the parent moved, its
@@ -395,7 +411,12 @@ fn the_mkdir_at_rows_on_every_host() {
 fn the_symlink_at_rows_on_every_host() {
     let dir = scratch("symlink_at");
     let entry = corpus("fs/symlink_at.lu");
-    every_lane_answers_on_the_host(&entry, &dir, &declared_stdout(&entry));
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &declared_stdout(&entry),
+        Pre::Unresolved(&["os_name"]),
+    );
 }
 
 /// #1031 (and #910's follow flag): a second name between two held
@@ -405,7 +426,12 @@ fn the_symlink_at_rows_on_every_host() {
 fn the_link_at_rows_on_every_host() {
     let dir = scratch("link_at");
     let entry = corpus("fs/link_at.lu");
-    every_lane_answers_on_the_host(&entry, &dir, &declared_stdout(&entry));
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &declared_stdout(&entry),
+        Pre::Unresolved(&["os_name"]),
+    );
 }
 
 /// #1032: bit 32 refuses a regular file (`invalid`, ENOTDIR) and opens a
@@ -415,7 +441,12 @@ fn the_link_at_rows_on_every_host() {
 fn the_directory_bit_rows_on_every_host() {
     let dir = scratch("open_directory");
     let entry = corpus("fs/open_directory.lu");
-    every_lane_answers_on_the_host(&entry, &dir, &declared_stdout(&entry));
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &declared_stdout(&entry),
+        Pre::Unresolved(&["os_name"]),
+    );
 }
 
 /// #1033: the mode set through a handle changes the held file, not the
@@ -424,7 +455,12 @@ fn the_directory_bit_rows_on_every_host() {
 fn the_mode_fd_rows_on_every_host() {
     let dir = scratch("mode_fd");
     let entry = corpus("fs/mode_fd.lu");
-    every_lane_answers_on_the_host(&entry, &dir, &declared_stdout(&entry));
+    every_lane_answers_on_the_host(
+        &entry,
+        &dir,
+        &declared_stdout(&entry),
+        Pre::Unresolved(&["fs_set_mode_fd"]),
+    );
 }
 
 // ----------------------------------------------------------- unix --
@@ -536,7 +572,7 @@ fn the_race_row_the_handle_walk_stays_inside_the_tree() {
             ));
         }
     }
-    lupin_leg(&entry, &dir, None);
+    lupin_leg(&entry, &dir, LUPIN_BIT_48, None);
     assert!(bad.is_empty(), "race rows:\n{}", bad.join("\n"));
 }
 
@@ -568,7 +604,7 @@ fn a_tree_past_path_max_is_made_and_removed_by_handle() {
             ));
         }
     }
-    lupin_leg(&entry, &dir, None);
+    lupin_leg(&entry, &dir, LUPIN_BIT_48, None);
     assert!(bad.is_empty(), "depth rows:\n{}", bad.join("\n"));
 }
 
@@ -707,7 +743,7 @@ fn every_refusal_by_name_with_the_hosts_number() {
             ));
         }
     }
-    lupin_leg(&entry, &dir, None);
+    lupin_leg(&entry, &dir, LUPIN_BIT_48, None);
     assert!(bad.is_empty(), "refusal rows:\n{}", bad.join("\n"));
 }
 
