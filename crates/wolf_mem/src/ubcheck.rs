@@ -16919,7 +16919,7 @@ mod checked_at {
     /// One stat's words, before they are a record.
     #[cfg(unix)]
     pub(super) struct Words {
-        pub(super) mode: u32,
+        pub(super) mode: libc::mode_t,
         size: i64,
         nlink: i64,
         uid: i64,
@@ -16949,15 +16949,15 @@ mod checked_at {
 
     /// The record's kind for `st_mode`'s type bits.
     #[cfg(unix)]
-    pub(super) fn kind_of_mode(mode: u32) -> i64 {
-        match mode & (libc::S_IFMT as u32) {
-            m if m == libc::S_IFREG as u32 => 0,
-            m if m == libc::S_IFDIR as u32 => 1,
-            m if m == libc::S_IFLNK as u32 => 3,
-            m if m == libc::S_IFIFO as u32 => 4,
-            m if m == libc::S_IFSOCK as u32 => 5,
-            m if m == libc::S_IFCHR as u32 => 6,
-            m if m == libc::S_IFBLK as u32 => 7,
+    pub(super) fn kind_of_mode(mode: libc::mode_t) -> i64 {
+        match mode & libc::S_IFMT {
+            libc::S_IFREG => 0,
+            libc::S_IFDIR => 1,
+            libc::S_IFLNK => 3,
+            libc::S_IFIFO => 4,
+            libc::S_IFSOCK => 5,
+            libc::S_IFCHR => 6,
+            libc::S_IFBLK => 7,
             _ => 2,
         }
     }
@@ -17008,7 +17008,7 @@ mod checked_at {
         #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "freebsd")))]
         let btime = None;
         Ok(Words {
-            mode: st.st_mode as u32,
+            mode: st.st_mode,
             size: st.st_size as i64,
             nlink: st.st_nlink as i64,
             uid: i64::from(st.st_uid),
@@ -17096,7 +17096,7 @@ mod checked_at {
         }
         let t = |s: StatxTime| (s.sec, i64::from(s.nsec));
         Ok(Words {
-            mode: u32::from(x.mode),
+            mode: libc::mode_t::from(x.mode),
             size: x.size as i64,
             nlink: i64::from(x.nlink),
             uid: i64::from(x.uid),

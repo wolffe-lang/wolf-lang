@@ -200,15 +200,15 @@ fn ms_of(sec: i64, nsec: i64) -> Option<i64> {
 
 /// The record's kind for a `st_mode`'s file type bits.
 #[cfg(unix)]
-fn kind_of_mode(mode: u32) -> i64 {
-    match mode & (libc::S_IFMT as u32) {
-        m if m == libc::S_IFREG as u32 => stat_kind::FILE,
-        m if m == libc::S_IFDIR as u32 => stat_kind::DIR,
-        m if m == libc::S_IFLNK as u32 => stat_kind::LINK,
-        m if m == libc::S_IFIFO as u32 => stat_kind::FIFO,
-        m if m == libc::S_IFSOCK as u32 => stat_kind::SOCKET,
-        m if m == libc::S_IFCHR as u32 => stat_kind::CHAR_DEVICE,
-        m if m == libc::S_IFBLK as u32 => stat_kind::BLOCK_DEVICE,
+fn kind_of_mode(mode: libc::mode_t) -> i64 {
+    match mode & libc::S_IFMT {
+        libc::S_IFREG => stat_kind::FILE,
+        libc::S_IFDIR => stat_kind::DIR,
+        libc::S_IFLNK => stat_kind::LINK,
+        libc::S_IFIFO => stat_kind::FIFO,
+        libc::S_IFSOCK => stat_kind::SOCKET,
+        libc::S_IFCHR => stat_kind::CHAR_DEVICE,
+        libc::S_IFBLK => stat_kind::BLOCK_DEVICE,
         _ => stat_kind::OTHER,
     }
 }
@@ -216,7 +216,7 @@ fn kind_of_mode(mode: u32) -> i64 {
 /// The host's words of one stat, before they are a record.
 #[cfg(unix)]
 struct Words {
-    mode: u32,
+    mode: libc::mode_t,
     size: i64,
     nlink: i64,
     uid: i64,
@@ -282,7 +282,7 @@ fn fstatat_words(
     #[cfg(not(any(target_os = "macos", target_os = "ios", target_os = "freebsd")))]
     let btime = None;
     Ok(Words {
-        mode: st.st_mode as u32,
+        mode: st.st_mode,
         size: st.st_size as i64,
         nlink: st.st_nlink as i64,
         uid: i64::from(st.st_uid),
@@ -377,7 +377,7 @@ fn stat_words(dirfd: libc::c_int, name: &std::ffi::CStr, follow: bool) -> std::i
     }
     let t = |s: StatxTime| (s.sec, i64::from(s.nsec));
     Ok(Words {
-        mode: u32::from(x.mode),
+        mode: libc::mode_t::from(x.mode),
         size: x.size as i64,
         nlink: i64::from(x.nlink),
         uid: i64::from(x.uid),
