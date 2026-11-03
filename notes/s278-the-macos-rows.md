@@ -116,10 +116,13 @@ The rows, at the head:
 
 The records at the final head live outside the tree, under the lane's directory, because a
 record cannot predate the head it names. The PR body quotes every `END` line. There are three:
-- the macOS record (nomad, behind the Mac lock, two takes). Its `rows` chunk is `fmt`,
-  `fmt-fixpoint`, the three crates' corpus snapshot tests, the two `os_surface_lanes` rows, and
-  clippy on that test. Its `gates` chunk is the gates shard's fifteen steps in `cargo xtask ci`'s
-  order, corpus first;
+- the macOS record (nomad, behind the Mac lock, one take). It runs `fmt`, `fmt-fixpoint`, the
+  three crates' corpus snapshot tests, the two `os_surface_lanes` rows and clippy on that test,
+  then the gates shard's fifteen steps in `cargo xtask ci`'s order, corpus first. nomad's rustup
+  1.97.1 has no `x86_64-unknown-none` target, and a lane installs nothing, so dist-smoke runs as
+  `dist-smoke:no-none-target`, with `WOLF_RT_NONE_REQUIRE` unset for that step alone: the
+  freestanding runtime's archive is a loud skip, and the rest of the step is CI's. The first try
+  at `daccfe79` was red there and only there (`nomad/record-try1-daccfe79.log`);
 - the linux record (hasu block B, `localhost/r41-toolchain:1`, a foreign pid 1, the taskset
   shim). It runs the build, `cargo xtask ci`'s corpus step and the two `os_surface_lanes` rows;
 - the plant record (nomad). `s278-plant-darwin-kill` is one commit, one file and one hunk on the
