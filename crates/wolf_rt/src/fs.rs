@@ -138,6 +138,16 @@ pub mod fs_mode {
     /// is `invalid`. windows has no such open on this path and refuses the
     /// flag `invalid`, by name, before the host is asked.
     pub const NOFOLLOW: i64 = 16;
+    /// s277 (wolf-lang#1032, `[os.fs.open.directory]`): a FLAG beside
+    /// [`NOFOLLOW`] — the open is of a DIRECTORY or nothing (`O_DIRECTORY`:
+    /// any other kind of file is the host's `ENOTDIR`, answered `invalid`,
+    /// and a fifo is refused without being opened, so it cannot park). It
+    /// rides the two read modes ([`READ`], [`READ_NONBLOCK`]) only; with any
+    /// other mode it is `invalid` before the host (a directory is never
+    /// opened for writing, and `O_CREAT` with it is `EINVAL` on linux and
+    /// macOS, measured). windows refuses it `invalid`, by name, before the
+    /// host, as it refuses [`NOFOLLOW`]. Bits above 32 stay `invalid`.
+    pub const DIRECTORY: i64 = 32;
 }
 
 /// The open files, by handle. 0, 1 and 2 are never in it: those three
@@ -342,19 +352,36 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_text(pp: i64, pl: i64, cp: i64, cl: 
 /// `fs_open_perm` (s230, [`crate::fs_change`]), which adds the
 /// creation's permission bits to the same options. s254: the mode may
 /// carry [`fs_mode::NOFOLLOW`] (`O_NOFOLLOW` beside the mode's own flags;
-/// windows: `None`, the flag refused by name).
+/// windows: `None`, the flag refused by name). s277: and
+/// [`fs_mode::DIRECTORY`] (`O_DIRECTORY`), on the two read modes only
+/// (`None` beside any other; windows: `None`, by name).
 pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
     let nofollow = mode & fs_mode::NOFOLLOW != 0;
-    let mode = mode & !fs_mode::NOFOLLOW;
-    if nofollow && !cfg!(unix) {
+    let directory = mode & fs_mode::DIRECTORY != 0;
+    let mode = mode & !(fs_mode::NOFOLLOW | fs_mode::DIRECTORY);
+    if (nofollow || directory) && !cfg!(unix) {
+        return None;
+    }
+    if directory && mode != fs_mode::READ && mode != fs_mode::READ_NONBLOCK {
         return None;
     }
     let mut o = std::fs::OpenOptions::new();
     #[cfg(unix)]
-    if nofollow {
+    let extra = {
+        let mut x = 0;
+        if nofollow {
+            x |= libc::O_NOFOLLOW;
+        }
+        if directory {
+            x |= libc::O_DIRECTORY;
+        }
+        x
+    };
+    #[cfg(unix)]
+    if extra != 0 {
         use std::os::unix::fs::OpenOptionsExt as _;
-        // Mode 5 sets its own custom flags below, with this one beside.
-        o.custom_flags(libc::O_NOFOLLOW);
+        // Mode 5 sets its own custom flags below, with these beside.
+        o.custom_flags(extra);
     }
     match mode {
         fs_mode::READ => o.read(true),
@@ -370,7 +397,6 @@ pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt as _;
-                let extra = if nofollow { libc::O_NOFOLLOW } else { 0 };
                 o.read(true).custom_flags(libc::O_NONBLOCK | extra)
             }
             #[cfg(not(unix))]
@@ -411,7 +437,10 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
 /// The code of a failed open of `mode` (s254, `[os.fs.open.nofollow]`):
 /// under [`fs_mode::NOFOLLOW`] the host's refusal of a final symbolic link
 /// — `ELOOP` (linux, macOS; freebsd's `EMLINK`) — is `invalid`, its number
-/// in `os_error()`; everything else is the family's mapping.
+/// in `os_error()`; everything else is the family's mapping. s277
+/// (`[os.fs.open.directory]`): under [`fs_mode::DIRECTORY`] the host's
+/// refusal of a name that is not a directory (`ENOTDIR`) is `invalid`
+/// too; an open without the bit keeps every answer it had.
 pub(crate) fn open_code(e: &std::io::Error, mode: i64) -> i64 {
     #[cfg(unix)]
     if mode & fs_mode::NOFOLLOW != 0 {
@@ -424,6 +453,11 @@ pub(crate) fn open_code(e: &std::io::Error, mode: i64) -> i64 {
             os_error_record(e);
             return fs_code::INVALID;
         }
+    }
+    #[cfg(unix)]
+    if mode & fs_mode::DIRECTORY != 0 && e.raw_os_error() == Some(libc::ENOTDIR) {
+        os_error_record(e);
+        return fs_code::INVALID;
     }
     let _ = mode;
     code_of(e)
