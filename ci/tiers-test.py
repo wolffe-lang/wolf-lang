@@ -242,7 +242,7 @@ for j in EVERY:
     b = blocks[j]
     needs = re.search(r"^    needs: (.*)$", b, re.M)
     ok = needs is not None and "plan" in re.findall(r"[A-Za-z0-9_-]+", needs.group(1))
-    ok = ok and ("    if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), '%s')\n" % j) in b
+    ok = ok and ("    if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), '%s')) }}\n" % j) in b
     say(ok, "T4 %s needs the plan and runs only when the plan names it" % j)
 reads = re.findall(r"needs\.plan\.outputs\.([a-z_]+)(\s*\|\|)?", wf)
 say(len(reads) >= 7 and all(d for _, d in reads), "T4 every plan output is read with a default (%d reads: %s)" % (
@@ -257,7 +257,7 @@ t = blocks["tier"]
 tn = re.findall(r"^      - ([A-Za-z0-9_-]+)\s*$", t, re.M)
 say(sorted(tn) == sorted(["plan"] + EVERY), "T4 the tier job needs every job (%d of %d)" % (len(tn), len(EVERY) + 1))
 ifs = re.findall(r"^    if: (.*)$", t, re.M)
-say(ifs == ["${{ !cancelled() }}"], "T4 the tier job runs on !cancelled(), never always() (%s)" % "; ".join(ifs))
+say(ifs == ["${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (!cancelled()) }}"], "T4 the opted-in tier job runs on !cancelled(), never always() (%s)" % "; ".join(ifs))
 say("    name: tier ${{ needs.plan.outputs.tier || 'unplanned' }}\n" in t, "T4 the tier job is named for the tier")
 say("        run: python3 ci/tiers.py verdict\n" in t and "          NEEDS: ${{ toJSON(needs) }}\n" in t and "actions/checkout" in t,
     "T4 the tier job's check is ci/tiers.py verdict over toJSON(needs)")
