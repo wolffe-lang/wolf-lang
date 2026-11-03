@@ -78,8 +78,10 @@ The compiler candidate should print 0.2.37+dev before tagging, pairing
 On hasu's Ubuntu 24.04.5 userland expect the startup/constrained-runtime
 row's Ubuntu-specific value 12; record the actual row and userland, never
 substitute a host measurement. Linux GNU import ceiling remains GLIBC_2.34.
-Debug and release gauntlets take separate locks with a two-hour outer-held
-budget. Final release workflow rehearsal and release-tier CI follow the
+The normal local cargo xtask ci debug record and separate validation steps
+take locks with a two-hour outer-held budget. Release coverage comes from
+the release-matrix tier and release.yml dry=true rehearsal with readback,
+not an optimized xtask executable or a repeated debug gauntlet. Those follow the
 final push; no tag, publication, or downstream completion is claimed here.
 
 Focused pairing follow-up prediction:
@@ -99,5 +101,18 @@ changes only host-aware test expectations and snapshots; no extra compiler
 or interpreter runtime mover is predicted. Record later measurements in
 external verification records, not new source commits after final gauntlets.
 Choose the fewer-waiter hasu block before every submission, preferring B
-on a tie; do not take both blocks for this release stage. Separate debug
-and release takes retain the two-hour outer-held limit and hard deadline.
+on a tie; do not take both blocks for this release stage. Each independent validation take retains the two-hour outer-held limit
+and hard deadline. No local release leg is planned.
+
+Validation wrapper predictions before the final head is frozen:
+The compiler differ proxy supplies the same explicit checked/native/release
+flag to candidate and published 0.2.36, clears inherited lane flags and
+preserves complete observation/diagnostic records. Its subprocess tests
+exercise both roles, all three tiers, raw non-JSON failures and nonzero
+status propagation without requiring a compiler build. Fixed std tests
+and doc examples use exactly 5b3a599 with explicit candidate/runtime and
+published .59 executable paths; they do not alter std ledgers. The normal
+debug gauntlet, preparation, fixed std and each differential take use the
+organization's recorder and stop at the first nonzero step. The exact
+constrained-runtime command remains to be confirmed; the container's
+resource cap is not a substitute for that evidence.
