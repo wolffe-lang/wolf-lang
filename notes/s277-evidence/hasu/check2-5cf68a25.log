@@ -1,0 +1,45 @@
+S277 check2 waiting for block B at 2026-11-03T12:53:22Z
+head 5cf68a25db36a9bd34d8d4727d903f62f8293a24 cpus Cpus_allowed_list:	6-11
+== STEP check-gnu 12:53:22
+    Finished `dev` profile [unoptimized] target(s) in 6.72s
+END check-gnu exit=0
+== STEP check-musl 12:53:29
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+   --> crates/wolf_rt/src/fs_change.rs:275:40
+    |
+275 |                 ts.tv_sec = s as libc::time_t;
+    |                                        ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+     --> crates/wolf_mem/src/ubcheck.rs:18089:40
+      |
+18089 |                 ts.tv_sec = s as libc::time_t;
+      |                                        ^^^^^^
+      |
+      = note: `#[warn(deprecated)]` on by default
+
+warning: `wolf_rt` (lib) generated 1 warning
+warning: `wolf_mem` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized] target(s) in 1.44s
+END check-musl exit=0
+== STEP rt-unit 12:53:30
+    Finished `test` profile [unoptimized] target(s) in 2.60s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-2d9352de71a6d2f6)
+
+running 5 tests
+test fs_at::tests::the_millisecond_word_is_the_paths ... ok
+test fs_at::tests::the_open_word_is_the_open_familys ... ok
+test fs_at::tests::the_calls_follow_the_handle_not_the_path ... ok
+test fs_at::tests::the_record_by_handle_is_the_paths ... ok
+test fs_at::tests::the_mode_set_on_a_handle_is_the_held_files ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 361 filtered out; finished in 0.07s
+
+END rt-unit exit=0
+== STEP clippy 12:53:33
+    Finished `dev` profile [unoptimized] target(s) in 9.53s
+END clippy exit=0
+ALL rc=0
+S277 check2 END exit=0 at 2026-11-03T12:53:43Z

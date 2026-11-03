@@ -1,0 +1,32 @@
+s277 evidence (wolf-lang#707, #1029, #1030, #1031, #1032, #1033)
+
+base/             each issue's witness at 0d6b3a64: E0301 (wolf build exit 2, checked fail(E0301));
+                  bu21's fs_remove_at(3, "name") verbatim; fs_open_mode(file, 32) answers invalid, os_error 0
+probe/            black box, no libc or kernel source: probe.c (open/openat with O_DIRECTORY and O_NOFOLLOW,
+                  fstatat, unlinkat, mkdirat, symlinkat, linkat, fchmod, fdopendir on a duplicate, 100 levels
+                  past PATH_MAX) on nomad (Darwin 26.4.1 arm64) and hasu (linux 7.2.4, ubuntu 24.04 in
+                  rootless podman, as uid 1000); statx_probe.c: statx through syscall(2) with a struct laid
+                  out from the man page, every word equal to fstatat's; Containerfile.man: the image the
+                  Linux man pages were rendered in
+nomad/mac-red-9f569214.log
+                  descriptor_walk_lanes at the red rows' commit (base code): 9 of 9 FAILED, every compile
+                  error E0301; the bit-32 corpus row red only through lupin's leg (it passed on unix as
+                  windows' posture), which a8e7c6a2 then held to its host by os_name
+nomad/mac-job1-5cf68a25.log
+                  the base compiler (9f569214) on the strengthened bit-32 row: directory: false (red); at the
+                  implementation head: the runtime's unit rows, sema, the race (checked, native, release:
+                  the handle walk inside, the path walk escaping), the depth row, the refusals, clippy;
+                  lupin 0.1.58's answers, pinned at b63b43da
+hasu/check1-382fa4e5.log, check2-5cf68a25.log
+                  linux gnu and musl checks, wolf_rt's fs_at unit rows (the record by handle equal to the
+                  path record word for word: the statx layout held), clippy -D warnings (red at 382fa4e5:
+                  unnecessary_cast on mode_t; green at 5cf68a25)
+hasu/roottest-0da69942.log
+                  the privileged forms in 8 throwaway --network none containers from ubuntu:24.04, the
+                  programs copied in (s272's roottest shape): as uid 4242 every row denied with the host's
+                  number (EPERM 1 for the link across owners under protected_hardlinks=1, fchmod on root's
+                  file, the sticky removal; EACCES 13 under root's 0755 directory), as root every row ok,
+                  on checked, native and release; GNU ln, chmod, mkdir and rm refuse alike
+rig/              the scripts as run: the Mac lock and build-at, the Mac jobs, the plant's steps; hasu's
+                  job, check, roottest and gauntlet scripts (the org's gauntlet recorder
+                  is copied in, not committed)

@@ -1,0 +1,114 @@
+S277 check1 waiting for block B at 2026-11-03T12:49:34Z
+head 382fa4e533e5ef3c4d52a8cf518f2a847ebceeed cpus Cpus_allowed_list:	6-11
+== STEP check-gnu 12:49:34
+    Updating crates.io index
+    Finished `dev` profile [unoptimized] target(s) in 22.66s
+END check-gnu exit=0
+== STEP check-musl 12:49:57
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+   --> crates/wolf_rt/src/fs_change.rs:275:40
+    |
+275 |                 ts.tv_sec = s as libc::time_t;
+    |                                        ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: `wolf_rt` (lib) generated 1 warning
+warning: use of deprecated type alias `libc::time_t`: This type is changed to 64-bit in musl 1.2.0, we'll follow that change in the future release. See #1848 for more info.
+     --> crates/wolf_mem/src/ubcheck.rs:18089:40
+      |
+18089 |                 ts.tv_sec = s as libc::time_t;
+      |                                        ^^^^^^
+      |
+      = note: `#[warn(deprecated)]` on by default
+
+warning: `wolf_mem` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized] target(s) in 4.26s
+END check-musl exit=0
+== STEP rt-unit 12:50:01
+    Finished `test` profile [unoptimized] target(s) in 3.40s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-2d9352de71a6d2f6)
+
+running 5 tests
+test fs_at::tests::the_millisecond_word_is_the_paths ... ok
+test fs_at::tests::the_open_word_is_the_open_familys ... ok
+test fs_at::tests::the_record_by_handle_is_the_paths ... ok
+test fs_at::tests::the_calls_follow_the_handle_not_the_path ... ok
+test fs_at::tests::the_mode_set_on_a_handle_is_the_held_files ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 361 filtered out; finished in 0.05s
+
+END rt-unit exit=0
+== STEP clippy 12:50:04
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:204:18
+    |
+204 |     match mode & (libc::S_IFMT as u32) {
+    |                  ^^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFMT`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+    = note: `-D clippy::unnecessary-cast` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::unnecessary_cast)]`
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:205:19
+    |
+205 |         m if m == libc::S_IFREG as u32 => stat_kind::FILE,
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFREG`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:206:19
+    |
+206 |         m if m == libc::S_IFDIR as u32 => stat_kind::DIR,
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFDIR`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:207:19
+    |
+207 |         m if m == libc::S_IFLNK as u32 => stat_kind::LINK,
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFLNK`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:208:19
+    |
+208 |         m if m == libc::S_IFIFO as u32 => stat_kind::FIFO,
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFIFO`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:209:19
+    |
+209 |         m if m == libc::S_IFSOCK as u32 => stat_kind::SOCKET,
+    |                   ^^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFSOCK`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:210:19
+    |
+210 |         m if m == libc::S_IFCHR as u32 => stat_kind::CHAR_DEVICE,
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFCHR`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: casting to the same type is unnecessary (`u32` -> `u32`)
+   --> crates/wolf_rt/src/fs_at.rs:211:19
+    |
+211 |         m if m == libc::S_IFBLK as u32 => stat_kind::BLOCK_DEVICE,
+    |                   ^^^^^^^^^^^^^^^^^^^^ help: try: `libc::S_IFBLK`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_cast
+
+error: could not compile `wolf_rt` (lib) due to 8 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `wolf_rt` (lib test) due to 8 previous errors
+END clippy exit=101
+ALL rc=1
+S277 check1 END exit=1 at 2026-11-03T12:50:09Z

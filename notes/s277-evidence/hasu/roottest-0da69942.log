@@ -1,0 +1,87 @@
+S277 roottest waiting for block B at 2026-11-03T13:04:29Z
+S277 roottest acquired the block at 2026-11-03T13:04:29Z, cpus 6-11
+head 0da69942de0af2516082ccee82fbb6586ca65f69
+    Finished `dev` profile [unoptimized] target(s) in 0.05s
+total 9660
+drwxr-xr-x 2 ubuntu ubuntu    4096 Nov  3 13:04 .
+drwxr-xr-x 4 ubuntu ubuntu    4096 Nov  3 13:04 ..
+-rwxr-xr-x 1 ubuntu ubuntu 4948232 Nov  3 13:04 privilege-native
+-rwxr-xr-x 1 ubuntu ubuntu 4937112 Nov  3 13:04 privilege-release
+4480af2b9ed2c0698e36f80d59e309f51ea3877b6ad124dc5a6bb36690ec2312  /lane/records/roottest/t/wolf
+e308d7c70c9a5c557d0a3a667079cdeae7822802a2c2374777808d5010feefd5  /lane/records/roottest/t/bin/privilege-native
+fefa0177f2481d347fb962e6aba632c996bbcb51d4dac4e7dcd04a6950e82932  /lane/records/roottest/t/bin/privilege-release
+END roottest-build exit=0
+75170f0bdef1c0376dac33238714709b3d886ebaa1e8f3f986fa8c47bad7b9ec
+75170f0bdef1c0376dac33238714709b3d886ebaa1e8f3f986fa8c47bad7b9ec
+host protected_hardlinks=1
+=== case 1 as user: /t/wolf conform-run /t/fx/privilege.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/privilege.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"euid=4242\nlink_across_owners=denied number=1\nlink_into_roots_dir=denied number=13\nmode_on_roots_file=denied number=1\nmode_now=420\nmkdir_in_roots_dir=denied number=13\nremove_in_roots_dir=denied number=13\nsymlink_in_roots_dir=denied number=13\nremove_in_sticky=denied number=1\n","stdout_sha256":"ac9e24c67fdf4ea67e1a0108d4c8a018bc12ddea0dfbd2d0c5936fdbe334307c","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 2 as user: /t/bin/privilege-native
+euid=4242
+link_across_owners=denied number=1
+link_into_roots_dir=denied number=13
+mode_on_roots_file=denied number=1
+mode_now=420
+mkdir_in_roots_dir=denied number=13
+remove_in_roots_dir=denied number=13
+symlink_in_roots_dir=denied number=13
+remove_in_sticky=denied number=1
+@status 0
+=== case 3 as user: /t/bin/privilege-release
+euid=4242
+link_across_owners=denied number=1
+link_into_roots_dir=denied number=13
+mode_on_roots_file=denied number=1
+mode_now=420
+mkdir_in_roots_dir=denied number=13
+remove_in_roots_dir=denied number=13
+symlink_in_roots_dir=denied number=13
+remove_in_sticky=denied number=1
+@status 0
+=== case 4 as user: sh -c P=/tmp/s277-priv; ln $P/rootdir/rootfile $P/userdir/gnu-mine; echo "gnu-ln-across status=$?"; ln $P/userdir/userfile $P/rootdir/gnu-theirs; echo "gnu-ln-into status=$?"; chmod 600 $P/rootdir/rootfile; echo "gnu-chmod status=$?"; mkdir $P/rootdir/gnu-x; echo "gnu-mkdir status=$?"; rm -f $P/sticky/rootfile; echo "gnu-rm-sticky status=$?"
+ln: failed to create hard link '/tmp/s277-priv/userdir/gnu-mine' => '/tmp/s277-priv/rootdir/rootfile': Operation not permitted
+gnu-ln-across status=1
+ln: failed to create hard link '/tmp/s277-priv/rootdir/gnu-theirs' => '/tmp/s277-priv/userdir/userfile': Permission denied
+gnu-ln-into status=1
+chmod: changing permissions of '/tmp/s277-priv/rootdir/rootfile': Operation not permitted
+gnu-chmod status=1
+mkdir: cannot create directory '/tmp/s277-priv/rootdir/gnu-x': Permission denied
+gnu-mkdir status=1
+rm: cannot remove '/tmp/s277-priv/sticky/rootfile': Operation not permitted
+gnu-rm-sticky status=1
+@status 0
+=== case 5 as root: /t/wolf conform-run /t/fx/privilege.lu --checked --json
+{"commit":"unknown","diagnostics":[],"file":"/t/fx/privilege.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"euid=0\nlink_across_owners=ok number=0\nlink_into_roots_dir=ok number=0\nmode_on_roots_file=ok number=0\nmode_now=384\nmkdir_in_roots_dir=ok number=0\nremove_in_roots_dir=ok number=0\nsymlink_in_roots_dir=ok number=0\nremove_in_sticky=ok number=0\n","stdout_sha256":"0ccb38eec32f5788acc231096c1f04f5f77aa3061382c3cb3d9732ee1dd52803","verdict":"exit(0)","warnings":[]}
+@status 0
+=== case 6 as root: /t/bin/privilege-native
+euid=0
+link_across_owners=ok number=0
+link_into_roots_dir=ok number=0
+mode_on_roots_file=ok number=0
+mode_now=384
+mkdir_in_roots_dir=ok number=0
+remove_in_roots_dir=ok number=0
+symlink_in_roots_dir=ok number=0
+remove_in_sticky=ok number=0
+@status 0
+=== case 7 as root: /t/bin/privilege-release
+euid=0
+link_across_owners=ok number=0
+link_into_roots_dir=ok number=0
+mode_on_roots_file=ok number=0
+mode_now=384
+mkdir_in_roots_dir=ok number=0
+remove_in_roots_dir=ok number=0
+symlink_in_roots_dir=ok number=0
+remove_in_sticky=ok number=0
+@status 0
+=== case 8 as root: sh -c P=/tmp/s277-priv; ln $P/rootdir/rootfile $P/userdir/gnu-mine; echo "gnu-ln-across status=$?"; ln $P/userdir/userfile $P/rootdir/gnu-theirs; echo "gnu-ln-into status=$?"; chmod 600 $P/rootdir/rootfile; echo "gnu-chmod status=$?"; mkdir $P/rootdir/gnu-x; echo "gnu-mkdir status=$?"; rm -f $P/sticky/rootfile; echo "gnu-rm-sticky status=$?"
+gnu-ln-across status=0
+gnu-ln-into status=0
+gnu-chmod status=0
+gnu-mkdir status=0
+gnu-rm-sticky status=0
+@status 0
+== done 2026-11-03T13:04:36Z, 8 cases
+END roottest-run exit=0

@@ -1,0 +1,965 @@
+s277: building at 5cf68a25 in /Users/mfwolffe/lanes/s277/build
+s277: 07:53:00 mac build lock held by yw13 pid 46961; waiting
+s277: lock taken 07:53:30, 17749 MiB free, 25 GB disk; running: /Users/mfwolffe/lanes/s277/rig/mac-job1.sh
+head 5cf68a25db36a9bd34d8d4727d903f62f8293a24 2026-11-03T12:53:31Z
+== STEP base-bit32-row 12:53:31
+{"commit":"unknown","diagnostics":[],"file":"/Users/mfwolffe/lanes/s277/build/corpus/fs/open_directory.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"file=invalid\nfile_number: true\ndirectory: false\na_directory_handle: true\nwith_nofollow: true\nwith_a_write_mode=invalid\nwith_create_new=invalid\nbit_64=invalid\nunmoved=ok\ncleaned=true\n","stdout_sha256":"f20204e42b36d90f9c8e0988fb3a2ad036f90aaae6fa0963b647e21300f37fc9","verdict":"exit(0)","warnings":[]}
+END base-bit32-row exit=0
+== STEP build 12:53:32
+   Compiling wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_sema)
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_rt)
+   Compiling wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_mem)
+   Compiling wolf_query v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_query)
+   Compiling wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_lsp)
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_wir)
+   Compiling wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_backend)
+   Compiling wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_codegen_llvm)
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.83s
+END build exit=0
+== STEP rt-unit 12:53:46
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.06s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+
+running 36 tests
+test fs::tests::remove_on_a_directory_is_the_hosts_row ... ok
+test fs::tests::rename_moves_without_reading ... ok
+test fs::tests::roundtrip_and_rows ... ok
+test fs::tests::fstat_reads_the_open_handle ... ok
+test fs::tests::split_time_is_a_timespec ... ok
+test fs_at::tests::the_millisecond_word_is_the_paths ... ok
+test fs::tests::seek_tell_and_read_at_on_a_file ... ok
+test fs::tests::os_error_is_the_last_calls_host_number ... ok
+test fs_at::tests::the_open_word_is_the_open_familys ... ok
+test fs::tests::a_fifo_is_unseekable ... ok
+test fs::tests::the_standard_streams_are_not_table_slots ... ok
+test fs::tests::modes_cover_read_write_append_rw_and_exclusive ... ok
+test fs_gaps::tests::a_non_blocking_pipe_answers_busy_when_full ... ok
+test fs::tests::fd_table_matches_the_checked_shape ... ok
+test fs::tests::append_mode_appends_without_reading ... ok
+test fs::tests::byte_io_carries_a_lone_0x80 ... ok
+test statfs::tests::a_missing_path_is_not_found ... ok
+test statfs::tests::a_nul_in_the_path_is_io ... ok
+test statfs::tests::the_id_is_gnus_order ... ok
+test fs::tests::read_nonblock_matches_read_on_a_file_and_never_parks_on_a_fifo ... ok
+test fs::tests::lstat_sees_the_link_and_stat_its_target ... ok
+test fs::tests::entries_carry_kinds_and_bytes ... ok
+test statfs::tests::the_record_of_the_current_directory ... ok
+test fs::tests::stat_record_of_a_file ... ok
+test fs_gaps::tests::mkfifo_makes_a_fifo ... ok
+test fs_gaps::tests::access_answers_the_hosts_rows ... ok
+test fs::tests::dir_create_remove_and_metadata ... ok
+test fs_at::tests::the_mode_set_on_a_handle_is_the_held_files ... ok
+test fs::tests::read_dir_is_sorted_and_names_only ... ok
+test fs_gaps::tests::the_handle_record_is_the_paths ... ok
+test fs_gaps::tests::the_lock_is_the_open_files ... ok
+test fs::tests::a_failed_copy_write_puts_the_source_back ... ok
+test fs_at::tests::the_record_by_handle_is_the_paths ... ok
+test fs_gaps::tests::the_nofollow_bit_refuses_a_final_link ... ok
+test fs_at::tests::the_calls_follow_the_handle_not_the_path ... ok
+test fs::tests::copy_chunk_moves_a_file ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 325 filtered out; finished in 0.01s
+
+END rt-unit exit=0
+== STEP sema 12:53:50
+   Compiling getrandom v0.4.3
+   Compiling rustix v1.1.4
+   Compiling errno v0.3.14
+   Compiling bitflags v2.13.1
+   Compiling once_cell v1.21.4
+   Compiling fastrand v2.5.0
+   Compiling console v0.16.4
+   Compiling similar v2.7.0
+   Compiling tempfile v3.27.0
+   Compiling insta v1.48.0
+   Compiling wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.95s
+     Running tests/prelude_names.rs (target/debug/deps/prelude_names-60fe9f7010d816cc)
+
+running 3 tests
+test the_list_by_kind ... ok
+test w0304_is_what_the_resolver_says ... ok
+test every_cited_anchor_is_a_spec_clause ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/sandbox_s277.rs (target/debug/deps/sandbox_s277-0eb0b585d797be77)
+
+running 2 tests
+test each_s277_builtin_is_fs ... ok
+test each_s277_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END sema exit=0
+== STEP drv-tables 12:53:52
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running tests/freestanding_target.rs (target/debug/deps/freestanding_target-d0b710c022a0303c)
+
+running 5 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+test the_manifest_key_and_cfg_read_the_build_target ... ok
+test the_driver_refuses_bin_run_and_unknown_targets_by_name ... ok
+test native_objects_import_the_hook_list_and_nothing_else_on_every_host ... ok
+test the_hosted_runtime_defines_the_trap_hook ... ok
+test hosted_allocating_and_float_constructs_are_refused_by_name ... FAILED
+
+failures:
+
+---- hosted_allocating_and_float_constructs_are_refused_by_name stdout ----
+
+thread 'hosted_allocating_and_float_constructs_are_refused_by_name' (112101511) panicked at crates/wolf_driver/tests/freestanding_target.rs:913:5:
+refusals by name:
+fs_lstat_at (native): want exit 4 naming `fs_lstat_at` (hosted runtime, target x86_64-unknown-none); got exit Some(4): wolf build: cannot compile this yet — `fs_stat_at` needs the hosted runtime (target x86_64-unknown-none) @23..85 (pipeline is honest through `wir`; the conservatism ledger, not a bug in your program)
+fs_lstat_at (release): want exit 4 naming `fs_lstat_at` (hosted runtime, target x86_64-unknown-none); got exit Some(4): wolf build: cannot compile this yet — `fs_stat_at` needs the hosted runtime (target x86_64-unknown-none) @23..85 (pipeline is honest through `wir`; the conservatism ledger, not a bug in your program)
+fs_remove_dir_at (native): want exit 4 naming `fs_remove_dir_at` (hosted runtime, target x86_64-unknown-none); got exit Some(4): wolf build: cannot compile this yet — `fs_remove_at` needs the hosted runtime (target x86_64-unknown-none) @23..82 (pipeline is honest through `wir`; the conservatism ledger, not a bug in your program)
+fs_remove_dir_at (release): want exit 4 naming `fs_remove_dir_at` (hosted runtime, target x86_64-unknown-none); got exit Some(4): wolf build: cannot compile this yet — `fs_remove_at` needs the hosted runtime (target x86_64-unknown-none) @23..82 (pipeline is honest through `wir`; the conservatism ledger, not a bug in your program)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    hosted_allocating_and_float_constructs_are_refused_by_name
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.18s
+
+error: test failed, to rerun pass `-p wolf_driver --test freestanding_target`
+END drv-tables exit=101
+== STEP drv-cap 12:53:56
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.91s
+     Running unittests src/main.rs (target/debug/deps/wolf-492067bb5ccaf14c)
+
+running 2 tests
+test pkg_cmd::builtin_cap_tests::stdio_clock_random_and_pure_names_carry_no_capability ... ok
+test pkg_cmd::builtin_cap_tests::each_capability_family_is_charged_from_the_sandbox_table ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s
+
+END drv-cap exit=0
+== STEP lanes 12:53:57
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running tests/descriptor_walk_lanes.rs (target/debug/deps/descriptor_walk_lanes-20c0d62f0117b923)
+
+running 9 tests
+== depth on checked:
+levels=80 path_bytes=5204
+bottom_is_a_directory: true
+path_stat=io number_set=true
+path_mkdir=io number_set=true
+made_at_the_bottom: true
+removed=80 gone=true
+
+== depth on native:
+levels=80 path_bytes=5204
+bottom_is_a_directory: true
+path_stat=io number_set=true
+path_mkdir=io number_set=true
+made_at_the_bottom: true
+removed=80 gone=true
+
+== depth on release:
+levels=80 path_bytes=5204
+bottom_is_a_directory: true
+path_stat=io number_set=true
+path_mkdir=io number_set=true
+made_at_the_bottom: true
+removed=80 gone=true
+
+== lupin 0.1.58 on depth.lu: exit(1) 
+error: invalid
+
+
+thread 'a_tree_past_path_max_is_made_and_removed_by_handle' (112105462) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:250:9:
+assertion `left == right` failed: lupin 0.1.58 refuses depth.lu by name: Obs { verdict: "exit(1)", stdout: "error: invalid\n", reason: "", version: "0.1.58" }
+  left: "exit(1)"
+ right: "unsupported"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_tree_past_path_max_is_made_and_removed_by_handle ... FAILED
+== checked on at_rows.lu: exit(0) 
+witness: true
+held: true
+open_at: true
+lstat_at: true
+stat_at: true
+remove_at: true
+remove_dir_at: true
+listing: true
+listing_again: true
+cleaned=true
+
+== refusals on checked:
+open_dir_file=invalid number=20
+open_dir_nofollow_link=invalid number=20
+open_dir_link_followed=ok number=0
+open_nofollow_link=invalid number=62
+open_dir_write=invalid number=0
+open_bit_64=invalid number=0
+open_at_nofollow=invalid number=62
+open_at_dir_file=invalid number=20
+open_at_dir_nofollow_link=invalid number=20
+open_at_dir_write=invalid number=0
+open_at_absolute=invalid number=0
+open_at_empty=invalid number=0
+open_at_perm=invalid number=0
+open_at_mode=invalid number=0
+open_at_file_handle=invalid number=20
+open_at_forged=io number=0
+open_at_missing=not_found number=2
+open_at_exists=exists number=17
+open_at_dangling_create=invalid number=62
+open_at_created=ok number=0
+open_at_created_mode=true number=0
+open_at_dotdot=ok number=0
+lstat_at_missing=not_found number=2
+lstat_at_link=kind3 number=0
+stat_at_link=kind0 number=0
+stat_at_dangling=not_found number=2
+lstat_at_dangling=kind3 number=0
+stat_at_under_a_file=invalid number=20
+lstat_at_file_handle=invalid number=20
+lstat_at_forged=io number=0
+lstat_at_absolute=invalid number=0
+remove_at_a_directory=denied number=1
+remove_at_missing=not_found number=2
+remove_at_file_handle=invalid number=20
+remove_dir_at_a_file=invalid number=20
+remove_dir_at_a_link=invalid number=20
+remove_dir_at_not_empty=io number=66
+remove_dir_at_missing=not_found number=2
+mkdir_at_exists=exists number=17
+mkdir_at_dangling=exists number=17
+mkdir_at_missing_parent=not_found number=2
+mkdir_at_file_handle=invalid number=20
+mkdir_at_mode=invalid number=0
+symlink_at_empty=invalid number=0
+symlink_at_exists=exists number=17
+symlink_at_file_handle=invalid number=20
+link_at_a_directory=denied number=1
+link_at_exists=exists number=17
+link_at_dangling_followed=not_found number=2
+link_at_dangling_itself=ok number=0
+link_at_file_handle=invalid number=20
+link_at_missing=not_found number=2
+mode_fd_pipe=io number=22
+mode_fd_directory=ok number=0
+mode_fd_bits=ok number=0
+mode_fd_bits_kept=true number=0
+mode_fd_past_07777=invalid number=0
+mode_fd_forged=io number=0
+listing_file_handle=invalid number=20
+listing_forged=io number=0
+
+== refusals on native:
+open_dir_file=invalid number=20
+open_dir_nofollow_link=invalid number=20
+open_dir_link_followed=ok number=0
+open_nofollow_link=invalid number=62
+open_dir_write=invalid number=0
+open_bit_64=invalid number=0
+open_at_nofollow=invalid number=62
+open_at_dir_file=invalid number=20
+open_at_dir_nofollow_link=invalid number=20
+open_at_dir_write=invalid number=0
+open_at_absolute=invalid number=0
+open_at_empty=invalid number=0
+open_at_perm=invalid number=0
+open_at_mode=invalid number=0
+open_at_file_handle=invalid number=20
+open_at_forged=io number=0
+open_at_missing=not_found number=2
+open_at_exists=exists number=17
+open_at_dangling_create=invalid number=62
+open_at_created=ok number=0
+open_at_created_mode=true number=0
+open_at_dotdot=ok number=0
+lstat_at_missing=not_found number=2
+lstat_at_link=kind3 number=0
+stat_at_link=kind0 number=0
+stat_at_dangling=not_found number=2
+lstat_at_dangling=kind3 number=0
+stat_at_under_a_file=invalid number=20
+lstat_at_file_handle=invalid number=20
+lstat_at_forged=io number=0
+lstat_at_absolute=invalid number=0
+remove_at_a_directory=denied number=1
+remove_at_missing=not_found number=2
+remove_at_file_handle=invalid number=20
+remove_dir_at_a_file=invalid number=20
+remove_dir_at_a_link=invalid number=20
+remove_dir_at_not_empty=io number=66
+remove_dir_at_missing=not_found number=2
+mkdir_at_exists=exists number=17
+mkdir_at_dangling=exists number=17
+mkdir_at_missing_parent=not_found number=2
+mkdir_at_file_handle=invalid number=20
+mkdir_at_mode=invalid number=0
+symlink_at_empty=invalid number=0
+symlink_at_exists=exists number=17
+symlink_at_file_handle=invalid number=20
+link_at_a_directory=denied number=1
+link_at_exists=exists number=17
+link_at_dangling_followed=not_found number=2
+link_at_dangling_itself=ok number=0
+link_at_file_handle=invalid number=20
+link_at_missing=not_found number=2
+mode_fd_pipe=io number=22
+mode_fd_directory=ok number=0
+mode_fd_bits=ok number=0
+mode_fd_bits_kept=true number=0
+mode_fd_past_07777=invalid number=0
+mode_fd_forged=io number=0
+listing_file_handle=invalid number=20
+listing_forged=io number=0
+
+== refusals on release:
+open_dir_file=invalid number=20
+open_dir_nofollow_link=invalid number=20
+open_dir_link_followed=ok number=0
+open_nofollow_link=invalid number=62
+open_dir_write=invalid number=0
+open_bit_64=invalid number=0
+open_at_nofollow=invalid number=62
+open_at_dir_file=invalid number=20
+open_at_dir_nofollow_link=invalid number=20
+open_at_dir_write=invalid number=0
+open_at_absolute=invalid number=0
+open_at_empty=invalid number=0
+open_at_perm=invalid number=0
+open_at_mode=invalid number=0
+open_at_file_handle=invalid number=20
+open_at_forged=io number=0
+open_at_missing=not_found number=2
+open_at_exists=exists number=17
+open_at_dangling_create=invalid number=62
+open_at_created=ok number=0
+open_at_created_mode=true number=0
+open_at_dotdot=ok number=0
+lstat_at_missing=not_found number=2
+lstat_at_link=kind3 number=0
+stat_at_link=kind0 number=0
+stat_at_dangling=not_found number=2
+lstat_at_dangling=kind3 number=0
+stat_at_under_a_file=invalid number=20
+lstat_at_file_handle=invalid number=20
+lstat_at_forged=io number=0
+lstat_at_absolute=invalid number=0
+remove_at_a_directory=denied number=1
+remove_at_missing=not_found number=2
+remove_at_file_handle=invalid number=20
+remove_dir_at_a_file=invalid number=20
+remove_dir_at_a_link=invalid number=20
+remove_dir_at_not_empty=io number=66
+remove_dir_at_missing=not_found number=2
+mkdir_at_exists=exists number=17
+mkdir_at_dangling=exists number=17
+mkdir_at_missing_parent=not_found number=2
+mkdir_at_file_handle=invalid number=20
+mkdir_at_mode=invalid number=0
+symlink_at_empty=invalid number=0
+symlink_at_exists=exists number=17
+symlink_at_file_handle=invalid number=20
+link_at_a_directory=denied number=1
+link_at_exists=exists number=17
+link_at_dangling_followed=not_found number=2
+link_at_dangling_itself=ok number=0
+link_at_file_handle=invalid number=20
+link_at_missing=not_found number=2
+mode_fd_pipe=io number=22
+mode_fd_directory=ok number=0
+mode_fd_bits=ok number=0
+mode_fd_bits_kept=true number=0
+mode_fd_past_07777=invalid number=0
+mode_fd_forged=io number=0
+listing_file_handle=invalid number=20
+listing_forged=io number=0
+
+== lupin 0.1.58 on refusals.lu: exit(1) 
+error: invalid
+
+
+thread 'every_refusal_by_name_with_the_hosts_number' (112105463) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:250:9:
+assertion `left == right` failed: lupin 0.1.58 refuses refusals.lu by name: Obs { verdict: "exit(1)", stdout: "error: invalid\n", reason: "", version: "0.1.58" }
+  left: "exit(1)"
+ right: "unsupported"
+test every_refusal_by_name_with_the_hosts_number ... FAILED
+== checked on open_directory.lu: exit(0) 
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+== native on at_rows.lu: exit Some(0)
+witness: true
+held: true
+open_at: true
+lstat_at: true
+stat_at: true
+remove_at: true
+remove_dir_at: true
+listing: true
+listing_again: true
+cleaned=true
+
+== native on open_directory.lu: exit Some(0)
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+== release on open_directory.lu: exit Some(0)
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+== lupin 0.1.58 on open_directory.lu: unsupported `os_name` does not resolve
+
+
+thread 'the_directory_bit_rows_on_every_host' (112106209) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:255:9:
+lupin 0.1.58's refusal of open_directory.lu names one of the new calls: `os_name` does not resolve
+test the_directory_bit_rows_on_every_host ... FAILED
+== checked on link_at.lu: exit(0) 
+held: true
+linked_between_handles: true
+one_file: true
+again=exists_or_unsupported: true
+missing_source: true
+link_itself: true
+link_followed: true
+absolute=invalid
+cleaned=true
+
+== release on at_rows.lu: exit Some(0)
+witness: true
+held: true
+open_at: true
+lstat_at: true
+stat_at: true
+remove_at: true
+remove_dir_at: true
+listing: true
+listing_again: true
+cleaned=true
+
+== lupin 0.1.58 on at_rows.lu: unsupported `fs_remove_at` does not resolve
+
+test the_at_rows_on_every_host ... ok
+== checked on mkdir_at.lu: exit(0) 
+held: true
+made_under_the_handle: true
+not_under_the_old_name: true
+mode: true
+again=exists_or_unsupported: true
+missing_parent: true
+mode_past_0777=invalid
+absolute=invalid
+empty=invalid
+cleaned=true
+
+== native on link_at.lu: exit Some(0)
+held: true
+linked_between_handles: true
+one_file: true
+again=exists_or_unsupported: true
+missing_source: true
+link_itself: true
+link_followed: true
+absolute=invalid
+cleaned=true
+
+== native on mkdir_at.lu: exit Some(0)
+held: true
+made_under_the_handle: true
+not_under_the_old_name: true
+mode: true
+again=exists_or_unsupported: true
+missing_parent: true
+mode_past_0777=invalid
+absolute=invalid
+empty=invalid
+cleaned=true
+
+== release on mkdir_at.lu: exit Some(0)
+held: true
+made_under_the_handle: true
+not_under_the_old_name: true
+mode: true
+again=exists_or_unsupported: true
+missing_parent: true
+mode_past_0777=invalid
+absolute=invalid
+empty=invalid
+cleaned=true
+
+== lupin 0.1.58 on mkdir_at.lu: unsupported `os_name` does not resolve
+
+
+thread 'the_mkdir_at_rows_on_every_host' (112106693) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:255:9:
+lupin 0.1.58's refusal of mkdir_at.lu names one of the new calls: `os_name` does not resolve
+test the_mkdir_at_rows_on_every_host ... FAILED
+== checked on mode_fd.lu: exit(0) 
+probe: true
+held_file_changed: true
+named_file_kept: true
+named_file_is_the_other: true
+mode_past_07777=invalid
+forged: true
+cleaned=true
+
+== release on link_at.lu: exit Some(0)
+held: true
+linked_between_handles: true
+one_file: true
+again=exists_or_unsupported: true
+missing_source: true
+link_itself: true
+link_followed: true
+absolute=invalid
+cleaned=true
+
+== lupin 0.1.58 on link_at.lu: unsupported `os_name` does not resolve
+
+
+thread 'the_link_at_rows_on_every_host' (112106586) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:255:9:
+lupin 0.1.58's refusal of link_at.lu names one of the new calls: `os_name` does not resolve
+test the_link_at_rows_on_every_host ... FAILED
+== race on checked:
+checked: d=true e_kind=1 f_kind=1
+held_remove=ok
+asked_open_refused=true number=20 refused
+path_remove=ok
+
+== native on mode_fd.lu: exit Some(0)
+probe: true
+held_file_changed: true
+named_file_kept: true
+named_file_is_the_other: true
+mode_past_07777=invalid
+forged: true
+cleaned=true
+
+== race on native:
+checked: d=true e_kind=1 f_kind=1
+held_remove=ok
+asked_open_refused=true number=20 refused
+path_remove=ok
+
+== race on release:
+checked: d=true e_kind=1 f_kind=1
+held_remove=ok
+asked_open_refused=true number=20 refused
+path_remove=ok
+
+== lupin 0.1.58 on race.lu: exit(1) 
+error: invalid
+
+
+thread 'the_race_row_the_handle_walk_stays_inside_the_tree' (112107193) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:250:9:
+assertion `left == right` failed: lupin 0.1.58 refuses race.lu by name: Obs { verdict: "exit(1)", stdout: "error: invalid\n", reason: "", version: "0.1.58" }
+  left: "exit(1)"
+ right: "unsupported"
+test the_race_row_the_handle_walk_stays_inside_the_tree ... FAILED
+== checked on symlink_at.lu: exit(0) 
+held: true
+linked_under_the_handle: true
+target_verbatim: true
+is_a_link: true
+again=exists_or_unsupported: true
+empty_target=invalid
+absolute=invalid
+cleaned=true
+
+== release on mode_fd.lu: exit Some(0)
+probe: true
+held_file_changed: true
+named_file_kept: true
+named_file_is_the_other: true
+mode_past_07777=invalid
+forged: true
+cleaned=true
+
+== lupin 0.1.58 on mode_fd.lu: unsupported `fs_set_mode_fd` does not resolve
+
+test the_mode_fd_rows_on_every_host ... ok
+== native on symlink_at.lu: exit Some(0)
+held: true
+linked_under_the_handle: true
+target_verbatim: true
+is_a_link: true
+again=exists_or_unsupported: true
+empty_target=invalid
+absolute=invalid
+cleaned=true
+
+== release on symlink_at.lu: exit Some(0)
+held: true
+linked_under_the_handle: true
+target_verbatim: true
+is_a_link: true
+again=exists_or_unsupported: true
+empty_target=invalid
+absolute=invalid
+cleaned=true
+
+== lupin 0.1.58 on symlink_at.lu: unsupported `os_name` does not resolve
+
+
+thread 'the_symlink_at_rows_on_every_host' (112107471) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:255:9:
+lupin 0.1.58's refusal of symlink_at.lu names one of the new calls: `os_name` does not resolve
+test the_symlink_at_rows_on_every_host ... FAILED
+
+failures:
+
+failures:
+    a_tree_past_path_max_is_made_and_removed_by_handle
+    every_refusal_by_name_with_the_hosts_number
+    the_directory_bit_rows_on_every_host
+    the_link_at_rows_on_every_host
+    the_mkdir_at_rows_on_every_host
+    the_race_row_the_handle_walk_stays_inside_the_tree
+    the_symlink_at_rows_on_every_host
+
+test result: FAILED. 2 passed; 7 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.44s
+
+error: test failed, to rerun pass `-p wolf_driver --test descriptor_walk_lanes`
+END lanes exit=101
+== STEP gaps-lanes 12:54:06
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.31s
+     Running tests/fs_gaps_lanes.rs (target/debug/deps/fs_gaps_lanes-7c8c179790755a87)
+
+running 7 tests
+test the_advisory_lock_on_every_machine ... ok
+test the_fifo_on_every_machine ... ok
+REPORT checked access_rows.lu: exists=ok | read=ok | write=ok | read_write=ok | exec=denied | dir_write=ok | dir_search=ok | ro_write=denied | ro_read=ok | missing=not_found | under_file=io | dangle=not_found | mode8=invalid | negative=invalid
+REPORT checked nofollow_rows.lu: file_read=ok | file_rw=ok | file_nonblock=ok | file_append=ok | bit32=invalid | bit48=invalid | negative=invalid | links=made | link_follows=ok | link_refused=invalid | link_errno_set=true | link_rw_refused=invalid | link_write_refused=invalid | middle_followed=ok | excl_on_link=exists | excl_nofollow_on_link=exists | perm_link_refused=invalid | perm_excl_on_link=exists | target_intact=true
+REPORT native access_rows.lu: exists=ok | read=ok | write=ok | read_write=ok | exec=denied | dir_write=ok | dir_search=ok | ro_write=denied | ro_read=ok | missing=not_found | under_file=io | dangle=not_found | mode8=invalid | negative=invalid
+REPORT native nofollow_rows.lu: file_read=ok | file_rw=ok | file_nonblock=ok | file_append=ok | bit32=invalid | bit48=invalid | negative=invalid | links=made | link_follows=ok | link_refused=invalid | link_errno_set=true | link_rw_refused=invalid | link_write_refused=invalid | middle_followed=ok | excl_on_link=exists | excl_nofollow_on_link=exists | perm_link_refused=invalid | perm_excl_on_link=exists | target_intact=true
+REPORT release access_rows.lu: exists=ok | read=ok | write=ok | read_write=ok | exec=denied | dir_write=ok | dir_search=ok | ro_write=denied | ro_read=ok | missing=not_found | under_file=io | dangle=not_found | mode8=invalid | negative=invalid
+REPORT PINNED pre-mirror lupin 0.1.58 on access_rows.lu: `fs_access` does not resolve
+test access_on_every_machine ... ok
+test the_pipe_a_clipboard_writer_feeds_on_every_machine ... ok
+REPORT checked fstat_record_rows.lu: len=20 | kind=0 size=12 | same_mode=true same_nlink=true | same_identity=true | same_mtime=true | same_have=true | dev_have=1 | after_rename=true | closed=-1 | forged=-1 | pipe_kind=4 | dir_kind=1
+REPORT release nofollow_rows.lu: file_read=ok | file_rw=ok | file_nonblock=ok | file_append=ok | bit32=invalid | bit48=invalid | negative=invalid | links=made | link_follows=ok | link_refused=invalid | link_errno_set=true | link_rw_refused=invalid | link_write_refused=invalid | middle_followed=ok | excl_on_link=exists | excl_nofollow_on_link=exists | perm_link_refused=invalid | perm_excl_on_link=exists | target_intact=true
+REPORT PINNED pre-mirror lupin 0.1.58 on nofollow_rows.lu: the bit `invalid`: file_read=invalid | file_rw=invalid | file_nonblock=invalid | file_append=invalid | bit32=invalid | bit48=invalid | negative=invalid | links=made | link_follows=ok | link_refused=invalid | link_errno_set=false | link_rw_refused=invalid | link_write_refused=invalid | middle_followed=invalid | excl_on_link=exists | excl_nofollow_on_link=invalid | perm_link_refused=invalid | perm_excl_on_link=invalid | target_intact=true
+test the_open_that_does_not_follow_on_every_machine ... ok
+test yews_clipboard_writer_gives_up_instead_of_parking ... ok
+REPORT native fstat_record_rows.lu: len=20 | kind=0 size=12 | same_mode=true same_nlink=true | same_identity=true | same_mtime=true | same_have=true | dev_have=1 | after_rename=true | closed=-1 | forged=-1 | pipe_kind=4 | dir_kind=1
+REPORT release fstat_record_rows.lu: len=20 | kind=0 size=12 | same_mode=true same_nlink=true | same_identity=true | same_mtime=true | same_have=true | dev_have=1 | after_rename=true | closed=-1 | forged=-1 | pipe_kind=4 | dir_kind=1
+REPORT PINNED pre-mirror lupin 0.1.58 on fstat_record_rows.lu: `fs_fstat_record` does not resolve
+test the_record_on_a_handle_on_every_machine ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.88s
+
+END gaps-lanes exit=0
+== STEP clippy 12:54:10
+    Checking cfg-if v1.0.4
+    Checking wolf_span v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_span)
+    Checking libc v0.2.189
+    Checking crossbeam-utils v0.8.22
+    Checking unicode-ident v1.0.24
+    Checking arrayvec v0.7.8
+    Checking wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_diag)
+    Checking constant_time_eq v0.4.2
+    Checking crossbeam-epoch v0.9.20
+    Checking arrayref v0.3.9
+    Checking blake3 v1.8.6
+    Checking wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_ast)
+    Checking wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_lex)
+    Checking crossbeam-deque v0.8.7
+    Checking either v1.17.0
+    Checking rayon-core v1.13.0
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_rt)
+   Compiling proc-macro2 v1.0.107
+    Checking wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_parse)
+    Checking rayon v1.12.0
+   Compiling quote v1.0.47
+    Checking foldhash v0.2.0
+    Checking hashbrown v0.17.1
+   Compiling syn v2.0.119
+    Checking smallvec v1.15.2
+   Compiling syn v3.0.3
+    Checking wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_sema)
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+    Checking libm v0.2.16
+   Compiling synstructure v0.13.2
+    Checking wasmtime-internal-core v47.0.3
+    Checking log v0.4.33
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+    Checking fnv v1.0.7
+    Checking hashbrown v0.16.1
+    Checking zerofrom v0.1.8
+   Compiling cranelift-codegen-shared v0.134.3
+    Checking stable_deref_trait v1.2.1
+   Compiling cranelift-codegen-meta v0.134.3
+    Checking gimli v0.33.0
+    Checking yoke v0.8.3
+    Checking cranelift-bitset v0.134.3
+    Checking allocator-api2 v0.2.21
+    Checking memchr v2.8.3
+    Checking bumpalo v3.20.3
+    Checking cranelift-entity v0.134.3
+    Checking wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_mem)
+   Compiling zerovec-derive v0.11.3
+   Compiling cranelift-codegen v0.134.3
+    Checking rustc-hash v2.1.3
+    Checking arbitrary v1.4.2
+    Checking zerovec v0.11.6
+    Checking cranelift-control v0.134.3
+    Checking regalloc2 v0.15.2
+    Checking cranelift-bforest v0.134.3
+    Checking cranelift-assembler-x64 v0.134.3
+    Checking target-lexicon v0.13.5
+   Compiling displaydoc v0.2.7
+    Checking anyhow v1.0.104
+    Checking crc32fast v1.5.0
+    Checking object v0.39.1
+    Checking wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_wir)
+    Checking tinystr v0.8.3
+    Checking litemap v0.8.2
+    Checking writeable v0.6.3
+    Checking icu_locale_core v2.2.0
+    Checking zerotrie v0.2.4
+    Checking potential_utf v0.1.5
+    Checking utf8_iter v1.0.4
+    Checking icu_collections v2.2.0
+    Checking icu_provider v2.2.0
+    Checking serde_core v1.0.229
+    Checking icu_normalizer_data v2.2.0
+    Checking icu_properties_data v2.2.0
+    Checking icu_properties v2.2.0
+    Checking icu_normalizer v2.2.0
+    Checking wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_backend)
+   Compiling serde_derive v1.0.229
+    Checking idna_adapter v1.2.2
+    Checking zmij v1.0.23
+    Checking percent-encoding v2.3.2
+    Checking itoa v1.0.18
+    Checking form_urlencoded v1.2.2
+    Checking serde_json v1.0.151
+    Checking idna v1.1.0
+    Checking wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_fmt)
+   Compiling serde_repr v0.1.21
+    Checking wolf_query v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_query)
+    Checking crossbeam-channel v0.5.16
+    Checking bitflags v1.3.2
+    Checking wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_cimport)
+    Checking wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_doc)
+    Checking wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_codegen_llvm)
+    Checking wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_pkg)
+    Checking serde v1.0.229
+    Checking errno v0.3.14
+    Checking bitflags v2.13.1
+    Checking getrandom v0.4.3
+    Checking rustix v1.1.4
+    Checking once_cell v1.21.4
+    Checking fastrand v2.5.0
+    Checking url v2.5.8
+    Checking lsp-server v0.10.0
+    Checking console v0.16.4
+    Checking lsp-types v0.95.1
+    Checking similar v2.7.0
+    Checking tempfile v3.27.0
+    Checking insta v1.48.0
+    Checking wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_lsp)
+    Checking cranelift-module v0.134.3
+    Checking cranelift-frontend v0.134.3
+    Checking cranelift-object v0.134.3
+    Checking wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 25.67s
+END clippy exit=0
+== STEP check-windows 12:54:36
+   Compiling crossbeam-utils v0.8.22
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+   Compiling shlex v2.0.1
+    Checking wolf_span v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_span)
+   Compiling find-msvc-tools v0.1.10
+   Compiling cc v1.4.2
+   Compiling rayon-core v1.13.0
+    Checking wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_diag)
+    Checking unicode-ident v1.0.24
+    Checking wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_ast)
+    Checking wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_lex)
+    Checking arrayref v0.3.9
+    Checking arrayvec v0.7.8
+    Checking cfg-if v1.0.4
+    Checking cpufeatures v0.3.0
+    Checking constant_time_eq v0.4.2
+    Checking either v1.17.0
+    Checking wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_parse)
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_rt)
+    Checking rayon v1.12.0
+   Compiling blake3 v1.8.6
+warning: blake3@1.8.6: The C compiler "cc" does not support /arch:AVX512.
+error: failed to run custom build command for `blake3 v1.8.6`
+
+Caused by:
+  process didn't exit successfully: `/Users/mfwolffe/lanes/s277/build/target/debug/build/blake3-0a6509a561354dd6/build-script-build` (exit status: 1)
+  --- stdout
+  cargo::rustc-check-cfg=cfg(blake3_sse2_ffi, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_sse2_rust, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_sse41_ffi, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_sse41_rust, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_avx2_ffi, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_avx2_rust, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_avx512_ffi, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_neon, values(none()))
+  cargo::rustc-check-cfg=cfg(blake3_wasm32_simd, values(none()))
+  cargo::rerun-if-env-changed=CARGO_FEATURE_PURE
+  cargo::rerun-if-env-changed=CARGO_FEATURE_NO_NEON
+  VCINSTALLDIR = None
+  CC_x86_64-pc-windows-msvc = None
+  CC_x86_64_pc_windows_msvc = None
+  TARGET_CC = None
+  CC = None
+  CROSS_COMPILE = None
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  CRATE_CC_NO_DEFAULTS = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_x86_64_pc_windows_msvc = None
+  CFLAGS_x86_64-pc-windows-msvc = None
+  VCINSTALLDIR = None
+  CC_x86_64-pc-windows-msvc = None
+  CC_x86_64_pc_windows_msvc = None
+  TARGET_CC = None
+  CC = None
+  CROSS_COMPILE = None
+  CRATE_CC_NO_DEFAULTS = None
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  CRATE_CC_NO_DEFAULTS = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_x86_64_pc_windows_msvc = None
+  CFLAGS_x86_64-pc-windows-msvc = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_x86_64_pc_windows_msvc = None
+  CFLAGS_x86_64-pc-windows-msvc = None
+  cargo::warning=The C compiler "cc" does not support /arch:AVX512.
+  cargo::rerun-if-env-changed=BLAKE3_CI
+  cargo::rerun-if-env-changed=CARGO_FEATURE_PREFER_INTRINSICS
+  cargo::rerun-if-env-changed=CARGO_FEATURE_PURE
+  cargo::rustc-cfg=blake3_sse2_ffi
+  cargo::rustc-cfg=blake3_sse41_ffi
+  cargo::rustc-cfg=blake3_avx2_ffi
+  CC_FORCE_DISABLE = None
+  VCINSTALLDIR = None
+  CC_x86_64-pc-windows-msvc = None
+  CC_x86_64_pc_windows_msvc = None
+  TARGET_CC = None
+  CC = None
+  CROSS_COMPILE = None
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  CRATE_CC_NO_DEFAULTS = None
+  cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+  CRATE_CC_NO_DEFAULTS = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_x86_64_pc_windows_msvc = None
+  CFLAGS_x86_64-pc-windows-msvc = None
+  CFLAGS = None
+  TARGET_CFLAGS = None
+  CFLAGS_x86_64_pc_windows_msvc = None
+  CFLAGS_x86_64-pc-windows-msvc = None
+  VCINSTALLDIR = None
+
+  --- stderr
+
+
+  error occurred in cc-rs: failed to find tool "ml64.exe": No such file or directory (os error 2)
+
+
+END check-windows exit=101
+== STEP check-freebsd 12:54:38
+   Compiling crossbeam-utils v0.8.22
+    Checking wolf_span v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_span)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+   Compiling rayon-core v1.13.0
+    Checking wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_diag)
+   Compiling libc v0.2.189
+    Checking unicode-ident v1.0.24
+    Checking wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_lex)
+   Compiling blake3 v1.8.6
+    Checking wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_ast)
+    Checking arrayvec v0.7.8
+    Checking either v1.17.0
+    Checking constant_time_eq v0.4.2
+    Checking arrayref v0.3.9
+    Checking cpufeatures v0.3.0
+    Checking cfg-if v1.0.4
+    Checking rayon v1.12.0
+    Checking wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_parse)
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_rt)
+    Checking wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_sema)
+warning: method `values` is never used
+   --> crates/wolf_rt/src/handles.rs:177:19
+    |
+ 60 | impl<T> SeqTable<T> {
+    | ------------------- method in this implementation
+...
+177 |     pub(crate) fn values(&self) -> impl Iterator<Item = &T> {
+    |                   ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `raw_parts` is never used
+   --> crates/wolf_rt/src/list.rs:162:15
+    |
+162 | pub(crate) fn raw_parts(hdr: *mut ListHdr) -> (*mut u8, usize, usize) {
+    |               ^^^^^^^^^
+
+warning: function `new_list_len` is never used
+   --> crates/wolf_rt/src/list.rs:174:15
+    |
+174 | pub(crate) fn new_list_len(elem: usize, n: usize) -> (*mut ListHdr, *mut u8) {
+    |               ^^^^^^^^^^^^
+
+warning: function `off_std` is never used
+  --> crates/wolf_rt/src/stdfd.rs:27:15
+   |
+27 | pub(crate) fn off_std(fd: RawFd) -> std::io::Result<RawFd> {
+   |               ^^^^^^^
+
+warning: function `pipe_off_std` is never used
+  --> crates/wolf_rt/src/stdfd.rs:45:15
+   |
+45 | pub(crate) fn pipe_off_std(fds: [RawFd; 2]) -> std::io::Result<[RawFd; 2]> {
+   |               ^^^^^^^^^^^^
+
+warning: `wolf_rt` (lib) generated 5 warnings
+    Checking wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_mem)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.57s
+END check-freebsd exit=0
+ALL rc=1 2026-11-03T12:54:43Z
+s277: END exit=1 07:54:43

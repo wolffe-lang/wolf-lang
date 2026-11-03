@@ -1,0 +1,527 @@
+s277: building at 9f569214 in /Users/mfwolffe/lanes/s277/build
+s277: 07:30:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:30:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:31:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:31:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:32:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:32:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:33:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:33:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:34:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:34:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:35:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:35:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:36:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:36:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:37:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:37:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:38:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:38:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:39:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:39:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:40:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:40:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:41:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:41:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:42:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:42:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:43:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:43:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:44:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:44:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:45:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:45:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:46:19 mac build lock held by yw13 pid 17394; waiting
+s277: 07:46:49 mac build lock held by yw13 pid 17394; waiting
+s277: 07:47:19 mac build lock held by yw13 pid 17394; waiting
+s277: lock taken 07:47:50, 19557 MiB free, 26 GB disk; running: /Users/mfwolffe/lanes/s277/rig/mac-red.sh
+head 9f569214c3657985338c52810b404c17c7db59d7 2026-11-03T12:47:50Z
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s277/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+     Running tests/descriptor_walk_lanes.rs (target/debug/deps/descriptor_walk_lanes-20c0d62f0117b923)
+
+running 9 tests
+
+thread 'a_tree_past_path_max_is_made_and_removed_by_handle' (112031844) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:187:5:
+wolf build /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu refused the program (a compile error is the defect, never a skip):
+error[E0301]: nothing named `fs_create_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:44:9
+   |
+44 |         fs_create_dir_at(cur, seg, 0o700)?
+   |         ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_create_dir_all`?
+   |
+44 |         fs_create_dir_all(cur, seg, 0o700)?
+   |
+
+error[E0301]: nothing named `fs_open_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:45:20
+   |
+45 |         let next = fs_open_at(cur, seg, 48, 0)?
+   |                    ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_open`?
+   |
+45 |         let next = fs_open(cur, seg, 48, 0)?
+   |
+
+error[E0301]: nothing named `fs_stat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:52:13
+   |
+52 |     let r = fs_stat_at(deepest, ".")?
+   |             ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_read_at`?
+   |
+52 |     let r = fs_read_at(deepest, ".")?
+   |
+
+error[E0301]: nothing named `fs_create_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:56:5
+   |
+56 |     fs_create_dir_at(deepest, "x", 0o700)?
+   |     ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_create_dir_all`?
+   |
+56 |     fs_create_dir_all(deepest, "x", 0o700)?
+   |
+
+error[E0301]: nothing named `fs_lstat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:57:13
+   |
+57 |     let x = fs_lstat_at(deepest, "x")?
+   |             ^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_lstat`?
+   |
+57 |     let x = fs_lstat(deepest, "x")?
+   |
+
+error[E0301]: nothing named `fs_remove_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:59:5
+   |
+59 |     fs_remove_dir_at(deepest, "x")?
+   |     ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove_dir_all`?
+   |
+59 |     fs_remove_dir_all(deepest, "x")?
+   |
+
+error[E0301]: nothing named `fs_remove_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/depth.lu:65:9
+   |
+65 |         fs_remove_dir_at(held[i - 1], seg)?
+   |         ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove_dir_all`?
+   |
+65 |         fs_remove_dir_all(held[i - 1], seg)?
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_tree_past_path_max_is_made_and_removed_by_handle ... FAILED
+
+thread 'every_refusal_by_name_with_the_hosts_number' (112031845) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:187:5:
+wolf build /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu refused the program (a compile error is the defect, never a skip):
+error[E0301]: nothing named `fs_open_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:25:14
+   |
+25 |     let fd = fs_open_at(dir, name, open, perm) else |e| {
+   |              ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_open`?
+   |
+25 |     let fd = fs_open(dir, name, open, perm) else |e| {
+   |
+
+error[E0301]: nothing named `fs_stat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:41:9
+   |
+41 |         fs_stat_at(dir, name) else |e| {
+   |         ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_read_at`?
+   |
+41 |         fs_read_at(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_lstat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:51:9
+   |
+51 |         fs_lstat_at(dir, name) else |e| {
+   |         ^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_lstat`?
+   |
+51 |         fs_lstat(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_remove_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:65:5
+   |
+65 |     fs_remove_at(dir, name) else |e| {
+   |     ^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove`?
+   |
+65 |     fs_remove(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_remove_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:78:5
+   |
+78 |     fs_remove_dir_at(dir, name) else |e| {
+   |     ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove_dir_all`?
+   |
+78 |     fs_remove_dir_all(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_create_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:91:5
+   |
+91 |     fs_create_dir_at(dir, name, mode) else |e| {
+   |     ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_create_dir_all`?
+   |
+91 |     fs_create_dir_all(dir, name, mode) else |e| {
+   |
+
+error[E0301]: nothing named `fs_symlink_at` is in scope
+   --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:105:5
+    |
+105 |     fs_symlink_at(target, dir, name) else |e| {
+    |     ^^^^^^^^^^^^^ not found
+    |
+help: did you mean `fs_symlink`?
+    |
+105 |     fs_symlink(target, dir, name) else |e| {
+    |
+
+error[E0301]: nothing named `fs_link_at` is in scope
+   --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:119:5
+    |
+119 |     fs_link_at(a, src, b, dst, follow) else |e| {
+    |     ^^^^^^^^^^ not found
+    |
+help: did you mean `fs_link`?
+    |
+119 |     fs_link(a, src, b, dst, follow) else |e| {
+    |
+
+error[E0301]: nothing named `fs_set_mode_fd` is in scope
+   --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:134:5
+    |
+134 |     fs_set_mode_fd(fd, mode) else |e| {
+    |     ^^^^^^^^^^^^^^ not found
+    |
+help: did you mean `fs_set_mode`?
+    |
+134 |     fs_set_mode(fd, mode) else |e| {
+    |
+
+error[E0301]: nothing named `fs_read_dir_entries_at` is in scope
+   --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/refusals.lu:146:14
+    |
+146 |     let es = fs_read_dir_entries_at(dir) else |e| {
+    |              ^^^^^^^^^^^^^^^^^^^^^^ not found
+    |
+help: did you mean `fs_read_dir_entries`?
+    |
+146 |     let es = fs_read_dir_entries(dir) else |e| {
+    |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+
+test every_refusal_by_name_with_the_hosts_number ... FAILED
+== checked on open_directory.lu: exit(0) 
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+== checked on at_rows.lu: fail(E0301) 
+error[E0301]: nothing named `fs_open_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/at_rows.lu:27:14
+   |
+27 |     let fd = fs_open_at(dir, name, open, 0) else |e| {
+   |              ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_open`?
+   |
+27 |     let fd = fs_open(dir, name, open, 0) else |e| {
+   |
+
+error[E0301]: nothing named `fs_remove_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/at_rows.lu:43:5
+   |
+43 |     fs_remove_at(dir, name) else |e| {
+   |     ^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove`?
+   |
+43 |     fs_remove(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_remove_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/at_rows.lu:56:5
+   |
+56 |     fs_remove_dir_at(dir, name) else |e| {
+   |     ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove_dir_all`?
+   |
+56 |     fs_remove_dir_all(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_lstat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/at_rows.lu:69:5
+   |
+69 |     fs_lstat_at(dir, name) else |e| {
+   |     ^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_lstat`?
+   |
+69 |     fs_lstat(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_stat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/at_rows.lu:84:5
+   |
+84 |     fs_stat_at(dir, name) else |e| {
+   |     ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_read_at`?
+   |
+84 |     fs_read_at(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_read_dir_entries_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/at_rows.lu:99:14
+   |
+99 |     let es = fs_read_dir_entries_at(dir) else |e| {
+   |              ^^^^^^^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_read_dir_entries`?
+   |
+99 |     let es = fs_read_dir_entries(dir) else |e| {
+   |
+
+
+
+thread 'the_at_rows_on_every_host' (112031909) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:305:5:
+assertion `left == right` failed: the CHECKED machine on at_rows.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "witness: true\nheld: true\nopen_at: true\nlstat_at: true\nstat_at: true\nremove_at: true\nremove_dir_at: true\nlisting: true\nlisting_again: true\ncleaned=true\n")
+test the_at_rows_on_every_host ... FAILED
+== checked on link_at.lu: fail(E0301) 
+error[E0301]: nothing named `fs_link_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/link_at.lu:17:5
+   |
+17 |     fs_link_at(a, src, b, dst, follow) else |e| {
+   |     ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_link`?
+   |
+17 |     fs_link(a, src, b, dst, follow) else |e| {
+   |
+
+
+
+thread 'the_link_at_rows_on_every_host' (112031973) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:305:5:
+assertion `left == right` failed: the CHECKED machine on link_at.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "held: true\nlinked_between_handles: true\none_file: true\nagain=exists_or_unsupported: true\nmissing_source: true\nlink_itself: true\nlink_followed: true\nabsolute=invalid\ncleaned=true\n")
+test the_link_at_rows_on_every_host ... FAILED
+== checked on mkdir_at.lu: fail(E0301) 
+error[E0301]: nothing named `fs_create_dir_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/mkdir_at.lu:16:5
+   |
+16 |     fs_create_dir_at(dir, name, mode) else |e| {
+   |     ^^^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_create_dir_all`?
+   |
+16 |     fs_create_dir_all(dir, name, mode) else |e| {
+   |
+
+
+
+thread 'the_mkdir_at_rows_on_every_host' (112031993) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:305:5:
+assertion `left == right` failed: the CHECKED machine on mkdir_at.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "held: true\nmade_under_the_handle: true\nnot_under_the_old_name: true\nmode: true\nagain=exists_or_unsupported: true\nmissing_parent: true\nmode_past_0777=invalid\nabsolute=invalid\nempty=invalid\ncleaned=true\n")
+test the_mkdir_at_rows_on_every_host ... FAILED
+== checked on mode_fd.lu: fail(E0301) 
+error[E0301]: nothing named `fs_set_mode_fd` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/mode_fd.lu:15:5
+   |
+15 |     fs_set_mode_fd(fd, mode) else |e| {
+   |     ^^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_set_mode`?
+   |
+15 |     fs_set_mode(fd, mode) else |e| {
+   |
+
+
+
+thread 'the_mode_fd_rows_on_every_host' (112032025) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:305:5:
+assertion `left == right` failed: the CHECKED machine on mode_fd.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "probe: true\nheld_file_changed: true\nnamed_file_kept: true\nnamed_file_is_the_other: true\nmode_past_07777=invalid\nforged: true\ncleaned=true\n")
+test the_mode_fd_rows_on_every_host ... FAILED
+
+thread 'the_race_row_the_handle_walk_stays_inside_the_tree' (112032063) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:187:5:
+wolf build /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/race.lu refused the program (a compile error is the defect, never a skip):
+error[E0301]: nothing named `fs_remove_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/race.lu:20:5
+   |
+20 |     fs_remove_at(dir, name) else |e| {
+   |     ^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_remove`?
+   |
+20 |     fs_remove(dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_open_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/race.lu:33:5
+   |
+33 |     fs_open_at(dir, name, 48, 0) else |e| {
+   |     ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_open`?
+   |
+33 |     fs_open(dir, name, 48, 0) else |e| {
+   |
+
+error[E0301]: nothing named `fs_open_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/race.lu:59:13
+   |
+59 |     let d = fs_open_at(root, "d", 48, 0)?
+   |             ^^^^^^^^^^ not found
+   |
+help: did you mean `fs_open`?
+   |
+59 |     let d = fs_open(root, "d", 48, 0)?
+   |
+
+error[E0301]: nothing named `fs_lstat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/tests/fixtures/descriptor_walk/race.lu:60:13
+   |
+60 |     let e = fs_lstat_at(root, "e")?
+   |             ^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_lstat`?
+   |
+60 |     let e = fs_lstat(root, "e")?
+   |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+
+test the_race_row_the_handle_walk_stays_inside_the_tree ... FAILED
+== checked on symlink_at.lu: fail(E0301) 
+error[E0301]: nothing named `fs_symlink_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/symlink_at.lu:16:5
+   |
+16 |     fs_symlink_at(target, dir, name) else |e| {
+   |     ^^^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_symlink`?
+   |
+16 |     fs_symlink(target, dir, name) else |e| {
+   |
+
+error[E0301]: nothing named `fs_lstat_at` is in scope
+  --> /Users/mfwolffe/lanes/s277/build/crates/wolf_driver/../../corpus/fs/symlink_at.lu:61:17
+   |
+61 |         let r = fs_lstat_at(h, "ln")?
+   |                 ^^^^^^^^^^^ not found
+   |
+help: did you mean `fs_lstat`?
+   |
+61 |         let r = fs_lstat(h, "ln")?
+   |
+
+
+
+thread 'the_symlink_at_rows_on_every_host' (112032095) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:305:5:
+assertion `left == right` failed: the CHECKED machine on symlink_at.lu: Obs { verdict: "fail(E0301)", stdout: "", reason: "", version: "0.2.36+dev.unknown" }
+  left: ("fail(E0301)", "")
+ right: ("exit(0)", "held: true\nlinked_under_the_handle: true\ntarget_verbatim: true\nis_a_link: true\nagain=exists_or_unsupported: true\nempty_target=invalid\nabsolute=invalid\ncleaned=true\n")
+test the_symlink_at_rows_on_every_host ... FAILED
+== native on open_directory.lu: exit Some(0)
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+== release on open_directory.lu: exit Some(0)
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+== lupin 0.1.58 on open_directory.lu: exit(0) 
+file=invalid
+file_number: true
+directory: true
+a_directory_handle: true
+with_nofollow: true
+with_a_write_mode=invalid
+with_create_new=invalid
+bit_64=invalid
+unmoved=ok
+cleaned=true
+
+
+thread 'the_directory_bit_rows_on_every_host' (112031911) panicked at crates/wolf_driver/tests/descriptor_walk_lanes.rs:250:9:
+assertion `left == right` failed: lupin 0.1.58 refuses open_directory.lu by name: Obs { verdict: "exit(0)", stdout: "file=invalid\nfile_number: true\ndirectory: true\na_directory_handle: true\nwith_nofollow: true\nwith_a_write_mode=invalid\nwith_create_new=invalid\nbit_64=invalid\nunmoved=ok\ncleaned=true\n", reason: "", version: "0.1.58" }
+  left: "exit(0)"
+ right: "unsupported"
+test the_directory_bit_rows_on_every_host ... FAILED
+
+failures:
+
+failures:
+    a_tree_past_path_max_is_made_and_removed_by_handle
+    every_refusal_by_name_with_the_hosts_number
+    the_at_rows_on_every_host
+    the_directory_bit_rows_on_every_host
+    the_link_at_rows_on_every_host
+    the_mkdir_at_rows_on_every_host
+    the_mode_fd_rows_on_every_host
+    the_race_row_the_handle_walk_stays_inside_the_tree
+    the_symlink_at_rows_on_every_host
+
+test result: FAILED. 0 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.70s
+
+error: test failed, to rerun pass `-p wolf_driver --test descriptor_walk_lanes`
+END red-lanes exit=101
+s277: END exit=0 07:47:53
