@@ -5,7 +5,7 @@ mode=${1:?observe, red, pairing-red-restore, green, postrebase or plant}
 head=${2:?full head}
 base=/home/mfwolffe/lanes/r42
 [[ "$head" =~ ^[0-9a-f]{40}$ ]] || exit 2
-case "$mode" in observe|red|pairing-red-restore|green|postrebase|plant|validation-prep|validation-debug|validation-std-tests|validation-std-docs|validation-differ-compiler-checked|validation-differ-compiler-native|validation-differ-compiler-release|validation-differ-interp-checked|validation-differ-interp-native) ;; *) exit 2 ;; esac
+case "$mode" in observe|red|pairing-red-restore|green|postrebase|plant|validation-prep|validation-debug|validation-release|validation-constrained|validation-startup|validation-std-tests|validation-std-docs|validation-std-published-tests|validation-std-published-docs|validation-differ-compiler-checked|validation-differ-compiler-native|validation-differ-compiler-release|validation-differ-interp-checked|validation-differ-interp-native) ;; *) exit 2 ;; esac
 name="wolf-$mode-$head"
 snapshot="$base/builds/$name"
 inside="/lane/builds/$name"

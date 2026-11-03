@@ -18,25 +18,32 @@ class CompilerProxy(unittest.TestCase):
             directory = pathlib.Path(scratch)
             binary = directory / "fake-compiler"
             binary.write_text("#!/usr/bin/env python3\nimport json, os, sys\n"
-                              "print(json.dumps({'argv': sys.argv[1:], 'ambient': [k for k in "
+                              "print(json.dumps({'argv': sys.argv[1:], 'rt': os.environ.get('WOLF_RT_LIB'), 'ambient': [k for k in "
                               "('WOLF_CHECKED', 'WOLF_NATIVE', 'WOLF_RELEASE') if k in os.environ]}))\n"
                               "print('exact diagnostic', file=sys.stderr)\n"
                               "raise SystemExit(int(os.environ.get('FAKE_EXIT', '0')))\n")
             binary.chmod(0o755)
             for role in ("A", "B"):
-                for tier in ("checked", "native", "release"):
+                for tier in ("checked", "native", "release", "passthrough"):
                     with self.subTest(role=role, tier=tier):
                         log = directory / f"{role}-{tier}.jsonl"
                         env = dict(os.environ, R42_DIFF_A=str(binary), R42_DIFF_B=str(binary),
                                    R42_DIFF_TIER=tier, R42_DIFF_LOG=str(log),
-                                   WOLF_CHECKED="1", WOLF_NATIVE="1", WOLF_RELEASE="1")
+                                   WOLF_CHECKED="1", WOLF_NATIVE="1", WOLF_RELEASE="1",
+                                   R42_DIFF_RT_A=str(directory / "candidate-runtime.a"),
+                                   R42_DIFF_RT_B=str(directory / "control-runtime.a"))
                         result = subprocess.run([sys.executable, "-I", str(PROXY), role,
                                                  "conform-run", "row.lu", "--json"],
                                                 env=env, capture_output=True)
                         self.assertEqual(result.returncode, 0, result.stderr)
                         observed = json.loads(result.stdout)
-                        self.assertEqual(observed["argv"], ["conform-run", "row.lu", "--json", "--" + tier])
+                        expected = ["conform-run", "row.lu", "--json"]
+                        if tier != "passthrough":
+                            expected.append("--" + tier)
+                        self.assertEqual(observed["argv"], expected)
                         self.assertEqual(observed["ambient"], [])
+                        runtime = "candidate-runtime.a" if role == "A" else "control-runtime.a"
+                        self.assertEqual(observed["rt"], str(directory / runtime))
                         record = json.loads(log.read_text())
                         self.assertEqual(record["record"], observed)
                         self.assertEqual(record["role"], role)

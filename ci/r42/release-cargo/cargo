@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$#" = 2 ] && [ "$1" = test ] && [ "$2" = --workspace ]; then
+  printf 'R42_RELEASE_PROFILE: cargo test --release --workspace\n' >&2
+  export CARGO_PROFILE_RELEASE_DEBUG=0
+  printf "R42_RELEASE_PROFILE: omit Rust test debuginfo only to bound disk; cfg(debug_assertions) remains release\n" >&2
+  exec /opt/s263-rust/bin/cargo test --release --workspace
+fi
+exec /opt/s263-rust/bin/cargo "$@"
