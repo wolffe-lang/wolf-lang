@@ -11,9 +11,17 @@
 #          `native gauntlet (macOS aarch64, gates)`), read from CI_STEPS and
 #          CI_SHARDS in xtask/src/main.rs AT THIS HEAD, run in its order with
 #          its arguments.
+#   all    rows, then gates, in one take of the lock.
 # The corpus step's own refusal lines (`corpus: <file>: …`) are repeated at
 # column 0 as `FAIL <file> …`, so a red row is named in the record.
-# usage: mac-gauntlet-chunk.sh <rows|gates> <expected-sha>
+# nomad's pinned toolchain (rustup 1.97.1) has no x86_64-unknown-none target,
+# and a lane installs nothing, so where the target is absent dist-smoke runs
+# as `dist-smoke:no-none-target`: `cargo xtask dist` with WOLF_RT_NONE_REQUIRE
+# unset for that step alone, the freestanding runtime's archive a loud skip
+# and everything else the step stages and smoke-runs as CI's (record try 1 at
+# daccfe79 was red there by exactly that: `rt-none: FAILED — … can't find
+# crate for core`).
+# usage: mac-gauntlet-chunk.sh <rows|gates|all|plant> <expected-sha>
 set -u
 exec 2>&1
 L=/Users/mfwolffe/lanes/s278
@@ -61,6 +69,21 @@ for name in order:
         print(name + "\t" + "\x1f".join(steps[name]))
 PY
 }
+none_target() { rustup target list --installed 2>/dev/null | grep -qx x86_64-unknown-none; }
+dist_without_none() {
+  echo "s278: rustup $(rustc -V | cut -d' ' -f2) here has no x86_64-unknown-none target (installed: $(rustup target list --installed | tr '\n' ' '))"
+  echo "s278: so WOLF_RT_NONE_REQUIRE is unset for this step alone (CI sets it, with the target added): cargo $*"
+  env -u WOLF_RT_NONE_REQUIRE cargo "$@"
+}
+run_rows() {
+  gauntlet_step fmt indent cargo fmt --all --check || return $?
+  gauntlet_step fmt-fixpoint indent cargo xtask fmt-fixpoint || return $?
+  gauntlet_step snap-lex indent cargo test --locked -p wolf_lex --test corpus_snapshots || return $?
+  gauntlet_step snap-parse indent cargo test --locked -p wolf_parse --test corpus_decls || return $?
+  gauntlet_step snap-wir indent cargo test --locked -p wolf_wir --test lower_corpus || return $?
+  gauntlet_step os-surface-rows indent cargo test --locked -p wolf_driver --test os_surface_lanes -- --nocapture --test-threads=1 the_root_rows_on_every_host the_signal_action_rows_on_every_host || return $?
+  gauntlet_step clippy-os-surface indent cargo clippy --locked -p wolf_driver --test os_surface_lanes -- -D warnings || return $?
+}
 run_gates() {
   local steps name args n=0
   steps=$(ci_steps) || return 1
@@ -71,21 +94,18 @@ run_gates() {
       continue
     fi
     IFS=$'\x1f' read -r -a argv <<< "$args"
+    if [ "$name" = dist-smoke ] && ! none_target; then
+      gauntlet_step dist-smoke:no-none-target indent dist_without_none "${argv[@]}" || return $?
+      continue
+    fi
     gauntlet_step "$name" indent cargo "${argv[@]}" || return $?
   done <<< "$steps"
   [ "$n" -eq 15 ] || { printf 'START gates-count\n  the gates shard has %s steps here, not 15\nEND gates-count exit=1 secs=0\n' "$n"; return 1; }
 }
 case $chunk in
-  rows)
-    gauntlet_step fmt indent cargo fmt --all --check || exit $?
-    gauntlet_step fmt-fixpoint indent cargo xtask fmt-fixpoint || exit $?
-    gauntlet_step snap-lex indent cargo test --locked -p wolf_lex --test corpus_snapshots || exit $?
-    gauntlet_step snap-parse indent cargo test --locked -p wolf_parse --test corpus_decls || exit $?
-    gauntlet_step snap-wir indent cargo test --locked -p wolf_wir --test lower_corpus || exit $?
-    gauntlet_step os-surface-rows indent cargo test --locked -p wolf_driver --test os_surface_lanes -- --nocapture --test-threads=1 the_root_rows_on_every_host the_signal_action_rows_on_every_host || exit $?
-    gauntlet_step clippy-os-surface indent cargo clippy --locked -p wolf_driver --test os_surface_lanes -- -D warnings || exit $?
-    ;;
+  rows) run_rows || exit $? ;;
   gates) run_gates || exit $? ;;
+  all) run_rows || exit $?; run_gates || exit $? ;;
   plant)
     gauntlet_step plant-build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
     gauntlet_step plant-corpus corpus_step || exit $?

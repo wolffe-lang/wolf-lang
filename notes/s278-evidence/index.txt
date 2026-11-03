@@ -22,6 +22,14 @@ nomad/mac-job1-63c1278d.log
                   corpus step whole, red by the two rows: `1253 file(s), 2 bad`, the lines CI printed.
                   The head step's exit 1 is the probe of the shell's dispositions: macOS ps has no
                   sigignore/sigcatch keywords (the record's head reads `sig` and `sigmask`)
+nomad/record-try1-daccfe79.log
+                  the macOS record's first try at daccfe79 (the org's gauntlet recorder, two takes of
+                  the Mac lock): every step 0 through audit-surface, the corpus step `1253 file(s),
+                  0 bad`; red at dist-smoke alone, `rt-none: FAILED — WOLF_RT_NONE_REQUIRE=1 and this
+                  toolchain cannot build no_std for x86_64-unknown-none (… can't find crate for
+                  core)`: nomad's rustup 1.97.1 has no x86_64-unknown-none target, and a lane installs
+                  nothing. The record at the final head runs that step as
+                  `dist-smoke:no-none-target` (WOLF_RT_NONE_REQUIRE unset for it alone)
 hasu/precheck1-433ec385.log
                   linux (block B, r41-toolchain, uid 1000) at the fixed rows: each row on every machine
                   (checked, native, release: kill: true … missing: true; lupin pinned), the two
@@ -34,6 +42,7 @@ hasu/snaps2-d2f4672f.log
                   two rows move (byte spans), the lowering ledger does not (32 passed, unchanged)
 rig/              the scripts as run: the Mac lock (locked.sh; lock-run.sh with its own lines on stderr,
                   for a record), build-at.sh, Mac job 1, the macOS record's host and chunk scripts
-                  (rows, gates, plant); hasu's job, probe, pre-check, snapshot and record scripts
+                  (rows, gates, all, plant) and the plant's record script; hasu's job, probe,
+                  pre-check, snapshot and record scripts
                   (adapted by copy from s277's), the taskset shim (s272's). The org's gauntlet recorder
                   is copied in, not committed.
