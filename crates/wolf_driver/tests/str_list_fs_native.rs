@@ -848,6 +848,16 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_getpriority",
         "__wolf_rt_os_setpriority",
         "__wolf_rt_os_signal_action_one",
+        // s277 (#707, #1029, #1030, #1031, #1033): `[os.fs.at]` and its
+        // clauses, `[os.fs.mode.fd]`.
+        "__wolf_rt_fs_open_at",
+        "__wolf_rt_fs_stat_at",
+        "__wolf_rt_fs_remove_at",
+        "__wolf_rt_fs_create_dir_at",
+        "__wolf_rt_fs_symlink_at",
+        "__wolf_rt_fs_link_at",
+        "__wolf_rt_fs_read_dir_entries_at",
+        "__wolf_rt_fs_set_mode_fd",
         // s256 (#866): `[conf.trap.stack]` — the main thread's guard
         // bounds and alternate signal stack, one call at startup.
         "__wolf_rt_stack_start",
@@ -873,7 +883,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        262,
+        270,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

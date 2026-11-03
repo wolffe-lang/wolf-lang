@@ -1510,6 +1510,18 @@ mod builtin_cap_tests {
             ("fs_mkfifo", Cap::Fs),
             ("fs_set_nonblock", Cap::Fs),
             ("fs_write_some", Cap::Fs),
+            // s277 (#707, #1029, #1030, #1031, #1033): the calls relative to
+            // a held directory and the mode on a handle — `fs`.
+            ("fs_open_at", Cap::Fs),
+            ("fs_stat_at", Cap::Fs),
+            ("fs_lstat_at", Cap::Fs),
+            ("fs_remove_at", Cap::Fs),
+            ("fs_remove_dir_at", Cap::Fs),
+            ("fs_create_dir_at", Cap::Fs),
+            ("fs_symlink_at", Cap::Fs),
+            ("fs_link_at", Cap::Fs),
+            ("fs_read_dir_entries_at", Cap::Fs),
+            ("fs_set_mode_fd", Cap::Fs),
             // s248 (#795): the wait over several descriptors is signal
             // control, `exec` with `os_signal_wait_fd`.
             ("os_signal_wait_fds", Cap::Exec),

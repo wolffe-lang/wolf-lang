@@ -740,6 +740,78 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_adopt`",
             "hosted runtime",
         ),
+        // s277 (#707, #1029, #1030, #1031, #1033): the calls relative to a
+        // held directory and the mode on a handle — each a hosted symbol.
+        (
+            "fs_open_at",
+            "",
+            "let h = fs_open_at(3, \"d\", 0, 0) else |e| {\n        return 0\n    }\n    h",
+            "`fs_open_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_stat_at",
+            "",
+            "let r = fs_stat_at(3, \"d\") else |e| {\n        return 0\n    }\n    r.len",
+            "`fs_stat_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_lstat_at",
+            "",
+            "let r = fs_lstat_at(3, \"d\") else |e| {\n        return 0\n    }\n    r.len",
+            "`fs_lstat_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_remove_at",
+            "",
+            "fs_remove_at(3, \"d\") else |e| {\n        return 0\n    }\n    1",
+            "`fs_remove_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_remove_dir_at",
+            "",
+            "fs_remove_dir_at(3, \"d\") else |e| {\n        return 0\n    }\n    1",
+            "`fs_remove_dir_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_create_dir_at",
+            "",
+            "fs_create_dir_at(3, \"d\", 448) else |e| {\n        return 0\n    }\n    1",
+            "`fs_create_dir_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_symlink_at",
+            "",
+            "fs_symlink_at(\"t\", 3, \"d\") else |e| {\n        return 0\n    }\n    1",
+            "`fs_symlink_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_link_at",
+            "",
+            "fs_link_at(3, \"a\", 3, \"b\", false) else |e| {\n        return 0\n    }\n    1",
+            "`fs_link_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_read_dir_entries_at",
+            "",
+            "let es = fs_read_dir_entries_at(3) else |e| {\n        return 0\n    }\n    es.len",
+            "`fs_read_dir_entries_at`",
+            "hosted runtime",
+        ),
+        (
+            "fs_set_mode_fd",
+            "",
+            "fs_set_mode_fd(3, 384) else |e| {\n        return 0\n    }\n    1",
+            "`fs_set_mode_fd`",
+            "hosted runtime",
+        ),
         // s272 (#686, #921, #922, #975): the file system's record, the root,
         // the nice value and its set, a meaning's action — each a hosted
         // symbol.
