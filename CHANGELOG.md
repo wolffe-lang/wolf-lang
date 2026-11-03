@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+## 0.2.37 — 2026-11-03
+
+Pairs with published **lupin 0.1.59**, conformance pin
+`b16353e8ae616ff3a35bd27adc56b727c50df345`, and bundles **wolf-std
+`5b3a59942b2ee69b99682544341ce8a12c984e9e`**: leap-aware local time,
+the byte-list string builder, invocation-name/byte-argument wrappers and
+bounded incremental SHA-2. See [the release note](docs/releases/0.2.37.md).
+
+s270 — the four wrong machines ([PR 992](https://github.com/wolffe-lang/wolf-lang/pull/992)).
+
+- Release optimization carries writes through relayed `mut` List
+  parameters, recognizes replacement of the caller's List, and widens
+  still-changing interprocedural facts conservatively. Mixed error payload
+  display projects through the active tag; bare enum variants initialize
+  inactive pointer-bearing payload slots. Native/release now agree with
+  the checked machine on those four regression programs.
+
+s271 — truthful test, fmt, fix and nightly failures
+([PR 997](https://github.com/wolffe-lang/wolf-lang/pull/997)).
+
+- Failed test assertions preserve messages, source sites and equality
+  operands, including optional JSON assertion details. Both formatter
+  modes reject parser failures. `fix` lists unapplied suggestions with
+  their applicability and reason, rechecks the edited program and returns
+  failure if it remains invalid. Lent-value refusals retain exit 4 and
+  now report E1016 with a source site. The nightly property sweep has real,
+  verified linker inputs and a head-built musl runtime. The existing
+  multiline if-argument layout repair gains regression coverage, not a
+  claim of another language change.
+
+CI routing distinguishes cheap PR checks, labelled full/release gates
+and shared-path trunk changes. The drain census accompanying issue 1023
+records evidence without a further runtime change. The bounded-memory
+rows (s276) now name their sensitivity controls and measurement floors.
+
+
 - Long build/run/test compilations show live unit and phase progress on a
   terminal. Non-interactive builds remain silent for 30 seconds without
   output, then emit a heartbeat every 60 seconds and a completion line.
@@ -64,8 +100,8 @@ shapes beyond the issues are recommendations asked at audit
   cannot land on a file renamed over the name in between; windows
   `unsupported`.
 - Charged: all ten `fs`, refused at comptime. The checked machine makes
-  each call on its own handles. lupin 0.1.58 does not resolve the ten
-  names (a mirror is drafted for wolf-interp). The host table is 177
+  each call on its own handles. lupin 0.1.58 and 0.1.59 do not resolve the ten
+  names (the mirror is tracked in wolf-interp issue 321). The host table is 177
   lines.
 
 s272 — the OS surface (wolf-lang#686, #921, #922, #976, #975; boreutils'
@@ -122,8 +158,8 @@ to R-s272-11), each one what is built.
   `os_getpriority` and `os_signal_action_one` `env`; all refused at
   comptime. The checked machine makes each call for the `wolf` process it
   runs as (and refuses the action query on the fault meanings by name);
-  lupin 0.1.58 does not resolve the four new names (wolf-interp#315, the
-  mirror). The host table is 167 lines.
+  lupin 0.1.58 and 0.1.59 do not resolve the five new names
+  (the mirror is tracked in wolf-interp issue 315). The host table is 167 lines.
 
 s275 — the drain thread (#1006).
 
