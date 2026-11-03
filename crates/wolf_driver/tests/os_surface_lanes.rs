@@ -268,6 +268,26 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
     }
 }
 
+/// Exercise the pairing judge with the actual interpreter, without first
+/// building native witnesses. A version bump is not evidence of a mirror.
+#[test]
+fn published_pairing_keeps_the_os_surface_pre_mirror() {
+    let Some(lupin) = lupin_or_skip() else {
+        return;
+    };
+    let dir = scratch("published_pairing_os_surface");
+    let entry = corpus("fs/statfs_rows.lu");
+    let mut cmd = Command::new(lupin);
+    cmd.arg("conform-run").arg(&entry).arg("--json");
+    let out = run_in(cmd, &dir);
+    judge_lupin(
+        &parse_obs(&out.stdout, "published pairing observation"),
+        "statfs_rows.lu",
+        &declared_stdout(&entry),
+        &Lupin::Unresolved(&["fs_statfs"]),
+    );
+}
+
 /// The checked machine's record of `entry`, run in `dir`.
 fn checked_in(entry: &Path, dir: &Path) -> Obs {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();

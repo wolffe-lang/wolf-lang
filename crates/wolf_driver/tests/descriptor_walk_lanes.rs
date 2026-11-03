@@ -282,6 +282,20 @@ fn lupin_leg(entry: &Path, dir: &Path, pre: Pre<'_>, want: Option<&str>) {
     }
 }
 
+/// Keep the published pairing's unsupported cell distinct from a future
+/// mirror. This exercises the same judge as the native/checked witnesses.
+#[test]
+fn published_pairing_keeps_the_descriptor_walk_pre_mirror() {
+    let dir = scratch("published_pairing_descriptor_walk");
+    let entry = corpus("fs/at_rows.lu");
+    lupin_leg(
+        &entry,
+        &dir,
+        Pre::Unresolved(&["fs_remove_at"]),
+        Some(&declared_stdout(&entry)),
+    );
+}
+
 /// The checked machine's record of `entry`, run in `dir`.
 fn checked_in(entry: &Path, dir: &Path) -> Obs {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();
