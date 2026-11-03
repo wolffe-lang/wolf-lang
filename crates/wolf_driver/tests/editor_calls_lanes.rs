@@ -43,9 +43,9 @@ const PRE_MIRROR_LUPIN: &[&str] = &["0.1.54", "0.1.55"];
 /// s272 (wolf-lang#976): the lupin releases that mirror s248's restore but
 /// predate `RAW_LF` (bit 24 of the mode word). Their own shape refuses the
 /// bit by name, so `restore_rows.lu`'s `lf=` line is `invalid` there,
-/// measured on 0.1.58 (the pairing). The mirror is wolf-interp#315; a lupin
+/// measured on published 0.1.58 and 0.1.59. The mirror is wolf-interp#315; a lupin
 /// past this list is held to the compiler's `lf=`.
-const PRE_RAW_LF_LUPIN: &[&str] = &["0.1.58"];
+const PRE_RAW_LF_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
 
 #[derive(Debug)]
 struct Obs {
@@ -704,7 +704,7 @@ fn the_restore_rows_on_every_machine() {
         &|lane, stdout| {
             // s272 (#976): bit 24 is RAW_LF, so the undefined bit is 25, and
             // RAW_LF on a file is the family's `io` (windows `unsupported`).
-            // lupin 0.1.58 answers `lf=invalid` until its mirror
+            // lupin 0.1.58 and 0.1.59 answer `lf=invalid` until their mirror
             // (wolf-interp#315): `PRE_RAW_LF_LUPIN`.
             let want = if cfg!(unix) {
                 "bit25=invalid negative=invalid forged=io file=io lf=io\n"
