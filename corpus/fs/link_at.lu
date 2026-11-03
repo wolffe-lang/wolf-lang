@@ -1,0 +1,96 @@
+//! check: run(exit=0, stdout="held: true\nlinked_between_handles: true\none_file: true\nagain=exists_or_unsupported: true\nmissing_source: true\nlink_itself: true\nlink_followed: true\nabsolute=invalid\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.at, os.fs.at.link, os.fs.link, os.fs.stat, os.fs.open.directory, err.union
+//!
+//! s277 (wolf-lang#1031, #910; `[os.fs.at.link]`) — `fs_link_at(src_dir,
+//! src, dst_dir, dst, follow)` makes a second name of a file between two
+//! directories the program HOLDS: both parents are held and then moved, and
+//! the new name appears under the destination's new name, one file with the
+//! source (the bytes read through it, the same identity, a link count of
+//! two where the host answers one). It never replaces (`exists`); a missing
+//! source is `not_found`. `follow` is #910's flag: false links a symbolic
+//! link itself (kind 3, `fs_link`'s rule), true links what it names
+//! (`AT_SYMLINK_FOLLOW`). An absolute name is `invalid` before the host, on
+//! every host; windows answers `unsupported` by name.
+
+fn link_row(a: int, src: str, b: int, dst: str, follow: bool) -> str {
+    fs_link_at(a, src, b, dst, follow) else |e| {
+        return match e {
+            cross_device => "cross_device",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn hold(path: str) -> int {
+    fs_open_mode(path, 32) else |e| {
+        return match e {
+            denied => -2,
+            exists => -3,
+            invalid => -1,
+            io => -4,
+            not_found => -5,
+        }
+    }
+}
+
+fn main() -> !int {
+    let dir = "target/s277-link-at"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir + "/a")?
+    fs_create_dir_all(dir + "/b")?
+    fs_write_text(dir + "/a/f", "two names")?
+    let ha = hold(dir + "/a")
+    let hb = hold(dir + "/b")
+    let served = ha >= 3 && hb >= 3
+    print("held: {served || (ha == -1 && hb == -1)}")
+    fs_rename(dir + "/a", dir + "/a2")?
+    fs_rename(dir + "/b", dir + "/b2")?
+    let x = if served { ha } else { 3 }
+    let y = if served { hb } else { 4 }
+
+    let made = link_row(x, "f", y, "g", false)
+    print("linked_between_handles: {(served && made == "ok" && fs_read_text(dir + "/b2/g")? == "two names") || (!served && made == "unsupported")}")
+    var one = !served
+    if served {
+        let s = fs_stat(dir + "/a2/f")?
+        let t = fs_stat(dir + "/b2/g")?
+        let counted = s[3] / 32 % 2 == 1
+        one = s[9] == t[9] && s[10] == t[10] && (!counted || t[5] == 2)
+    }
+    print("one_file: {one}")
+    let again = link_row(x, "f", y, "g", false)
+    print("again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}")
+    let gone = link_row(x, "missing", y, "h", false)
+    print("missing_source: {(served && gone == "not_found") || (!served && gone == "unsupported")}")
+
+    var itself = !served
+    var followed = !served
+    if served {
+        fs_symlink("f", dir + "/a2/lf")?
+        let own = link_row(x, "lf", y, "own", false)
+        let r = fs_lstat(dir + "/b2/own")?
+        itself = own == "ok" && r[0] == 3
+        let thru = link_row(x, "lf", y, "through", true)
+        let t = fs_lstat(dir + "/b2/through")?
+        let f = fs_stat(dir + "/a2/f")?
+        followed = thru == "ok" && t[0] == 0 && t[10] == f[10]
+    }
+    print("link_itself: {itself}")
+    print("link_followed: {followed}")
+    print("absolute={link_row(x, "/s277-absolute", y, "k", false)}")
+
+    if served {
+        fs_close(ha)?
+        fs_close(hb)?
+    }
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

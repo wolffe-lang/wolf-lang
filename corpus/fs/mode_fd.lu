@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="probe: true\nheld_file_changed: true\nnamed_file_kept: true\nnamed_file_is_the_other: true\nmode_past_07777=invalid\nforged: true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.mode.fd, os.fs.mode, os.fs.fstat.record, os.fs.std, err.union
+//!
+//! s277 (wolf-lang#1033; `[os.fs.mode.fd]`) — `fs_set_mode_fd(fd, mode)` is
+//! `fchmod`: the mode of the file a handle HOLDS, whatever its name is by
+//! now. A file is created and held, a second file is renamed over its
+//! name, and the handle form changes only the held file: its handle's
+//! record reads the new mode, and the name's file — the other one — keeps
+//! its own. A mode past 0o7777 is `invalid` before the host on every host;
+//! a forged handle is `io` (windows: `unsupported`, after the shape, as
+//! `[os.fs.mode]` answers there).
+
+fn mode_row(fd: int, mode: int) -> str {
+    fs_set_mode_fd(fd, mode) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let dir = "target/s277-mode-fd"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir)?
+    let a = dir + "/a"
+    let b = dir + "/b"
+    let fd = fs_open_mode(a, 4)?
+    fs_write(fd, "held")?
+    let probe = mode_row(fd, 0o640)
+    let served = probe == "ok"
+    print("probe: {served || probe == "unsupported"}")
+    var held_truth = !served
+    var kept_truth = !served
+    var other_truth = !served
+    if served {
+        fs_write_text(b, "other")?
+        fs_set_mode(b, 0o644)?
+        fs_rename(b, a)?
+        let set = mode_row(fd, 0o600)
+        let r = fs_fstat_record(fd)?
+        held_truth = set == "ok" && r[4] == 0o600
+        let s = fs_stat(a)?
+        kept_truth = s[4] == 0o644
+        other_truth = fs_read_text(a)? == "other" && s[10] != r[10]
+    }
+    print("held_file_changed: {held_truth}")
+    print("named_file_kept: {kept_truth}")
+    print("named_file_is_the_other: {other_truth}")
+    print("mode_past_07777={mode_row(fd, 0o10000)}")
+    let forged = mode_row(1000000, 0o600)
+    print("forged: {(served && forged == "io") || (!served && forged == "unsupported")}")
+    fs_close(fd)?
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

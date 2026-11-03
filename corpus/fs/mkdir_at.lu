@@ -1,0 +1,72 @@
+//! check: run(exit=0, stdout="held: true\nmade_under_the_handle: true\nnot_under_the_old_name: true\nmode: true\nagain=exists_or_unsupported: true\nmissing_parent: true\nmode_past_0777=invalid\nabsolute=invalid\nempty=invalid\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.at, os.fs.at.mkdir, os.fs.open.directory, os.fs.stat, err.union
+//!
+//! s277 (wolf-lang#1029; `[os.fs.at.mkdir]`) — `fs_create_dir_at(dir, name,
+//! mode)` makes a directory in the directory a handle HOLDS: the parent is
+//! held, then renamed, and the new directory appears under the parent's new
+//! name and not under its old one, `mode` less the umask from its first
+//! instant (0o700 here, the owner's bits no sane umask takes). The shape is
+//! judged before the host on every host, windows included: a mode past
+//! 0o777, an absolute name and an empty one are `invalid`. A taken name is
+//! `exists`, a missing middle component `not_found`. windows refuses the
+//! directory bit `invalid` and the call `unsupported`, by name.
+
+fn mkdir_row(dir: int, name: str, mode: int) -> str {
+    fs_create_dir_at(dir, name, mode) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let dir = "target/s277-mkdir-at"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir + "/p")?
+    var refused = ""
+    let held = fs_open_mode(dir + "/p", 32) else |e| {
+        refused = match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+        }
+        -1
+    }
+    let served = held >= 3
+    print("held: {served || refused == "invalid"}")
+    fs_rename(dir + "/p", dir + "/q")?
+    let h = if served { held } else { 3 }
+
+    let made = mkdir_row(h, "made", 0o700)
+    print("made_under_the_handle: {(served && made == "ok" && fs_is_dir(dir + "/q/made")) || (!served && made == "unsupported")}")
+    print("not_under_the_old_name: {!fs_exists(dir + "/p")}")
+    var mode_truth = !served
+    if served {
+        let s = fs_stat(dir + "/q/made")?
+        mode_truth = s[3] / 16 % 2 == 0 || s[4] == 0o700
+    }
+    print("mode: {mode_truth}")
+    let again = mkdir_row(h, "made", 0o700)
+    print("again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}")
+    let orphan = mkdir_row(h, "no/such", 0o700)
+    print("missing_parent: {(served && orphan == "not_found") || (!served && orphan == "unsupported")}")
+    print("mode_past_0777={mkdir_row(h, "wide", 0o1000)}")
+    print("absolute={mkdir_row(h, "/s277-absolute", 0o700)}")
+    print("empty={mkdir_row(h, "", 0o700)}")
+
+    if served {
+        fs_close(held)?
+    }
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

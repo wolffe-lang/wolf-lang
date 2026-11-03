@@ -1,0 +1,76 @@
+//! check: run(exit=0, stdout="held: true\nlinked_under_the_handle: true\ntarget_verbatim: true\nis_a_link: true\nagain=exists_or_unsupported: true\nempty_target=invalid\nabsolute=invalid\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.at, os.fs.at.symlink, os.fs.readlink, os.fs.open.directory, err.union
+//!
+//! s277 (wolf-lang#1030; `[os.fs.at.symlink]`) — `fs_symlink_at(target, dir,
+//! name)` makes a symbolic link in the directory a handle HOLDS, in
+//! `symlinkat(2)`'s order: what the link says, then where it goes. The
+//! parent is held and then moved; the link appears under the new name and
+//! `fs_read_link` (the path form, at the new name) reads its target back
+//! verbatim — a target that names nothing, never resolved. The link is kind
+//! 3 to `fs_lstat_at`. A taken name is `exists`; an empty target and an
+//! absolute name are `invalid` before the host, on every host. windows
+//! answers `unsupported` by name (`[os.fs.symlink]`'s posture).
+
+fn symlink_row(target: str, dir: int, name: str) -> str {
+    fs_symlink_at(target, dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn link_text(path: str) -> str {
+    let t = fs_read_link(path) else |_| {
+        return "<row>"
+    }
+    str_from_utf8(t) else "<bytes>"
+}
+
+fn main() -> !int {
+    let dir = "target/s277-symlink-at"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir + "/p")?
+    var refused = ""
+    let held = fs_open_mode(dir + "/p", 32) else |e| {
+        refused = match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+        }
+        -1
+    }
+    let served = held >= 3
+    print("held: {served || refused == "invalid"}")
+    fs_rename(dir + "/p", dir + "/q")?
+    let h = if served { held } else { 3 }
+
+    let made = symlink_row("no/such/place", h, "ln")
+    print("linked_under_the_handle: {(served && made == "ok") || (!served && made == "unsupported")}")
+    print("target_verbatim: {!served || link_text(dir + "/q/ln") == "no/such/place"}")
+    var kind_truth = !served
+    if served {
+        let r = fs_lstat_at(h, "ln")?
+        kind_truth = r[0] == 3 && !fs_exists(dir + "/q/ln")
+    }
+    print("is_a_link: {kind_truth}")
+    let again = symlink_row("elsewhere", h, "ln")
+    print("again=exists_or_unsupported: {(served && again == "exists") || (!served && again == "unsupported")}")
+    print("empty_target={symlink_row("", h, "empty")}")
+    print("absolute={symlink_row("t", h, "/s277-absolute")}")
+
+    if served {
+        fs_close(held)?
+    }
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

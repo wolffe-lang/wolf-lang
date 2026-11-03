@@ -1,0 +1,196 @@
+//! check: run(exit=0, stdout="witness: true\nheld: true\nopen_at: true\nlstat_at: true\nstat_at: true\nremove_at: true\nremove_dir_at: true\nlisting: true\nlisting_again: true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.at, os.fs.at.open, os.fs.at.lstat, os.fs.at.stat, os.fs.at.remove, os.fs.at.remove.dir, os.fs.at.readdir, os.fs.open.directory, err.union
+//!
+//! s277 (wolf-lang#707; `[os.fs.at]`) — calls relative to a directory the
+//! program HOLDS, so a name is looked up in the directory the handle names
+//! whatever its path has become. Each line holds on every tier-1 host:
+//!
+//!   witness        bu21's census program, `fs_remove_at(3, "name")`, verbatim:
+//!                  no open has answered 3 yet, so it is a forged handle,
+//!                  `io` (windows: `unsupported`, after the shape);
+//!   held           `inner` opened as a directory (bit 32, beside bit 16's
+//!                  no-follow), then renamed to `moved` — windows refuses
+//!                  the bit `invalid`, and every line after says
+//!                  `unsupported` there;
+//!   open_at ..     each call through the held handle reaches `moved`'s
+//!                  entries: the open reads the file's bytes, the two stats
+//!                  answer its record (kind, size, identity, mode), the
+//!                  removals take the file and an empty directory away, and
+//!                  the listing answers the two names written by path, the
+//!                  same on a second read.
+//!
+//! The race against a second process, the depth past `PATH_MAX` and the
+//! refusals by name are `crates/wolf_driver/tests/descriptor_walk_lanes.rs`.
+
+fn open_row(dir: int, name: str, open: int) -> str {
+    let fd = fs_open_at(dir, name, open, 0) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    let got = fs_read(fd, 64) else |_| "<unread>"
+    fs_close(fd) else |_| {}
+    got
+}
+
+fn remove_row(dir: int, name: str) -> str {
+    fs_remove_at(dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn remove_dir_row(dir: int, name: str) -> str {
+    fs_remove_dir_at(dir, name) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn lstat_row(dir: int, name: str) -> List[int] {
+    fs_lstat_at(dir, name) else |e| {
+        let t = match e {
+            denied => 1,
+            invalid => 2,
+            io => 3,
+            not_found => 4,
+            unsupported => 5,
+        }
+        var r = List[int]()
+        (mut r).push(-t)
+        return r
+    }
+}
+
+fn stat_row(dir: int, name: str) -> List[int] {
+    fs_stat_at(dir, name) else |e| {
+        let t = match e {
+            denied => 1,
+            invalid => 2,
+            io => 3,
+            not_found => 4,
+            unsupported => 5,
+        }
+        var r = List[int]()
+        (mut r).push(-t)
+        return r
+    }
+}
+
+fn names_of(dir: int) -> str {
+    let es = fs_read_dir_entries_at(dir) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    var a = false
+    var b = false
+    var other = 0
+    for e in es {
+        let k = e[0] as int
+        let n = str_from_utf8(e[1..]) else "?"
+        if n == "a" && k == 0 {
+            a = true
+        } else if n == "b" && k == 0 {
+            b = true
+        } else {
+            other = other + 1
+        }
+    }
+    "{es.len} {a} {b} {other}"
+}
+
+/// The words a record of the same file agrees on, by name or by handle:
+/// kind, size, mode, nlink, dev and ino (the times may move with a read).
+fn same_file(a: List[int], b: List[int]) -> bool {
+    if a.len != 20 || b.len != 20 {
+        return false
+    }
+    a[0] == b[0] && a[1] == b[1] && a[4] == b[4] && a[5] == b[5] && a[9] == b[9] && a[10] == b[10]
+}
+
+fn main() -> !int {
+    let w = remove_row(3, "name")
+    print("witness: {w == "io" || w == "unsupported"}")
+
+    let dir = "target/s277-at-rows"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir + "/inner")?
+    fs_write_text(dir + "/inner/f", "wolves")?
+    fs_create_dir(dir + "/inner/sub")?
+    // 48 = 32 (the directory bit) + 16 (no final link followed).
+    var refused = ""
+    let held = fs_open_mode(dir + "/inner", 48) else |e| {
+        refused = match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+        }
+        -1
+    }
+    let served = held >= 3
+    fs_rename(dir + "/inner", dir + "/moved")?
+    let moved = dir + "/moved"
+    print("held: {served || refused == "invalid"}")
+
+    let probe = if served { held } else { 3 }
+    let read = open_row(probe, "f", 0)
+    print("open_at: {(served && read == "wolves") || (!served && read == "unsupported")}")
+
+    let ls = lstat_row(probe, "f")
+    let by_path = fs_lstat(moved + "/f")?
+    let lstat_truth = if served {
+        same_file(ls, by_path) && ls[0] == 0 && ls[1] == 6
+    } else {
+        ls.len == 1 && ls[0] == -5
+    }
+    print("lstat_at: {lstat_truth}")
+
+    let st = stat_row(probe, "f")
+    let stat_truth = if served { same_file(st, by_path) } else { st.len == 1 && st[0] == -5 }
+    print("stat_at: {stat_truth}")
+
+    let gone = remove_row(probe, "f")
+    print("remove_at: {(served && gone == "ok" && !fs_exists(moved + "/f")) || (!served && gone == "unsupported" && fs_exists(moved + "/f"))}")
+
+    let rd = remove_dir_row(probe, "sub")
+    print("remove_dir_at: {(served && rd == "ok" && !fs_exists(moved + "/sub")) || (!served && rd == "unsupported" && fs_is_dir(moved + "/sub"))}")
+
+    fs_write_text(moved + "/a", "1")?
+    fs_write_text(moved + "/b", "2")?
+    let listed = names_of(probe)
+    print("listing: {(served && listed == "2 true true 0") || (!served && listed == "unsupported")}")
+    let again = names_of(probe)
+    print("listing_again: {again == listed}")
+
+    if served {
+        fs_close(held)?
+    }
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

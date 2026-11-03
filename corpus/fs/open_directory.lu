@@ -1,0 +1,63 @@
+//! check: run(exit=0, stdout="file=invalid\nfile_number: true\ndirectory: true\na_directory_handle: true\nwith_nofollow: true\nwith_a_write_mode=invalid\nwith_create_new=invalid\nbit_64=invalid\nunmoved=ok\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.open.directory, os.fs.open, os.fs.open.nofollow, os.fs.fstat.record, os.fs.error, err.union
+//!
+//! s277 (wolf-lang#1032; `[os.fs.open.directory]`) — bit 32 of the open
+//! word asks for a directory: a regular file opened with it is refused
+//! `invalid`, with `ENOTDIR` (20 on linux, macOS and freebsd) in
+//! `os_error()` — on windows the bit itself is `invalid`, before the host,
+//! with no number. A directory opened with it is a handle `fs_fstat_record`
+//! calls kind 1 (how a program tells a directory handle from a file
+//! handle), with bit 16 (no final link followed) beside it too. The bit
+//! rides the read modes only: with a write mode or the exclusive create it
+//! is `invalid` before the host on every host. A bit above both is still
+//! `invalid`, and an open without the bit answers as it always did.
+
+fn open_row(path: str, mode: int) -> str {
+    let fd = fs_open_mode(path, mode) else |e| {
+        return match e {
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn main() -> !int {
+    let dir = "target/s277-open-directory"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir + "/sub")?
+    fs_write_text(dir + "/f", "not a directory")?
+
+    print("file={open_row(dir + "/f", 32)}")
+    let n = os_error()
+    let d = open_row(dir + "/sub", 32)
+    let served = d == "ok"
+    print("file_number: {(served && n == 20) || (!served && n == 0)}")
+    print("directory: {served || d == "invalid"}")
+    var kind_truth = !served
+    if served {
+        let h = fs_open_mode(dir + "/sub", 32)?
+        let r = fs_fstat_record(h)?
+        let f = fs_open_mode(dir + "/f", 0)?
+        let g = fs_fstat_record(f)?
+        kind_truth = r[0] == 1 && g[0] == 0
+        fs_close(h)?
+        fs_close(f)?
+    }
+    print("a_directory_handle: {kind_truth}")
+    let both = open_row(dir + "/sub", 48)
+    print("with_nofollow: {(served && both == "ok") || (!served && both == "invalid")}")
+    print("with_a_write_mode={open_row(dir + "/sub", 33)}")
+    print("with_create_new={open_row(dir + "/new", 36)}")
+    print("bit_64={open_row(dir + "/sub", 64)}")
+    print("unmoved={open_row(dir + "/f", 0)}")
+
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}
