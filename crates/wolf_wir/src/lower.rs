@@ -10804,6 +10804,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_write_some"
                 // s253 (#815): an inherited descriptor made a handle.
                 | "fs_adopt"
+                // s277 (#707, #1029, #1030, #1031, #1033): the calls
+                // relative to a held directory and the mode on a handle.
+                | "fs_open_at"
+                | "fs_stat_at"
+                | "fs_lstat_at"
+                | "fs_remove_at"
+                | "fs_remove_dir_at"
+                | "fs_create_dir_at"
+                | "fs_symlink_at"
+                | "fs_link_at"
+                | "fs_read_dir_entries_at"
+                | "fs_set_mode_fd"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -14569,6 +14581,37 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // through the foreign chain (the shim allocates the list).
             // s254 (#820, `[os.fs.fstat.record]`): the twenty-word record on
             // the handle is `fs_fstat`'s shape, a longer list.
+            // s277 (#707, `[os.fs.at.stat]`, `[os.fs.at.lstat]`): the record
+            // of a name relative to a held directory, `fs_stat`'s shape with
+            // the handle first — `follow` 1 for `fs_stat_at`, 0 for
+            // `fs_lstat_at`; the shim mints the `List[int]`.
+            // (`[os.fs.at.readdir]`) the held directory's listing,
+            // `fs_fstat_record`'s shape with a listing for a record.
+            "fs_stat_at" | "fs_lstat_at" | "fs_read_dir_entries_at" => {
+                let dir = arg(0)?;
+                let (region, slot) = self.rt_slot(8);
+                let (sym, args): (&'static str, Vec<Value>) = if name == "fs_read_dir_entries_at" {
+                    ("__wolf_rt_fs_read_dir_entries_at", vec![dir])
+                } else {
+                    let s = arg(1)?;
+                    let (p, l) = self.str_parts(s);
+                    let follow = self.b.iconst(types::I64, i64::from(name == "fs_stat_at"));
+                    ("__wolf_rt_fs_stat_at", vec![dir, p, l, follow])
+                };
+                let rc = self
+                    .rt_call_foreign(sym, &args, Some((slot, region)), Some(types::I64))
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             "fs_fstat" | "fs_fstat_record" => {
                 let fd = arg(0)?;
                 let (region, slot) = self.rt_slot(8);
@@ -14609,8 +14652,69 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             | "fs_sync" | "fs_sync_dir"
             // s254 (#820, #818): access, the lock and its release, the
             // fifo and the descriptor's flag, the same shape.
-            | "fs_access" | "fs_lock" | "fs_unlock" | "fs_mkfifo" | "fs_set_nonblock" => {
+            | "fs_access" | "fs_lock" | "fs_unlock" | "fs_mkfifo" | "fs_set_nonblock"
+            // s277 (#707, #1029, #1030, #1031, #1033): the changes relative
+            // to a held directory and the mode on a handle, the same shape.
+            | "fs_remove_at" | "fs_remove_dir_at" | "fs_create_dir_at" | "fs_symlink_at"
+            | "fs_link_at" | "fs_set_mode_fd" => {
                 let rc = match name {
+                    // s277 (`[os.fs.at.remove]`, `[os.fs.at.remove.dir]`):
+                    // the handle, the name pair, `rmdir`.
+                    "fs_remove_at" | "fs_remove_dir_at" => {
+                        let dir = arg(0)?;
+                        let (np, nl) = self.str_parts(arg(1)?);
+                        let rmdir = self
+                            .b
+                            .iconst(types::I64, i64::from(name == "fs_remove_dir_at"));
+                        self.rt_call(
+                            "__wolf_rt_fs_remove_at",
+                            &[dir, np, nl, rmdir],
+                            Some(types::I64),
+                        )
+                    }
+                    // s277 (`[os.fs.at.mkdir]`): the handle, the name pair,
+                    // the mode.
+                    "fs_create_dir_at" => {
+                        let dir = arg(0)?;
+                        let (np, nl) = self.str_parts(arg(1)?);
+                        let mode = arg(2)?;
+                        self.rt_call(
+                            "__wolf_rt_fs_create_dir_at",
+                            &[dir, np, nl, mode],
+                            Some(types::I64),
+                        )
+                    }
+                    // s277 (`[os.fs.at.symlink]`): the target pair, the
+                    // handle, the name pair — symlinkat's order.
+                    "fs_symlink_at" => {
+                        let (tp, tl) = self.str_parts(arg(0)?);
+                        let dir = arg(1)?;
+                        let (np, nl) = self.str_parts(arg(2)?);
+                        self.rt_call(
+                            "__wolf_rt_fs_symlink_at",
+                            &[tp, tl, dir, np, nl],
+                            Some(types::I64),
+                        )
+                    }
+                    // s277 (`[os.fs.at.link]`): two handles and name pairs,
+                    // `follow` widened.
+                    "fs_link_at" => {
+                        let sd = arg(0)?;
+                        let (sp, sl) = self.str_parts(arg(1)?);
+                        let dd = arg(2)?;
+                        let (dp, dl) = self.str_parts(arg(3)?);
+                        let follow = self.widen_to_wire(arg(4)?, e.span)?;
+                        self.rt_call(
+                            "__wolf_rt_fs_link_at",
+                            &[sd, sp, sl, dd, dp, dl, follow],
+                            Some(types::I64),
+                        )
+                    }
+                    // s277 (`[os.fs.mode.fd]`): the handle and the mode.
+                    "fs_set_mode_fd" => {
+                        let (fd, mode) = (arg(0)?, arg(1)?);
+                        self.rt_call("__wolf_rt_fs_set_mode_fd", &[fd, mode], Some(types::I64))
+                    }
                     // s254 (`[os.fs.access]`, `[os.fs.mkfifo]`): the path
                     // pair and a word (the mode, the bits).
                     "fs_access" | "fs_mkfifo" => {
@@ -14813,8 +14917,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             //
             // s253 (#815, `[os.proc.adopt]`): `fs_adopt` answers a handle the
             // same way — the adopted descriptor's handle, or the negated code.
-            "fs_open" | "fs_create" | "fs_open_mode" | "fs_open_perm" | "os_umask" | "fs_adopt" => {
+            //
+            // s277 (#707, `[os.fs.at.open]`): `fs_open_at` answers a handle
+            // the same way, from the held directory, the name, the open
+            // word and the permission.
+            "fs_open" | "fs_create" | "fs_open_mode" | "fs_open_perm" | "os_umask" | "fs_adopt"
+            | "fs_open_at" => {
                 let rc = match name {
+                    "fs_open_at" => {
+                        let dir = arg(0)?;
+                        let (np, nl) = self.str_parts(arg(1)?);
+                        let open = arg(2)?;
+                        let perm = arg(3)?;
+                        self.rt_call(
+                            "__wolf_rt_fs_open_at",
+                            &[dir, np, nl, open, perm],
+                            Some(types::I64),
+                        )
+                    }
                     "os_umask" => {
                         let mask = arg(0)?;
                         self.rt_call("__wolf_rt_os_umask", &[mask], Some(types::I64))
