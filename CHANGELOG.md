@@ -106,7 +106,7 @@ shapes beyond the issues are recommendations asked at audit
 
 s272 — the OS surface (wolf-lang#686, #921, #922, #976, #975; boreutils'
 `df`, `stat -f`, `chroot`, `nice` and `env --ignore-signal`, yew's REPL).
-Four calls and one mode bit, on every machine; the shapes beyond the
+Five calls and one mode bit, on every machine; the shapes beyond the
 issues are recommendations asked at audit (`[os.surface.note]` R-s272-1
 to R-s272-11), each one what is built.
 
