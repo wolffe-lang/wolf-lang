@@ -30,6 +30,20 @@ gauntlet_step metadata indent python3 -I ci/r42/release-posture.py || exit $?
 gauntlet_step proxy-tests indent python3 -I ci/r42/compiler-proxy-test.py || exit $?
 gauntlet_step pruner-tests indent python3 -I ci/r42/prune-completed-tests-test.py || exit $?
 case "$mode" in
+    validation-plant)
+        export LUPIN="$previous"
+        gauntlet_step compile-plant-test indent cargo test --locked -p wolf_driver --test os_surface_lanes --no-run || exit $?
+        plant_case() {
+            cargo test --locked -p wolf_driver --test os_surface_lanes published_pairing_keeps_the_os_surface_pre_mirror -- --nocapture > "$records/plant-test.log" 2>&1
+            local rc=$?
+            sed 's/^/  /' "$records/plant-test.log"
+            if ((rc != 0)) && grep -q '^test published_pairing_keeps_the_os_surface_pre_mirror \.\.\. FAILED$' "$records/plant-test.log"; then
+                echo 'FAIL published_pairing_keeps_the_os_surface_pre_mirror the deliberate false mirror requirement rejected the published .58 control'
+            fi
+            return "$rc"
+        }
+        gauntlet_step pre-mirror-plant plant_case || exit $?
+        ;;
     validation-prep)
         gauntlet_step build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
         export GITHUB_ENV="$records/tool-inputs.env"

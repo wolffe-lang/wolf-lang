@@ -4,7 +4,11 @@ set -uo pipefail
 cc -O2 -static ci/r42/taskset-shim.c -o /usr/bin/taskset || exit $?
 job=(ci/r42/wolf-steps.sh "$@")
 if [[ "${1:?}" = validation-* ]]; then
-    job=("${R42_RECORDER:?}" --output "${3:?}/local-record.log" -- bash ci/r42/validation-steps.sh "$@")
+    job=("${R42_RECORDER:?}" --output "${3:?}/local-record.log")
+    if [[ "$1" = validation-plant ]]; then
+        job+=(--base "${R42_PLANT_BASE:?}" --plant published_pairing_keeps_the_os_surface_pre_mirror)
+    fi
+    job+=(-- bash ci/r42/validation-steps.sh "$@")
 fi
 /usr/bin/taskset.real -c "${R42_CPU_FOUR:?}" setpriv \
     --reuid=1000 --regid=1000 --clear-groups --bounding-set=-all \

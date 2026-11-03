@@ -126,3 +126,9 @@ wolf 0.2.37/lupin 0.1.59, both on the same fixed std tree. Passing-through
 protocol proxies preserve each actual std observation and per-command
 status. Completed test-executable pruning between debug/release/constrained
 keeps the root compiler/runtime, sources, logs and later-phase inputs.
+
+The final-head plant is refreshed as one commit, one file and one hunk:
+remove only 0.1.58 from the OS gate's pre-mirror list. Its real published
+0.1.58 oracle test must fail by name with a literal FAIL line inside a
+nonzero recorded step. The earlier independent plant and red logs remain
+historical evidence, not a substitute for the final-head recorder check.

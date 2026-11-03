@@ -5,7 +5,7 @@ mode=${1:?observe, red, pairing-red-restore, green, postrebase or plant}
 head=${2:?full head}
 base=/home/mfwolffe/lanes/r42
 [[ "$head" =~ ^[0-9a-f]{40}$ ]] || exit 2
-case "$mode" in observe|red|pairing-red-restore|green|postrebase|plant|validation-prep|validation-debug|validation-release|validation-constrained|validation-startup|validation-std-tests|validation-std-docs|validation-std-published-tests|validation-std-published-docs|validation-differ-compiler-checked|validation-differ-compiler-native|validation-differ-compiler-release|validation-differ-interp-checked|validation-differ-interp-native) ;; *) exit 2 ;; esac
+case "$mode" in observe|red|pairing-red-restore|green|postrebase|plant|validation-plant|validation-prep|validation-debug|validation-release|validation-constrained|validation-startup|validation-std-tests|validation-std-docs|validation-std-published-tests|validation-std-published-docs|validation-differ-compiler-checked|validation-differ-compiler-native|validation-differ-compiler-release|validation-differ-interp-checked|validation-differ-interp-native) ;; *) exit 2 ;; esac
 name="wolf-$mode-$head"
 snapshot="$base/builds/$name"
 inside="/lane/builds/$name"
@@ -37,6 +37,7 @@ flock -w 21600 --close "/home/mfwolffe/lanes/hasu-block-$block.lock" \
     -e CARGO_HOME=/lane/cargo -e CARGO_INCREMENTAL=0 -e CARGO_BUILD_JOBS=4 \
     -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 -e RUST_TEST_THREADS=4 \
     -e CARGO_PROFILE_RELEASE_DEBUG=0 -e R42_RECORDER=/lane/scripts/org-gauntlet-record.sh \
+    -e "R42_PLANT_BASE=$(git -C "$snapshot" rev-parse HEAD^)" \
     -e RUST_TEST_NOCAPTURE=1 -e "WOLF_TEST_CPUS=$four" \
     -e HOME=/lane/scratch/wolf-home -e TMPDIR=/lane/scratch/wolf-tmp \
     -e XDG_CACHE_HOME=/lane/scratch/wolf-cache \
