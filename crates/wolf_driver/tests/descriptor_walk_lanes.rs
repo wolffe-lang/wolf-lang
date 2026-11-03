@@ -308,6 +308,22 @@ fn published_pairing_keeps_the_descriptor_walk_pre_mirror() {
     );
 }
 
+/// 0.1.58 stops at os_name; 0.1.59 reaches the next call or returns its
+/// older open-word answer. Keep all four real-binary cells exercised.
+#[test]
+fn published_pairing_measures_the_four_descriptor_rows() {
+    for row in ["mkdir_at", "symlink_at", "link_at", "open_directory"] {
+        let dir = scratch(&format!("published_pairing_{row}"));
+        let entry = corpus(&format!("fs/{row}.lu"));
+        lupin_leg(
+            &entry,
+            &dir,
+            Pre::Unresolved(&["os_name"]),
+            Some(&declared_stdout(&entry)),
+        );
+    }
+}
+
 /// The checked machine's record of `entry`, run in `dir`.
 fn checked_in(entry: &Path, dir: &Path) -> Obs {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();

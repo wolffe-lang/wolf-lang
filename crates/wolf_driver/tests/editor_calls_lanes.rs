@@ -268,6 +268,31 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
     }
 }
 
+/// Exercise the RAW_LF pairing judge directly with a published interpreter,
+/// without requiring the unrelated native terminal witnesses first.
+#[test]
+fn published_pairing_keeps_the_restore_pre_raw_lf() {
+    let Some(lupin) = lupin_or_skip() else {
+        return;
+    };
+    let dir = scratch("published_pairing_restore");
+    let entry = fixture("restore_rows.lu");
+    let mut cmd = Command::new(lupin);
+    cmd.arg("conform-run").arg(&entry).arg("--json");
+    let out = run_in(cmd, &dir);
+    let want = if cfg!(unix) {
+        "bit25=invalid negative=invalid forged=io file=io lf=io\n"
+    } else {
+        "bit25=invalid negative=invalid forged=unsupported file=unsupported lf=unsupported\n"
+    };
+    judge_lupin(
+        &parse_obs(&out.stdout, "published restore observation"),
+        "restore_rows.lu",
+        want,
+        &["os_term_restore_at_exit"],
+    );
+}
+
 /// `entry` on every machine, in `dir`: the checked machine and lupin
 /// under `conform-run`, the native and release binaries run directly
 /// (and under `taskset` on four CPUs of the allocation on linux). Each stdout is held to `want`
