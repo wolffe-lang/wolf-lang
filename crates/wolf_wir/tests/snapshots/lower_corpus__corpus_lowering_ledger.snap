@@ -164,6 +164,7 @@ faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 faults/wrap_high_as_i32.lu: lowers
 faults/wrap_top_bit_as_int.lu: lowers
 ffi.lu: not mem-clean (pre-wir rungs own it)
+fs/at_rows.lu: lowers
 fs/bytes_dirs.lu: lowers
 fs/change_rows.lu: lowers
 fs/copy_chunk.lu: lowers
@@ -172,7 +173,11 @@ fs/copy_chunk_failed_write.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
 fs/hard_link.lu: lowers
+fs/link_at.lu: lowers
+fs/mkdir_at.lu: lowers
+fs/mode_fd.lu: lowers
 fs/mode_symlink.lu: lowers
+fs/open_directory.lu: lowers
 fs/open_nonblock.lu: lowers
 fs/os_error.lu: lowers
 fs/read_at.lu: lowers
@@ -182,6 +187,7 @@ fs/seek_tell.lu: lowers
 fs/set_times.lu: lowers
 fs/statfs_rows.lu: lowers
 fs/std_write_bytes.lu: lowers
+fs/symlink_at.lu: lowers
 fs/truncate.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
