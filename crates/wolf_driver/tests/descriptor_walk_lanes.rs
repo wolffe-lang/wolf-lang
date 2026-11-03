@@ -28,9 +28,9 @@
 //!   never a skip. boreutils' `tools/roottest` is the shape (read, not
 //!   moved), as s272's container rows are.
 //!
-//! **lupin 0.1.58**, the pairing, predates every new name: each is pinned
-//! here by version, exactly as measured ("does not resolve"); a newer lupin
-//! is held to the mirror (the wolf-interp issue this lane drafts).
+//! **lupin 0.1.58 and 0.1.59** predate every new name: each is pinned
+//! here by version, exactly as measured; a newer lupin is held to the
+//! mirror (tracked in wolf-interp issue 321).
 
 mod lane_exit;
 
@@ -61,7 +61,7 @@ fn fail_row(row: &str, why: &str) -> String {
 
 /// The pairing at this lane, which predates the mirror of the ten names:
 /// its measured answers are pinned per row.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58"];
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
 
 /// The pairing on the unix fixtures, measured on nomad: their first call is
 /// an open with bits 32 and 16, a mode outside 0.1.58's set, so `main`
@@ -222,7 +222,7 @@ fn lupin_or_skip() -> Option<PathBuf> {
     found
 }
 
-/// What the pairing (0.1.58) answers a witness, measured: it resolves a
+/// What a pre-mirror pairing answers a witness, measured: it resolves a
 /// name when the program reaches the call, so it either stops there, by
 /// name, or runs to an answer of its own.
 enum Pre<'a> {
@@ -248,6 +248,18 @@ fn lupin_leg(entry: &Path, dir: &Path, pre: Pre<'_>, want: Option<&str>) {
         "== lupin {} on {name}: {} {}\n{}",
         obs.version, obs.verdict, obs.reason, obs.stdout
     );
+    // 0.1.59 resolves os_name, so these four no longer stop where 0.1.58
+    // did. Each answer is from the published archive, not a presumed mirror.
+    let pre = match (obs.version.as_str(), name.as_str()) {
+        ("0.1.59", "mkdir_at.lu") => Pre::Unresolved(&["fs_create_dir_at"]),
+        ("0.1.59", "symlink_at.lu") => Pre::Unresolved(&["fs_symlink_at"]),
+        ("0.1.59", "link_at.lu") => Pre::Unresolved(&["fs_link_at"]),
+        ("0.1.59", "open_directory.lu") => Pre::Answers(
+            "exit(0)",
+            "file=invalid\nfile_number: true\ndirectory: false\na_directory_handle: true\nwith_nofollow: true\nwith_a_write_mode=invalid\nwith_create_new=invalid\nbit_64=invalid\nunmoved=ok\ncleaned=true\n",
+        ),
+        _ => pre,
+    };
     if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) {
         match pre {
             Pre::Unresolved(calls) => {

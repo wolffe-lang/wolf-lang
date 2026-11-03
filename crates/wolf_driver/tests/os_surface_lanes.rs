@@ -34,9 +34,9 @@
 //! **Nothing here signals a process, and nothing changes a root, a nice
 //! value or a disposition outside a process the test started.**
 //!
-//! **lupin 0.1.58**, the pairing, predates every new name: each is pinned
+//! **lupin 0.1.58 and 0.1.59** predate every new name: each is pinned
 //! here by version, exactly as measured ("does not resolve"); a newer lupin
-//! is held to the mirror (wolf-interp#315, filed by this lane).
+//! is held to the mirror (tracked in wolf-interp issue 315).
 
 mod lane_exit;
 mod test_cpus;
@@ -58,7 +58,7 @@ fn report(line: &str) {
 
 /// The pairing at this lane, which predates the mirror of the five names
 /// (wolf-interp#315): its measured answers are pinned per row (`Lupin`).
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58"];
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
 
 #[derive(Debug)]
 struct Obs {
@@ -208,10 +208,10 @@ fn lupin_or_skip() -> Option<PathBuf> {
 
 /// What lupin is held to for one witness.
 enum Lupin<'a> {
-    /// 0.1.58 stops at a name it does not resolve (one of these); a newer
+    /// The pre-mirror releases stop at a name it does not resolve (one of these); a newer
     /// lupin mirrors the compiler.
     Unresolved(&'a [&'a str]),
-    /// 0.1.58 answers the program itself, with its own older shape (this
+    /// The pre-mirror releases answer the program itself, with its own older shape (this
     /// stdout, measured); a newer lupin mirrors the compiler.
     Answers(&'a str),
 }
@@ -465,7 +465,7 @@ fn the_mode_word_carries_onlcr_rows() {
     } else {
         declared_stdout(&entry)
     };
-    // lupin 0.1.58 answers the rows with its own shape, in which bit 24 is
+    // lupin 0.1.58 and 0.1.59 answer the rows with their own shape, in which bit 24 is
     // not a mode bit (measured on nomad): the mirror is wolf-interp#315.
     every_lane_answers_on_the_host(
         &entry,
