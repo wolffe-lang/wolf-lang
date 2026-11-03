@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1026..1382 name=mkdir_row body=Block
+FnDecl 1384..3085 name=main body=Block

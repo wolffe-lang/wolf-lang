@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1697..2136 name=open_row body=Block
+FnDecl 2138..2442 name=remove_row body=Block
+FnDecl 2444..2756 name=remove_dir_row body=Block
+FnDecl 2758..3088 name=lstat_row body=Block
+FnDecl 3090..3418 name=stat_row body=Block
+FnDecl 3420..4069 name=names_of body=Block
+FnDecl 4219..4433 name=same_file body=Block
+FnDecl 4435..6831 name=main body=Block
