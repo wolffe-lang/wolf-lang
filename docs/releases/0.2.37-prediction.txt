@@ -132,3 +132,24 @@ remove only 0.1.58 from the OS gate's pre-mirror list. Its real published
 0.1.58 oracle test must fail by name with a literal FAIL line inside a
 nonzero recorded step. The earlier independent plant and red logs remain
 historical evidence, not a substitute for the final-head recorder check.
+
+Published-pairing gate sweep prediction before further source edits:
+The first full debug record stopped at the implemented-attribute control:
+published 0.1.59 still declines a construct in attr_implemented_set.lu,
+while the gate's version table ended at 0.1.58 and assumed a later mirror.
+The existing named test must be observed red with the published archive;
+retain its actual 0.1.58 control and full 0.1.59 diagnostic record before
+changing that expectation. This is a compatibility-gate correction, not a
+compiler, runtime, spec or standard-library behavior change.
+An independent static inventory defines every consumed version-gate case,
+including older version boundaries and metadata fixtures. Measure each
+case on both real published 0.1.58 and 0.1.59 with the helper's actual
+arguments, input and platform policy. Collect all baseline outcomes even
+when several rows fail; a completed collection is not a passing gate.
+Do not infer unsupported answers from version numbers or extend every
+pre-mirror list indiscriminately. Preserve matching mirrors and explain
+any unsupported construct independently of the version fallback.
+Only after the inventory and actual named reds are complete may stale
+expectations change. The next source head and strict one-break plant must
+be frozen again, and the full serial validation must restart from prep.
+No record from the earlier frozen head is a green at that new head.
