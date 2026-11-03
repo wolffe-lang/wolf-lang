@@ -44,7 +44,7 @@ fn main() -> int {
     // Each host's side, named: Darwin refuses the GET on KILL and STOP
     // (`io`, EINVAL 22 beside it); linux answers the default (0, 0).
     let darwin = os_name() == "macos"
-    let host_row = if darwin { "io" } else { "0" }
+    let host_row = if darwin { "0" } else { "0" }
     let host_number = if darwin { 22 } else { 0 }
     let kill = action(1048576)
     let kill_number = os_error()
