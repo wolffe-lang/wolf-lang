@@ -2,6 +2,10 @@ wolf 0.2.37 prediction, recorded before implementation
 
 Inputs re-derived 2026-11-03:
 compiler base: 63c1278da2f7767594e6416083705927c7df841f (origin/trunk)
+This is provisional: the final candidate must include the pending macOS
+chroot/signal corpus portability correction. No final full build or gauntlet
+will be submitted before that dependency lands; targeted published-binary
+measurements and the unrelated pairing regressions may run meanwhile.
 compiler control v0.2.36: 5adf3d91f75b3545ff8d38e5b6693b0b9f367a05
 base posture: workspace 0.2.36, development version; pairing 0.1.58/a5378e3
 published interpreter v0.1.59: 668fb752c690f33cf124c052cc9bae2e9696eeef
