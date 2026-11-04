@@ -395,7 +395,22 @@ mod linux {
                 if release {
                     c.arg("--release");
                 }
-                success(c.output().unwrap());
+                let tier = if release { "release" } else { "native" };
+                let started = std::time::Instant::now();
+                let start_unix_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+                eprintln!(
+                    "LINK_CASE_START scope=BUILD+LINK program={name} tier={tier} start_unix_ms={start_unix_ms}"
+                );
+                let output = c.output();
+                eprintln!(
+                    "LINK_CASE_END scope=BUILD+LINK program={name} tier={tier} elapsed_ms={} status={:?}",
+                    started.elapsed().as_millis(),
+                    output.as_ref().map(|out| out.status.code())
+                );
+                success(output.unwrap());
                 let exe = dir.join("output program");
                 success(
                     Command::new(&linker)
