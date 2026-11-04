@@ -26,7 +26,7 @@
 //!
 //! Index growth doubles, in the birth region, keeping abandoned tables
 //! charged just like entry buffers. Eight bytes a slot cost 16–32 bytes
-//! per live entry beyond the initial small table, and less than 64 bytes
+//! per peak entry beyond the initial small table, and less than 64 bytes
 //! per peak entry including abandoned tables (plus the small-table
 //! constant). Clear and remove reuse the index without allocating.
 //!
