@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="other\ndrink\nnope\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043), a control: a bare variant two levels down,
+//! `Out(In(Drink))`, tests its variant. The outer payload is itself a
+//! variant pattern, so every tier already took this arm through the
+//! product walk, which decides a bare name by the type of the slot it
+//! matches; this row was green before s281 and holds that line.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum Inner {
+    In(Kind),
+    Nope,
+}
+
+enum Outer {
+    Out(Inner),
+}
+
+fn deep(o: Outer) -> str {
+    match o {
+        Out(In(Drink)) => "drink",
+        Out(In(_)) => "other",
+        Out(Nope) => "nope",
+    }
+}
+
+fn main() -> !int {
+    print(deep(Outer.Out(Inner.In(Kind.Food))))
+    print(deep(Outer.Out(Inner.In(Kind.Drink))))
+    print(deep(Outer.Out(Inner.Nope)))
+    0
+}

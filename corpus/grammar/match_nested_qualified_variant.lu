@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="other\ndrink\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043), a control: the qualified spelling of a nested
+//! variant, `K(Kind.Drink)`, tests the slot on every tier, and was right
+//! before s281 too (a dotted path is not a bare name, so the arm always
+//! took the product walk).
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum W {
+    K(Kind),
+}
+
+fn say(w: W) -> str {
+    match w {
+        K(Kind.Drink) => "drink",
+        K(_) => "other",
+    }
+}
+
+fn main() -> !int {
+    print(say(W.K(Kind.Food)))
+    print(say(W.K(Kind.Drink)))
+    0
+}

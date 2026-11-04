@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="other 1\ndrink\nother 3\ndrink 4\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat.struct, gram.pat
+//!
+//! s281 (wolf-lang#1043), a control: a bare variant as a struct field's
+//! pattern, at the top of a `match` (`P { k: Drink, .. }`) and inside a
+//! payload (`K(P { k: Drink, n })`), tests the field. Struct patterns
+//! always took the product walk, which decides a bare name by the
+//! field's type, so this row was green before s281 and holds that line.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+struct P {
+    k: Kind,
+    n: int,
+}
+
+enum W {
+    K(P),
+}
+
+fn top(p: P) -> str {
+    match p {
+        P { k: Drink, .. } => "drink",
+        P { n, .. } => "other {n}",
+    }
+}
+
+fn nested(w: W) -> str {
+    match w {
+        K(P { k: Drink, n }) => "drink {n}",
+        K(P { n, .. }) => "other {n}",
+    }
+}
+
+fn main() -> !int {
+    print(top(P { k: Kind.Food, n: 1 }))
+    print(top(P { k: Kind.Drink, n: 2 }))
+    print(nested(W.K(P { k: Kind.Food, n: 3 })))
+    print(nested(W.K(P { k: Kind.Drink, n: 4 })))
+    0
+}
