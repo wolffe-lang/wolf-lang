@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Network-free checks for real-linker input selection and CI provisioning."""
+import ast
 import contextlib
 import hashlib
 import io
+import json
 import os
 from pathlib import Path
 import runpy
@@ -80,6 +82,22 @@ class LinkInputs(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             self.invoke(subprocess.CalledProcessError(1, "ci/fetch-entry-bundle"))
         self.assertFalse(self.envfile.exists())
+
+    def test_licensed_bundle_pin_data_and_validator_are_exact(self):
+        expected = json.loads((ROOT / "ci/r42/licensed-bundle-pins.json").read_text())
+        text = (ROOT / "ci/fetch-entry-bundle").read_text()
+        values = {}
+        for node in ast.parse(text).body:
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+                if node.targets[0].id in ("SHA", "NAME", "ASSET", "MEMBERS"):
+                    values[node.targets[0].id] = ast.literal_eval(node.value)
+        self.assertEqual(values["SHA"], expected["archive_sha256"])
+        self.assertEqual(values["NAME"], expected["stable_cache_name"])
+        self.assertEqual(values["ASSET"], expected["asset"])
+        self.assertEqual(values["MEMBERS"], {k: tuple(v) for k, v in expected["members"].items()})
+        self.assertEqual(len(values["MEMBERS"]), 38)
+        tail = text[text.index("def digest(path):"):]
+        self.assertEqual(hashlib.sha256(tail.encode()).hexdigest(), expected["validator_tail_sha256"])
 
     def test_ci_builds_shared_runtime_before_real_linker_inputs(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()

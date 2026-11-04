@@ -1,0 +1,161 @@
+{
+  "archive_sha256": "8210ac2223d969ab8f0845cc74950a1c68226b58b10dd083cd2e2113acd3e37a",
+  "archive_size": 36514237,
+  "asset": "musl-link-bundle-sha256-8210ac2223d969ab8f0845cc74950a1c68226b58b10dd083cd2e2113acd3e37a.tar.gz",
+  "stable_cache_name": "ld02-musl-link-bundle.tar.gz",
+  "members": {
+    "LICENSES/libc-rust/LICENSE-APACHE": [
+      "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a",
+      9723
+    ],
+    "LICENSES/libc-rust/LICENSE-MIT": [
+      "123a331b5dbf04c30097fa43b8f858bc85df671fe776de498d01f3d6b7c1f69e",
+      1066
+    ],
+    "LICENSES/llvm/compiler-rt/CREDITS.TXT": [
+      "a9901f47a089da41e4690682d00ce4cedaa2baf41fedbe79beee366d43ac2461",
+      1049
+    ],
+    "LICENSES/llvm/compiler-rt/LICENSE.TXT": [
+      "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+      16708
+    ],
+    "LICENSES/llvm/libcxx/CREDITS.TXT": [
+      "054e099bf5954c8821b880f5751d2fbf221bf43cf7c57ac1c2c5ff6263d6d9c3",
+      4124
+    ],
+    "LICENSES/llvm/libcxx/LICENSE.TXT": [
+      "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+      16703
+    ],
+    "LICENSES/llvm/libcxxabi/CREDITS.TXT": [
+      "a259fff28a51623f14917dd68f97f3af7804984087ddc1bfd8196d08ebb75b83",
+      1660
+    ],
+    "LICENSES/llvm/libcxxabi/LICENSE.TXT": [
+      "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c",
+      16706
+    ],
+    "LICENSES/llvm/libunwind/LICENSE.TXT": [
+      "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d",
+      16706
+    ],
+    "LICENSES/llvm/lld/LICENSE.TXT": [
+      "f7891568956e34643eb6a0db1462db30820d40d7266e2a78063f2fe233ece5a0",
+      15138
+    ],
+    "LICENSES/llvm/llvm/LICENSE.TXT": [
+      "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+      15141
+    ],
+    "LICENSES/llvm/llvm/include/llvm/Support/LICENSE.TXT": [
+      "54cbc326a78b9400065bfc5830a57fdcdaf808286d4ac35d8a9e324aa77b7241",
+      303
+    ],
+    "LICENSES/llvm/llvm/lib/Support/BLAKE3/LICENSE": [
+      "6a94bedb8b707ed97f6e310d0d015ab14e0683ffa0a612b02958581b9cc9fc0e",
+      18691
+    ],
+    "LICENSES/llvm/llvm/lib/Support/COPYRIGHT.regex": [
+      "0424e57d4303164dc59a8509c20dae0518b853692e5c2b0e98b11816fdbc97c7",
+      2718
+    ],
+    "LICENSES/musl/COPYRIGHT": [
+      "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      6204
+    ],
+    "LICENSES/musl/debian-copyright": [
+      "8d51fb83b8860aca6362ccf2b4eaa71362e7c2ca54c09cdaa5da18e419ef4a91",
+      10801
+    ],
+    "LICENSES/pax/LICENSE": [
+      "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      35149
+    ],
+    "LICENSES/pax/LICENSE-TRAINING-DATA": [
+      "39d16667f8215642b3e1f6b65c5169dc4ca288c5cef87b17f2c16a0be5a74da3",
+      1450
+    ],
+    "LICENSES/rust/COPYRIGHT-library.html": [
+      "0a65bb747c49c7bb816cbc7188319bd6e4e8d08091c1190b8a3c0971c47968ed",
+      279302
+    ],
+    "LICENSES/rust/licenses/Apache-2.0.txt": [
+      "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+      10280
+    ],
+    "LICENSES/rust/licenses/BSD-2-Clause.txt": [
+      "f32fb3b417a194167cfad068223fc975ba96c5960513a10f66a3c28720aec1df",
+      1267
+    ],
+    "LICENSES/rust/licenses/LLVM-exception.txt": [
+      "e34c58338bd89d43e709e226610d8f32b3e3c47f4ad9a99a8dc1d4ac7842488e",
+      919
+    ],
+    "LICENSES/rust/licenses/MIT.txt": [
+      "b85dcd3e453d05982552c52b5fc9e0bdd6d23c6f8e844b984a88af32570b0cc0",
+      1078
+    ],
+    "LICENSES/rust/licenses/NCSA.txt": [
+      "39cb0234065c92b9e6cee3830cbb52b1aa289aa8fe9ba2e66730fec5cf05c630",
+      1676
+    ],
+    "LICENSES/rust/licenses/Unicode-3.0.txt": [
+      "f5062c9a188d81dfe66b56db4182dcf9e4b17c0d9b0d311a8e20b3a1b075c443",
+      1995
+    ],
+    "LICENSES/wolf/LICENSE": [
+      "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      35149
+    ],
+    "LICENSES/wolf/LICENSE-EXCEPTION": [
+      "a0eec20d7b98b1cd0e5b4d23c3965667c97b68fb365ec95a9516b0c3cbc4fec4",
+      1273
+    ],
+    "MANIFEST": [
+      "8bcea75770a47a23f619ad778d05c84a028f2e840964302d164195ea74e73886",
+      3510
+    ],
+    "NOTICE": [
+      "d63118282bb45cc651d8614f4281f60617d46a1102a320329fd1f7ce0a0db94f",
+      5135
+    ],
+    "SOURCES.json": [
+      "849c40ac2f9f148063110b6aa8f2ee772cab626426753f1015ba6b81c38a808d",
+      11717
+    ],
+    "cc": [
+      "3161aea27abb8beeb669cc6499fa9dc162014b69eecc6fb0d169eed5def25b11",
+      499760
+    ],
+    "ld.lld": [
+      "1217ca75f9df70439294844b2aba14895adc557e2514c6cdc76c4c6676a3757b",
+      66247008
+    ],
+    "libwolf_rt.a": [
+      "6892dac8a6e211f12c6823c0f19497d820a47fdbfe7fb569cd967acf86461aad",
+      46700882
+    ],
+    "sysroot/crt1.o": [
+      "51dba24287eb9b1e74f3c7cb8ea5464491d3a4ba54c016722f149179d08f90f6",
+      5560
+    ],
+    "sysroot/crti.o": [
+      "5cbc84c78a23cdddda0db8cdcd5ec3b5a15b6b555510bd97e4c5a0334aca7b49",
+      2816
+    ],
+    "sysroot/crtn.o": [
+      "d884ee5f9120490b98bb43496f88983ee379a0d2ebf027574fcca7eae9aaa1e7",
+      2760
+    ],
+    "sysroot/libc.a": [
+      "8e69a73c464a86fd8b278f3aa08ab2640b720157e92b45a2d34441c22248ddd4",
+      10961970
+    ],
+    "sysroot/libunwind.a": [
+      "264296d61db52859cc7a8cd6a7a09fc62bde189aa3ea8867fb62ef5129b694bc",
+      201794
+    ]
+  },
+  "validator_tail_sha256": "24e0e44888d8e9930c5a4f874f77d7bad59ba25aed3c2e43f0d779ec575a11d2"
+}
