@@ -93,6 +93,7 @@ fn listen_before_wait(version: &str, commit: &str) -> bool {
         ("0.1.56", "28547b4"),
         ("0.1.57", "fb054c8"),
         ("0.1.58", "6240efe"),
+        ("0.1.59", "668fb75"),
     ]
     .iter()
     .any(|(v, c)| *v == version && commit.starts_with(c))
@@ -108,6 +109,9 @@ fn only_measured_listen_refusals_are_pinned() {
     assert!(listen_before_wait("0.1.58", "6240efe"));
     assert!(!listen_before_wait("0.1.58", "unknown"));
     assert!(!listen_before_wait("0.1.59", "6240efe"));
+    assert!(listen_before_wait("0.1.59", "668fb75"));
+    assert!(!listen_before_wait("0.1.59", "unknown"));
+    assert!(!listen_before_wait("0.1.58", "668fb75"));
 }
 
 /// The native or release binary of `entry`. A compile error FAILS the
