@@ -1,0 +1,388 @@
+QUEUED 2026-11-04T06:37:41Z work=head-7d0539c9
+LOCKS_ACQUIRED 2026-11-04T07:45:52Z budget=6900
+START head-build
+   Compiling wolf_span v0.2.36 (/work/crates/wolf_span)
+   Compiling wolf_rt v0.2.36 (/work/crates/wolf_rt)
+   Compiling wolf_diag v0.2.36 (/work/crates/wolf_diag)
+   Compiling wolf_ast v0.2.36 (/work/crates/wolf_ast)
+   Compiling wolf_lex v0.2.36 (/work/crates/wolf_lex)
+   Compiling wolf_cimport v0.2.36 (/work/crates/wolf_cimport)
+   Compiling wolf_parse v0.2.36 (/work/crates/wolf_parse)
+   Compiling wolf_sema v0.2.36 (/work/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.36 (/work/crates/wolf_fmt)
+   Compiling wolf_mem v0.2.36 (/work/crates/wolf_mem)
+   Compiling wolf_query v0.2.36 (/work/crates/wolf_query)
+   Compiling wolf_doc v0.2.36 (/work/crates/wolf_doc)
+   Compiling wolf_wir v0.2.36 (/work/crates/wolf_wir)
+   Compiling wolf_backend v0.2.36 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.36 (/work/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.36 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_lsp v0.2.36 (/work/crates/wolf_lsp)
+   Compiling wolf_pkg v0.2.36 (/work/crates/wolf_pkg)
+   Compiling wolf_driver v0.2.36 (/work/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 08s
+END head-build exit=0
+START head-runtime
+   Compiling wolf_rt v0.2.36 (/work/crates/wolf_rt)
+    Finished `release` profile [optimized + debuginfo] target(s) in 10.35s
+     Running unittests src/lib.rs (target/release/deps/wolf_rt-f6ab6a2091add3c0)
+
+running 13 tests
+test map::tests::deterministic_hash_vectors_and_empty_binary_strings ... ok
+test map::tests::full_index_miss_is_bounded_and_next_insert_grows ... ok
+test map::tests::copy_is_independent ... ok
+test map::tests::indexed_clear_reuses_storage_and_forgets_old_keys ... ok
+test map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity ... ok
+test map::tests::indexed_integer_collisions_survive_rehash ... ok
+test map::tests::indexed_growth_charges_abandoned_tables_to_birth_region ... ok
+test map::tests::indexed_remove_patches_survivors_without_reordering ... ok
+test map::tests::remove_erases_and_keeps_insertion_order ... ok
+test map::tests::scalar_hash_ignores_entry_padding_and_value_bytes ... ok
+test map::tests::indexed_string_collisions_compare_contents_after_growth ... ok
+test map::tests::str_keys_compare_by_bytes ... ok
+test map::tests::int_keys_round_trip ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 360 filtered out; finished in 0.00s
+
+END head-runtime exit=0
+START head-freestanding
+   Compiling wolf_rt_none v0.2.36 (/work/crates/wolf_rt_none)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.09s
+     Running tests/hook_contract.rs (target/release/deps/hook_contract-c71464d04ca178ff)
+
+running 6 tests
+test lists_and_maps_are_the_hosted_families ... ok
+test holes_render_as_the_hosted_runtime_renders_them ... ok
+test root_allocations_are_never_freed_and_a_finish_frees_its_buffer ... ok
+test map_index_growth_removal_and_copy_obey_the_allocator_hook ... ok
+test a_region_hands_every_block_back_by_its_own_size ... ok
+test the_ledger_and_the_cap_are_the_hosted_ones ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END head-freestanding exit=0
+START head-index-gates
+   Compiling wolf_driver v0.2.36 (/work/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.71s
+     Running tests/map_index_lanes.rs (target/release/deps/map_index_lanes-00fc694acdd74f08)
+
+running 3 tests
+test indexed_map_observations_agree_with_checked_and_lupin ... REPORT map-index semantics --checked: {"commit":"unknown","diagnostics":[],"file":"/work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+REPORT map-index semantics --native: {"commit":"unknown","diagnostics":[],"file":"/work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+REPORT map-index semantics --release: {"commit":"unknown","diagnostics":[],"file":"/work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+REPORT map-index semantics lupin: {"commit":"6240efe","diagnostics":[],"file":"//work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"lupin","impl_version":"0.1.58","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+ok
+test native_string_index_doubling_costs_at_most_two_point_five ... REPORT map-index doubling: 50k=[0.009835316, 0.009823395, 0.009820588] 100k=[0.019320838, 0.020425984, 0.019381404] ratio=1.9730 bound=2.5
+ok
+test native_string_index_stays_within_twenty_times_same_run_c ... REPORT map-index C-relative N=100000: wolf=[0.020333984, 0.020439066, 0.019466992] C=[0.016109452, 0.016149678, 0.016186934] ratio=1.2591 bound=20
+REPORT map-index C-relative N=236000: wolf=[0.059632764, 0.050100119, 0.057625784] C=[0.041568841, 0.040548068, 0.039598503] ratio=1.4212 bound=20
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.92s
+
+END head-index-gates exit=0
+START head-memory-regressions
+   Compiling wolf_driver v0.2.36 (/work/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.57s
+     Running tests/map_pairs_walk_lanes.rs (target/release/deps/map_pairs_walk_lanes-29fb674c1c00841a)
+
+running 7 tests
+test a_refilled_container_charges_only_past_its_storage_on_every_machine ... REPORT reuse_ledger --checked: exit(0) "true true true true true true true 1616\n"
+REPORT reuse_ledger --native: exit(0) "true true true true true true true 1616\n"
+REPORT reuse_ledger --release: exit(0) "true true true true true true true 1616\n"
+ok
+test a_reset_and_refilled_list_does_not_grow_its_region_on_every_machine ... REPORT memory/list_reset_reuse_ledger.lu --checked: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu --native: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu --release: exit(0) "8 true true\n"
+REPORT memory/list_reset_reuse_ledger.lu lupin 0.1.58 6240efe: exit(0) "8 false true\n"
+ok
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_natively ... REPORT mapwalk native: 2000 entries 2891776 B, 4000 entries 2891776 B, 0 B an entry
+REPORT mapwalk release: 2000 entries 2891776 B, 4000 entries 2891776 B, 0 B an entry
+ok
+test a_string_keyed_map_walked_by_get_keeps_a_linear_resident_set_on_the_checked_machine ... REPORT mapwalk checked: 500 entries 10084352 B, 1000 entries 10592256 B, 1015 B an entry
+ok
+test a_walk_that_never_names_its_map_charges_nothing_on_every_machine ... REPORT memory/map_pairs_walk_view.lu --checked: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu --native: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu --release: exit(0) "64 201600 7 true true\n"
+REPORT memory/map_pairs_walk_view.lu lupin 0.1.58 6240efe: exit(0) "64 201600 7 true true\n"
+ok
+test a_walk_whose_body_writes_the_map_sees_its_snapshot_on_every_machine ... REPORT memory/map_pairs_walk_snapshot.lu --checked: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --native: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu --release: exit(0) "abc 6 3 20 4\n"
+REPORT memory/map_pairs_walk_snapshot.lu lupin 0.1.58 6240efe: exit(0) "abc 6 3 20 4\n"
+ok
+test the_refill_pin_names_only_the_measured_release_record ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s
+
+END head-memory-regressions exit=0
+START head-measure
+HEAD_START 2026-11-04T07:47:21Z head=7d0539c9b9935732c303cc957d79c196101829fe
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Linux 8973dcc87d32 7.2.4 #1-NixOS SMP PREEMPT_DYNAMIC Mon Sep  7 15:37:28 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+CPU(s):                                  20
+On-line CPU(s) list:                     0-19
+Model name:                              12th Gen Intel(R) Core(TM) i7-12700KF
+CPU(s) scaling MHz:                      31%
+NUMA node0 CPU(s):                       0-19
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
+END head-measure-build exit=0 2026-11-04T07:47:21Z
+86481b2555d50be76bdf5279697255a563bb05aeee776f94d7cebc1a8e4eba8c  native
+51e795c62652185b25f4e71ca00cd5fbc317dff380a70cb9b019e1e2977b4ca3  release
+1fdc9182847fa9a6f61be1af96444a2ad7ff17aa1600c4879d1ab285d49bd0a8  c972
+25095c31b93accacf736a592d77572dac74d0700b2bc121fc98abf8915d7fede  /work/target/release/wolf
+e532922fa57294048f99973e1fceb1ab71439ab293036fcfbda8b9a246d9e88c  /work/target/release/libwolf_rt.a
+BEGIN head-C-10000 2026-11-04T07:47:22Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=2468 exit=0
+END head-C-10000 exit=0 2026-11-04T07:47:22Z
+BEGIN head-native-issue-10000 2026-11-04T07:47:22Z
+10000
+MEASURE elapsed_s=0.31 peak_kib=3024 exit=0
+END head-native-issue-10000 exit=0 2026-11-04T07:47:22Z
+BEGIN head-release-issue-10000 2026-11-04T07:47:22Z
+10000
+MEASURE elapsed_s=0.08 peak_kib=3148 exit=0
+END head-release-issue-10000 exit=0 2026-11-04T07:47:22Z
+BEGIN head-checked-issue-10000 2026-11-04T07:47:22Z
+wolf conform-run --checked: unsupported — step budget exhausted
+   --> ./main.lu:12:1
+    |
+ 12 | fn num(s: str) -> int {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+ 13 |     var n = 0
+...
+141 | }
+    | ^
+    |
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"./main.lu","x-unsupported-line":12,"x-unsupported-span":[702,3818]}
+MEASURE elapsed_s=5.95 peak_kib=16652 exit=0
+END head-checked-issue-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-native-index-10000 2026-11-04T07:47:28Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=3144 exit=0
+END head-native-index-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-release-index-10000 2026-11-04T07:47:28Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=3204 exit=0
+END head-release-index-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-checked-index-10000 2026-11-04T07:47:28Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=0.21 peak_kib=13760 exit=0
+END head-checked-index-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-native-setonly-10000 2026-11-04T07:47:28Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=2984 exit=0
+END head-native-setonly-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-release-setonly-10000 2026-11-04T07:47:28Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=3008 exit=0
+END head-release-setonly-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-checked-setonly-10000 2026-11-04T07:47:28Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=0.13 peak_kib=13164 exit=0
+END head-checked-setonly-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-native-intmap-10000 2026-11-04T07:47:28Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=2664 exit=0
+END head-native-intmap-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-release-intmap-10000 2026-11-04T07:47:28Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=2640 exit=0
+END head-release-intmap-10000 exit=0 2026-11-04T07:47:28Z
+BEGIN head-checked-intmap-10000 2026-11-04T07:47:28Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=0.03 peak_kib=12840 exit=0
+END head-checked-intmap-10000 exit=0 2026-11-04T07:47:29Z
+BEGIN head-C-100000 2026-11-04T07:47:29Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=8796 exit=0
+END head-C-100000 exit=0 2026-11-04T07:47:29Z
+BEGIN head-native-issue-100000 2026-11-04T07:47:29Z
+100000
+MEASURE elapsed_s=34.05 peak_kib=14372 exit=0
+END head-native-issue-100000 exit=0 2026-11-04T07:48:03Z
+BEGIN head-release-issue-100000 2026-11-04T07:48:03Z
+100000
+MEASURE elapsed_s=8.28 peak_kib=14380 exit=0
+END head-release-issue-100000 exit=0 2026-11-04T07:48:11Z
+BEGIN head-checked-issue-100000 2026-11-04T07:48:11Z
+wolf conform-run --checked: unsupported — step budget exhausted
+   --> ./main.lu:12:1
+    |
+ 12 | fn num(s: str) -> int {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+ 13 |     var n = 0
+...
+141 | }
+    | ^
+    |
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"./main.lu","x-unsupported-line":12,"x-unsupported-span":[702,3818]}
+MEASURE elapsed_s=46.11 peak_kib=55516 exit=0
+END head-checked-issue-100000 exit=0 2026-11-04T07:48:57Z
+BEGIN head-native-index-100000 2026-11-04T07:48:57Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=14496 exit=0
+END head-native-index-100000 exit=0 2026-11-04T07:48:57Z
+BEGIN head-release-index-100000 2026-11-04T07:48:57Z
+100000
+MEASURE elapsed_s=0.02 peak_kib=14580 exit=0
+END head-release-index-100000 exit=0 2026-11-04T07:48:57Z
+BEGIN head-checked-index-100000 2026-11-04T07:48:57Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=20.01 peak_kib=29612 exit=0
+END head-checked-index-100000 exit=0 2026-11-04T07:49:17Z
+BEGIN head-native-setonly-100000 2026-11-04T07:49:17Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=12880 exit=0
+END head-native-setonly-100000 exit=0 2026-11-04T07:49:17Z
+BEGIN head-release-setonly-100000 2026-11-04T07:49:17Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=12896 exit=0
+END head-release-setonly-100000 exit=0 2026-11-04T07:49:17Z
+BEGIN head-checked-setonly-100000 2026-11-04T07:49:17Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=13.40 peak_kib=22968 exit=0
+END head-checked-setonly-100000 exit=0 2026-11-04T07:49:30Z
+BEGIN head-native-intmap-100000 2026-11-04T07:49:30Z
+100000
+MEASURE elapsed_s=0.00 peak_kib=9600 exit=0
+END head-native-intmap-100000 exit=0 2026-11-04T07:49:30Z
+BEGIN head-release-intmap-100000 2026-11-04T07:49:30Z
+100000
+MEASURE elapsed_s=0.00 peak_kib=9452 exit=0
+END head-release-intmap-100000 exit=0 2026-11-04T07:49:31Z
+BEGIN head-checked-intmap-100000 2026-11-04T07:49:31Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=5.02 peak_kib=20248 exit=0
+END head-checked-intmap-100000 exit=0 2026-11-04T07:49:36Z
+BEGIN head-C-236000 2026-11-04T07:49:36Z
+236000
+MEASURE elapsed_s=0.03 peak_kib=18552 exit=0
+END head-C-236000 exit=0 2026-11-04T07:49:36Z
+BEGIN head-native-issue-236000 2026-11-04T07:49:36Z
+236000
+MEASURE elapsed_s=135.92 peak_kib=28568 exit=0
+END head-native-issue-236000 exit=0 2026-11-04T07:51:52Z
+BEGIN head-release-issue-236000 2026-11-04T07:51:52Z
+236000
+MEASURE elapsed_s=36.85 peak_kib=28776 exit=0
+END head-release-issue-236000 exit=0 2026-11-04T07:52:28Z
+BEGIN head-checked-issue-236000 2026-11-04T07:52:28Z
+wolf conform-run --checked: unsupported — step budget exhausted
+   --> ./main.lu:12:1
+    |
+ 12 | fn num(s: str) -> int {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+ 13 |     var n = 0
+...
+141 | }
+    | ^
+    |
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"./main.lu","x-unsupported-line":12,"x-unsupported-span":[702,3818]}
+MEASURE elapsed_s=138.15 peak_kib=113568 exit=0
+END head-checked-issue-236000 exit=0 2026-11-04T07:54:47Z
+BEGIN head-native-index-236000 2026-11-04T07:54:47Z
+236000
+MEASURE elapsed_s=0.06 peak_kib=29028 exit=0
+END head-native-index-236000 exit=0 2026-11-04T07:54:47Z
+BEGIN head-release-index-236000 2026-11-04T07:54:47Z
+236000
+MEASURE elapsed_s=0.06 peak_kib=29072 exit=0
+END head-release-index-236000 exit=0 2026-11-04T07:54:47Z
+BEGIN head-checked-index-236000 2026-11-04T07:54:47Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"236000\n","stdout_sha256":"d487d03f24cb3a74e35f05b8292fd1e8797ef1606bff5cfb8268580436c647d0","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=135.73 peak_kib=52628 exit=0
+END head-checked-index-236000 exit=0 2026-11-04T07:57:02Z
+BEGIN head-native-setonly-236000 2026-11-04T07:57:02Z
+236000
+MEASURE elapsed_s=0.03 peak_kib=25412 exit=0
+END head-native-setonly-236000 exit=0 2026-11-04T07:57:02Z
+BEGIN head-release-setonly-236000 2026-11-04T07:57:02Z
+236000
+MEASURE elapsed_s=0.03 peak_kib=25244 exit=0
+END head-release-setonly-236000 exit=0 2026-11-04T07:57:02Z
+BEGIN head-checked-setonly-236000 2026-11-04T07:57:02Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"236000\n","stdout_sha256":"d487d03f24cb3a74e35f05b8292fd1e8797ef1606bff5cfb8268580436c647d0","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=75.16 peak_kib=38076 exit=0
+END head-checked-setonly-236000 exit=0 2026-11-04T07:58:18Z
+BEGIN head-native-intmap-236000 2026-11-04T07:58:18Z
+236000
+MEASURE elapsed_s=0.01 peak_kib=17716 exit=0
+END head-native-intmap-236000 exit=0 2026-11-04T07:58:18Z
+BEGIN head-release-intmap-236000 2026-11-04T07:58:18Z
+236000
+MEASURE elapsed_s=0.01 peak_kib=17740 exit=0
+END head-release-intmap-236000 exit=0 2026-11-04T07:58:18Z
+BEGIN head-checked-intmap-236000 2026-11-04T07:58:18Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"236000\n","stdout_sha256":"d487d03f24cb3a74e35f05b8292fd1e8797ef1606bff5cfb8268580436c647d0","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=40.00 peak_kib=30776 exit=0
+END head-checked-intmap-236000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-complexity-1-50000 2026-11-04T07:58:58Z
+50000
+MEASURE elapsed_s=0.00 peak_kib=8088 exit=0
+END head-complexity-1-50000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-complexity-1-100000 2026-11-04T07:58:58Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=14500 exit=0
+END head-complexity-1-100000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-complexity-2-50000 2026-11-04T07:58:58Z
+50000
+MEASURE elapsed_s=0.00 peak_kib=8080 exit=0
+END head-complexity-2-50000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-complexity-2-100000 2026-11-04T07:58:58Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=14472 exit=0
+END head-complexity-2-100000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-complexity-3-50000 2026-11-04T07:58:58Z
+50000
+MEASURE elapsed_s=0.00 peak_kib=8088 exit=0
+END head-complexity-3-50000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-complexity-3-100000 2026-11-04T07:58:58Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=14480 exit=0
+END head-complexity-3-100000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-ledger-region-10000 2026-11-04T07:58:58Z
+10000 1630496
+MEASURE elapsed_s=0.30 peak_kib=3144 exit=0
+END head-ledger-region-10000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-ledger-rindex-10000 2026-11-04T07:58:58Z
+10000 1630496
+MEASURE elapsed_s=0.00 peak_kib=3144 exit=0
+END head-ledger-rindex-10000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-ledger-rset-10000 2026-11-04T07:58:58Z
+10000 1470496
+MEASURE elapsed_s=0.00 peak_kib=3100 exit=0
+END head-ledger-rset-10000 exit=0 2026-11-04T07:58:58Z
+BEGIN head-ledger-region-100000 2026-11-04T07:58:58Z
+100000 13685536
+MEASURE elapsed_s=32.17 peak_kib=14328 exit=0
+END head-ledger-region-100000 exit=0 2026-11-04T07:59:30Z
+BEGIN head-ledger-rindex-100000 2026-11-04T07:59:30Z
+100000 13685536
+MEASURE elapsed_s=0.01 peak_kib=14344 exit=0
+END head-ledger-rindex-100000 exit=0 2026-11-04T07:59:30Z
+BEGIN head-ledger-rset-100000 2026-11-04T07:59:30Z
+100000 12085536
+MEASURE elapsed_s=0.01 peak_kib=12876 exit=0
+END head-ledger-rset-100000 exit=0 2026-11-04T07:59:30Z
+BEGIN head-ledger-region-236000 2026-11-04T07:59:30Z
+236000 28523296
+MEASURE elapsed_s=136.59 peak_kib=28360 exit=0
+END head-ledger-region-236000 exit=0 2026-11-04T08:01:47Z
+BEGIN head-ledger-rindex-236000 2026-11-04T08:01:47Z
+236000 28523296
+MEASURE elapsed_s=0.04 peak_kib=28936 exit=0
+END head-ledger-rindex-236000 exit=0 2026-11-04T08:01:47Z
+BEGIN head-ledger-rset-236000 2026-11-04T08:01:47Z
+236000 24747296
+MEASURE elapsed_s=0.03 peak_kib=25228 exit=0
+END head-ledger-rset-236000 exit=0 2026-11-04T08:01:47Z
+HEAD_COMPLETE 2026-11-04T08:01:47Z
+END head-measure exit=0
+JOB_END exit=0 2026-11-04T08:01:47Z

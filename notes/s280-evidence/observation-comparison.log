@@ -1,0 +1,10 @@
+PASS identical answers: 12 checked observations and 33 native/release/C executions
+PASS ledger-region-10000: before=1106320 after=1630496 predicted_delta=524176 measured_delta=524176
+PASS ledger-rindex-10000: before=1106320 after=1630496 predicted_delta=524176 measured_delta=524176
+PASS ledger-rset-10000: before=946320 after=1470496 predicted_delta=524176 measured_delta=524176
+PASS ledger-region-100000: before=9491344 after=13685536 predicted_delta=4194192 measured_delta=4194192
+PASS ledger-rindex-100000: before=9491344 after=13685536 predicted_delta=4194192 measured_delta=4194192
+PASS ledger-rset-100000: before=7891344 after=12085536 predicted_delta=4194192 measured_delta=4194192
+PASS ledger-region-236000: before=20134800 after=28523296 predicted_delta=8388496 measured_delta=8388496
+PASS ledger-rindex-236000: before=20134800 after=28523296 predicted_delta=8388496 measured_delta=8388496
+PASS ledger-rset-236000: before=16358800 after=24747296 predicted_delta=8388496 measured_delta=8388496

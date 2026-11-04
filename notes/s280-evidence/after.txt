@@ -1,0 +1,76 @@
+s280 measured after — code head 7d0539c9b9935732c303cc957d79c196101829fe
+2026-11-04, hasu CPUs 0–5; same host, image, Rust 1.97.1,
+release-profile compiler/runtime, std pin and C -O2 bar as the prediction.
+
+Read after-table.txt beside prediction.txt for the complete 10k/100k/236k
+matrix. Raw head-7d0539c9.log contains every answer, peak and termination;
+all 61 END lines are exit=0. The three checked issue-mode answers remain
+unsupported: a zero conform-run process exit is not an exit(0) verdict.
+check-observations.py verifies that all 12 checked observations and 33
+native/release/C execution answers are identical to the base, and that
+all nine ledger deltas match the prediction exactly.
+
+High-resolution committed gates, three interleaved samples:
+                               base          indexed head       bound
+100k/50k native time            4.7105x          1.9730x           2.5x
+100k native / same-run C      988.8043x          1.2591x            20x
+236k native / same-run C      not reached       1.4212x            20x
+The base C-relative test stops at its failing 100k assertion; the separate
+baseline matrix measured 236k at 62.36 s native and 0.04 s C. The native
+100k median in the identical gate fixture fell from 15.993704380 s to
+0.020333984 s (about 787x). The head's 236k median was 0.057625784 s,
+against C's 0.040548068 s. Do not derive fast-row ratios from GNU time's
+0.01-second rounding: some entries in the full table round to zero.
+
+These bounds gate runtime indexing, not std.map.get's pairs walk. The
+pinned get still walks every entry: native issue mode at 100k fell from
+41.57 to 34.05 s, and at 236k from 169.68 to 135.92 s, because insertion
+became cheap while the lookup walk remained quadratic. Its std change is
+separate. The checked machine is unchanged; no checked speedup is claimed.
+
+Predicted versus measured native retained ledger (bytes):
+N         base region/index   head region/index   predicted delta   measured delta
+10000          1106320              1630496              524176           524176
+100000         9491344             13685536             4194192          4194192
+236000        20134800             28523296             8388496          8388496
+The rset deltas are the same at each N, exactly. Header charge grows by
+16 B. Eight-byte slots at half load add 16–32 B per peak live entry beyond the
+initial table (clear and remove retain that high-water capacity); geometric abandoned tables stay charged, below 64 B per
+peak entry plus the small-table constant. Remove and clear reuse both
+buffers and charge nothing. Copy builds an independent index in its
+ambient region; the freestanding allocator-hook row verifies ownership
+and return of every grant.
+
+Native indexed peak KiB, 10k / 100k / 236k:
+base: 2704 / 9984 / 20532
+head: 3144 / 14496 / 29028
+C:    2468 / 8796 / 18552
+The 10k→100k native peak slope is about 129 B/entry (base 83, C 72),
+remaining linear. The existing memory gate passes unchanged: its native
+and release peaks at 2k/4k both hit the harness's 2,891,776 B high-water
+floor, so its reported zero slope is not a claim of zero allocation.
+Checked's measured slope there was 1,015 B/entry, within its 16 KiB bar.
+
+Targeted head results:
+- 13 hosted map unit rows passed; six new regression rows were red before
+  the fix at b299667b (unit-red-b299667b.log).
+- Six freestanding allocator-hook rows passed, including index rehash,
+  birth-region charges, order-preserving remove, copy and clear/refill.
+- All three new driver gates passed. The semantic fixture answered
+  "0 128 299 -1 300 298 true 46322 901 -1 1" on checked, native, release
+  and lupin 0.1.58 (commit 6240efe).
+- All seven existing map/pairs/reset memory regression rows passed with
+  their original bounds and observations.
+- The seven exported runtime entry-point signatures are unchanged.
+
+Evidence correction: the first runtime test commit used two removal
+slots inferred as i32 rather than i64. b299667b fixes the test ABI; only
+its corrected Mac run is accepted for the removal/accounting reds. The
+older Linux red take had already started before a runner skip correction
+arrived. Its old removal/accounting failures are not accepted evidence;
+its timing gates and semantic program are valid. Both original logs are
+retained rather than silently replacing them.
+
+The full final-head corpus, differ, memory bars and coverage gauntlet,
+and the final one-hunk plant, are subsequent gates, not claimed by this
+targeted measurement record. README read, current for these changes.

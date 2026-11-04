@@ -1,0 +1,56 @@
+COMPLETE
+row	seconds	peak_KiB	exit	answer
+head-C-10000	0.0	2468	0	10000
+head-native-issue-10000	0.31	3024	0	10000
+head-release-issue-10000	0.08	3148	0	10000
+head-checked-issue-10000	5.95	16652	0	unsupported stdout=None
+head-native-index-10000	0.0	3144	0	10000
+head-release-index-10000	0.0	3204	0	10000
+head-checked-index-10000	0.21	13760	0	exit(0) stdout='10000\n'
+head-native-setonly-10000	0.0	2984	0	10000
+head-release-setonly-10000	0.0	3008	0	10000
+head-checked-setonly-10000	0.13	13164	0	exit(0) stdout='10000\n'
+head-native-intmap-10000	0.0	2664	0	10000
+head-release-intmap-10000	0.0	2640	0	10000
+head-checked-intmap-10000	0.03	12840	0	exit(0) stdout='10000\n'
+head-C-100000	0.01	8796	0	100000
+head-native-issue-100000	34.05	14372	0	100000
+head-release-issue-100000	8.28	14380	0	100000
+head-checked-issue-100000	46.11	55516	0	unsupported stdout=None
+head-native-index-100000	0.01	14496	0	100000
+head-release-index-100000	0.02	14580	0	100000
+head-checked-index-100000	20.01	29612	0	exit(0) stdout='100000\n'
+head-native-setonly-100000	0.01	12880	0	100000
+head-release-setonly-100000	0.01	12896	0	100000
+head-checked-setonly-100000	13.4	22968	0	exit(0) stdout='100000\n'
+head-native-intmap-100000	0.0	9600	0	100000
+head-release-intmap-100000	0.0	9452	0	100000
+head-checked-intmap-100000	5.02	20248	0	exit(0) stdout='100000\n'
+head-C-236000	0.03	18552	0	236000
+head-native-issue-236000	135.92	28568	0	236000
+head-release-issue-236000	36.85	28776	0	236000
+head-checked-issue-236000	138.15	113568	0	unsupported stdout=None
+head-native-index-236000	0.06	29028	0	236000
+head-release-index-236000	0.06	29072	0	236000
+head-checked-index-236000	135.73	52628	0	exit(0) stdout='236000\n'
+head-native-setonly-236000	0.03	25412	0	236000
+head-release-setonly-236000	0.03	25244	0	236000
+head-checked-setonly-236000	75.16	38076	0	exit(0) stdout='236000\n'
+head-native-intmap-236000	0.01	17716	0	236000
+head-release-intmap-236000	0.01	17740	0	236000
+head-checked-intmap-236000	40.0	30776	0	exit(0) stdout='236000\n'
+head-complexity-1-50000	0.0	8088	0	50000
+head-complexity-1-100000	0.01	14500	0	100000
+head-complexity-2-50000	0.0	8080	0	50000
+head-complexity-2-100000	0.01	14472	0	100000
+head-complexity-3-50000	0.0	8088	0	50000
+head-complexity-3-100000	0.01	14480	0	100000
+head-ledger-region-10000	0.3	3144	0	10000 1630496
+head-ledger-rindex-10000	0.0	3144	0	10000 1630496
+head-ledger-rset-10000	0.0	3100	0	10000 1470496
+head-ledger-region-100000	32.17	14328	0	100000 13685536
+head-ledger-rindex-100000	0.01	14344	0	100000 13685536
+head-ledger-rset-100000	0.01	12876	0	100000 12085536
+head-ledger-region-236000	136.59	28360	0	236000 28523296
+head-ledger-rindex-236000	0.04	28936	0	236000 28523296
+head-ledger-rset-236000	0.03	25228	0	236000 24747296

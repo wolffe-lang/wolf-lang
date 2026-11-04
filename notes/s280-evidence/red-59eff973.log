@@ -1,0 +1,110 @@
+QUEUED 2026-11-04T06:20:03Z work=red-59eff973
+LOCKS_ACQUIRED 2026-11-04T06:36:19Z budget=6900
+   Compiling wolf_span v0.2.36 (/work/crates/wolf_span)
+   Compiling wolf_rt v0.2.36 (/work/crates/wolf_rt)
+   Compiling wolf_diag v0.2.36 (/work/crates/wolf_diag)
+   Compiling wolf_ast v0.2.36 (/work/crates/wolf_ast)
+   Compiling wolf_lex v0.2.36 (/work/crates/wolf_lex)
+   Compiling wolf_parse v0.2.36 (/work/crates/wolf_parse)
+   Compiling wolf_cimport v0.2.36 (/work/crates/wolf_cimport)
+   Compiling wolf_sema v0.2.36 (/work/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.36 (/work/crates/wolf_fmt)
+   Compiling wolf_mem v0.2.36 (/work/crates/wolf_mem)
+   Compiling wolf_query v0.2.36 (/work/crates/wolf_query)
+   Compiling wolf_wir v0.2.36 (/work/crates/wolf_wir)
+   Compiling wolf_backend v0.2.36 (/work/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.36 (/work/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.36 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_doc v0.2.36 (/work/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.36 (/work/crates/wolf_lsp)
+   Compiling wolf_pkg v0.2.36 (/work/crates/wolf_pkg)
+   Compiling wolf_driver v0.2.36 (/work/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1m 06s
+END red-build exit=0
+   Compiling wolf_rt v0.2.36 (/work/crates/wolf_rt)
+    Finished `release` profile [optimized + debuginfo] target(s) in 11.29s
+     Running unittests src/lib.rs (target/release/deps/wolf_rt-f6ab6a2091add3c0)
+
+running 10 tests
+test map::tests::copy_is_independent ... ok
+
+thread 'map::tests::indexed_integer_collisions_survive_rehash' (1015) panicked at crates/wolf_rt/src/map.rs:312:9:
+32642 key comparisons for 256 probes; bound 4096
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'map::tests::indexed_remove_patches_survivors_without_reordering' (1016) panicked at crates/wolf_rt/src/map.rs:403:17:
+assertion `left == right` failed
+  left: 0
+ right: 1
+test map::tests::indexed_integer_collisions_survive_rehash ... FAILED
+
+thread 'map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity' (1013) panicked at crates/wolf_rt/src/map.rs:312:9:
+33411 key comparisons for 258 probes; bound 4128
+
+thread 'map::tests::indexed_growth_charges_abandoned_tables_to_birth_region' (1014) panicked at crates/wolf_rt/src/map.rs:515:13:
+assertion `left == right` failed
+  left: 16336
+ right: 32608
+test map::tests::indexed_remove_patches_survivors_without_reordering ... FAILED
+
+thread 'map::tests::indexed_string_collisions_compare_contents_after_growth' (1017) panicked at crates/wolf_rt/src/map.rs:312:9:
+32896 key comparisons for 256 probes; bound 4096
+test map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity ... FAILED
+test map::tests::indexed_growth_charges_abandoned_tables_to_birth_region ... FAILED
+test map::tests::int_keys_round_trip ... ok
+test map::tests::indexed_string_collisions_compare_contents_after_growth ... FAILED
+test map::tests::remove_erases_and_keeps_insertion_order ... ok
+test map::tests::str_keys_compare_by_bytes ... ok
+
+thread 'map::tests::indexed_clear_reuses_storage_and_forgets_old_keys' (1012) panicked at crates/wolf_rt/src/map.rs:312:9:
+98432 key comparisons for 512 probes; bound 8192
+test map::tests::indexed_clear_reuses_storage_and_forgets_old_keys ... FAILED
+
+failures:
+
+failures:
+    map::tests::indexed_clear_reuses_storage_and_forgets_old_keys
+    map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity
+    map::tests::indexed_growth_charges_abandoned_tables_to_birth_region
+    map::tests::indexed_integer_collisions_survive_rehash
+    map::tests::indexed_remove_patches_survivors_without_reordering
+    map::tests::indexed_string_collisions_compare_contents_after_growth
+
+test result: FAILED. 4 passed; 6 failed; 0 ignored; 0 measured; 360 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+END red-runtime exit=101
+   Compiling wolf_driver v0.2.36 (/work/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.44s
+     Running tests/map_index_lanes.rs (target/release/deps/map_index_lanes-00fc694acdd74f08)
+
+running 3 tests
+test indexed_map_observations_agree_with_checked_and_lupin ... SKIP map-index lupin: set LUPIN to run the independent interpreter
+REPORT map-index semantics --checked: {"commit":"unknown","diagnostics":[],"file":"/work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+REPORT map-index semantics --native: {"commit":"unknown","diagnostics":[],"file":"/work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+REPORT map-index semantics --release: {"commit":"unknown","diagnostics":[],"file":"/work/crates/wolf_driver/tests/fixtures/map_index_semantics/main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"0 128 299 -1 300 298 true 46322 901 -1 1\n","stdout_sha256":"e2aff2c38da044b0cf5a697eb720438de99bde9dfb4ff12387a9b43990dab5d4","verdict":"exit(0)","warnings":[]}
+ok
+test native_string_index_doubling_costs_at_most_two_point_five ... REPORT map-index doubling: 50k=[3.39839635, 3.39172584, 3.386598415] 100k=[15.976851699000001, 15.969974765, 16.048981038] ratio=4.7105 bound=2.5
+
+thread 'native_string_index_doubling_costs_at_most_two_point_five' (1107) panicked at crates/wolf_driver/tests/map_index_lanes.rs:168:5:
+native string index is not linear: ratio=4.7105, bound=2.5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test native_string_index_stays_within_twenty_times_same_run_c ... REPORT map-index C-relative N=100000: wolf=[15.917009444, 16.017727719, 15.99370438] C=[0.017086587, 0.016157468, 0.016174793] ratio=988.8043 bound=20
+
+thread 'native_string_index_stays_within_twenty_times_same_run_c' (1134) panicked at crates/wolf_driver/tests/map_index_lanes.rs:201:9:
+native string index N=100000: 988.8043x C, bound=20
+FAILED
+
+failures:
+
+failures:
+    native_string_index_doubling_costs_at_most_two_point_five
+    native_string_index_stays_within_twenty_times_same_run_c
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 106.48s
+
+error: test failed, to rerun pass `-p wolf_driver --test map_index_lanes`
+END red-driver exit=101
+RED_COMPLETE unit=101 driver=101 2026-11-04T06:39:26Z
+JOB_END exit=0 2026-11-04T06:39:28Z
