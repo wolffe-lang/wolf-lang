@@ -7,7 +7,7 @@ import sys
 
 
 def matches(line, head):
-    match = re.fullmatch(r"wolf 0\.2\.37\+dev\.([0-9a-f]{7,40}) \(wolfgang, pin ([0-9a-f]{7,40})\)", line)
+    match = re.fullmatch(r"wolf 0\.2\.37\+dev\.([0-9a-f]{7}) \(wolfgang, pin ([0-9a-f]{7})\)", line)
     return bool(re.fullmatch(r"[0-9a-f]{40}", head) and match
                 and match[1] == match[2] and head.startswith(match[1]))
 
