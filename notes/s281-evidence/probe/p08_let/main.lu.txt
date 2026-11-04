@@ -1,0 +1,7 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn main() -> !int {
+    let (Drink, n) = (Kind.Food, 3)
+    print("{n}")
+    0
+}

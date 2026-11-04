@@ -1,0 +1,15 @@
+enum Kind { Drink, Food, Gratuity }
+enum Line { Item(int, Kind) }
+
+fn cost(l: Line) -> int {
+    match l {
+        Item(n, Drink) => n,
+        Item(n, _) => n * 10,
+    }
+}
+
+fn main() -> !int {
+    print("{cost(Line.Item(3, Kind.Food))}")
+    print("{cost(Line.Item(3, Kind.Drink))}")
+    0
+}

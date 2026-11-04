@@ -1,0 +1,14 @@
+enum Kind { Drink, Food, Gratuity }
+enum W { K(Kind) }
+
+fn main() -> !int {
+    let ch = channel[W](1)
+    ch.send(W.K(Kind.Food))?
+    var got = 0
+    select {
+        K(Drink) from ch => { got = 1 },
+        timeout(1.s) => { got = -1 },
+    }
+    print("{got}")
+    0
+}

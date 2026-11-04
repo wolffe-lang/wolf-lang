@@ -1,0 +1,150 @@
+s281: building at 5f1f1c94 in /Users/mfwolffe/lanes/s281/build
+s281: last release 34s ago; waiting 26s for the turn
+s281: lock taken 10:04:25, 9914 MiB free, 26 GB disk; running: bash /Users/mfwolffe/lanes/s281/rig/mac-job1.sh
+== STEP head 15:04:25
+5f1f1c949582f53121e4047bc83c86f23ff72240
+       0
+Darwin 25.4.0 arm64
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+cargo 1.97.1 (c980f4866 2026-06-30)
+lupin 0.1.58 (wolf-interp, reference interpreter at pin a5378e3)
+END head exit=0
+== STEP build 15:04:25
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+END build exit=0
+== STEP probes-base 15:04:25
+## p01_k_drink
+checked  exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+native   exit(0)      run       out='drink\ndrink\ndrink\n' warns=[] 
+release  exit(0)      run       out='drink\ndrink\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+## p02_item_two
+checked  exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+native   exit(0)      run       out='1\n1\n1\n200\n' warns=[] 
+release  exit(0)      run       out='1\n1\n1\n200\n' warns=[] 
+lupin    exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+## p03_two_levels
+checked  exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+## p04_or_payload
+checked  exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+native   exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+release  exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+lupin    exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+## p05_qualified
+checked  exit(0)      run       out='other\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+## p06_lower_bind
+checked  exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+native   exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+release  exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+lupin    exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+## p07_struct_field
+checked  exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+native   exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+release  exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+lupin    exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+## p08_let
+checked  exit(0)      run       out='3\n' warns=[] 
+native   exit(0)      run       out='3\n' warns=[] 
+release  exit(0)      run       out='3\n' warns=[] 
+lupin    exit(0)      run       out='3\n' warns=[] 
+## p08b_let_struct
+checked  exit(0)      run       out='3\n' warns=[] 
+native   exit(0)      run       out='3\n' warns=[] 
+release  exit(0)      run       out='3\n' warns=[] 
+lupin    exit(0)      run       out='3\n' warns=[] 
+## p09_else
+checked  fail(E0809)  typecheck out=None warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+native   fail(E0809)  typecheck out=None warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+release  fail(E0809)  typecheck out=None warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+lupin    unsupported  resolve   out=None warns=[W0603] 
+## p09b_else_match
+checked  exit(0)      run       out='8\n7\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+native   exit(0)      run       out='7\n7\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+release  exit(0)      run       out='7\n7\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+lupin    exit(0)      run       out='8\n7\n' warns=[W0603] 
+## p10_for
+checked  exit(0)      run       out='3\n' warns=[] 
+native   exit(0)      run       out='3\n' warns=[] 
+release  exit(0)      run       out='3\n' warns=[] 
+lupin    exit(0)      run       out='3\n' warns=[] 
+## p11_select
+checked  exit(0)      run       out='1\n' warns=[] 
+native   exit(0)      run       out='1\n' warns=[] 
+release  exit(0)      run       out='1\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## p11b_select_payload
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+lupin    unsupported  resolve   out=None warns=[] 
+## p12_generic
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — a generic enum's variants (generic data)
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — a generic enum's variants (generic data)
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — a generic enum's variants (generic data)
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+## p13_row_tag
+checked  exit(0)      run       out='other\ndrink\nvalue 5\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+native   exit(0)      run       out='drink\ndrink\nvalue 5\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+release  exit(0)      run       out='drink\ndrink\nvalue 5\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+lupin    exit(0)      run       out='other\ndrink\nvalue 5\n' warns=[W0603] 
+## p14_or_top
+checked  exit(0)      run       out='other\nconsumable\n' warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+lupin    exit(0)      run       out='other\nconsumable\n' warns=[] 
+## p15_guard
+checked  exit(0)      run       out='other\nbig drink\ndrink\n' warns=[] 
+native   exit(0)      run       out='big drink\nbig drink\ndrink\n' warns=[] 
+release  exit(0)      run       out='big drink\nbig drink\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\nbig drink\ndrink\n' warns=[] 
+## p16_lowercase_variant
+checked  exit(0)      run       out='other\nfast\n' warns=[] 
+native   exit(0)      run       out='fast\nfast\n' warns=[] 
+release  exit(0)      run       out='fast\nfast\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## p17_at_binding
+checked  exit(0)      run       out='other\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+## p18_second_slot
+checked  exit(0)      run       out='30\n3\n' warns=[] 
+native   exit(0)      run       out='3\n3\n' warns=[] 
+release  exit(0)      run       out='3\n3\n' warns=[] 
+lupin    exit(0)      run       out='30\n3\n' warns=[] 
+## p19_tuple_in_payload
+checked  exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+native   exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+release  exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+lupin    exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+## p20_tuple_top
+checked  exit(0)      run       out='other 275\ndrink\n' warns=[] 
+native   exit(0)      run       out='other 275\ndrink\n' warns=[] 
+release  exit(0)      run       out='other 275\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other 275\ndrink\n' warns=[] 
+## p21_bare_top
+checked  exit(0)      run       out='other\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+END probes-base exit=0
+== STEP probes-0.2.36 15:04:39
+## p01_k_drink
+checked  exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+native   exit(0)      run       out='drink\ndrink\ndrink\n' warns=[] 
+release  exit(0)      run       out='drink\ndrink\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+## p02_item_two
+checked  exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+native   exit(0)      run       out='1\n1\n1\n200\n' warns=[] 
+release  exit(0)      run       out='1\n1\n1\n200\n' warns=[] 
+lupin    exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+END probes-0.2.36 exit=0
+== done 2026-11-04T15:04:40Z
+s281: END exit=0 10:04:40

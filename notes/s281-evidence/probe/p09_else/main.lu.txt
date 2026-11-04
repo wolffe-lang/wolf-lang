@@ -1,0 +1,11 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn pick(n: int) -> int ! {bad(Kind)} {
+    if n > 0 { n } else if n == 0 { bad(Kind.Food) } else { bad(Kind.Drink) }
+}
+
+fn main() -> !int {
+    let a = pick(0) else |bad(Drink)| 7
+    print("{a}")
+    0
+}
