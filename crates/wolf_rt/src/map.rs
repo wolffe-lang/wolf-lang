@@ -398,7 +398,7 @@ mod tests {
             for k in 0..256 {
                 put(m, k, k * 10);
             }
-            for k in [0, 127, 255] {
+            for k in [0i64, 127, 255] {
                 let mut kv = [k, -1];
                 assert_eq!(__wolf_rt_map_remove(m, kv.as_mut_ptr() as i64), 1);
                 assert_eq!(kv[1], k * 10);
@@ -495,7 +495,7 @@ mod tests {
             for k in 0..257 {
                 put(m, k, k);
             }
-            let mut kv = [128, 0];
+            let mut kv = [128i64, 0];
             let removed = __wolf_rt_map_remove(m, kv.as_mut_ptr() as i64);
             put(m, 128, 128);
             let refilled = region_bytes(birth);
