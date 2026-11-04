@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Build the pinned real linker. The strict test also needs the matching musl
 # runtime and sysroot from ci/fetch-test-link-bundle (ligature#13).
-# Optional WOLF supplies an already digest-verified complete 0.2.35 toolchain.
+# Optional WOLF supplies an already digest-verified complete 0.2.36 toolchain.
 set -euo pipefail
-pin=3f20641375d0493b5c62f802f435d624de172ede
+pin=c8ca1be4b3ccb7f8c425638e2d1145d21a62ee5a
 root=$(git rev-parse --show-toplevel)
-tree=${1:-$root/target/test-ligature}
+tree=${1:-$root/target/test-ligature-$pin}
 # #966: a restored cache can leave .git hollow, making git answer the
 # enclosing wolf-lang checkout instead. Clone the default tree again;
 # refuse a caller-named tree without removing it.
@@ -31,9 +31,10 @@ if [ -z "${WOLF:-}" ]; then
     "$tree/tools/fetch-toolchain"
     WOLF="$tree/.wolf-bin/wolf"
 fi
-[ "$("$WOLF" --version | head -1)" = 'wolf 0.2.35 (wolfgang, pin cf0c13d)' ]
+[ "$("$WOLF" --version | head -1)" = 'wolf 0.2.36 (wolfgang, pin 5adf3d9)' ]
 mkdir -p "$tree/target"
-"$WOLF" build --deny-warnings "$tree/src/ligature.lu" -o "$tree/target/ligature"
+env -u WOLF_STD -u WOLF_RT_LIB -u WOLF_LD -u WOLF_AS \
+    "$WOLF" build --deny-warnings "$tree/src/ligature.lu" -o "$tree/target/ligature"
 sha256sum "$tree/target/ligature"
 sha256sum "$tree/target/ligature"
 if [ -n "${GITHUB_ENV:-}" ]; then
