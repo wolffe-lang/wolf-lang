@@ -1,0 +1,275 @@
+s281: building at 0fa55804 in /Users/mfwolffe/lanes/s281/build
+s281: lock taken 12:12:06, 9182 MiB free, 25 GB disk; running: bash /Users/mfwolffe/lanes/s281/rig/mac-job5.sh
+== STEP head 17:12:06
+0fa55804e9bdea949a4e94150a255c3a0e24b2e4
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+END head exit=0
+== STEP red-first 17:12:07
+   Compiling wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_parse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.63s
+     Running tests/ambiguity_trees.rs (target/debug/deps/ambiguity_trees-526fa69673091290)
+
+running 1 test
+test ambiguity_corpus_tree_shapes ... FAILED
+
+failures:
+
+---- ambiguity_corpus_tree_shapes stdout ----
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ Snapshot Summary ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Snapshot file: crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant.snap
+Snapshot: expr_tree__match_nested_bare_variant
+Source: crates/wolf_parse/tests/ambiguity_trees.rs:34
+────────────────────────────────────────────────────────────────────────────────
+Expression: out
+────────────────────────────────────────────────────────────────────────────────
++new results
+────────────┬───────────────────────────────────────────────────────────────────
+          1 │+== tree ==
+          2 │+SourceFile 683..983
+          3 │+  EnumDecl 683..731
+          4 │+    EnumKw 683..687 "enum"
+          5 │+    Ident 688..692 "Kind"
+          6 │+    LBrace 693..694 "{"
+          7 │+    EnumVariant 699..704
+          8 │+      Ident 699..704 "Drink"
+          9 │+    Comma 704..705 ","
+         10 │+    EnumVariant 710..714
+         11 │+      Ident 710..714 "Food"
+         12 │+    Comma 714..715 ","
+         13 │+    EnumVariant 720..728
+         14 │+      Ident 720..728 "Gratuity"
+         15 │+    Comma 728..729 ","
+         16 │+    RBrace 730..731 "}"
+         17 │+  Term 731..732 "\n"
+         18 │+  EnumDecl 733..756
+         19 │+    EnumKw 733..737 "enum"
+         20 │+    Ident 738..739 "W"
+         21 │+    LBrace 740..741 "{"
+         22 │+    EnumVariant 746..753
+         23 │+      Ident 746..747 "K"
+         24 │+      LParen 747..748 "("
+         25 │+      PathType 748..752
+         26 │+        Path 748..752
+         27 │+          Ident 748..752 "Kind"
+         28 │+      RParen 752..753 ")"
+         29 │+    Comma 753..754 ","
+         30 │+    RBrace 755..756 "}"
+         31 │+  Term 756..757 "\n"
+         32 │+  FnDecl 758..855
+         33 │+    FnKw 758..760 "fn"
+         34 │+    Ident 761..764 "say"
+         35 │+    ParamList 764..770
+         36 │+      LParen 764..765 "("
+         37 │+      Param 765..769
+         38 │+        Ident 765..766 "w"
+         39 │+        Colon 766..767 ":"
+         40 │+        PathType 768..769
+         41 │+          Path 768..769
+         42 │+            Ident 768..769 "W"
+         43 │+      RParen 769..770 ")"
+         44 │+    RetType 771..777
+         45 │+      Arrow 771..773 "->"
+         46 │+      PathType 774..777
+         47 │+        Path 774..777
+         48 │+          Ident 774..777 "str"
+         49 │+    Block 778..855
+         50 │+      LBrace 778..779 "{"
+         51 │+      ExprStmt 784..854
+         52 │+        MatchExpr 784..853
+         53 │+          MatchKw 784..789 "match"
+         54 │+          PathExpr 790..791
+         55 │+            Ident 790..791 "w"
+         56 │+          LBrace 792..793 "{"
+         57 │+          MatchArm 802..822
+         58 │+            PathPat 802..810
+         59 │+              Path 802..803
+         60 │+                Ident 802..803 "K"
+         61 │+              LParen 803..804 "("
+         62 │+              IdentPat 804..809
+         63 │+                Ident 804..809 "Drink"
+         64 │+              RParen 809..810 ")"
+         65 │+            FatArrow 811..813 "=>"
+         66 │+            StringExpr 814..821
+         67 │+              StrBegin 814..815 "\""
+         68 │+              StrFragment 815..820 "drink"
+         69 │+              StrEnd 820..821 "\""
+         70 │+            Comma 821..822 ","
+         71 │+          MatchArm 831..847
+         72 │+            PathPat 831..835
+         73 │+              Path 831..832
+         74 │+                Ident 831..832 "K"
+         75 │+              LParen 832..833 "("
+         76 │+              WildcardPat 833..834
+         77 │+                Underscore 833..834 "_"
+         78 │+              RParen 834..835 ")"
+         79 │+            FatArrow 836..838 "=>"
+         80 │+            StringExpr 839..846
+         81 │+              StrBegin 839..840 "\""
+         82 │+              StrFragment 840..845 "other"
+         83 │+              StrEnd 845..846 "\""
+         84 │+            Comma 846..847 ","
+         85 │+          RBrace 852..853 "}"
+         86 │+        Term 853..854 "\n"
+         87 │+      RBrace 854..855 "}"
+         88 │+  Term 855..856 "\n"
+         89 │+  FnDecl 857..982
+         90 │+    FnKw 857..859 "fn"
+         91 │+    Ident 860..864 "main"
+         92 │+    ParamList 864..866
+         93 │+      LParen 864..865 "("
+         94 │+      RParen 865..866 ")"
+         95 │+    RetType 867..874
+         96 │+      Arrow 867..869 "->"
+         97 │+      ErrorUnionType 870..874
+         98 │+        Not 870..871 "!"
+         99 │+        PathType 871..874
+        100 │+          Path 871..874
+        101 │+            Ident 871..874 "int"
+        102 │+    Block 875..982
+        103 │+      LBrace 875..876 "{"
+        104 │+      ExprStmt 881..908
+        105 │+        CallExpr 881..907
+        106 │+          PathExpr 881..886
+        107 │+            Ident 881..886 "print"
+        108 │+          ArgList 886..907
+        109 │+            LParen 886..887 "("
+        110 │+            Arg 887..906
+        111 │+              CallExpr 887..906
+        112 │+                PathExpr 887..890
+        113 │+                  Ident 887..890 "say"
+        114 │+                ArgList 890..906
+        115 │+                  LParen 890..891 "("
+        116 │+                  Arg 891..905
+        117 │+                    CallExpr 891..905
+        118 │+                      MemberExpr 891..894
+        119 │+                        PathExpr 891..892
+        120 │+                          Ident 891..892 "W"
+        121 │+                        Dot 892..893 "."
+        122 │+                        Ident 893..894 "K"
+        123 │+                      ArgList 894..905
+        124 │+                        LParen 894..895 "("
+        125 │+                        Arg 895..904
+        126 │+                          MemberExpr 895..904
+        127 │+                            PathExpr 895..899
+        128 │+                              Ident 895..899 "Kind"
+        129 │+                            Dot 899..900 "."
+        130 │+                            Ident 900..904 "Food"
+        131 │+                        RParen 904..905 ")"
+        132 │+                  RParen 905..906 ")"
+        133 │+            RParen 906..907 ")"
+        134 │+        Term 907..908 "\n"
+        135 │+      ExprStmt 912..940
+        136 │+        CallExpr 912..939
+        137 │+          PathExpr 912..917
+        138 │+            Ident 912..917 "print"
+        139 │+          ArgList 917..939
+        140 │+            LParen 917..918 "("
+        141 │+            Arg 918..938
+        142 │+              CallExpr 918..938
+        143 │+                PathExpr 918..921
+        144 │+                  Ident 918..921 "say"
+        145 │+                ArgList 921..938
+        146 │+                  LParen 921..922 "("
+        147 │+                  Arg 922..937
+        148 │+                    CallExpr 922..937
+        149 │+                      MemberExpr 922..925
+        150 │+                        PathExpr 922..923
+        151 │+                          Ident 922..923 "W"
+        152 │+                        Dot 923..924 "."
+        153 │+                        Ident 924..925 "K"
+        154 │+                      ArgList 925..937
+        155 │+                        LParen 925..926 "("
+        156 │+                        Arg 926..936
+        157 │+                          MemberExpr 926..936
+        158 │+                            PathExpr 926..930
+        159 │+                              Ident 926..930 "Kind"
+        160 │+                            Dot 930..931 "."
+        161 │+                            Ident 931..936 "Drink"
+        162 │+                        RParen 936..937 ")"
+        163 │+                  RParen 937..938 ")"
+        164 │+            RParen 938..939 ")"
+        165 │+        Term 939..940 "\n"
+        166 │+      ExprStmt 944..975
+        167 │+        CallExpr 944..974
+        168 │+          PathExpr 944..949
+        169 │+            Ident 944..949 "print"
+        170 │+          ArgList 949..974
+        171 │+            LParen 949..950 "("
+        172 │+            Arg 950..973
+        173 │+              CallExpr 950..973
+        174 │+                PathExpr 950..953
+        175 │+                  Ident 950..953 "say"
+        176 │+                ArgList 953..973
+        177 │+                  LParen 953..954 "("
+        178 │+                  Arg 954..972
+        179 │+                    CallExpr 954..972
+        180 │+                      MemberExpr 954..957
+        181 │+                        PathExpr 954..955
+        182 │+                          Ident 954..955 "W"
+        183 │+                        Dot 955..956 "."
+        184 │+                        Ident 956..957 "K"
+        185 │+                      ArgList 957..972
+        186 │+                        LParen 957..958 "("
+        187 │+                        Arg 958..971
+        188 │+                          MemberExpr 958..971
+        189 │+                            PathExpr 958..962
+        190 │+                              Ident 958..962 "Kind"
+        191 │+                            Dot 962..963 "."
+        192 │+                            Ident 963..971 "Gratuity"
+        193 │+                        RParen 971..972 ")"
+        194 │+                  RParen 972..973 ")"
+        195 │+            RParen 973..974 ")"
+        196 │+        Term 974..975 "\n"
+        197 │+      ExprStmt 979..981
+        198 │+        LiteralExpr 979..980
+        199 │+          Int 979..980 "0"
+        200 │+        Term 980..981 "\n"
+        201 │+      RBrace 981..982 "}"
+        202 │+  Term 982..983 "\n"
+        203 │+  Eof 983..983 ""
+        204 │+== diagnostics ==
+────────────┴───────────────────────────────────────────────────────────────────
+Stopped on the first failure. Run `cargo insta test` to run all snapshots.
+
+thread 'ambiguity_corpus_tree_shapes' (159427192) panicked at /Users/mfwolffe/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/insta-1.48.0/src/runtime.rs:719:13:
+snapshot assertion for 'expr_tree__match_nested_bare_variant' failed in line 34
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    ambiguity_corpus_tree_shapes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+error: test failed, to rerun pass `-p wolf_parse --test ambiguity_trees`
+END red-first exit=101
+== STEP snap-ambiguity 17:12:08
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/ambiguity_trees.rs (target/debug/deps/ambiguity_trees-526fa69673091290)
+
+running 1 test
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_deep.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_fields.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_guard.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_or.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_name_binds.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_qualified_variant.snap
+updated snapshot /Users/mfwolffe/lanes/s281/build/crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_struct_field_variant.snap
+test ambiguity_corpus_tree_shapes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+END snap-ambiguity exit=0
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_deep.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_fields.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_guard.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_bare_variant_or.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_name_binds.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_qualified_variant.snap
+?? crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_nested_struct_field_variant.snap
+clean:        0
+== done 2026-11-04T17:12:08Z
+s281: END exit=0 12:12:08
