@@ -80,12 +80,15 @@ def screen(data, width=40):
                 cursor += 1
     return '\n'.join(''.join(line) for line in lines)
 
-def terminal_row(name, argv, interrupt=False, dumb=False, expected=0):
+def terminal_row(name, argv, interrupt=False, dumb=False, expected=0, late_size=False):
     pid, fd = pty.fork()
     if pid == 0:
         child_env = dict(env)
         if dumb: child_env['TERM'] = 'dumb'
         os.execvpe(wolf, [wolf, *argv], child_env)
+    if late_size:
+        # The race forced: the parent's size lands after wolf's first frames.
+        time.sleep(0.5)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 40, 0, 0))
     data = bytearray()
     sent = False
@@ -140,6 +143,7 @@ def terminal_row(name, argv, interrupt=False, dumb=False, expected=0):
     print(f'PASS PTY {name}: clean terminal, {len(data)} captured bytes')
 
 terminal_row('success', args)
+terminal_row('late window size', args, late_size=True)
 terminal_row('dumb', args, dumb=True)
 terminal_row('SIGINT via 0x03', args, interrupt=True)
 refusal = root / 'refusal'
