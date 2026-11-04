@@ -35,6 +35,7 @@ flock -w 21600 --close "/home/mfwolffe/lanes/hasu-block-$block.lock" \
     -e PATH=/opt/s263-rust/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     -e RUSTUP_HOME=/opt/s263-rustup -e RUSTUP_TOOLCHAIN=1.97.1 \
     -e CARGO_HOME=/lane/cargo -e CARGO_INCREMENTAL=0 -e CARGO_BUILD_JOBS=4 \
+    -e "WOLF_COMMIT=$head" \
     -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 -e RUST_TEST_THREADS=4 \
     -e CARGO_PROFILE_RELEASE_DEBUG=0 -e R42_RECORDER=/lane/scripts/org-gauntlet-record.sh \
     -e "R42_PLANT_BASE=$(git -C "$snapshot" rev-parse HEAD^)" \
