@@ -23455,9 +23455,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 .as_ref()
                                 .and_then(|tys| tys.get(j))
                                 .is_some_and(|&(tbl, ty)| self.names_sema_case(tbl, ty, &sub));
-                            if test {
-                                return Ok(PatShape::Product);
-                            }
+                            // s281-plant: the case test dropped; the bare name binds again.
+                            let _ = test;
                             binds.push((j, sub));
                         }
                         SyntaxKind::WildcardPat => {}
