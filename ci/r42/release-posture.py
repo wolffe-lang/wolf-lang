@@ -16,6 +16,15 @@ class ReleasePosture(unittest.TestCase):
         self.assertGreater(len(versions), 20)
         self.assertEqual(set(versions), {"0.2.37"})
 
+    def test_fuzz_lock_records_the_release(self):
+        # fuzz/ is outside the workspace; `cargo check --manifest-path
+        # fuzz/Cargo.toml` rewrites a stale lock and leaves the tree dirty.
+        blocks = (ROOT / "fuzz/Cargo.lock").read_text().split("[[package]]")
+        versions = [re.search(r'^version = "([^"]+)"', b, re.M)[1] for b in blocks
+                    if re.search(r'^name = "(?:wolf_[^"]+|xtask)"', b, re.M)]
+        self.assertGreater(len(versions), 10)
+        self.assertEqual(set(versions), {"0.2.37"})
+
     def test_published_pairing(self):
         pairing = (ROOT / "crates/wolf_driver/PAIRING").read_text()
         self.assertIn("lupin-version = 0.1.59\n", pairing)
