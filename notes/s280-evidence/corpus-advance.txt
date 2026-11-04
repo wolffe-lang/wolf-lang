@@ -1,0 +1,63 @@
+s280 — g1's corpus red came from the harness's global WOLF_STD (R-s280-2)
+2026-11-04, hasu block A, CPUs 0–5, image localhost/r41-toolchain:1,
+12 GiB container, both block-A lock names held.
+
+What g1 saw
+The first full gauntlet (g1), at 9973f2b387b67d7eb75ff229dff5d3112109c07c,
+passed every build-shard step: prep-build, fmt, fmt-fixpoint, clippy,
+rt-none, test (2694.754 s), fuzz-check and deps-check. It stopped at the
+first step of the gates shard:
+
+  corpus: corpus/strings.lu: header claims phase `resolve` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+  corpus: corpus/typecheck/method_home_no_std.lu: header claims phase `resolve` but deepest passing phase is `wir` — advance/retreat `//! phase:` deliberately
+  corpus: 1253 file(s), 2 bad — phase ledger enforced via conform-run
+END corpus exit=1 secs=68.827
+
+Nothing after corpus ran. The raw log stays on hasu:
+/home/mfwolffe/lanes/s280/records/full-g1-9973f2b3.log, sha256
+e4d0e11e547e258e124b1da7981be5de01d07bd57345bad70b03f2c365b0fcee.
+
+Why
+g1's environment exported WOLF_STD=/lane/wolf-std/std for the whole
+gauntlet. conform-run takes its std root from --std-root, then from
+WOLF_STD (effective_std_root, crates/wolf_driver/src/main.rs:567;
+conform_run, :4186). The corpus step passes --std-root only for a
+fixture with an adjacent std/ directory (corpus::fixture_std_root,
+xtask/src/corpus.rs:443, used at xtask/src/main.rs:584). Every other
+fixture inherits the environment, so the global export became its std
+root. method_home_no_std.lu states its own premise: "`any` ... comes
+from `std.list`, and no std root is configured for this directory:
+E0301". With a root configured, `xs.any` resolves, and the file lowers
+through WIR. strings.lu also reaches wir when the root is configured.
+
+The lane did not cause it. Neither file differs between the base
+5f1f1c94 and 9973f2b3 (`git diff --quiet 5f1f1c94 9973f2b3 -- corpus`).
+The lane's diff touches crates/wolf_rt/src/map.rs, two test files, two
+test fixtures and notes/. It touches no resolve, typecheck or WIR code.
+
+The proof (corpus-proof-5f1f1c94.log, sha256
+0bc2a1ea2b56b23fb14e111cfc1a00706049ff1e98cb63c96ffba909e232e902,
+identical on hasu and here)
+At the base 5f1f1c94, on the same host and image, with g1's environment
+unchanged, the corpus ran twice. The second run unset only WOLF_STD;
+WOLF_DIST_STD_SRC stayed set.
+
+END base-build exit=0 secs=31
+END base-corpus-same-std exit=1 secs=74
+    log lines 1315–1317: the same two files, "1253 file(s), 2 bad"
+ENV WOLF_STD=unset WOLF_DIST_STD_SRC=/lane/wolf-std
+END base-corpus-no-global-std exit=0 secs=61
+    log line 2513: "1253 file(s), 0 bad"
+CORPUS_PROOF_END with_std=1 without_std=0 2026-11-04T10:49:20Z
+
+The base shows exactly g1's two failures under g1's environment, and
+none without the global export. The advance belongs to the harness, not
+to the index.
+
+The fix (R-s280-2)
+The full-gauntlet environment no longer exports WOLF_STD; it unsets it,
+and the record's prep step prints its state. WOLF_DIST_STD_SRC stays.
+The measurement scripts keep the explicit WOLF_STD they set for
+themselves. Neither corpus header changes. The repository's GitHub
+workflows set no WOLF_STD, so the corrected environment matches CI.
+The whole full gauntlet is taken again (g2) at the new head.
