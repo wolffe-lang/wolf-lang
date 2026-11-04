@@ -95,6 +95,21 @@ Committed before the first change (`3a7bc845`, `notes/s281-prediction.md`). Scor
     checked machine and lupin (R-s281-4).
 - **The plant: see the PR body.** `s281-plant-binds-again` is one commit, one file and one hunk
   on the final head: the fast path's case test is dropped, so the bare name binds again.
+- **The snapshot sets: a miss, caught by the first linux take.** The prediction named the
+  lexer's and parser's per-file snapshots and the lowering ledger; it missed `wolf_parse`'s
+  `ambiguity_trees`, whose `ambiguity_corpus_tree_shapes` snapshots the parse tree of every file
+  in `corpus/grammar/`. The first record at `0fa55804` (hasu block A) went red there and only
+  there: `END test exit=101 secs=3077`, the one failure `snapshot assertion for
+  'expr_tree__match_nested_bare_variant' failed in line 34` (`hasu/red-linux-0fa55804.log`; the
+  `lane_exit` and `wolf_query` panics before it are passing tests' own expected panics). The
+  same assertion fails on nomad at `0fa55804` before the update (`nomad/mac-job5-0fa55804.log`).
+  `9d7cd68c` commits the eight snapshots, one per grammar row: each arm parses as a `PathPat`
+  whose payload sub is an `IdentPat` (`K(Drink)`), a `PathPat` (`Out(In(Drink))`) or an `OrPat`
+  (`K(Drink | Food)`), with no diagnostics, which is the point: the parser cannot tell a binding
+  from a variant, and the type decides. Because `cargo test --workspace` stops at the first red
+  binary, the crates after `wolf_parse` never ran in that take; `nomad/mac-job6-9d7cd68c.log`
+  runs them with `--no-fail-fast` and insta's update off, beside the whole `wolf_parse` suite and
+  `wolf_driver`'s corpus-walking binaries.
 
 ## Evidence index
 
@@ -110,6 +125,14 @@ Committed before the first change (`3a7bc845`, `notes/s281-prediction.md`). Scor
 - `nomad/mac-job4-3972d9d3.log`: every probe at the head, `cargo fmt --all --check`, clippy on
   `wolf_wir` and `wolf_driver` (all targets, `-D warnings`), the corpus snapshot tests, the
   `wolf_wir` suite and the release-parity row;
+- `hasu/red-linux-0fa55804.log` (and its `.side.log`): the first linux record, at `0fa55804`,
+  red at the test step by the missing parse-tree snapshots;
+- `nomad/mac-job5-0fa55804.log`: `ambiguity_trees` red at `0fa55804` on nomad, then the eight
+  snapshots made with insta's update;
+- `nomad/mac-job6-9d7cd68c.log`: at `9d7cd68c`, insta's update off and `--no-fail-fast`: the whole
+  `wolf_parse` suite, `wolf_driver`'s corpus-walking binaries with the four-machine rows and the
+  release-parity row, and every crate the first take's test step never reached (`wolf_pkg`,
+  `wolf_query`, `wolf_rt`, `wolf_sema`, `wolf_span`, `wolf_wir`, `xtask`);
 - `rig/`: the scripts as run (the Mac lock, build-at, the jobs, the probe runner, the plant's
   record scripts, and hasu's gauntlet scripts, adapted by copy from s277's). The org's gauntlet
   recorder is copied in, not committed.
@@ -134,7 +157,10 @@ Commits:
 - `7818bfcf`: the fix, `pattern_shape`.
 - `da68bdc6`, `c029948f`, `3972d9d3`: the lexer's and parser's snapshots of the nine rows, and the
   lowering ledger (the nine rows lower).
-- This note and its evidence.
+- `d49fb950`, `0fa55804`: the evidence and this note (the first linux take's head).
+- `9d7cd68c`: the parse-tree snapshots of the eight grammar rows (`ambiguity_trees`), red at
+  `0fa55804` in the first linux record.
+- The evidence of the red take and the note's account of it.
 
 R-list, recommendations implemented:
 - **R-s281-1, the spec: (A) no `spec/` change**, implemented. The spec is not silent:
@@ -163,6 +189,11 @@ Test targets:
 - [x] every row green on all four machines at the fix; the corpus step `0 bad` (`nomad/mac-job3-7818bfcf.log`)
 - [x] the sweep's probes at the head; fmt, clippy, the snapshot tests, `wolf_wir`, release parity
       (`nomad/mac-job4-3972d9d3.log`)
+- [x] the first linux record at `0fa55804`, red at the test step by `ambiguity_trees` alone
+      (`hasu/red-linux-0fa55804.log`); the snapshots red first and made on nomad
+      (`nomad/mac-job5-0fa55804.log`)
+- [x] `wolf_parse` whole, `wolf_driver`'s corpus-walking binaries and the crates the red take
+      never reached, at `9d7cd68c` (`nomad/mac-job6-9d7cd68c.log`)
 - [ ] the linux record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
