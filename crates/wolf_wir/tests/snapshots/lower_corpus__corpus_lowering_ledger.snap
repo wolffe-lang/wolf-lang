@@ -267,6 +267,14 @@ grammar/match_arm_or_inside_product.lu: lowers
 grammar/match_arm_or_over_product.lu: refused — or-patterns over product patterns (join params)
 grammar/match_arm_product_nested.lu: lowers
 grammar/match_arm_str_in_product.lu: lowers
+grammar/match_nested_bare_variant.lu: lowers
+grammar/match_nested_bare_variant_deep.lu: lowers
+grammar/match_nested_bare_variant_fields.lu: lowers
+grammar/match_nested_bare_variant_guard.lu: lowers
+grammar/match_nested_bare_variant_or.lu: lowers
+grammar/match_nested_name_binds.lu: lowers
+grammar/match_nested_qualified_variant.lu: lowers
+grammar/match_nested_struct_field_variant.lu: lowers
 grammar/match_nullary_variant.lu: lowers
 grammar/match_range.lu: lowers
 grammar/match_range_char.lu: lowers
@@ -933,6 +941,7 @@ rows/match_range_empty.lu: not mem-clean (pre-wir rungs own it)
 rows/match_row_bare_tag.lu: lowers
 rows/match_row_else_control.lu: lowers
 rows/match_row_nested.lu: lowers
+rows/match_row_nested_bare_variant.lu: lowers
 rows/match_row_payload_tag.lu: lowers
 rows/match_row_try_scrutinee.lu: lowers
 rows/match_row_wild_each_half.lu: lowers
