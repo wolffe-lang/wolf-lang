@@ -7,22 +7,28 @@
 //! reads the entry count through the list header's `len` slot and the
 //! region story is the list's word for word (`[mem.region.create.3]`:
 //! header and buffer land in the ambient region at the constructor,
-//! growth stays in the birth region). Four words follow: how keys
-//! compare, the key's byte size, the value's offset inside an entry,
-//! and the value's byte size.
+//! growth stays in the birth region). Four key/value layout words
+//! follow, then a pointer to the hash index and its slot count.
 //!
 //! An ENTRY is the `(K, V)` tuple's flat layout — the key's bytes at
 //! offset 0, the value's at `val_off`, `elem` bytes per entry (the
 //! tuple's list stride) — so `pairs()` is a byte copy of the entry
 //! buffer into a fresh list of that stride and compiled code loads
-//! each element as the tuple it already knows how to load. Entries
-//! keep INSERTION ORDER: the clause leaves iteration order
-//! unspecified, the reference interpreter answers insertion order
-//! (`Value::Map(Vec<(Value, Slot)>)`), and both machines agreeing is
-//! worth more than a hash table's constant factor for the maps this
-//! edition serves (four key types, the count exercise's dozen entries).
-//! Lookup is a linear scan; a hashed store behind the same five entry
-//! points is a runtime change and no clause moves.
+//! each element as the tuple it already knows how to load. Optimized
+//! `pairs()` walks read this same dense buffer through the ListHdr prefix.
+//! Entries keep INSERTION ORDER, agreeing with the checked machine and
+//! reference interpreter. A separate deterministic open-addressing index
+//! stores entry indices, never entry pointers, so entry-buffer growth
+//! cannot invalidate it. Its power-of-two table is at most half full.
+//! Lookup and insertion are expected constant time in the entry count
+//! (plus hashing the key's bytes); adversarial collisions can still be
+//! linear. This is not a randomized, collision-resistant hash.
+//!
+//! Index growth doubles, in the birth region, keeping abandoned tables
+//! charged just like entry buffers. Eight bytes a slot cost 16–32 bytes
+//! per live entry beyond the initial small table, and less than 64 bytes
+//! per peak entry including abandoned tables (plus the small-table
+//! constant). Clear and remove reuse the index without allocating.
 //!
 //! Key comparison is the language's own equality (`[type.map.key]`):
 //! `key_kind` 0 compares the key's bytes (`int`, `char`, `bool` — a
@@ -56,6 +62,9 @@ pub(crate) struct MapHdr {
     key_size: i64,
     val_off: i64,
     val_size: i64,
+    /// Zero is vacant; otherwise a slot is the dense entry index + 1.
+    index: *mut i64,
+    index_cap: i64,
 }
 
 const KEY_BYTES: i64 = 0;
@@ -85,17 +94,102 @@ unsafe fn key_eq(h: &MapHdr, a: *const u8, b: *const u8) -> bool {
     }
 }
 
-/// The entry whose key equals the key at `key_ptr`, by index.
-unsafe fn find(h: &MapHdr, key_ptr: *const u8) -> Option<i64> {
+/// FNV-1a over the equality bytes, with a final avalanche so nearby
+/// scalars and common string prefixes spread across the low slot bits.
+/// No address, ambient state, platform hasher or random seed participates.
+unsafe fn key_hash(h: &MapHdr, key: *const u8) -> u64 {
     unsafe {
-        for i in 0..h.len {
-            let entry = h.data.add((i * h.elem) as usize);
-            if key_eq(h, entry, key_ptr) {
+        let (bytes, len) = if h.key_kind == KEY_STR {
+            (
+                (key as *const i64).read_unaligned() as *const u8,
+                (key as *const i64).add(1).read_unaligned() as usize,
+            )
+        } else {
+            (key, h.key_size as usize)
+        };
+        let mut hash = 0xcbf29ce484222325u64;
+        // An empty string may have a null pointer: never make a slice or
+        // dereference it. Embedded NULs and non-ASCII bytes are ordinary bytes.
+        for i in 0..len {
+            hash = (hash ^ bytes.add(i).read() as u64).wrapping_mul(0x100000001b3);
+        }
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xff51afd7ed558ccd);
+        hash ^= hash >> 33;
+        hash = hash.wrapping_mul(0xc4ceb9fe1a85ec53);
+        hash ^ (hash >> 33)
+    }
+}
+
+/// The entry whose key equals the key at `key_ptr`, by index. Even a
+/// synthetically full table terminates: a vacant slot is not the only exit.
+unsafe fn find(h: &MapHdr, key_ptr: *const u8) -> Option<i64> {
+    if h.len == 0 {
+        return None;
+    }
+    unsafe {
+        let mask = h.index_cap as u64 - 1;
+        let mut slot = key_hash(h, key_ptr) & mask;
+        for _ in 0..h.index_cap {
+            let encoded = h.index.add(slot as usize).read();
+            if encoded == 0 {
+                return None;
+            }
+            let i = encoded - 1;
+            if key_eq(h, h.data.add((i * h.elem) as usize), key_ptr) {
                 return Some(i);
             }
+            slot = (slot + 1) & mask;
         }
         None
     }
+}
+
+/// Place an already-written dense entry into a table with a vacant slot.
+unsafe fn index_insert(h: &MapHdr, entry: i64) {
+    unsafe {
+        let mask = h.index_cap as u64 - 1;
+        let mut slot = key_hash(h, h.data.add((entry * h.elem) as usize)) & mask;
+        for _ in 0..h.index_cap {
+            let p = h.index.add(slot as usize);
+            if p.read() == 0 {
+                p.write(entry + 1);
+                return;
+            }
+            slot = (slot + 1) & mask;
+        }
+        unreachable!("map index must have a vacant slot");
+    }
+}
+
+unsafe fn clear_index(h: &MapHdr) {
+    if h.index_cap != 0 {
+        unsafe { h.index.write_bytes(0, h.index_cap as usize) };
+    }
+}
+
+unsafe fn rebuild_index(h: &MapHdr) {
+    unsafe {
+        clear_index(h);
+        for i in 0..h.len {
+            index_insert(h, i);
+        }
+    }
+}
+
+/// Ensure space for `entries` at load <= 1/2, retaining the old table's
+/// region charge. Copy can request an arbitrary entry count, not a power of two.
+unsafe fn reserve_index(h: &mut MapHdr, entries: i64) {
+    if entries <= h.index_cap / 2 {
+        return;
+    }
+    let mut cap = h.index_cap.max(16);
+    while entries > cap / 2 {
+        cap *= 2;
+    }
+    h.index = alloc_in(h.region, cap as usize * core::mem::size_of::<i64>()) as *mut i64;
+    h.index_cap = cap;
+    unsafe { rebuild_index(h) };
 }
 
 /// `Map[K, V]()` — a fresh empty map: how keys compare, the key's
@@ -126,6 +220,8 @@ pub extern "C" fn __wolf_rt_map_new(
             key_size: key_size.max(0),
             val_off: val_off.max(0),
             val_size: val_size.max(0),
+            index: core::ptr::null_mut(),
+            index_cap: 0,
         });
     }
     hdr as i64
@@ -192,7 +288,9 @@ pub unsafe extern "C" fn __wolf_rt_map_set(hdr: i64, kv: i64) {
             h.data = ndata;
             h.cap = ncap;
         }
+        reserve_index(h, h.len + 1);
         core::ptr::copy_nonoverlapping(kv, h.data.add((h.len * h.elem) as usize), h.elem as usize);
+        index_insert(h, h.len);
         h.len += 1;
     }
 }
@@ -222,9 +320,9 @@ pub unsafe extern "C" fn __wolf_rt_map_pairs(hdr: i64) -> i64 {
 /// the erased value written into the slot's value half, 0 on a miss
 /// (the map unchanged). The entries after it shift down one stride, so
 /// insertion order survives the erase — `pairs()` still reports the
-/// order the remaining keys were first bound in. O(n) in the entries
-/// after the erased one; nothing is freed (the buffer's capacity and
-/// its birth region are the map's, as for a list's `pop`).
+/// order the remaining keys were first bound in. The tail shifts and
+/// the retained index is rebuilt (expected O(slots + key bytes)); no
+/// storage is allocated or freed. The capacities and birth region stay.
 ///
 /// # Safety
 ///
@@ -250,6 +348,7 @@ pub unsafe extern "C" fn __wolf_rt_map_remove(hdr: i64, kv: i64) -> i64 {
             core::ptr::copy(entry.add(stride), entry, after);
         }
         h.len -= 1;
+        rebuild_index(h);
         1
     }
 }
@@ -277,6 +376,7 @@ pub unsafe extern "C" fn __wolf_rt_map_copy(hdr: i64) -> i64 {
             o.data = data;
             o.len = h.len;
             o.cap = h.len;
+            reserve_index(o, o.len);
         }
         out
     }
@@ -290,7 +390,9 @@ pub unsafe extern "C" fn __wolf_rt_map_copy(hdr: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_map_clear(hdr: i64) {
     unsafe {
-        (*(hdr as *mut MapHdr)).len = 0;
+        let h = &mut *(hdr as *mut MapHdr);
+        h.len = 0;
+        clear_index(h);
     }
 }
 
@@ -514,6 +616,96 @@ mod tests {
             // index capacities 16+...+1024, each index slot eight bytes.
             assert_eq!(charged, 96 + 1016 * 16 + 2032 * 8);
             assert_eq!(refilled, charged, "clear, erase and refill charge nothing");
+        }
+    }
+
+    #[test]
+    fn full_index_miss_is_bounded_and_next_insert_grows() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        unsafe {
+            for k in 0..16 {
+                put(m, k, k);
+            }
+            let h = &mut *(m as *mut MapHdr);
+            // Public mutations keep load <= 1/2. Deliberately use only
+            // half the allocated slots to exercise the full-table exit.
+            h.index_cap = 16;
+            rebuild_index(h);
+            reset_comparisons();
+            assert_eq!(get(m, 99), None);
+            assert_eq!(COMPARISONS.with(|n| n.get()), 16);
+            for k in 0..16 {
+                assert_eq!(get(m, k), Some(k));
+            }
+            put(m, 99, 999);
+            assert_eq!(get(m, 99), Some(999));
+            assert_eq!((*(m as *const MapHdr)).index_cap, 64);
+            for k in 0..16 {
+                assert_eq!(get(m, k), Some(k));
+            }
+        }
+    }
+
+    #[test]
+    fn deterministic_hash_vectors_and_empty_binary_strings() {
+        let ints = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        let strings = __wolf_rt_map_new(KEY_STR, 16, 16, 8, 24);
+        unsafe {
+            let ih = &*(ints as *const MapHdr);
+            let sh = &*(strings as *const MapHdr);
+            let two = [2i64, 0];
+            let six = [6i64, 0];
+            assert_eq!(
+                key_hash(ih, two.as_ptr().cast()) & 15,
+                key_hash(ih, six.as_ptr().cast()) & 15
+            );
+            let mut buckets = Vec::new();
+            for text in [b"k2".as_slice(), b"k10".as_slice()] {
+                let kv = [text.as_ptr() as i64, text.len() as i64, 0];
+                buckets.push(key_hash(sh, kv.as_ptr().cast()) & 15);
+            }
+            assert_eq!(buckets[0], buckets[1]);
+            // A str and an int also reach the same initial slot, in
+            // their own typed maps: the language never mixes key types.
+            let k4 = [b"k4".as_ptr() as i64, 2, 0];
+            assert_eq!(
+                key_hash(ih, two.as_ptr().cast()) & 15,
+                key_hash(sh, k4.as_ptr().cast()) & 15
+            );
+            for (i, text) in [b"".as_slice(), b"a\0b", b"a", "λ".as_bytes()]
+                .into_iter()
+                .enumerate()
+            {
+                let kv = [text.as_ptr() as i64, text.len() as i64, i as i64];
+                __wolf_rt_map_set(strings, kv.as_ptr() as i64);
+                let other = text.to_vec();
+                let mut probe = [other.as_ptr() as i64, other.len() as i64, -1];
+                assert_eq!(__wolf_rt_map_get(strings, probe.as_mut_ptr() as i64), 1);
+                assert_eq!(probe[2], i as i64);
+            }
+            let mut null_empty = [0i64, 0, -1];
+            assert_eq!(
+                __wolf_rt_map_get(strings, null_empty.as_mut_ptr() as i64),
+                1
+            );
+            assert_eq!(null_empty[2], 0);
+        }
+    }
+
+    #[test]
+    fn scalar_hash_ignores_entry_padding_and_value_bytes() {
+        for size in [1, 4] {
+            let m = __wolf_rt_map_new(KEY_BYTES, size, 8, 8, 16);
+            let mut kv = [0u8; 16];
+            kv[0] = 1;
+            kv[8..].copy_from_slice(&42i64.to_ne_bytes());
+            unsafe {
+                __wolf_rt_map_set(m, kv.as_ptr() as i64);
+                kv[size as usize..8].fill(0xff);
+                kv[8..].fill(0);
+                assert_eq!(__wolf_rt_map_get(m, kv.as_mut_ptr() as i64), 1);
+                assert_eq!(i64::from_ne_bytes(kv[8..].try_into().unwrap()), 42);
+            }
         }
     }
 
