@@ -248,3 +248,21 @@ so far was measured with LUPIN_STD set, so the focused take at the new
 head runs the whole workspace, the corpus and fuzz-check in CI's
 environment under 0.1.59, without fail-fast, before the head is frozen.
 Predicted: corpus 1253 files, 0 bad; the sixteen static-entry cells run.
+
+PTY status witness prediction before its fixture changes:
+The final chain at 4c795d2b stopped in its release take on the PTY status
+witness: the success row's 40-column screen kept the head of the first
+live frame, `Building [          ] 0/0 · package · native resolve 0s
+(0 reused)`, uncut and wrapped, though the captured bytes end with the
+reporter's own clear. The reporter reads the terminal's width for every
+frame and answers 80 when the width is zero. The fixture sets the PTY's
+size from the parent after pty.fork(), while the child execs wolf at
+once; a child that draws before that ioctl sees a zero width. The faster
+release binary and a loaded host widen that window. This is a fixture
+race, not a reporter or runtime defect, and nothing outside the fixture
+changes. A stress row applies the parent's size half a second late: it
+fails every time while the size is the parent's alone. The fix sets the
+size on the child's terminal before exec, so the first frame always sees
+40 columns. Predicted: the stress row red at its own commit and green
+after the fix; the success, dumb, SIGINT and refusal rows unchanged; the
+new head, strict plant and full chain restart from prep.
