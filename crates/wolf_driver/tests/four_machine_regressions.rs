@@ -94,3 +94,77 @@ fn a_relayed_mut_list_keeps_its_callees_pushes() {
 fn a_mut_list_replaced_by_its_callee_is_the_new_list() {
     four_machines("memory/mut_param_replaced.lu", "6\n");
 }
+
+// s281 (wolf-lang#1043): a bare payload-less variant nested in a payload
+// pattern tests its variant on every machine. The first four rows were red
+// on native and release before the fix (the arm took every value of the
+// outer tag); the last five are controls that were green everywhere.
+
+#[test]
+fn a_bare_variant_nested_in_a_payload_tests_its_variant() {
+    four_machines(
+        "grammar/match_nested_bare_variant.lu",
+        "other\ndrink\nother\n",
+    );
+}
+
+#[test]
+fn a_bare_variant_in_either_payload_slot_tests_that_slot() {
+    four_machines(
+        "grammar/match_nested_bare_variant_fields.lu",
+        "275\n1\n30\n200\n0\n30\n3\n",
+    );
+}
+
+#[test]
+fn a_guarded_arm_tests_its_nested_bare_variant_first() {
+    four_machines(
+        "grammar/match_nested_bare_variant_guard.lu",
+        "other\nbig drink\ndrink\n",
+    );
+}
+
+#[test]
+fn a_bare_variant_in_a_row_tags_payload_tests_its_variant() {
+    four_machines(
+        "rows/match_row_nested_bare_variant.lu",
+        "other\ndrink\nvalue 5\n8\n7\n",
+    );
+}
+
+#[test]
+fn a_bare_variant_two_levels_down_tests_its_variant() {
+    four_machines(
+        "grammar/match_nested_bare_variant_deep.lu",
+        "other\ndrink\nnope\n",
+    );
+}
+
+#[test]
+fn bare_variants_in_a_payload_or_pattern_test_the_slot() {
+    four_machines(
+        "grammar/match_nested_bare_variant_or.lu",
+        "other\nconsumable\nconsumable\n",
+    );
+}
+
+#[test]
+fn a_qualified_nested_variant_tests_the_slot() {
+    four_machines(
+        "grammar/match_nested_qualified_variant.lu",
+        "other\ndrink\n",
+    );
+}
+
+#[test]
+fn a_nested_name_that_is_no_variant_still_binds() {
+    four_machines("grammar/match_nested_name_binds.lu", "food\ndrink\nnone\n");
+}
+
+#[test]
+fn a_bare_variant_as_a_struct_fields_pattern_tests_the_field() {
+    four_machines(
+        "grammar/match_nested_struct_field_variant.lu",
+        "other 1\ndrink\nother 3\ndrink 4\n",
+    );
+}
