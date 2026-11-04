@@ -63,6 +63,8 @@ const KEY_STR: i64 = 1;
 
 /// Do the keys at `a` and `b` name the same key?
 unsafe fn key_eq(h: &MapHdr, a: *const u8, b: *const u8) -> bool {
+    #[cfg(test)]
+    tests::COMPARISONS.with(|n| n.set(n.get() + 1));
     unsafe {
         if h.key_kind == KEY_STR {
             let ap = (a as *const i64).read_unaligned() as *const u8;
@@ -296,6 +298,224 @@ pub unsafe extern "C" fn __wolf_rt_map_clear(hdr: i64) {
 mod tests {
     use super::*;
     use crate::list::ListHdr;
+
+    std::thread_local! {
+        pub(super) static COMPARISONS: core::cell::Cell<usize> = const { core::cell::Cell::new(0) };
+    }
+
+    fn reset_comparisons() {
+        COMPARISONS.with(|n| n.set(0));
+    }
+
+    fn bounded_comparisons(n: usize) {
+        let comparisons = COMPARISONS.with(|n| n.get());
+        assert!(
+            comparisons <= 16 * n,
+            "{comparisons} key comparisons for {n} probes; bound {}",
+            16 * n
+        );
+    }
+
+    unsafe fn put(m: i64, k: i64, v: i64) {
+        let kv = [k, v];
+        unsafe { __wolf_rt_map_set(m, kv.as_ptr() as i64) };
+    }
+
+    unsafe fn get(m: i64, k: i64) -> Option<i64> {
+        let mut kv = [k, -1];
+        (unsafe { __wolf_rt_map_get(m, kv.as_mut_ptr() as i64) } != 0).then_some(kv[1])
+    }
+
+    unsafe fn ordered_keys(m: i64) -> Vec<i64> {
+        unsafe {
+            let h = &*(m as *const MapHdr);
+            assert_eq!(crate::list::__wolf_rt_list_len(m), h.len, "ListHdr prefix");
+            let pairs = __wolf_rt_map_pairs(m);
+            (0..h.len)
+                .map(|i| {
+                    let mut kv = [0i64; 2];
+                    assert_eq!(
+                        crate::list::__wolf_rt_list_read(pairs, i, kv.as_mut_ptr() as i64),
+                        1
+                    );
+                    let direct = (h.data.add((i * h.elem) as usize) as *const i64).read_unaligned();
+                    assert_eq!(kv[0], direct, "pairs snapshot and in-place walk agree");
+                    kv[0]
+                })
+                .collect()
+        }
+    }
+
+    #[test]
+    fn indexed_integer_collisions_survive_rehash() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        unsafe {
+            // 2 and 6 collide in the initial 16-slot deterministic index.
+            put(m, 2, 20);
+            put(m, 6, 60);
+            reset_comparisons();
+            for k in 0..256 {
+                put(m, k, k * 10);
+            }
+            bounded_comparisons(256);
+            reset_comparisons();
+            for k in 0..256 {
+                assert_eq!(get(m, k), Some(k * 10));
+            }
+            assert_eq!(get(m, 256), None);
+            bounded_comparisons(257);
+            let mut order = vec![2, 6];
+            order.extend((0..256).filter(|k| *k != 2 && *k != 6));
+            assert_eq!(ordered_keys(m), order);
+        }
+    }
+
+    #[test]
+    fn indexed_string_collisions_compare_contents_after_growth() {
+        let keys: Vec<Vec<u8>> = (0..256).map(|i| format!("k{i}").into_bytes()).collect();
+        let m = __wolf_rt_map_new(KEY_STR, 16, 16, 8, 24);
+        unsafe {
+            // k2 and k10 collide in the initial 16-slot index.
+            for i in [2, 10].into_iter().chain(0..256) {
+                let kv = [keys[i].as_ptr() as i64, keys[i].len() as i64, i as i64];
+                __wolf_rt_map_set(m, kv.as_ptr() as i64);
+            }
+            reset_comparisons();
+            for (i, key) in keys.iter().enumerate() {
+                let other = key.clone();
+                let mut kv = [other.as_ptr() as i64, other.len() as i64, -1];
+                assert_eq!(__wolf_rt_map_get(m, kv.as_mut_ptr() as i64), 1);
+                assert_eq!(kv[2], i as i64);
+            }
+            bounded_comparisons(256);
+        }
+    }
+
+    #[test]
+    fn indexed_remove_patches_survivors_without_reordering() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        unsafe {
+            for k in 0..256 {
+                put(m, k, k * 10);
+            }
+            for k in [0, 127, 255] {
+                let mut kv = [k, -1];
+                assert_eq!(__wolf_rt_map_remove(m, kv.as_mut_ptr() as i64), 1);
+                assert_eq!(kv[1], k * 10);
+                assert_eq!(__wolf_rt_map_remove(m, kv.as_mut_ptr() as i64), 0);
+            }
+            let order: Vec<i64> = (0..256).filter(|k| ![0, 127, 255].contains(k)).collect();
+            assert_eq!(ordered_keys(m), order);
+            reset_comparisons();
+            for k in 0..256 {
+                assert_eq!(
+                    get(m, k),
+                    if [0, 127, 255].contains(&k) {
+                        None
+                    } else {
+                        Some(k * 10)
+                    }
+                );
+            }
+            bounded_comparisons(256);
+            put(m, 127, 99);
+            let mut order = order;
+            order.push(127);
+            assert_eq!(ordered_keys(m), order);
+            assert_eq!(get(m, 127), Some(99));
+        }
+    }
+
+    #[test]
+    fn indexed_clear_reuses_storage_and_forgets_old_keys() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        unsafe {
+            for k in 0..256 {
+                put(m, k, k);
+            }
+            let data = (*(m as *const MapHdr)).data;
+            __wolf_rt_map_clear(m);
+            __wolf_rt_map_clear(m);
+            for k in 0..256 {
+                assert_eq!(get(m, k), None);
+            }
+            for k in (256..512).rev() {
+                put(m, k, k);
+            }
+            assert_eq!((*(m as *const MapHdr)).data, data);
+            assert_eq!(ordered_keys(m), (256..512).rev().collect::<Vec<_>>());
+            reset_comparisons();
+            for k in 0..512 {
+                assert_eq!(get(m, k), (k >= 256).then_some(k));
+            }
+            bounded_comparisons(512);
+        }
+    }
+
+    #[test]
+    fn indexed_copy_has_independent_storage_and_grows_from_exact_capacity() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        unsafe {
+            for k in 0..257 {
+                put(m, k, k);
+            }
+            let c = __wolf_rt_map_copy(m);
+            assert_eq!(ordered_keys(c), ordered_keys(m));
+            put(c, 257, 257);
+            put(c, 0, 999);
+            assert_eq!(get(m, 0), Some(0));
+            assert_eq!(get(m, 257), None);
+            __wolf_rt_map_clear(m);
+            reset_comparisons();
+            for k in 0..258 {
+                assert_eq!(get(c, k), Some(if k == 0 { 999 } else { k }));
+            }
+            bounded_comparisons(258);
+        }
+    }
+
+    #[test]
+    fn indexed_growth_charges_abandoned_tables_to_birth_region() {
+        use crate::native::{
+            __wolf_rt_region_ambient_enter as enter, __wolf_rt_region_ambient_leave as leave,
+            __wolf_rt_region_free as free, __wolf_rt_region_new as new, region_bytes,
+        };
+        let birth = new();
+        let child = new();
+        unsafe {
+            let prev = enter(birth);
+            let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+            let saved = enter(child);
+            for k in 0..257 {
+                put(m, k, k);
+            }
+            let child_after_growth = region_bytes(child);
+            let charged = region_bytes(birth);
+            __wolf_rt_map_clear(m);
+            for k in 0..257 {
+                put(m, k, k);
+            }
+            let mut kv = [128, 0];
+            let removed = __wolf_rt_map_remove(m, kv.as_mut_ptr() as i64);
+            put(m, 128, 128);
+            let refilled = region_bytes(birth);
+            let child_after_refill = region_bytes(child);
+            leave(saved);
+            leave(prev);
+            free(child);
+            free(birth);
+            assert_eq!(removed, 1);
+            assert_eq!(
+                child_after_growth, 0,
+                "growth never charges the ambient child"
+            );
+            assert_eq!(child_after_refill, 0);
+            // 96-byte rounded header, entry capacities 8+...+512,
+            // index capacities 16+...+1024, each index slot eight bytes.
+            assert_eq!(charged, 96 + 1016 * 16 + 2032 * 8);
+            assert_eq!(refilled, charged, "clear, erase and refill charge nothing");
+        }
+    }
 
     /// `copy` (#384): an independent map — same entries, same order,
     /// and a write to either leaves the other alone.
