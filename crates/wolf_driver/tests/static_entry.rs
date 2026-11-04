@@ -7,7 +7,7 @@
 //! environment) x two tiers (native, release) x three links of ONE object
 //! per reader and tier: `cc` against glibc and the host `libwolf_rt.a`
 //! (what `wolf build` runs), and the musl link bundle's sysroot (ligature's
-//! `link-bundle-2026-10-25`, fetched by digest by `ci/fetch-entry-bundle`)
+//! `link-bundle-wolf-0.2.36`, fetched by digest by `ci/fetch-entry-bundle`)
 //! with a musl `libwolf_rt.a` built from this checkout, by `ld.lld` and by
 //! GNU `ld`. Each link is its own test, so a red run names the links that
 //! moved; each prints every cell (`cell ...` on stderr) before it judges.
