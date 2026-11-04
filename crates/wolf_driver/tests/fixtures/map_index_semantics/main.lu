@@ -1,0 +1,31 @@
+//! member: false
+//! s280: order, replacement, remove, snapshot, copy, and clear on every machine.
+fn main() {
+    var m = Map[int, int]()
+    for i in 0..300 {
+        m[i] = i
+    }
+    let snapshot = m.pairs()
+    let a = (mut m).remove(0) else -1
+    let b = (mut m).remove(128) else -1
+    let c = (mut m).remove(299) else -1
+    let missing = (mut m).remove(128) else -1
+    m[0] = 999
+    var copied = copy m
+    copied[1] = 901
+    (mut m).clear()
+    m[777] = 888
+    var expected = 1
+    var ordered = true
+    var sum = 0
+    for (k, v) in copied.pairs() {
+        if expected == 128 { expected = 129 }
+        if expected == 299 { expected = 0 }
+        if k != expected { ordered = false }
+        expected = expected + 1
+        sum = sum + v
+    }
+    let found = copied[1] else -1
+    let absent = m[1] else -1
+    print("{a} {b} {c} {missing} {snapshot.len} {copied.len} {ordered} {sum} {found} {absent} {m.len}")
+}

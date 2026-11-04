@@ -1,0 +1,29 @@
+//! member: false
+//! s280: native Map index workload, independent of std.map.get's walk.
+fn num(s: str) -> int {
+    var n = 0
+    for b in s.bytes() {
+        n = n * 10 + (b as int - 48)
+    }
+    n
+}
+
+fn main() -> !int {
+    let args = env_args()
+    let n = num(args[0])
+    var m = Map[str, int]()
+    var i = 0
+    while i < n {
+        m["0#key{i}"] = i
+        i = i + 1
+    }
+    var hits = 0
+    i = 0
+    while i < n {
+        let v = m["0#key{i}"] else -1
+        if v == i { hits = hits + 1 }
+        i = i + 1
+    }
+    print("{hits}")
+    0
+}
