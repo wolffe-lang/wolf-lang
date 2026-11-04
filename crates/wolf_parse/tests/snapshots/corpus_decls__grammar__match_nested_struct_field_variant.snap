@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 503..551 name=Kind variants=3
+StructDecl 553..590 name=P fields=2
+EnumDecl 592..612 name=W variants=1
+FnDecl 614..732 name=top body=Block
+FnDecl 734..864 name=nested body=Block
+FnDecl 866..1075 name=main body=Block
