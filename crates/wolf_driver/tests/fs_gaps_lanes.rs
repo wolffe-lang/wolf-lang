@@ -207,6 +207,34 @@ fn lupin_or_skip() -> Option<PathBuf> {
 /// bit's case: 0.1.55 resolves `fs_open_mode` and refuses the bit as a mode
 /// outside its set (`invalid`, measured at s254's prediction commit), so it
 /// runs the program and its first row reads `invalid`.
+fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
+    PRE_MIRROR_LUPIN.contains(&version)
+        || (version == "0.1.59"
+            && ((name == "nofollow_rows.lu" && calls.is_empty())
+                || (name == "fstat_record_rows.lu" && calls == ["fs_fstat_record"])))
+}
+
+#[test]
+fn published_059_keeps_only_the_two_measured_fs_gap_cells() {
+    assert!(measured_pre_mirror("0.1.58", "access_rows.lu", &["fs_access"]));
+    assert!(measured_pre_mirror("0.1.59", "nofollow_rows.lu", &[]));
+    assert!(measured_pre_mirror(
+        "0.1.59",
+        "fstat_record_rows.lu",
+        &["fs_fstat_record"]
+    ));
+    for (name, calls) in [
+        ("access_rows.lu", &["fs_access"][..]),
+        ("lock_rows.lu", &["fs_lock", "fs_unlock"][..]),
+        ("fifo_rows.lu", &["fs_mkfifo", "fs_fstat_record"][..]),
+        ("nonblock_rows.lu", &["fs_set_nonblock", "fs_write_some"][..]),
+        ("other_rows.lu", &[][..]),
+    ] {
+        assert!(!measured_pre_mirror("0.1.59", name, calls), "{name}");
+    }
+    assert!(!measured_pre_mirror("0.1.59+dev", "nofollow_rows.lu", &[]));
+}
+
 fn judge_lupin(entry: &Path, dir: &Path, want: &str, calls: &[&str]) {
     let Some(l) = lupin_or_skip() else {
         return;
@@ -219,7 +247,8 @@ fn judge_lupin(entry: &Path, dir: &Path, want: &str, calls: &[&str]) {
         "== lupin {} on {name}: {} {}\n{}",
         obs.version, obs.verdict, obs.reason, obs.stdout
     );
-    if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) && calls.is_empty() {
+    let pre_mirror = measured_pre_mirror(&obs.version, &name, calls);
+    if pre_mirror && calls.is_empty() {
         assert!(
             obs.verdict == "exit(0)" && obs.stdout.starts_with("file_read=invalid\n"),
             "lupin {} (pre-mirror) refuses the no-follow bit as a mode outside its set: {obs:?}",
@@ -230,7 +259,7 @@ fn judge_lupin(entry: &Path, dir: &Path, want: &str, calls: &[&str]) {
             obs.version,
             obs.stdout.trim_end().replace('\n', " | ")
         ));
-    } else if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) {
+    } else if pre_mirror {
         assert_eq!(
             obs.verdict, "unsupported",
             "lupin {} refuses {name}: {obs:?}",
