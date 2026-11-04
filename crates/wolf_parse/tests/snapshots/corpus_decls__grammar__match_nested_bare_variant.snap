@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 683..731 name=Kind variants=3
+EnumDecl 733..756 name=W variants=1
+FnDecl 758..855 name=say body=Block
+FnDecl 857..982 name=main body=Block
