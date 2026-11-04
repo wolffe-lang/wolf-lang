@@ -218,3 +218,33 @@ corpus or std change. Predicted for this file: the plain-copy row is its
 only mover (24 of 25 pass under 0.1.59), and the 0.1.58 control still
 answers exit(0). Any other mover is named from the collection before it
 is edited. The new head, strict plant and full chain restart from prep.
+
+Collection classification and release-tree prediction before more edits:
+The collection at c9899fbc named three failed tests, a corpus gate with
+two bad rows and a dirty tree. Only the plain-copy row passes under 0.1.58;
+it is the stale pin above. The others fail under both lupins and are not
+interpreter movers. Three are omissions of the version bump itself, each
+seen before at 0.2.36: the two-module interface snapshot still stamps
+toolchain 0.2.36, fuzz/Cargo.lock still records the workspace at 0.2.36
+(fuzz-check rewrites it, so the tree is dirty after the gauntlet), and the
+refreshed README links the release note by a relative path that resolves
+to nothing where the README is installed. Each is fixed in its own file;
+the release posture check gains fuzz/Cargo.lock first, so that omission is
+red by name before the lock changes. Predicted: interface_pretty,
+shipped_readme_has_no_relative_links and a clean tree after fuzz-check.
+
+The corpus gate's two rows and bench-gates' is_blank refusals come from
+the validation helper, not the release: its debug and release takes export
+WOLF_STD and LUPIN_STD, which CI and the 0.2.36 debug take never set, so
+the no-std-root row resolves through the fixed std and a directory's own
+std root is overridden. Those takes also pointed WOLF_RT_LIB at the debug
+runtime and never required the static-entry inputs, so sixteen static
+entry cells skipped silently when the sysroot was missing. The debug and
+release takes now run in CI's environment: no WOLF_STD, LUPIN_STD or
+WOLF_RT_LIB, and WOLF_STATIC_ENTRY_REQUIRE=1. A static check of that
+environment is committed red before the helper changes. The std and
+differential takes keep their explicit roots. Every lupin column measured
+so far was measured with LUPIN_STD set, so the focused take at the new
+head runs the whole workspace, the corpus and fuzz-check in CI's
+environment under 0.1.59, without fail-fast, before the head is frozen.
+Predicted: corpus 1253 files, 0 bad; the sixteen static-entry cells run.
