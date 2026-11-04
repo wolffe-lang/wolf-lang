@@ -16,6 +16,9 @@ fi
 records="$base/records/$name"
 marker="$base/records/$name.exit"
 [[ -f "$snapshot/ci/r42/wolf-work.sh" && ! -e "$marker" ]] || exit 2
+[[ "$(git -C "$snapshot" rev-parse HEAD)" = "$head" ]] || exit 2
+stamp=$(git -C "$snapshot" rev-parse --short=7 HEAD) || exit $?
+[[ "$stamp" =~ ^[0-9a-f]{7}$ && "$head" = "$stamp"* ]] || exit 2
 mkdir -p "$records" "$base/scratch/wolf-home" "$base/scratch/wolf-tmp" "$base/scratch/wolf-cache" "$base/cargo"
 echo $$ > "$base/records/$name.pid"
 size=$(du -sk "$base" | awk '{print $1}')
@@ -35,7 +38,7 @@ flock -w 21600 --close "/home/mfwolffe/lanes/hasu-block-$block.lock" \
     -e PATH=/opt/s263-rust/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     -e RUSTUP_HOME=/opt/s263-rustup -e RUSTUP_TOOLCHAIN=1.97.1 \
     -e CARGO_HOME=/lane/cargo -e CARGO_INCREMENTAL=0 -e CARGO_BUILD_JOBS=4 \
-    -e "WOLF_COMMIT=$head" \
+    -e "WOLF_COMMIT=$stamp" \
     -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 -e RUST_TEST_THREADS=4 \
     -e CARGO_PROFILE_RELEASE_DEBUG=0 -e R42_RECORDER=/lane/scripts/org-gauntlet-record.sh \
     -e "R42_PLANT_BASE=$(git -C "$snapshot" rev-parse HEAD^)" \
