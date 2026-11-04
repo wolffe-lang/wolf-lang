@@ -35,7 +35,11 @@
 //! its own size. lupin 0.1.58 runs the repaired heap's block form to the
 //! compilers' answer and traps `region-fault` on the one copy it does not
 //! mirror yet, `push(copy …)` through a `mut` parameter (pinned below by
-//! its record; an unlisted release must mirror).
+//! its record; an unlisted release must mirror). The plain-copy refusal's
+//! lupin column is keyed the same way: 0.1.58 runs it to `exit(0)`
+//! (wolf-interp#310); from 0.1.59 lupin makes that push's copy in the
+//! block and traps `region-fault`, `[mem.region.escape]`'s dynamic form of
+//! the compilers' E1010.
 
 #![cfg(unix)]
 
@@ -62,6 +66,17 @@ fn param_copy_before_mirror(version: &str, commit: &str) -> bool {
         .any(|(v, c)| *v == version && commit.starts_with(c))
 }
 
+/// s270b: the published lupin records that run the refused plain-copy push
+/// (`region_outer_write_push_plain_copy.lu`) to `exit(0)` (wolf-interp#310,
+/// measured on 0.1.58). Every other release or dev commit makes the push's
+/// copy in the block's ambient region, where `[mem.region.edge.elem]`
+/// places it, and traps `region-fault` (measured on 0.1.59).
+fn plain_copy_before_mirror(version: &str, commit: &str) -> bool {
+    [("0.1.58", "6240efe")]
+        .iter()
+        .any(|(v, c)| *v == version && commit.starts_with(c))
+}
+
 #[test]
 fn the_copy_pin_names_only_the_measured_release_records() {
     assert!(copy_before_mirror("0.1.55", "e642f26"));
@@ -74,6 +89,10 @@ fn the_copy_pin_names_only_the_measured_release_records() {
     assert!(!param_copy_before_mirror("0.1.58", "unknown"));
     assert!(!param_copy_before_mirror("0.1.59", "6240efe"));
     assert!(!param_copy_before_mirror("0.1.57", "fb054c8"));
+    assert!(plain_copy_before_mirror("0.1.58", "6240efe"));
+    assert!(!plain_copy_before_mirror("0.1.58", "unknown"));
+    assert!(!plain_copy_before_mirror("0.1.59", "668fb75"));
+    assert!(!plain_copy_before_mirror("0.1.59", "6240efe"));
 }
 
 fn wolf() -> &'static str {
@@ -185,6 +204,10 @@ enum Lupin {
     /// s270b: what a [`param_copy_before_mirror`] record answers for a
     /// `push(copy …)` through a `mut` parameter; an unlisted lupin mirrors.
     ParamCopy(&'static str),
+    /// s270b: what a [`plain_copy_before_mirror`] record answers for the
+    /// refused plain-copy push; an unlisted lupin traps `region-fault`.
+    /// A refusal row's column only.
+    PlainCopy(&'static str),
 }
 
 /// A run row: exit(0) and `want` on the checked machine, native and
@@ -217,6 +240,7 @@ fn run_row(rel: &str, want: &str, lupin: Lupin, why: &str) {
                 );
                 assert_eq!(l.stdout, want, "{rel}: unlisted lupin's mirrored output");
             }
+            Lupin::PlainCopy(_) => panic!("{rel}: a run row has no plain-copy column"),
         }
     }
 }
@@ -264,6 +288,13 @@ fn fail_row(rel: &str, code: &str, needles: &[&str], lupin: Lupin, why: &str) {
     if let Some(l) = lupin_says(&entry) {
         match lupin {
             Lupin::Same => assert_eq!(l.verdict, format!("fail({code})"), "{rel}: lupin"),
+            Lupin::PlainCopy(v) if plain_copy_before_mirror(&l.version, &l.commit) => {
+                assert_eq!(l.verdict, v, "{rel}: measured pre-mirror lupin (#310)")
+            }
+            Lupin::PlainCopy(_) => assert_eq!(
+                l.verdict, "trap(region-fault)",
+                "{rel}: an unlisted lupin traps the copy the block freed"
+            ),
             Lupin::Verdict(v) | Lupin::ParamCopy(v) => {
                 assert_eq!(l.verdict, v, "{rel}: lupin's verdict (its own)")
             }
@@ -471,7 +502,7 @@ fn a_plain_push_copies_an_outer_list_into_the_block_and_is_refused() {
             "`outs` still holds a value allocated in region `scratch`",
             "mem.region.outer-write",
         ],
-        Lupin::Verdict("exit(0)"),
+        Lupin::PlainCopy("exit(0)"),
         "x is built outside the block, but the push's copy of it is made inside: native and \
          release read the next region's list through the freed header",
     );
