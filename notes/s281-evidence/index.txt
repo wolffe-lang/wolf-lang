@@ -1,0 +1,29 @@
+s281 evidence (wolf-lang#1043: a bare variant nested in a payload pattern tests its variant)
+
+probe/            the 24 probe programs, each in its own directory (a directory is a module), kept as
+                  .lu.txt: the issue's shapes (p01 K(Drink), p02 Item(Drink, _), p03 two levels, p04
+                  K(Drink | Food), p05 K(Kind.Drink), p06 K(d)) and the sweep (p07 struct fields, p08
+                  and p08b let, p09 else |pat|, p09b else |e| match e, p10 for, p11 and p11b select,
+                  p12 a generic enum, p13 a row arm, p14 K(Drink) | K(Food), p15 a guard, p16 a
+                  lowercase variant, p17 an @-binding, p18 the second slot, p19 a tuple in a payload,
+                  p20 a top-level tuple, p21 a top-level bare variant)
+nomad/mac-job1-5f1f1c94.log
+                  the base, wolf built at 5f1f1c94 on nomad (Darwin 25.4.0 arm64, Rust 1.97.1): every
+                  probe on the checked machine, native, release (wolf conform-run --json --<tier>) and
+                  lupin 0.1.58; the issue's two programs on the published wolf 0.2.36 (the same answers)
+nomad/mac-job2-7afb039b.log
+                  the rows at the base's code: the nine rows on every machine (four red on native and
+                  release, green on checked and lupin; five controls green), four_machine_regressions
+                  9 passed, 4 FAILED by name, the corpus step `1262 file(s), 4 bad` by name, and the
+                  lexer, parser and lowering-ledger snapshots generated (insta's update)
+nomad/mac-job3-7818bfcf.log
+                  the same at the fix: every row green on all four machines, 13 passed, `1262 file(s),
+                  0 bad`; the snapshots generated again, identical to the base's (diff -r)
+nomad/mac-job4-3972d9d3.log
+                  the head before the note: every probe again (the sweep after the fix), cargo fmt
+                  --all --check, clippy -p wolf_wir -p wolf_driver --all-targets -D warnings, the corpus
+                  snapshot tests (no update), the wolf_wir suite, the release-parity row
+rig/              the scripts as run: the Mac lock (locked.sh; lock-run.sh with its own lines on
+                  stderr, for a record), build-at.sh, the probe runner, the Mac jobs, the plant's record
+                  scripts; hasu's gauntlet scripts (adapted by copy from s277's) and the taskset shim.
+                  The org's gauntlet recorder is copied in, not committed.

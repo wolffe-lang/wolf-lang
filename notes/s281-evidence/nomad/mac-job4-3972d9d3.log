@@ -1,0 +1,741 @@
+s281: building at 3972d9d3 in /Users/mfwolffe/lanes/s281/build
+s281: last release 27s ago; waiting 33s for the turn
+s281: lock taken 10:27:41, 9647 MiB free, 26 GB disk; running: bash /Users/mfwolffe/lanes/s281/rig/mac-job4.sh
+== STEP head 15:27:41
+3972d9d30569e98b4345892d20c6ae524a8968f6
+3972d9d3 s281: the lowering ledger — the nine rows lower
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.58 (wolf-interp, reference interpreter at pin a5378e3)
+END head exit=0
+== STEP build 15:27:41
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+END build exit=0
+== STEP probes-head 15:27:41
+## p01_k_drink/main.lu
+checked  exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\nother\n' warns=[] 
+## p02_item_two/main.lu
+checked  exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+native   exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+release  exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+lupin    exit(0)      run       out='275\n1\n30\n200\n' warns=[] 
+## p03_two_levels/main.lu
+checked  exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\nnope\n' warns=[] 
+## p04_or_payload/main.lu
+checked  exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+native   exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+release  exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+lupin    exit(0)      run       out='other\nconsumable\nconsumable\n' warns=[] 
+## p05_qualified/main.lu
+checked  exit(0)      run       out='other\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+## p06_lower_bind/main.lu
+checked  exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+native   exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+release  exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+lupin    exit(0)      run       out='food\ndrink\nnone\n' warns=[] 
+## p07_struct_field/main.lu
+checked  exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+native   exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+release  exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+lupin    exit(0)      run       out='other 1\ndrink\nother 3\ndrink 4\n' warns=[] 
+## p08_let/main.lu
+checked  exit(0)      run       out='3\n' warns=[] 
+native   exit(0)      run       out='3\n' warns=[] 
+release  exit(0)      run       out='3\n' warns=[] 
+lupin    exit(0)      run       out='3\n' warns=[] 
+## p08b_let_struct/main.lu
+checked  exit(0)      run       out='3\n' warns=[] 
+native   exit(0)      run       out='3\n' warns=[] 
+release  exit(0)      run       out='3\n' warns=[] 
+lupin    exit(0)      run       out='3\n' warns=[] 
+## p09_else/main.lu
+checked  fail(E0809)  typecheck out=None warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+native   fail(E0809)  typecheck out=None warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+release  fail(E0809)  typecheck out=None warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+lupin    unsupported  resolve   out=None warns=[W0603] 
+## p09b_else_match/main.lu
+checked  exit(0)      run       out='8\n7\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+native   exit(0)      run       out='8\n7\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+release  exit(0)      run       out='8\n7\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+lupin    exit(0)      run       out='8\n7\n' warns=[W0603] 
+## p10_for/main.lu
+checked  exit(0)      run       out='3\n' warns=[] 
+native   exit(0)      run       out='3\n' warns=[] 
+release  exit(0)      run       out='3\n' warns=[] 
+lupin    exit(0)      run       out='3\n' warns=[] 
+## p11_select/main.lu
+checked  exit(0)      run       out='1\n' warns=[] 
+native   exit(0)      run       out='1\n' warns=[] 
+release  exit(0)      run       out='1\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## p11b_select_payload/main.lu
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+lupin    unsupported  resolve   out=None warns=[] 
+## p12_generic/main.lu
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — a generic enum's variants (generic data)
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — a generic enum's variants (generic data)
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — a generic enum's variants (generic data)
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+## p13_row_tag/main.lu
+checked  exit(0)      run       out='other\ndrink\nvalue 5\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+native   exit(0)      run       out='other\ndrink\nvalue 5\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+release  exit(0)      run       out='other\ndrink\nvalue 5\n' warns=[W0603] warning[W0603]: the tag `bad` carries a payload but is spelled like a mark
+lupin    exit(0)      run       out='other\ndrink\nvalue 5\n' warns=[W0603] 
+## p14_or_top/main.lu
+checked  exit(0)      run       out='other\nconsumable\n' warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns over product patterns (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns over product patterns (join params)
+lupin    exit(0)      run       out='other\nconsumable\n' warns=[] 
+## p15_guard/main.lu
+checked  exit(0)      run       out='other\nbig drink\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\nbig drink\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\nbig drink\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\nbig drink\ndrink\n' warns=[] 
+## p16_lowercase_variant/main.lu
+checked  exit(0)      run       out='other\nfast\n' warns=[] 
+native   exit(0)      run       out='other\nfast\n' warns=[] 
+release  exit(0)      run       out='other\nfast\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## p17_at_binding/main.lu
+checked  exit(0)      run       out='other\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+## p18_second_slot/main.lu
+checked  exit(0)      run       out='30\n3\n' warns=[] 
+native   exit(0)      run       out='30\n3\n' warns=[] 
+release  exit(0)      run       out='30\n3\n' warns=[] 
+lupin    exit(0)      run       out='30\n3\n' warns=[] 
+## p19_tuple_in_payload/main.lu
+checked  exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+native   exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+release  exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+lupin    exit(0)      run       out='other 1\ndrink 2\n' warns=[] 
+## p20_tuple_top/main.lu
+checked  exit(0)      run       out='other 275\ndrink\n' warns=[] 
+native   exit(0)      run       out='other 275\ndrink\n' warns=[] 
+release  exit(0)      run       out='other 275\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other 275\ndrink\n' warns=[] 
+## p21_bare_top/main.lu
+checked  exit(0)      run       out='other\ndrink\n' warns=[] 
+native   exit(0)      run       out='other\ndrink\n' warns=[] 
+release  exit(0)      run       out='other\ndrink\n' warns=[] 
+lupin    exit(0)      run       out='other\ndrink\n' warns=[] 
+END probes-head exit=0
+== STEP fmt 15:27:56
+END fmt exit=0
+== STEP clippy 15:27:57
+    Checking cfg-if v1.0.4
+    Checking wolf_span v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_span)
+    Checking crossbeam-utils v0.8.22
+    Checking unicode-ident v1.0.24
+    Checking libc v0.2.189
+    Checking arrayvec v0.7.8
+    Checking wolf_diag v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_diag)
+    Checking constant_time_eq v0.4.2
+    Checking crossbeam-epoch v0.9.20
+    Checking arrayref v0.3.9
+    Checking blake3 v1.8.6
+    Checking wolf_lex v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_lex)
+    Checking wolf_ast v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_ast)
+    Checking crossbeam-deque v0.8.7
+    Checking either v1.17.0
+    Checking rayon-core v1.13.0
+    Checking foldhash v0.2.0
+   Compiling proc-macro2 v1.0.107
+    Checking hashbrown v0.17.1
+    Checking wolf_parse v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_parse)
+    Checking rayon v1.12.0
+   Compiling quote v1.0.47
+    Checking stable_deref_trait v1.2.1
+    Checking smallvec v1.15.2
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+    Checking libm v0.2.16
+    Checking wolf_sema v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_sema)
+    Checking litemap v0.8.2
+    Checking writeable v0.6.3
+    Checking wasmtime-internal-core v47.0.3
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+    Checking utf8_iter v1.0.4
+    Checking log v0.4.33
+    Checking fnv v1.0.7
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling cranelift-codegen-shared v0.134.3
+    Checking zerofrom v0.1.8
+    Checking hashbrown v0.16.1
+   Compiling cranelift-codegen-meta v0.134.3
+    Checking gimli v0.33.0
+    Checking yoke v0.8.3
+    Checking zerovec v0.11.6
+    Checking tinystr v0.8.3
+    Checking wolf_mem v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_mem)
+    Checking icu_locale_core v2.2.0
+    Checking potential_utf v0.1.5
+    Checking zerotrie v0.2.4
+    Checking icu_collections v2.2.0
+    Checking cranelift-bitset v0.134.3
+    Checking icu_provider v2.2.0
+    Checking allocator-api2 v0.2.21
+    Checking memchr v2.8.3
+   Compiling cranelift-codegen v0.134.3
+    Checking bumpalo v3.20.3
+    Checking cranelift-entity v0.134.3
+    Checking icu_normalizer_data v2.2.0
+    Checking icu_properties_data v2.2.0
+    Checking serde_core v1.0.229
+    Checking rustc-hash v2.1.3
+    Checking arbitrary v1.4.2
+    Checking regalloc2 v0.15.2
+    Checking cranelift-control v0.134.3
+    Checking icu_properties v2.2.0
+    Checking cranelift-bforest v0.134.3
+    Checking icu_normalizer v2.2.0
+    Checking cranelift-assembler-x64 v0.134.3
+    Checking target-lexicon v0.13.5
+   Compiling serde_derive v1.0.229
+    Checking wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_wir)
+    Checking serde v1.0.229
+    Checking idna_adapter v1.2.2
+    Checking zmij v1.0.23
+    Checking percent-encoding v2.3.2
+    Checking itoa v1.0.18
+    Checking serde_json v1.0.151
+    Checking form_urlencoded v1.2.2
+    Checking idna v1.1.0
+    Checking crc32fast v1.5.0
+    Checking anyhow v1.0.104
+    Checking wolf_fmt v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_fmt)
+    Checking wolf_backend v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_backend)
+    Checking wolf_query v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_query)
+    Checking object v0.39.1
+    Checking url v2.5.8
+   Compiling serde_repr v0.1.21
+    Checking wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_rt)
+    Checking crossbeam-channel v0.5.16
+    Checking bitflags v1.3.2
+    Checking lsp-types v0.95.1
+    Checking lsp-server v0.10.0
+    Checking wolf_cimport v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_cimport)
+    Checking wolf_codegen_llvm v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_codegen_llvm)
+    Checking wolf_pkg v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_pkg)
+    Checking wolf_doc v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_doc)
+    Checking errno v0.3.14
+    Checking bitflags v2.13.1
+    Checking getrandom v0.4.3
+    Checking rustix v1.1.4
+    Checking once_cell v1.21.4
+    Checking fastrand v2.5.0
+    Checking console v0.16.4
+    Checking similar v2.7.0
+    Checking tempfile v3.27.0
+    Checking insta v1.48.0
+    Checking wolf_lsp v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_lsp)
+    Checking cranelift-module v0.134.3
+    Checking cranelift-frontend v0.134.3
+    Checking cranelift-object v0.134.3
+    Checking wolf_codegen_clif v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.07s
+END clippy exit=0
+== STEP snap-lex 15:28:12
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running tests/corpus_snapshots.rs (target/debug/deps/corpus_snapshots-19e0fe04466c1aa8)
+
+running 1 test
+test corpus_token_streams ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s
+
+END snap-lex exit=0
+== STEP snap-parse 15:28:13
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/corpus_decls.rs (target/debug/deps/corpus_decls-027967958e3b4bdf)
+
+running 1 test
+test corpus_declaration_structure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+END snap-parse exit=0
+== STEP wolf-wir 15:28:14
+   Compiling wolf_wir v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_wir)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.62s
+     Running unittests src/lib.rs (target/debug/deps/wolf_wir-832585c08357c9a3)
+
+running 40 tests
+test entity::tests::secondary_map_defaults_and_growth ... ok
+test lower::c_layout_tests::a_field_is_as_aligned_as_its_offset_allows ... ok
+test entity::tests::primary_map_lifo_truncate ... ok
+test entity::tests::primary_map_push_and_index ... ok
+test hash::tests::known_vectors ... ok
+test entity::tests::list_pool_intern_get_truncate ... ok
+test lower::strlit_parity::the_engine_and_the_lowering_cook_one_value ... ok
+test lower::c_layout_tests::the_c_layout_is_the_psabi_one ... ok
+test midend::instrument::tests::a_library_shaped_module_reports_no_entry ... ok
+test profile::tests::a_bad_hash_refuses ... ok
+test profile::tests::a_future_version_refuses_loudly ... ok
+test atomic_intrinsic_tests::every_intrinsic_round_trips ... ok
+test profile::tests::a_missing_producer_refuses ... ok
+test profile::tests::a_lying_samples_header_refuses ... ok
+test midend::instrument::tests::the_bump_is_the_first_instruction_of_its_block ... ok
+test midend::instrument::tests::counter_indices_are_dense_and_program_wide ... ok
+test profile::tests::a_missing_version_header_refuses ... ok
+test midend::instrument::tests::main_inits_first_and_dumps_before_every_ret ... ok
+test profile::tests::an_empty_file_refuses ... ok
+test profile::tests::a_profile_that_matches_nothing_is_fully_stale ... ok
+test profile::tests::an_empty_profile_is_never_fully_stale ... ok
+test profile::tests::an_unknown_directive_refuses_instead_of_skipping ... ok
+test midend::instrument::tests::every_block_gets_exactly_one_counter ... ok
+test profile::tests::coverage_scores_matched_stale_and_unprofiled ... ok
+test profile::tests::extra_counts_on_a_record_refuse ... ok
+test midend::instrument::tests::the_index_blob_names_every_body_by_content_hash ... ok
+test midend::instrument::tests::an_instrumented_module_still_verifies ... ok
+test profile::tests::merge_is_commutative_in_its_counts ... ok
+test profile::tests::merge_sums_compatible_records_and_keeps_the_rest ... ok
+test profile::tests::merging_incompatible_records_refuses ... ok
+test profile::tests::record_accessors_read_the_positional_counts ... ok
+test profile::tests::records_render_in_hash_order ... ok
+test profile::tests::round_trip_is_a_fixpoint ... ok
+test profile::tests::samples_is_the_sum_of_every_count ... ok
+test midend::instrument::tests::instrumentation_is_deterministic ... ok
+test profile::tests::the_reserved_sample_producer_refuses_at_v1 ... ok
+test profile::tests::too_few_counts_refuse ... ok
+test types::tests::mem_and_agg_dedup ... ok
+test types::tests::scalars_are_pre_interned ... ok
+test types::tests::union_interns_one_set_once ... ok
+
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/build_peephole.rs (target/debug/deps/build_peephole-a42a55fb77c81603)
+
+running 24 tests
+test gvn_hit_returns_dominating_value_and_rolls_back_to_exact_mark ... ok
+test gvn_misses_across_non_dominating_scopes ... ok
+test icmp_same_operand_folds_by_reflexivity ... ok
+test const_zero_divisor_folds_to_trap_even_with_unknown_lhs ... ok
+test isub_wrap_of_iadd_chk_is_the_addend ... ok
+test checked_overflow_folds_to_trap ... ok
+test all_const_operands_fold_and_roll_back ... ok
+test agg_get_of_agg_make_is_the_ingredient ... ok
+test identity_add_zero_returns_operand_and_rolls_back ... ok
+test br_on_const_emits_the_taken_edge_only ... ok
+test a_lent_region_still_forwards_across_a_call ... ok
+test a_foreign_load_is_not_reused_across_a_call ... ok
+test a_call_through_a_fn_value_clobbers_too ... ok
+test a_foreign_store_is_not_forwarded_across_a_call ... ok
+test a_call_in_a_loop_body_clobbers_the_load_after_the_loop ... ok
+test isub_wrap_of_iadd_wrap_is_the_addend ... ok
+test an_inert_call_keeps_forwarding_and_the_next_call_does_not ... ok
+test identical_builder_runs_print_identically ... ok
+test a_load_inside_a_frozen_container_is_reused_across_a_call ... ok
+test the_same_chain_from_an_unfrozen_parameter_reloads ... ok
+test loop_carried_token_becomes_a_block_param ... ok
+test without_a_call_foreign_forwarding_and_gvn_stay ... ok
+test redundant_load_elimination_via_gvn_same_token ... ok
+test store_to_load_forwarding_through_the_token_chain ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/canonical.rs (target/debug/deps/canonical-f6a94107982b49fb)
+
+running 11 tests
+test region_foreign_rejects_a_role_outside_the_closed_set ... ok
+test unreferenced_data_is_not_printed ... ok
+test region_foreign_cannot_double_root_a_region ... ok
+test two_foreign_roots_of_one_role_are_legal_in_one_function ... ok
+test frem_survives_the_textual_ir ... ok
+test region_foreign_roots_a_chain_and_round_trips ... ok
+test an_under_aligned_access_round_trips ... ok
+test data_declarations_round_trip ... ok
+test an_under_aligned_access_states_a_real_alignment ... ok
+test c_membrane_widening_round_trips ... ok
+test insertion_order_does_not_change_the_dump ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ct_tier.rs (target/debug/deps/ct_tier-b4d2f90732cc24d0)
+
+running 14 tests
+test hand_written_text_accepts_the_contract ... ok
+test off_by_default_is_free ... ok
+test honest_wrapping_kernel_verifies ... ok
+test e1605_secret_into_public_param_refused ... ok
+test secret_into_secret_param_composes ... ok
+test public_param_licenses_control_flow ... ok
+test contract_rides_the_canonical_text ... ok
+test midend_never_dissolves_a_consttime_fn ... ok
+test e1604_div_by_secret_refused ... ok
+test e1603_secret_call_target_refused ... ok
+test e1601_branch_on_secret_refused ... ok
+test e1606_checked_arith_on_secret_refused ... ok
+test e1605_membrane_refused ... ok
+test e1602_secret_index_refused ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/dedup_instances.rs (target/debug/deps/dedup_instances-753592a215bd55c5)
+
+running 3 tests
+test two_casts_one_vtable ... ok
+test a_record_slot_pins_its_function_against_dedup ... ok
+test hundred_shapes_is_one_body ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/fact_text_edges.rs (target/debug/deps/fact_text_edges-e6a3b4726625dd79)
+
+running 4 tests
+test hex_prefix_needs_a_digit ... ok
+test wir_parse_crash_c255f8ab_round_trips ... ok
+test every_printed_immediate_reparses_to_itself ... ok
+test every_printed_fact_reparses_to_itself ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/interproc.rs (target/debug/deps/interproc-3a75b4e378a6745f)
+
+running 8 tests
+test a_mut_param_reaching_an_unknown_external_kills_the_callers_list ... ok
+test a_relayed_mut_param_carries_the_callees_writes ... ok
+test a_mut_relay_chain_longer_than_the_widen_passes_still_closes ... ok
+test analyze_grants_match_the_phase ... ok
+test reverify_rejects_a_tampered_fact ... ok
+test a_zero_index_element_access_is_still_an_element ... ok
+test the_aliased_variant_refuses_the_grant ... ok
+test the_stencil_shape_discharges_its_element_sums ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/lifo.rs (target/debug/deps/lifo-ecfc8da5f94f3ac1)
+
+running 1 test
+test truncate_to_mark_restores_everything_exactly ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lower_corpus.rs (target/debug/deps/lower_corpus-6dd3db2018a3d4c2)
+
+running 32 tests
+test golden_faults_overflow_add ... ok
+test golden_faults_div_zero_rem ... ok
+test golden_faults_assert_fails ... ok
+test golden_conc_spawn_fanout_loop ... ok
+test golden_grammar_intdot_range ... ok
+test golden_grammar_bang_not ... ok
+test golden_grammar_else_chain ... ok
+test golden_grammar_bang_errunion ... ok
+test golden_conc_select_two_timeouts ... ok
+test golden_resolve_two_mod ... ok
+test golden_resolve_forward ... ok
+test golden_overflow ... ok
+test golden_memory_div_zero ... ok
+test golden_memory_region_freeze_ok ... ok
+test golden_memory_checked_unsigned ... ok
+test golden_memory_excl_disjoint_ok ... ok
+test golden_memory_region_infer_request_handler ... ok
+test golden_traits_dyn_ok ... ok
+test golden_memory_region_infer_list_builder ... ok
+test golden_memory_exclusivity ... ok
+test golden_rows_open_row_growth ... ok
+test variadic_declaration_corpus_lowers_on_every_target ... ok
+test golden_typecheck_cast_set ... ok
+test golden_typecheck_match_unreachable ... ok
+test golden_rows_qmark_defer ... ok
+test golden_typecheck_receiver_modes ... ok
+test golden_typecheck_match_exhaustive ... ok
+test golden_memory_region_multiopen_values_ok ... ok
+test golden_memory_view_set_norm ... ok
+test golden_memory_region_infer_tree_transform ... ok
+test corpus_lowering_ledger ... ok
+test corpus_dumps_are_deterministic ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.63s
+
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-e72e1ed511e1b8e9)
+
+running 34 tests
+test a_mut_list_argument_reloads_its_header_after_the_call ... ok
+test local_function_named_va_start_is_not_a_builtin ... ok
+test a_bound_word_list_still_materializes ... ok
+test block_order_puts_every_definition_before_its_uses ... ok
+test an_unmodelled_callee_still_materializes ... ok
+test long_operands_route_to_the_memcmp_shim ... ok
+test a_lent_view_relends_without_materializing ... ok
+test no_dangling_param_defs_after_removal ... ok
+test a_named_bytes_result_still_materializes ... ok
+test a_lent_byte_view_crosses_a_call_without_allocating ... ok
+test one_list_lent_and_mut_in_one_call_is_refused ... ok
+test str_ordering_against_itself_is_the_length_compare ... ok
+test two_lent_views_share_one_clone ... ok
+test two_live_lists_cannot_share_a_buffer ... ok
+test variadic_builtins_and_differing_promoted_tails_round_trip ... ok
+test variadic_membranes_keep_their_call_contract ... ok
+test byte_index_and_str_slice_emit_no_runtime_call ... ok
+test match_arm_consts_take_the_discriminant_width ... ok
+test loop_carried_value_is_a_block_param ... ok
+test nested_if_in_loop_with_break_continue ... ok
+test short_circuit_and_or_not ... ok
+test loop_invariant_var_makes_no_param ... ok
+test line_and_field_walks_build_no_list ... ok
+test str_match_dispatch_is_call_free ... ok
+test if_value_rides_a_merge_param ... ok
+test gvn_misses_across_arms_but_dominating_entries_hit ... ok
+test gvn_dedups_repeated_subexpressions ... ok
+test str_equality_emits_no_call_on_the_byte_path ... ok
+test byte_walk_has_no_call_and_no_allocation ... ok
+test word_walk_has_no_call_and_no_allocation ... ok
+test inclusive_for_then_later_read_keeps_live_definitions ... ok
+test str_ordering_emits_no_call_on_the_byte_path ... ok
+test mut_param_aggregate_writes_are_fieldwise ... ok
+test reducible_cfg_property_200_seeds ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+     Running tests/midend_corpus.rs (target/debug/deps/midend_corpus-58bb4bc8e9eca4df)
+
+running 8 tests
+test kernel_walk_twice_merges_its_unrolled_loops ... ok
+test kernel_hot_header_alias_refuses_promotion ... ok
+test kernel_hot_header_promotes_the_header_cells ... ok
+test kernel_guarded_stencil_mints_the_overlap_guard ... ok
+test conc_seams_survive_optimization_in_order ... ok
+test hot_header_witnesses_are_ten_run_deterministic ... ok
+test kernel_tier_elimination_rate_is_at_least_80_percent ... ok
+test optimized_corpus_stays_canonical ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.96s
+
+     Running tests/midend_passes.rs (target/debug/deps/midend_passes-9580da71d8dc857c)
+
+running 45 tests
+test coalesce_never_crosses_a_call ... ok
+test loopcse_refuses_differing_entry_args ... ok
+test loopcse_refuses_a_loop_that_loads ... ok
+test loopcse_refuses_a_differing_body ... ok
+test licm_refuses_the_license_for_an_external_callee ... ok
+test loopcse_refuses_versioned_alternatives ... ok
+test memopt_dse_respects_escape ... ok
+test hdrprom_refuses_an_unproven_call ... ok
+test hdrprom_refuses_a_variant_address_on_the_chain ... ok
+test pipeline_preserves_entry_facts ... ok
+test licm_refuses_the_license_on_a_shared_root ... ok
+test licm_refuses_the_license_without_the_theorem ... ok
+test inline_keeps_a_call_whose_token_formals_share_a_region ... ok
+test rangeopt_band_carries_the_operand_bound ... ok
+test hdrprom_promotes_the_push_header ... ok
+test rangeopt_refuses_monotonicity_from_a_wrapping_counter ... ok
+test rangeopt_affine_relation_proves_offset_indices ... ok
+test rangeopt_relation_proves_the_unsigned_bounds_test ... ok
+test rangeopt_never_spends_a_user_wrap_as_a_relation ... ok
+test rangeopt_spends_a_proven_check_as_a_relation ... ok
+test rangeopt_trip_scaled_accumulator_needs_no_guard ... ok
+test rangeopt_still_decides_a_shift_past_its_unsigned_maximum ... ok
+test rangeopt_versioning_skips_loops_with_calls ... ok
+test rangeopt_keeps_a_branch_on_the_top_half_of_a_logical_shift ... ok
+test rangeopt_keeps_a_bounds_test_over_an_unrelated_bound ... ok
+test rangeopt_wrapping_counter_under_a_guard_is_bounded ... ok
+test sink_rejects_unbounded_and_escaping ... ok
+test variadic_entry_prologue_is_an_inlining_barrier ... ok
+test rangeopt_versions_a_reduction_against_an_opaque_bound ... ok
+test rangeopt_affine_wrap_admitted_when_bounded ... ok
+test rangeopt_affine_refuses_an_unproven_wrap ... ok
+test inline_scalar_callee ... ok
+test licm_hoists_frozen_load ... ok
+test memopt_store_to_load_forwarding ... ok
+test loopcse_merges_identical_sequential_loops ... ok
+test licm_licenses_a_load_past_a_disjoint_writing_callee ... ok
+test inline_token_callee_rebinds_region ... ok
+test witness_dead_store_into_freed_region ... ok
+test coalesce_fuses_adjacent_allocs ... ok
+test rangeopt_counter_eliminates_accumulator_stays ... ok
+test sink_promotes_small_region_in_loop ... ok
+test simplify_branch_fold_and_trap ... ok
+test simplify_rules_gvn_fold ... ok
+test witness_read_param_load_cse_across_opaque_call ... ok
+test rangeopt_versioning_backstop ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/pass_facts.rs (target/debug/deps/pass_facts-b9a5cf004adf0227)
+
+running 4 tests
+test lossy_pass_is_rejected ... ok
+test bogus_value_deleted_claim_is_rejected ... ok
+test honest_pass_keeps_its_facts ... ok
+test justified_invalidation_is_accepted ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pgo.rs (target/debug/deps/pgo-5518c1ccb7d9cc27)
+
+running 10 tests
+test a_body_without_a_record_stays_unknown_not_cold ... ok
+test hotness_is_a_rank_over_the_peak_block_count ... ok
+test a_zeroed_record_is_proven_cold_and_says_so ... ok
+test the_reserved_slot_fills_without_moving_the_format ... ok
+test a_fully_stale_profile_leaves_the_index_bit_identical ... ok
+test branch_weights_are_offered_only_for_matched_bodies ... ok
+test recompiling_an_untouched_program_keeps_its_records ... ok
+test a_changed_body_loses_exactly_its_own_record ... ok
+test the_default_thresholds_do_not_move_a_single_body ... ok
+test hotness_buys_inline_budget_and_only_for_hot_callees ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/roundtrip_prop.rs (target/debug/deps/roundtrip_prop-bd2790bf2cef40f7)
+
+running 4 tests
+test generation_is_deterministic ... ok
+test parser_never_panics_on_garbage ... ok
+test parser_never_panics_on_mutated_canonical_text ... ok
+test generated_modules_verify_and_round_trip ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/survey.rs (target/debug/deps/survey-0c0d86bf5d74b2f3)
+
+running 2 tests
+test the_survey_collects_what_fail_fast_masks ... ok
+test survey_is_a_superset_and_changes_nothing_on_refusing_corpus_files ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/token_inline.rs (target/debug/deps/token_inline-4090e12a9bbf2700)
+
+running 2 tests
+test multi_return_token_cfg_stays_out_of_line ... ok
+test single_return_token_cfg_stays_out_of_line ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/verify_red.rs (target/debug/deps/verify_red-3720bbd005ad74ae)
+
+running 59 tests
+test conflicting_callee_signatures ... ok
+test entry_sig_mismatch ... ok
+test eu_is_err_needs_a_union ... ok
+test data_addr_missing_declaration ... ok
+test branch_condition_not_bool ... ok
+test call_argument_type_mismatch ... ok
+test eu_ok_on_unit_ok_extracts_nothing ... ok
+test block_arg_arity_mismatch ... ok
+test eu_err_slot_out_of_range ... ok
+test eu_make_err_tag_must_be_i64 ... ok
+test edge_consumption_reaching_second_consumer_stays_rejected ... ok
+test empty_range_fact ... ok
+test cross_block_load_after_free ... ok
+test eu_make_ok_payload_type_must_match ... ok
+test every_rejection_class_is_exercised ... ok
+test block_arg_type_mismatch ... ok
+test deref_citing_non_allocation ... ok
+test deref_overclaim_rejected ... ok
+test dominance_violation ... ok
+test fact_on_wrong_type ... ok
+test function_without_blocks ... ok
+test fpromote_requires_the_exact_float_widths ... ok
+test frozen_token_cannot_be_consumed ... ok
+test icmp_mixing_bool_and_int_is_rejected ... ok
+test iconst_out_of_range ... ok
+test icmp_on_bools_rejects_ordering ... ok
+test guarded_noalias_forged_dominance_rejected ... ok
+test icmp_signed_order_on_pointers_rejected ... ok
+test ill_typed_arith ... ok
+test icmp_on_bools_is_accepted_for_equality ... ok
+test noalias_cannot_be_op_derived ... ok
+test load_of_stale_token_after_store ... ok
+test load_after_region_free ... ok
+test noalias_of_value_with_itself ... ok
+test range_fact_on_block_param_citing_op ... ok
+test missing_terminator ... ok
+test guarded_noalias_unrelated_operands_rejected ... ok
+test read_of_edge_consumed_token_at_target_stays_rejected ... ok
+test region_fact_must_cite_an_allocation ... ok
+test reserved_op_rejected ... ok
+test region_fact_forgery_rejected ... ok
+test stack_alloc_size_must_be_const ... ok
+test terminator_mid_block ... ok
+test store_then_stale_edge_arg_stays_rejected ... ok
+test token_consumed_on_disjoint_arms_is_accepted ... ok
+test rem_range_fact_rederived ... ok
+test two_roots_for_one_region ... ok
+test unjustified_range_fact ... ok
+test token_consumed_twice ... ok
+test token_consumed_twice_across_sequential_blocks ... ok
+test unreachable_block ... ok
+test variadic_tail_must_already_be_promoted ... ok
+test variadic_function_address_is_rejected ... ok
+test variadic_cursor_needs_its_own_export_frame ... ok
+test ptr_int_bridges_verify_and_round_trip ... ok
+test guarded_noalias_verifies_and_roundtrips ... ok
+test token_on_loop_exit_edge_beside_body_store_is_accepted ... ok
+test zext_from_bool_is_the_bridge_and_sext_from_bool_is_not ... ok
+test variadic_cursor_effects_require_a_successor_token ... ok
+
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/whole_program.rs (target/debug/deps/whole_program-0a5b8748f3e715eb)
+
+running 12 tests
+test dedup_never_merges_pinned_bodies ... ok
+test clustering_is_deterministic ... ok
+test func_addr_referee_travels_with_its_referrer ... ok
+test summary_digest_tracks_the_body ... ok
+test module_phase_does_not_inline_across_modules ... ok
+test single_module_degenerates_cleanly ... ok
+test closure_entry_rides_the_same_reference_edge ... ok
+test task_seam_carriers_are_never_imported ... ok
+test normalization_is_alpha_equivalence_only ... ok
+test summary_format_is_frozen ... ok
+test a_hundred_instantiations_emit_one_body ... ok
+test cross_cluster_inline_witness ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/wir_dumps.rs (target/debug/deps/wir_dumps-e19d7f08f52d2132)
+
+running 3 tests
+test corpus_is_big_enough ... ok
+test fixtures_parse_verify_and_reach_fixpoint ... ok
+test fixture_dumps_are_reviewed_snapshots ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests wolf_wir
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END wolf-wir exit=0
+== STEP release-parity 15:29:02
+   Compiling wolf_driver v0.2.36 (/Users/mfwolffe/lanes/s281/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running tests/release_native.rs (target/debug/deps/release_native-ca1e3be1a9664447)
+
+running 1 test
+test release_tier_matches_debug_tier_on_the_corpus ...     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 491.51s
+
+END release-parity exit=0
+clean:        0
+== done 2026-11-04T15:37:14Z
+s281: END exit=0 10:37:14
