@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="other\ndrink\nother\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043): a bare payload-less variant nested one level
+//! inside another variant's payload pattern tests its variant. `K(Drink)`
+//! matches a `K` that carries `Kind.Drink` and nothing else: the payload's
+//! type names the enum, as the scrutinee's type does at the top of a
+//! `match` and an element's type does inside a tuple. Until s281 the
+//! native and release tiers bound `Drink` as a name, so `K(Drink)` took
+//! every `K` and this printed `drink` three times, while the checker, the
+//! checked machine and lupin read the arm as the test.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum W {
+    K(Kind),
+}
+
+fn say(w: W) -> str {
+    match w {
+        K(Drink) => "drink",
+        K(_) => "other",
+    }
+}
+
+fn main() -> !int {
+    print(say(W.K(Kind.Food)))
+    print(say(W.K(Kind.Drink)))
+    print(say(W.K(Kind.Gratuity)))
+    0
+}

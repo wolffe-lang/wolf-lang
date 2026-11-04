@@ -1,0 +1,55 @@
+//! check: run(exit=0, stdout="275\n1\n30\n200\n0\n30\n3\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043): a bare variant in either slot of a two-field
+//! payload is a test on that slot. `Item(Drink, _)` takes only the drink
+//! line; `Item(Food, n)` tests the first slot and binds the second;
+//! `Pair(n, Drink)` tests the second slot and binds the first. Until
+//! s281 the native and release tiers bound every bare name in a payload
+//! whose slots were all names or `_`, so the first `Item` arm took every
+//! line (`1 1 1`) and `Pair(n, Drink)` took every pair (`3 3`).
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum Line {
+    Item(Kind, int),
+    Tip(int),
+    Void,
+}
+
+enum Pair {
+    P(int, Kind),
+}
+
+fn cost(l: Line) -> int {
+    match l {
+        Item(Drink, _) => 1,
+        Item(Food, n) => n,
+        Item(_, n) => n * 10,
+        Tip(n) => n * 100,
+        Void => 0,
+    }
+}
+
+fn second(p: Pair) -> int {
+    match p {
+        P(n, Drink) => n,
+        P(n, _) => n * 10,
+    }
+}
+
+fn main() -> !int {
+    print("{cost(Line.Item(Kind.Food, 275))}")
+    print("{cost(Line.Item(Kind.Drink, 275))}")
+    print("{cost(Line.Item(Kind.Gratuity, 3))}")
+    print("{cost(Line.Tip(2))}")
+    print("{cost(Line.Void)}")
+    print("{second(Pair.P(3, Kind.Food))}")
+    print("{second(Pair.P(3, Kind.Drink))}")
+    0
+}

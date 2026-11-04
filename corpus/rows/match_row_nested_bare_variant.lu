@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="other\ndrink\nvalue 5\n8\n7\n")
+//! phase: run
+//! conforms: type.row.match, gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043): a bare variant nested in a row tag's payload
+//! tests its variant, in a row arm of a `match` over a fallible value
+//! (`Bad(Drink) =>` over `int ! {Bad(Kind)}`) and in a `match` over the
+//! row value an `else |e|` handler caught. Both are the same arm
+//! classifier as a `match` over an enum, so until s281 the native and
+//! release tiers bound `Drink` as a name there too: `Bad(Drink)` took
+//! every `Bad`, printing `drink` and `7` where the checked machine and
+//! lupin printed `other` and `8`.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+fn pick(n: int) -> int ! {Bad(Kind)} {
+    if n > 0 { n } else if n == 0 { Bad(Kind.Food) } else { Bad(Kind.Drink) }
+}
+
+fn say(n: int) -> str {
+    match pick(n) {
+        Bad(Drink) => "drink",
+        Bad(_) => "other",
+        v => "value {v}",
+    }
+}
+
+fn caught(n: int) -> int {
+    pick(n) else |e| match e {
+        Bad(Drink) => 7,
+        Bad(_) => 8,
+    }
+}
+
+fn main() -> !int {
+    print(say(0))
+    print(say(-1))
+    print(say(5))
+    print("{caught(0)}")
+    print("{caught(-1)}")
+    0
+}
