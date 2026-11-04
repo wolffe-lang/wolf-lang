@@ -93,6 +93,8 @@ case "$mode" in
         ;;
     validation-startup)
         gauntlet_step build indent build_current || exit $?
+        # bench-gates is a CI step: CI's environment, as the debug take.
+        unset WOLF_STD LUPIN_STD WOLF_RT_LIB
         gauntlet_step startup-bench-gates indent cargo xtask bench-gates || exit $?
         ;;
     validation-std-tests|validation-std-docs|validation-std-published-tests|validation-std-published-docs)
