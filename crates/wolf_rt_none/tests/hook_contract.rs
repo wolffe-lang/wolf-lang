@@ -17,7 +17,10 @@ use wolf_rt_none::list::{
     __wolf_rt_list_copy, __wolf_rt_list_len, __wolf_rt_list_new, __wolf_rt_list_pop,
     __wolf_rt_list_push, __wolf_rt_list_read,
 };
-use wolf_rt_none::map::{__wolf_rt_map_get, __wolf_rt_map_new, __wolf_rt_map_set};
+use wolf_rt_none::map::{
+    __wolf_rt_map_clear, __wolf_rt_map_copy, __wolf_rt_map_get, __wolf_rt_map_new,
+    __wolf_rt_map_pairs, __wolf_rt_map_remove, __wolf_rt_map_set,
+};
 use wolf_rt_none::native::{
     __wolf_rt_closure_alloc, __wolf_rt_live_region_bytes, __wolf_rt_region_alloc,
     __wolf_rt_region_ambient_enter, __wolf_rt_region_ambient_leave, __wolf_rt_region_bytes,
@@ -268,6 +271,58 @@ fn holes_render_as_the_hosted_runtime_renders_them() {
             "{name}: the hosted renderer's bytes"
         );
     }
+}
+
+#[test]
+fn map_index_growth_removal_and_copy_obey_the_allocator_hook() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    let before = live();
+    let birth = __wolf_rt_region_new();
+    let child = __wolf_rt_region_new();
+    unsafe {
+        let prev = __wolf_rt_region_ambient_enter(birth);
+        let m = __wolf_rt_map_new(0, 8, 8, 8, 16);
+        let saved = __wolf_rt_region_ambient_enter(child);
+        for i in 0..257i64 {
+            let kv = [i, i * 10];
+            __wolf_rt_map_set(m, kv.as_ptr() as i64);
+        }
+        assert_eq!(__wolf_rt_region_bytes(child), 0);
+        assert_eq!(__wolf_rt_region_bytes(birth), 32608);
+        let copy = __wolf_rt_map_copy(m);
+        assert_eq!(__wolf_rt_region_bytes(child), 96 + 257 * 16 + 1024 * 8);
+        let mut erased = [128i64, 0];
+        assert_eq!(__wolf_rt_map_remove(m, erased.as_mut_ptr() as i64), 1);
+        assert_eq!(erased[1], 1280);
+        let pairs = __wolf_rt_map_pairs(m);
+        assert_eq!(__wolf_rt_list_len(pairs), 256);
+        for i in 0..256i64 {
+            let mut kv = [0i64; 2];
+            assert_eq!(__wolf_rt_list_read(pairs, i, kv.as_mut_ptr() as i64), 1);
+            assert_eq!(kv[0], if i < 128 { i } else { i + 1 });
+        }
+        let charged = __wolf_rt_region_bytes(birth);
+        __wolf_rt_map_clear(m);
+        for i in 0..257i64 {
+            let kv = [i, -i];
+            __wolf_rt_map_set(m, kv.as_ptr() as i64);
+        }
+        assert_eq!(__wolf_rt_region_bytes(birth), charged);
+        for i in 0..257i64 {
+            let mut kv = [i, 0];
+            assert_eq!(__wolf_rt_map_get(copy, kv.as_mut_ptr() as i64), 1);
+            assert_eq!(
+                kv[1],
+                i * 10,
+                "the copy's entries and index are independent"
+            );
+        }
+        __wolf_rt_region_ambient_leave(saved);
+        __wolf_rt_region_ambient_leave(prev);
+        __wolf_rt_region_free(child);
+        __wolf_rt_region_free(birth);
+    }
+    assert_eq!(live(), before, "all entry and index growth grants return");
 }
 
 #[test]
