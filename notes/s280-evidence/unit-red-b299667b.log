@@ -1,0 +1,48 @@
+   Compiling libc v0.2.189
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s280/red-b299667b/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.06s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+
+running 6 tests
+
+thread 'map::tests::indexed_integer_collisions_survive_rehash' (155899130) panicked at crates/wolf_rt/src/map.rs:312:9:
+32642 key comparisons for 256 probes; bound 4096
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test map::tests::indexed_integer_collisions_survive_rehash ... FAILED
+
+thread 'map::tests::indexed_growth_charges_abandoned_tables_to_birth_region' (155899129) panicked at crates/wolf_rt/src/map.rs:515:13:
+assertion `left == right` failed
+  left: 16336
+ right: 32608
+
+thread 'map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity' (155899128) panicked at crates/wolf_rt/src/map.rs:312:9:
+33411 key comparisons for 258 probes; bound 4128
+test map::tests::indexed_growth_charges_abandoned_tables_to_birth_region ... FAILED
+
+thread 'map::tests::indexed_remove_patches_survivors_without_reordering' (155899131) panicked at crates/wolf_rt/src/map.rs:312:9:
+32890 key comparisons for 256 probes; bound 4096
+test map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity ... FAILED
+test map::tests::indexed_remove_patches_survivors_without_reordering ... FAILED
+
+thread 'map::tests::indexed_string_collisions_compare_contents_after_growth' (155899132) panicked at crates/wolf_rt/src/map.rs:312:9:
+32896 key comparisons for 256 probes; bound 4096
+test map::tests::indexed_string_collisions_compare_contents_after_growth ... FAILED
+
+thread 'map::tests::indexed_clear_reuses_storage_and_forgets_old_keys' (155899127) panicked at crates/wolf_rt/src/map.rs:312:9:
+98432 key comparisons for 512 probes; bound 8192
+test map::tests::indexed_clear_reuses_storage_and_forgets_old_keys ... FAILED
+
+failures:
+
+failures:
+    map::tests::indexed_clear_reuses_storage_and_forgets_old_keys
+    map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity
+    map::tests::indexed_growth_charges_abandoned_tables_to_birth_region
+    map::tests::indexed_integer_collisions_survive_rehash
+    map::tests::indexed_remove_patches_survivors_without_reordering
+    map::tests::indexed_string_collisions_compare_contents_after_growth
+
+test result: FAILED. 0 passed; 6 failed; 0 ignored; 0 measured; 361 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+END mac-indexed-unit-red exit=101 2026-11-04T06:28:32Z
