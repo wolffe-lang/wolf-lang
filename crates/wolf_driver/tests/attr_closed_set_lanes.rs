@@ -412,6 +412,13 @@ fn the_implemented_attributes_still_compile() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            // Published .59 has the same comptime-fn control limitation;
+            // this does not undo its existing attribute mirror.
+            Pin {
+                version: "0.1.59",
+                verdict: "unsupported",
+                stdout: "",
+            },
         ],
     );
 }
