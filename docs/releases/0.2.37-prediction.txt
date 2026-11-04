@@ -153,3 +153,10 @@ Only after the inventory and actual named reds are complete may stale
 expectations change. The next source head and strict one-break plant must
 be frozen again, and the full serial validation must restart from prep.
 No record from the earlier frozen head is a green at that new head.
+
+Fresh compiler provenance is checked independently of Cargo cache reuse:
+validation exports WOLF_COMMIT from the immutable source head and verifies
+that target/debug/wolf reports that exact full head or its Git short prefix,
+never dev.unknown or an earlier head. Debug/release CI records check it
+before and after the gauntlet. No prior-head build result is a fresh binary
+claim; metadata-only .58 pairing rejection remains an intentional control.

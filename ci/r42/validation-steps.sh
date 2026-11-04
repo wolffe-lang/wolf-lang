@@ -16,6 +16,10 @@ export WOLF_RT_LIB="$root/target/debug/libwolf_rt.a"
 export WOLF_STD=/lane/builds/wolf-std-5b3a59942b2ee69b99682544341ce8a12c984e9e/std
 export LUPIN_STD="$WOLF_STD"
 indent() { "$@" 2>&1 | sed 's/^/  /'; return "${PIPESTATUS[0]}"; }
+build_current() {
+    cargo build --locked -p wolf_driver -p wolf_rt || return $?
+    python3 -I ci/r42/assert-build-stamp.py "$root/target/debug/wolf" "$head"
+}
 identity() {
     git rev-parse HEAD || return $?
     git status --porcelain --untracked-files=no || return $?
@@ -45,7 +49,7 @@ case "$mode" in
         gauntlet_step pre-mirror-plant plant_case || exit $?
         ;;
     validation-prep)
-        gauntlet_step build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+        gauntlet_step build indent build_current || exit $?
         export GITHUB_ENV="$records/tool-inputs.env"
         cache="/lane/inputs/entry-bundle-$head"
         gauntlet_step entry-bundle indent python3 -I ci/fetch-entry-bundle "$cache" || exit $?
@@ -72,18 +76,20 @@ case "$mode" in
             gauntlet_step release-shim indent release_shim || exit $?
             export PATH=/lane/scripts/release-cargo:$PATH
         fi
+        gauntlet_step compiler-build-stamp indent python3 -I ci/r42/assert-build-stamp.py "$root/target/debug/wolf" "$head" || exit $?
         gauntlet_step "${mode#validation-}-xtask-ci" indent cargo xtask ci || exit $?
+        gauntlet_step compiler-build-stamp-after-ci indent python3 -I ci/r42/assert-build-stamp.py "$root/target/debug/wolf" "$head" || exit $?
         ;;
     validation-constrained)
         gauntlet_step prune-release-tests indent python3 -I ci/r42/prune-completed-tests.py "$root" release "/lane/records/wolf-validation-release-$head/local-record.log" "/lane/records/wolf-validation-release-$head.exit" "$records/pruned-release.txt" || exit $?
         gauntlet_step constrained-runtime indent taskset -c 0-3 cargo test --locked -p wolf_rt -- --nocapture || exit $?
         ;;
     validation-startup)
-        gauntlet_step build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+        gauntlet_step build indent build_current || exit $?
         gauntlet_step startup-bench-gates indent cargo xtask bench-gates || exit $?
         ;;
     validation-std-tests|validation-std-docs|validation-std-published-tests|validation-std-published-docs)
-        gauntlet_step build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+        gauntlet_step build indent build_current || exit $?
         std=/lane/builds/wolf-std-5b3a59942b2ee69b99682544341ce8a12c984e9e
         std_identity() {
             [[ "$(git -C "$std" rev-parse HEAD)" = 5b3a59942b2ee69b99682544341ce8a12c984e9e ]] &&
@@ -115,7 +121,7 @@ case "$mode" in
         gauntlet_step "$command" indent std_gate || exit $?
         ;;
     validation-differ-compiler-checked|validation-differ-compiler-native|validation-differ-compiler-release)
-        gauntlet_step build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+        gauntlet_step build indent build_current || exit $?
         export R42_DIFF_A="$root/target/debug/wolf" R42_DIFF_B="$control"
         export R42_DIFF_RT_A="$root/target/debug/libwolf_rt.a"
         export R42_DIFF_RT_B="$(dirname "$control")/libwolf_rt.a"
@@ -125,7 +131,7 @@ case "$mode" in
         gauntlet_step "compiler-$R42_DIFF_TIER-differ" indent cargo xtask differ "$a" "$b" --triage || exit $?
         ;;
     validation-differ-interp-checked|validation-differ-interp-native)
-        gauntlet_step build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+        gauntlet_step build indent build_current || exit $?
         tier="${mode##*-}"
         gauntlet_step "interpreter-$tier-control" indent cargo xtask differ "$root/target/debug/wolf" "$lupin" --triage "--$tier" --control "$previous" || exit $?
         ;;
