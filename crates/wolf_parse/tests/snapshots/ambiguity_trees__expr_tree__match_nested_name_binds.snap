@@ -1,0 +1,257 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 348..772
+  EnumDecl 348..396
+    EnumKw 348..352 "enum"
+    Ident 353..357 "Kind"
+    LBrace 358..359 "{"
+    EnumVariant 364..369
+      Ident 364..369 "Drink"
+    Comma 369..370 ","
+    EnumVariant 375..379
+      Ident 375..379 "Food"
+    Comma 379..380 ","
+    EnumVariant 385..393
+      Ident 385..393 "Gratuity"
+    Comma 393..394 ","
+    RBrace 395..396 "}"
+  Term 396..397 "\n"
+  EnumDecl 398..431
+    EnumKw 398..402 "enum"
+    Ident 403..404 "W"
+    LBrace 405..406 "{"
+    EnumVariant 411..418
+      Ident 411..412 "K"
+      LParen 412..413 "("
+      PathType 413..417
+        Path 413..417
+          Ident 413..417 "Kind"
+      RParen 417..418 ")"
+    Comma 418..419 ","
+    EnumVariant 424..428
+      Ident 424..428 "None"
+    Comma 428..429 ","
+    RBrace 430..431 "}"
+  Term 431..432 "\n"
+  FnDecl 433..562
+    FnKw 433..435 "fn"
+    Ident 436..440 "name"
+    ParamList 440..449
+      LParen 440..441 "("
+      Param 441..448
+        Ident 441..442 "k"
+        Colon 442..443 ":"
+        PathType 444..448
+          Path 444..448
+            Ident 444..448 "Kind"
+      RParen 448..449 ")"
+    RetType 450..456
+      Arrow 450..452 "->"
+      PathType 453..456
+        Path 453..456
+          Ident 453..456 "str"
+    Block 457..562
+      LBrace 457..458 "{"
+      ExprStmt 463..561
+        MatchExpr 463..560
+          MatchKw 463..468 "match"
+          PathExpr 469..470
+            Ident 469..470 "k"
+          LBrace 471..472 "{"
+          MatchArm 481..498
+            IdentPat 481..486
+              Ident 481..486 "Drink"
+            FatArrow 487..489 "=>"
+            StringExpr 490..497
+              StrBegin 490..491 "\""
+              StrFragment 491..496 "drink"
+              StrEnd 496..497 "\""
+            Comma 497..498 ","
+          MatchArm 507..522
+            IdentPat 507..511
+              Ident 507..511 "Food"
+            FatArrow 512..514 "=>"
+            StringExpr 515..521
+              StrBegin 515..516 "\""
+              StrFragment 516..520 "food"
+              StrEnd 520..521 "\""
+            Comma 521..522 ","
+          MatchArm 531..554
+            IdentPat 531..539
+              Ident 531..539 "Gratuity"
+            FatArrow 540..542 "=>"
+            StringExpr 543..553
+              StrBegin 543..544 "\""
+              StrFragment 544..552 "gratuity"
+              StrEnd 552..553 "\""
+            Comma 553..554 ","
+          RBrace 559..560 "}"
+        Term 560..561 "\n"
+      RBrace 561..562 "}"
+  Term 562..563 "\n"
+  FnDecl 564..656
+    FnKw 564..566 "fn"
+    Ident 567..570 "say"
+    ParamList 570..576
+      LParen 570..571 "("
+      Param 571..575
+        Ident 571..572 "w"
+        Colon 572..573 ":"
+        PathType 574..575
+          Path 574..575
+            Ident 574..575 "W"
+      RParen 575..576 ")"
+    RetType 577..583
+      Arrow 577..579 "->"
+      PathType 580..583
+        Path 580..583
+          Ident 580..583 "str"
+    Block 584..656
+      LBrace 584..585 "{"
+      ExprStmt 590..655
+        MatchExpr 590..654
+          MatchKw 590..595 "match"
+          PathExpr 596..597
+            Ident 596..597 "w"
+          LBrace 598..599 "{"
+          MatchArm 608..624
+            PathPat 608..612
+              Path 608..609
+                Ident 608..609 "K"
+              LParen 609..610 "("
+              IdentPat 610..611
+                Ident 610..611 "d"
+              RParen 611..612 ")"
+            FatArrow 613..615 "=>"
+            CallExpr 616..623
+              PathExpr 616..620
+                Ident 616..620 "name"
+              ArgList 620..623
+                LParen 620..621 "("
+                Arg 621..622
+                  PathExpr 621..622
+                    Ident 621..622 "d"
+                RParen 622..623 ")"
+            Comma 623..624 ","
+          MatchArm 633..648
+            IdentPat 633..637
+              Ident 633..637 "None"
+            FatArrow 638..640 "=>"
+            StringExpr 641..647
+              StrBegin 641..642 "\""
+              StrFragment 642..646 "none"
+              StrEnd 646..647 "\""
+            Comma 647..648 ","
+          RBrace 653..654 "}"
+        Term 654..655 "\n"
+      RBrace 655..656 "}"
+  Term 656..657 "\n"
+  FnDecl 658..771
+    FnKw 658..660 "fn"
+    Ident 661..665 "main"
+    ParamList 665..667
+      LParen 665..666 "("
+      RParen 666..667 ")"
+    RetType 668..675
+      Arrow 668..670 "->"
+      ErrorUnionType 671..675
+        Not 671..672 "!"
+        PathType 672..675
+          Path 672..675
+            Ident 672..675 "int"
+    Block 676..771
+      LBrace 676..677 "{"
+      ExprStmt 682..709
+        CallExpr 682..708
+          PathExpr 682..687
+            Ident 682..687 "print"
+          ArgList 687..708
+            LParen 687..688 "("
+            Arg 688..707
+              CallExpr 688..707
+                PathExpr 688..691
+                  Ident 688..691 "say"
+                ArgList 691..707
+                  LParen 691..692 "("
+                  Arg 692..706
+                    CallExpr 692..706
+                      MemberExpr 692..695
+                        PathExpr 692..693
+                          Ident 692..693 "W"
+                        Dot 693..694 "."
+                        Ident 694..695 "K"
+                      ArgList 695..706
+                        LParen 695..696 "("
+                        Arg 696..705
+                          MemberExpr 696..705
+                            PathExpr 696..700
+                              Ident 696..700 "Kind"
+                            Dot 700..701 "."
+                            Ident 701..705 "Food"
+                        RParen 705..706 ")"
+                  RParen 706..707 ")"
+            RParen 707..708 ")"
+        Term 708..709 "\n"
+      ExprStmt 713..741
+        CallExpr 713..740
+          PathExpr 713..718
+            Ident 713..718 "print"
+          ArgList 718..740
+            LParen 718..719 "("
+            Arg 719..739
+              CallExpr 719..739
+                PathExpr 719..722
+                  Ident 719..722 "say"
+                ArgList 722..739
+                  LParen 722..723 "("
+                  Arg 723..738
+                    CallExpr 723..738
+                      MemberExpr 723..726
+                        PathExpr 723..724
+                          Ident 723..724 "W"
+                        Dot 724..725 "."
+                        Ident 725..726 "K"
+                      ArgList 726..738
+                        LParen 726..727 "("
+                        Arg 727..737
+                          MemberExpr 727..737
+                            PathExpr 727..731
+                              Ident 727..731 "Kind"
+                            Dot 731..732 "."
+                            Ident 732..737 "Drink"
+                        RParen 737..738 ")"
+                  RParen 738..739 ")"
+            RParen 739..740 ")"
+        Term 740..741 "\n"
+      ExprStmt 745..764
+        CallExpr 745..763
+          PathExpr 745..750
+            Ident 745..750 "print"
+          ArgList 750..763
+            LParen 750..751 "("
+            Arg 751..762
+              CallExpr 751..762
+                PathExpr 751..754
+                  Ident 751..754 "say"
+                ArgList 754..762
+                  LParen 754..755 "("
+                  Arg 755..761
+                    MemberExpr 755..761
+                      PathExpr 755..756
+                        Ident 755..756 "W"
+                      Dot 756..757 "."
+                      Ident 757..761 "None"
+                  RParen 761..762 ")"
+            RParen 762..763 ")"
+        Term 763..764 "\n"
+      ExprStmt 768..770
+        LiteralExpr 768..769
+          Int 768..769 "0"
+        Term 769..770 "\n"
+      RBrace 770..771 "}"
+  Term 771..772 "\n"
+  Eof 772..772 ""
+== diagnostics ==

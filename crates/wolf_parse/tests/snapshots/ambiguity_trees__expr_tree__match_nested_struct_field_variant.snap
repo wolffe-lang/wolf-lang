@@ -1,0 +1,398 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 503..1076
+  EnumDecl 503..551
+    EnumKw 503..507 "enum"
+    Ident 508..512 "Kind"
+    LBrace 513..514 "{"
+    EnumVariant 519..524
+      Ident 519..524 "Drink"
+    Comma 524..525 ","
+    EnumVariant 530..534
+      Ident 530..534 "Food"
+    Comma 534..535 ","
+    EnumVariant 540..548
+      Ident 540..548 "Gratuity"
+    Comma 548..549 ","
+    RBrace 550..551 "}"
+  Term 551..552 "\n"
+  StructDecl 553..590
+    StructKw 553..559 "struct"
+    Ident 560..561 "P"
+    LBrace 562..563 "{"
+    StructField 568..576
+      Ident 568..569 "k"
+      Colon 569..570 ":"
+      PathType 571..575
+        Path 571..575
+          Ident 571..575 "Kind"
+      Comma 575..576 ","
+    StructField 581..588
+      Ident 581..582 "n"
+      Colon 582..583 ":"
+      PathType 584..587
+        Path 584..587
+          Ident 584..587 "int"
+      Comma 587..588 ","
+    RBrace 589..590 "}"
+  Term 590..591 "\n"
+  EnumDecl 592..612
+    EnumKw 592..596 "enum"
+    Ident 597..598 "W"
+    LBrace 599..600 "{"
+    EnumVariant 605..609
+      Ident 605..606 "K"
+      LParen 606..607 "("
+      PathType 607..608
+        Path 607..608
+          Ident 607..608 "P"
+      RParen 608..609 ")"
+    Comma 609..610 ","
+    RBrace 611..612 "}"
+  Term 612..613 "\n"
+  FnDecl 614..732
+    FnKw 614..616 "fn"
+    Ident 617..620 "top"
+    ParamList 620..626
+      LParen 620..621 "("
+      Param 621..625
+        Ident 621..622 "p"
+        Colon 622..623 ":"
+        PathType 624..625
+          Path 624..625
+            Ident 624..625 "P"
+      RParen 625..626 ")"
+    RetType 627..633
+      Arrow 627..629 "->"
+      PathType 630..633
+        Path 630..633
+          Ident 630..633 "str"
+    Block 634..732
+      LBrace 634..635 "{"
+      ExprStmt 640..731
+        MatchExpr 640..730
+          MatchKw 640..645 "match"
+          PathExpr 646..647
+            Ident 646..647 "p"
+          LBrace 648..649 "{"
+          MatchArm 658..688
+            StructPat 658..676
+              Path 658..659
+                Ident 658..659 "P"
+              LBrace 660..661 "{"
+              FieldPat 662..670
+                Ident 662..663 "k"
+                Colon 663..664 ":"
+                IdentPat 665..670
+                  Ident 665..670 "Drink"
+              Comma 670..671 ","
+              RestPat 672..674
+                DotDot 672..674 ".."
+              RBrace 675..676 "}"
+            FatArrow 677..679 "=>"
+            StringExpr 680..687
+              StrBegin 680..681 "\""
+              StrFragment 681..686 "drink"
+              StrEnd 686..687 "\""
+            Comma 687..688 ","
+          MatchArm 697..724
+            StructPat 697..708
+              Path 697..698
+                Ident 697..698 "P"
+              LBrace 699..700 "{"
+              FieldPat 701..702
+                IdentPat 701..702
+                  Ident 701..702 "n"
+              Comma 702..703 ","
+              RestPat 704..706
+                DotDot 704..706 ".."
+              RBrace 707..708 "}"
+            FatArrow 709..711 "=>"
+            StringExpr 712..723
+              StrBegin 712..713 "\""
+              StrFragment 713..719 "other "
+              Interp 719..722
+                InterpOpen 719..720 "{"
+                PathExpr 720..721
+                  Ident 720..721 "n"
+                InterpClose 721..722 "}"
+              StrEnd 722..723 "\""
+            Comma 723..724 ","
+          RBrace 729..730 "}"
+        Term 730..731 "\n"
+      RBrace 731..732 "}"
+  Term 732..733 "\n"
+  FnDecl 734..864
+    FnKw 734..736 "fn"
+    Ident 737..743 "nested"
+    ParamList 743..749
+      LParen 743..744 "("
+      Param 744..748
+        Ident 744..745 "w"
+        Colon 745..746 ":"
+        PathType 747..748
+          Path 747..748
+            Ident 747..748 "W"
+      RParen 748..749 ")"
+    RetType 750..756
+      Arrow 750..752 "->"
+      PathType 753..756
+        Path 753..756
+          Ident 753..756 "str"
+    Block 757..864
+      LBrace 757..758 "{"
+      ExprStmt 763..863
+        MatchExpr 763..862
+          MatchKw 763..768 "match"
+          PathExpr 769..770
+            Ident 769..770 "w"
+          LBrace 771..772 "{"
+          MatchArm 781..817
+            PathPat 781..801
+              Path 781..782
+                Ident 781..782 "K"
+              LParen 782..783 "("
+              StructPat 783..800
+                Path 783..784
+                  Ident 783..784 "P"
+                LBrace 785..786 "{"
+                FieldPat 787..795
+                  Ident 787..788 "k"
+                  Colon 788..789 ":"
+                  IdentPat 790..795
+                    Ident 790..795 "Drink"
+                Comma 795..796 ","
+                FieldPat 797..798
+                  IdentPat 797..798
+                    Ident 797..798 "n"
+                RBrace 799..800 "}"
+              RParen 800..801 ")"
+            FatArrow 802..804 "=>"
+            StringExpr 805..816
+              StrBegin 805..806 "\""
+              StrFragment 806..812 "drink "
+              Interp 812..815
+                InterpOpen 812..813 "{"
+                PathExpr 813..814
+                  Ident 813..814 "n"
+                InterpClose 814..815 "}"
+              StrEnd 815..816 "\""
+            Comma 816..817 ","
+          MatchArm 826..856
+            PathPat 826..840
+              Path 826..827
+                Ident 826..827 "K"
+              LParen 827..828 "("
+              StructPat 828..839
+                Path 828..829
+                  Ident 828..829 "P"
+                LBrace 830..831 "{"
+                FieldPat 832..833
+                  IdentPat 832..833
+                    Ident 832..833 "n"
+                Comma 833..834 ","
+                RestPat 835..837
+                  DotDot 835..837 ".."
+                RBrace 838..839 "}"
+              RParen 839..840 ")"
+            FatArrow 841..843 "=>"
+            StringExpr 844..855
+              StrBegin 844..845 "\""
+              StrFragment 845..851 "other "
+              Interp 851..854
+                InterpOpen 851..852 "{"
+                PathExpr 852..853
+                  Ident 852..853 "n"
+                InterpClose 853..854 "}"
+              StrEnd 854..855 "\""
+            Comma 855..856 ","
+          RBrace 861..862 "}"
+        Term 862..863 "\n"
+      RBrace 863..864 "}"
+  Term 864..865 "\n"
+  FnDecl 866..1075
+    FnKw 866..868 "fn"
+    Ident 869..873 "main"
+    ParamList 873..875
+      LParen 873..874 "("
+      RParen 874..875 ")"
+    RetType 876..883
+      Arrow 876..878 "->"
+      ErrorUnionType 879..883
+        Not 879..880 "!"
+        PathType 880..883
+          Path 880..883
+            Ident 880..883 "int"
+    Block 884..1075
+      LBrace 884..885 "{"
+      ExprStmt 890..927
+        CallExpr 890..926
+          PathExpr 890..895
+            Ident 890..895 "print"
+          ArgList 895..926
+            LParen 895..896 "("
+            Arg 896..925
+              CallExpr 896..925
+                PathExpr 896..899
+                  Ident 896..899 "top"
+                ArgList 899..925
+                  LParen 899..900 "("
+                  Arg 900..924
+                    StructLit 900..924
+                      PathExpr 900..901
+                        Ident 900..901 "P"
+                      LBrace 902..903 "{"
+                      FieldInit 904..916
+                        Ident 904..905 "k"
+                        Colon 905..906 ":"
+                        MemberExpr 907..916
+                          PathExpr 907..911
+                            Ident 907..911 "Kind"
+                          Dot 911..912 "."
+                          Ident 912..916 "Food"
+                      Comma 916..917 ","
+                      FieldInit 918..922
+                        Ident 918..919 "n"
+                        Colon 919..920 ":"
+                        LiteralExpr 921..922
+                          Int 921..922 "1"
+                      RBrace 923..924 "}"
+                  RParen 924..925 ")"
+            RParen 925..926 ")"
+        Term 926..927 "\n"
+      ExprStmt 931..969
+        CallExpr 931..968
+          PathExpr 931..936
+            Ident 931..936 "print"
+          ArgList 936..968
+            LParen 936..937 "("
+            Arg 937..967
+              CallExpr 937..967
+                PathExpr 937..940
+                  Ident 937..940 "top"
+                ArgList 940..967
+                  LParen 940..941 "("
+                  Arg 941..966
+                    StructLit 941..966
+                      PathExpr 941..942
+                        Ident 941..942 "P"
+                      LBrace 943..944 "{"
+                      FieldInit 945..958
+                        Ident 945..946 "k"
+                        Colon 946..947 ":"
+                        MemberExpr 948..958
+                          PathExpr 948..952
+                            Ident 948..952 "Kind"
+                          Dot 952..953 "."
+                          Ident 953..958 "Drink"
+                      Comma 958..959 ","
+                      FieldInit 960..964
+                        Ident 960..961 "n"
+                        Colon 961..962 ":"
+                        LiteralExpr 963..964
+                          Int 963..964 "2"
+                      RBrace 965..966 "}"
+                  RParen 966..967 ")"
+            RParen 967..968 ")"
+        Term 968..969 "\n"
+      ExprStmt 973..1018
+        CallExpr 973..1017
+          PathExpr 973..978
+            Ident 973..978 "print"
+          ArgList 978..1017
+            LParen 978..979 "("
+            Arg 979..1016
+              CallExpr 979..1016
+                PathExpr 979..985
+                  Ident 979..985 "nested"
+                ArgList 985..1016
+                  LParen 985..986 "("
+                  Arg 986..1015
+                    CallExpr 986..1015
+                      MemberExpr 986..989
+                        PathExpr 986..987
+                          Ident 986..987 "W"
+                        Dot 987..988 "."
+                        Ident 988..989 "K"
+                      ArgList 989..1015
+                        LParen 989..990 "("
+                        Arg 990..1014
+                          StructLit 990..1014
+                            PathExpr 990..991
+                              Ident 990..991 "P"
+                            LBrace 992..993 "{"
+                            FieldInit 994..1006
+                              Ident 994..995 "k"
+                              Colon 995..996 ":"
+                              MemberExpr 997..1006
+                                PathExpr 997..1001
+                                  Ident 997..1001 "Kind"
+                                Dot 1001..1002 "."
+                                Ident 1002..1006 "Food"
+                            Comma 1006..1007 ","
+                            FieldInit 1008..1012
+                              Ident 1008..1009 "n"
+                              Colon 1009..1010 ":"
+                              LiteralExpr 1011..1012
+                                Int 1011..1012 "3"
+                            RBrace 1013..1014 "}"
+                        RParen 1014..1015 ")"
+                  RParen 1015..1016 ")"
+            RParen 1016..1017 ")"
+        Term 1017..1018 "\n"
+      ExprStmt 1022..1068
+        CallExpr 1022..1067
+          PathExpr 1022..1027
+            Ident 1022..1027 "print"
+          ArgList 1027..1067
+            LParen 1027..1028 "("
+            Arg 1028..1066
+              CallExpr 1028..1066
+                PathExpr 1028..1034
+                  Ident 1028..1034 "nested"
+                ArgList 1034..1066
+                  LParen 1034..1035 "("
+                  Arg 1035..1065
+                    CallExpr 1035..1065
+                      MemberExpr 1035..1038
+                        PathExpr 1035..1036
+                          Ident 1035..1036 "W"
+                        Dot 1036..1037 "."
+                        Ident 1037..1038 "K"
+                      ArgList 1038..1065
+                        LParen 1038..1039 "("
+                        Arg 1039..1064
+                          StructLit 1039..1064
+                            PathExpr 1039..1040
+                              Ident 1039..1040 "P"
+                            LBrace 1041..1042 "{"
+                            FieldInit 1043..1056
+                              Ident 1043..1044 "k"
+                              Colon 1044..1045 ":"
+                              MemberExpr 1046..1056
+                                PathExpr 1046..1050
+                                  Ident 1046..1050 "Kind"
+                                Dot 1050..1051 "."
+                                Ident 1051..1056 "Drink"
+                            Comma 1056..1057 ","
+                            FieldInit 1058..1062
+                              Ident 1058..1059 "n"
+                              Colon 1059..1060 ":"
+                              LiteralExpr 1061..1062
+                                Int 1061..1062 "4"
+                            RBrace 1063..1064 "}"
+                        RParen 1064..1065 ")"
+                  RParen 1065..1066 ")"
+            RParen 1066..1067 ")"
+        Term 1067..1068 "\n"
+      ExprStmt 1072..1074
+        LiteralExpr 1072..1073
+          Int 1072..1073 "0"
+        Term 1073..1074 "\n"
+      RBrace 1074..1075 "}"
+  Term 1075..1076 "\n"
+  Eof 1076..1076 ""
+== diagnostics ==
