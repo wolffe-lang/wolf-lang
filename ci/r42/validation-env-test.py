@@ -51,6 +51,13 @@ class CiMirrorEnvironment(unittest.TestCase):
                      "validation-std-published-tests|validation-std-published-docs")
         self.assertNotIn("unset WOLF_STD", std)
 
+    def test_the_startup_take_runs_bench_gates_as_ci_does(self):
+        startup = branch(self.text, "validation-startup")
+        gates = startup.index("cargo xtask bench-gates")
+        m = re.search(r"^\s*unset WOLF_STD LUPIN_STD WOLF_RT_LIB$", startup, re.M)
+        self.assertIsNotNone(m)
+        self.assertLess(m.start(), gates)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
