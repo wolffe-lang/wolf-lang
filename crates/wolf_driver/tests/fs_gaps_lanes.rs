@@ -216,7 +216,11 @@ fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
 
 #[test]
 fn published_059_keeps_only_the_two_measured_fs_gap_cells() {
-    assert!(measured_pre_mirror("0.1.58", "access_rows.lu", &["fs_access"]));
+    assert!(measured_pre_mirror(
+        "0.1.58",
+        "access_rows.lu",
+        &["fs_access"]
+    ));
     assert!(measured_pre_mirror("0.1.59", "nofollow_rows.lu", &[]));
     assert!(measured_pre_mirror(
         "0.1.59",
@@ -227,7 +231,10 @@ fn published_059_keeps_only_the_two_measured_fs_gap_cells() {
         ("access_rows.lu", &["fs_access"][..]),
         ("lock_rows.lu", &["fs_lock", "fs_unlock"][..]),
         ("fifo_rows.lu", &["fs_mkfifo", "fs_fstat_record"][..]),
-        ("nonblock_rows.lu", &["fs_set_nonblock", "fs_write_some"][..]),
+        (
+            "nonblock_rows.lu",
+            &["fs_set_nonblock", "fs_write_some"][..],
+        ),
         ("other_rows.lu", &[][..]),
     ] {
         assert!(!measured_pre_mirror("0.1.59", name, calls), "{name}");
