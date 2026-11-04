@@ -66,6 +66,12 @@ case "$mode" in
         envfile="/lane/records/wolf-validation-prep-$head/tool-inputs.env"
         [[ -f "$envfile" ]] || exit 2
         set -a; source "$envfile"; set +a
+        # CI's gauntlet environment (ci.yml's linux job, as the 0.2.36 take
+        # ran): no std root for either machine, each compiler's runtime found
+        # beside it, and a missing static-entry input red, never a skip. The
+        # std and differential takes keep their explicit roots.
+        unset WOLF_STD LUPIN_STD WOLF_RT_LIB
+        export WOLF_STATIC_ENTRY_REQUIRE=1
         if [[ "$mode" = validation-release ]]; then
             gauntlet_step prune-debug-tests indent python3 -I ci/r42/prune-completed-tests.py "$root" debug "/lane/records/wolf-validation-debug-$head/local-record.log" "/lane/records/wolf-validation-debug-$head.exit" "$records/pruned-debug.txt" || exit $?
             release_shim() {
