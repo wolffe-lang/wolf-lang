@@ -160,3 +160,39 @@ that target/debug/wolf reports that exact full head or its Git short prefix,
 never dev.unknown or an earlier head. Debug/release CI records check it
 before and after the gauntlet. No prior-head build result is a fresh binary
 claim; metadata-only .58 pairing rejection remains an intentional control.
+
+Real-linker integration prediction before the next source changes:
+Use ligature c8ca1be4b3ccb7f8c425638e2d1145d21a62ee5a in a fresh pin-keyed
+cache. Its published wolf-toolchain.toml requires the complete wolf 0.2.36
+archive at 5adf3d91f75b3545ff8d38e5b6693b0b9f367a05, whose actual identity
+is `wolf 0.2.36 (wolfgang, pin 5adf3d9)`. Clear per-command candidate std,
+runtime and selected-tool overrides during this bootstrap. Clef retains
+its separate 0.2.35 bootstrap. Wrong HEAD/dirty source/digest checks stay.
+
+The six real linker cases (exit/hello/assembly, native/release) gain start
+and elapsed completion labels for BUILD+LINK around the existing compiler
+invocation. The six object-only preflights are separate. These are wall
+observations, not pure linker CPU, and introduce no performance threshold
+or change to verifier/executable/exit/stdout/stderr assertions.
+
+The licensed link bundle is data only: archive SHA-256
+8210ac2223d969ab8f0845cc74950a1c68226b58b10dd083cd2e2113acd3e37a,
+36514237 bytes,38 regular members at link-bundle-wolf-0.2.36. Its asset is
+musl-link-bundle-sha256-8210ac2223d969ab8f0845cc74950a1c68226b58b10dd083cd2e2113acd3e37a.tar.gz;
+the local cache alias remains ld02-musl-link-bundle.tar.gz. Thirty added
+members are licences/notices/source inventory/manifest data. Of the old
+eight binary members, seven linked controls are byte-identical; only the
+bundled runtime changes to the verified 0.2.36 runtime6892dac8a6e211f12c6823c0f19497d820a47fdbfe7fb569cd967acf86461aad
+(46700882 bytes). It is verified but never selected over the head-built
+0.2.37 runtime by the tests.
+
+Commit the failing digest regression first. The old fetcher must reject
+the real new archive under its stable alias before extraction. Then only
+pin/member-table/asset-name/comment data change: the validator algorithm
+must remain byte-identical, including both archive reads, exact regular
+member set, safe extraction and two size/hash passes. Existing corrupt
+cache remains red. CI cache-key data and only matching preserved baseline
+strings change; classifier/assertion logic remains unchanged. If linked
+bytes or validator logic must change, defer the bundle portion rather
+than relax it. New source head/strict plant/full chain all restart from
+prep, without reusing previous-head greens.
