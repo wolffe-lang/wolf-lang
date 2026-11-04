@@ -99,6 +99,23 @@ class LinkInputs(unittest.TestCase):
         tail = text[text.index("def digest(path):"):]
         self.assertEqual(hashlib.sha256(tail.encode()).hexdigest(), expected["validator_tail_sha256"])
 
+    def test_real_linker_pin_and_bootstrap_are_isolated(self):
+        builder = (ROOT / "ci/build-test-ligature").read_text()
+        self.assertIn("pin=c8ca1be4b3ccb7f8c425638e2d1145d21a62ee5a", builder)
+        self.assertIn("wolf 0.2.36 (wolfgang, pin 5adf3d9)", builder)
+        self.assertIn("target/test-ligature-$pin", builder)
+        self.assertIn("env -u WOLF_STD -u WOLF_RT_LIB -u WOLF_LD -u WOLF_AS", builder)
+        self.assertIn("wolf-0.2.35", (ROOT / "ci/build-test-clef").read_text())
+
+    def test_real_case_timing_is_build_and_link_not_preflight(self):
+        source = (ROOT / "crates/wolf_driver/tests/linker_select.rs").read_text()
+        preflight, real = source.split("for (name, source, code, stdout) in cases", 1)
+        self.assertNotIn("LINK_CASE_START", preflight)
+        self.assertLess(real.index("LINK_CASE_START"), real.index("c.output()"))
+        self.assertLess(real.index("c.output()"), real.index("LINK_CASE_END"))
+        self.assertIn("BUILD+LINK", real)
+        self.assertIn("elapsed_ms=", real)
+
     def test_ci_builds_shared_runtime_before_real_linker_inputs(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         lint = workflow.split("  lint-test:", 1)[1].split("  variadic-abi:", 1)[0]
