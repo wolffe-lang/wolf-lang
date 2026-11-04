@@ -1,0 +1,8 @@
+enum Kind { Drink, Food, Gratuity }
+struct P { k: Kind, n: int }
+
+fn main() -> !int {
+    let P { k: Drink, n } = P { k: Kind.Food, n: 3 }
+    print("{n}")
+    0
+}

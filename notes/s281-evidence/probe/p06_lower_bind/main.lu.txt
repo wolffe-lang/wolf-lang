@@ -1,0 +1,24 @@
+enum Kind { Drink, Food, Gratuity }
+enum W { K(Kind), None }
+
+fn name(k: Kind) -> str {
+    match k {
+        Drink => "drink",
+        Food => "food",
+        Gratuity => "gratuity",
+    }
+}
+
+fn say(w: W) -> str {
+    match w {
+        K(d) => name(d),
+        None => "none",
+    }
+}
+
+fn main() -> !int {
+    print(say(W.K(Kind.Food)))
+    print(say(W.K(Kind.Drink)))
+    print(say(W.None))
+    0
+}

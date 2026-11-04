@@ -1,0 +1,16 @@
+enum Kind { Drink, Food, Gratuity }
+enum Holder[T] { Full(T), Empty }
+
+fn say(h: Holder[Kind]) -> str {
+    match h {
+        Full(Drink) => "drink",
+        Full(_) => "other",
+        Empty => "empty",
+    }
+}
+
+fn main() -> !int {
+    print(say(Holder.Full(Kind.Food)))
+    print(say(Holder.Full(Kind.Drink)))
+    0
+}

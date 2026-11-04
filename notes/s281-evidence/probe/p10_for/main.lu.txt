@@ -1,0 +1,9 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn main() -> !int {
+    let xs = [(Kind.Food, 1), (Kind.Drink, 2)]
+    var t = 0
+    for (Drink, n) in xs { t = t + n }
+    print("{t}")
+    0
+}

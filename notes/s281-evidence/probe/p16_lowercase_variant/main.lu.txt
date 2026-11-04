@@ -1,0 +1,15 @@
+enum Mode { fast, slow }
+enum Cfg { M(Mode) }
+
+fn say(c: Cfg) -> str {
+    match c {
+        M(fast) => "fast",
+        M(_) => "other",
+    }
+}
+
+fn main() -> !int {
+    print(say(Cfg.M(Mode.slow)))
+    print(say(Cfg.M(Mode.fast)))
+    0
+}

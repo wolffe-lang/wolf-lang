@@ -1,0 +1,14 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn say(t: (Kind, int)) -> str {
+    match t {
+        (Drink, _) => "drink",
+        (_, n) => "other {n}",
+    }
+}
+
+fn main() -> !int {
+    print(say((Kind.Food, 275)))
+    print(say((Kind.Drink, 1)))
+    0
+}

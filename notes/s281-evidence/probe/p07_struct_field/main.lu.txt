@@ -1,0 +1,25 @@
+enum Kind { Drink, Food, Gratuity }
+struct P { k: Kind, n: int }
+enum W { K(P) }
+
+fn top(p: P) -> str {
+    match p {
+        P { k: Drink, .. } => "drink",
+        P { n, .. } => "other {n}",
+    }
+}
+
+fn nested(w: W) -> str {
+    match w {
+        K(P { k: Drink, n }) => "drink {n}",
+        K(P { n, .. }) => "other {n}",
+    }
+}
+
+fn main() -> !int {
+    print(top(P { k: Kind.Food, n: 1 }))
+    print(top(P { k: Kind.Drink, n: 2 }))
+    print(nested(W.K(P { k: Kind.Food, n: 3 })))
+    print(nested(W.K(P { k: Kind.Drink, n: 4 })))
+    0
+}
