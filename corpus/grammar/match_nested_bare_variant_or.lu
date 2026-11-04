@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="other\nconsumable\nconsumable\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043), a control: bare variants inside an or-pattern
+//! in a payload slot, `K(Drink | Food)`, test the slot. The slot's
+//! pattern is an or-pattern, so every tier already took this arm through
+//! the product walk; this row was green before s281 and holds that line.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum W {
+    K(Kind),
+}
+
+fn say(w: W) -> str {
+    match w {
+        K(Drink | Food) => "consumable",
+        K(_) => "other",
+    }
+}
+
+fn main() -> !int {
+    print(say(W.K(Kind.Gratuity)))
+    print(say(W.K(Kind.Food)))
+    print(say(W.K(Kind.Drink)))
+    0
+}

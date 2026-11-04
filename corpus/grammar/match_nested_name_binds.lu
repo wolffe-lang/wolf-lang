@@ -1,0 +1,41 @@
+//! check: run(exit=0, stdout="food\ndrink\nnone\n")
+//! phase: run
+//! conforms: gram.pat
+//!
+//! s281 (wolf-lang#1043), a control: a bare name in a payload slot that
+//! spells none of the slot type's variants still binds the slot. `K(d)`
+//! takes every `K` and names its `Kind`; only a name that IS a variant
+//! of the slot's type is a test.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum W {
+    K(Kind),
+    None,
+}
+
+fn name(k: Kind) -> str {
+    match k {
+        Drink => "drink",
+        Food => "food",
+        Gratuity => "gratuity",
+    }
+}
+
+fn say(w: W) -> str {
+    match w {
+        K(d) => name(d),
+        None => "none",
+    }
+}
+
+fn main() -> !int {
+    print(say(W.K(Kind.Food)))
+    print(say(W.K(Kind.Drink)))
+    print(say(W.None))
+    0
+}
