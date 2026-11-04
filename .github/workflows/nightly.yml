@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .link-bundle-cache
-          key: ld02-musl-link-bundle-6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1
+          key: ld02-musl-link-bundle-8210ac2223d969ab8f0845cc74950a1c68226b58b10dd083cd2e2113acd3e37a
       - name: build the head runtime against the verified musl sysroot
         run: |
           ci/fetch-entry-bundle
