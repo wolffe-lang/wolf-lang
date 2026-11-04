@@ -33,6 +33,7 @@ gauntlet_step identity indent identity || exit $?
 gauntlet_step metadata indent python3 -I ci/r42/release-posture.py || exit $?
 gauntlet_step proxy-tests indent python3 -I ci/r42/compiler-proxy-test.py || exit $?
 gauntlet_step pruner-tests indent python3 -I ci/r42/prune-completed-tests-test.py || exit $?
+gauntlet_step env-tests indent python3 -I ci/r42/validation-env-test.py || exit $?
 case "$mode" in
     validation-plant)
         export LUPIN="$previous"
