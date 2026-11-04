@@ -85,6 +85,9 @@ def terminal_row(name, argv, interrupt=False, dumb=False, expected=0, late_size=
     if pid == 0:
         child_env = dict(env)
         if dumb: child_env['TERM'] = 'dumb'
+        # The terminal has its size before wolf draws: the reporter reads the
+        # width every frame and answers 80 for a size not yet set.
+        fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 40, 0, 0))
         os.execvpe(wolf, [wolf, *argv], child_env)
     if late_size:
         # The race forced: the parent's size lands after wolf's first frames.
