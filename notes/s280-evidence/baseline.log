@@ -1,0 +1,481 @@
+QUEUED 2026-11-04T04:27:20Z head=5f1f1c949582f53121e4047bc83c86f23ff72240
+LOCKS_ACQUIRED 2026-11-04T05:42:52Z budget=6900
+BASE_START 2026-11-04T05:42:52Z head=5f1f1c949582f53121e4047bc83c86f23ff72240
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Linux bd60de462815 7.2.4 #1-NixOS SMP PREEMPT_DYNAMIC Mon Sep  7 15:37:28 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+CPU(s):                                  20
+On-line CPU(s) list:                     0-19
+Model name:                              12th Gen Intel(R) Core(TM) i7-12700KF
+CPU(s) scaling MHz:                      42%
+NUMA node0 CPU(s):                       0-19
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded allocator-api2 v0.2.21
+  Downloaded cranelift-srcgen v0.134.3
+  Downloaded equivalent v1.0.2
+  Downloaded cfg-if v1.0.4
+  Downloaded anyhow v1.0.104
+  Downloaded cranelift-control v0.134.3
+  Downloaded serde_repr v0.1.21
+  Downloaded cranelift-bitset v0.134.3
+  Downloaded idna_adapter v1.2.2
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded zerofrom-derive v0.1.7
+  Downloaded cranelift-codegen-shared v0.134.3
+  Downloaded potential_utf v0.1.5
+  Downloaded arrayref v0.3.9
+  Downloaded utf8_iter v1.0.4
+  Downloaded fnv v1.0.7
+  Downloaded yoke-derive v0.8.2
+  Downloaded rustc-hash v2.1.3
+  Downloaded heck v0.5.0
+  Downloaded form_urlencoded v1.2.2
+  Downloaded percent-encoding v2.3.2
+  Downloaded cpufeatures v0.3.0
+  Downloaded zerofrom v0.1.8
+  Downloaded cranelift-object v0.134.3
+  Downloaded cranelift-module v0.134.3
+  Downloaded cranelift-entity v0.134.3
+  Downloaded constant_time_eq v0.4.2
+  Downloaded tinystr v0.8.3
+  Downloaded cranelift-assembler-x64 v0.134.3
+  Downloaded quote v1.0.47
+  Downloaded lsp-server v0.10.0
+  Downloaded zmij v1.0.23
+  Downloaded displaydoc v0.2.7
+  Downloaded foldhash v0.2.0
+  Downloaded writeable v0.6.3
+  Downloaded either v1.17.0
+  Downloaded bitflags v1.3.2
+  Downloaded shlex v2.0.1
+  Downloaded zerovec-derive v0.11.3
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded target-lexicon v0.13.5
+  Downloaded find-msvc-tools v0.1.10
+  Downloaded litemap v0.8.2
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded itoa v1.0.18
+  Downloaded cranelift-bforest v0.134.3
+  Downloaded synstructure v0.13.2
+  Downloaded cranelift-assembler-x64-meta v0.134.3
+  Downloaded smallvec v1.15.2
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded yoke v0.8.3
+  Downloaded arrayvec v0.7.8
+  Downloaded serde_derive v1.0.229
+  Downloaded unicode-ident v1.0.24
+  Downloaded arbitrary v1.4.2
+  Downloaded serde_core v1.0.229
+  Downloaded icu_provider v2.2.0
+  Downloaded proc-macro2 v1.0.107
+  Downloaded log v0.4.33
+  Downloaded crc32fast v1.5.0
+  Downloaded icu_properties v2.2.0
+  Downloaded wasmtime-internal-core v47.0.3
+  Downloaded rayon-core v1.13.0
+  Downloaded icu_normalizer v2.2.0
+  Downloaded icu_normalizer_data v2.2.0
+  Downloaded lsp-types v0.95.1
+  Downloaded cranelift-frontend v0.134.3
+  Downloaded cranelift-isle v0.134.3
+  Downloaded url v2.5.8
+  Downloaded icu_collections v2.2.0
+  Downloaded cranelift-codegen-meta v0.134.3
+  Downloaded crossbeam-channel v0.5.16
+  Downloaded serde v1.0.229
+  Downloaded icu_locale_core v2.2.0
+  Downloaded zerotrie v0.2.4
+  Downloaded memchr v2.8.3
+  Downloaded bumpalo v3.20.3
+  Downloaded indexmap v2.14.0
+  Downloaded cc v1.4.2
+  Downloaded zerovec v0.11.6
+  Downloaded regalloc2 v0.15.2
+  Downloaded libm v0.2.16
+  Downloaded idna v1.1.0
+  Downloaded serde_json v1.0.151
+  Downloaded hashbrown v0.16.1
+  Downloaded hashbrown v0.17.1
+  Downloaded icu_properties_data v2.2.0
+  Downloaded rayon v1.12.0
+  Downloaded blake3 v1.8.6
+  Downloaded syn v3.0.3
+  Downloaded syn v2.0.119
+  Downloaded gimli v0.33.0
+  Downloaded object v0.39.1
+  Downloaded libc v0.2.189
+  Downloaded cranelift-codegen v0.134.3
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling foldhash v0.2.0
+   Compiling wolf_span v0.2.36 (/work/crates/wolf_span)
+   Compiling hashbrown v0.17.1
+   Compiling cfg-if v1.0.4
+   Compiling stable_deref_trait v1.2.1
+   Compiling find-msvc-tools v0.1.10
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling shlex v2.0.1
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.36 (/work/crates/wolf_diag)
+   Compiling synstructure v0.13.2
+   Compiling crossbeam-epoch v0.9.20
+   Compiling blake3 v1.8.6
+   Compiling crossbeam-deque v0.8.7
+   Compiling wolf_lex v0.2.36 (/work/crates/wolf_lex)
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerofrom v0.1.8
+   Compiling zerovec-derive v0.11.3
+   Compiling yoke v0.8.3
+   Compiling displaydoc v0.2.7
+   Compiling zerovec v0.11.6
+   Compiling constant_time_eq v0.4.2
+   Compiling smallvec v1.15.2
+   Compiling cranelift-srcgen v0.134.3
+   Compiling arrayref v0.3.9
+   Compiling cpufeatures v0.3.0
+   Compiling rayon-core v1.13.0
+   Compiling arrayvec v0.7.8
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling wolf_ast v0.2.36 (/work/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling wolf_parse v0.2.36 (/work/crates/wolf_parse)
+   Compiling either v1.17.0
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling indexmap v2.14.0
+   Compiling rayon v1.12.0
+   Compiling tinystr v0.8.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling cranelift-isle v0.134.3
+   Compiling icu_locale_core v2.2.0
+   Compiling wolf_sema v0.2.36 (/work/crates/wolf_sema)
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling icu_normalizer_data v2.2.0
+   Compiling heck v0.5.0
+   Compiling fnv v1.0.7
+   Compiling utf8_iter v1.0.4
+   Compiling hashbrown v0.16.1
+   Compiling log v0.4.33
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling icu_properties_data v2.2.0
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.189
+   Compiling gimli v0.33.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling icu_collections v2.2.0
+   Compiling icu_provider v2.2.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling memchr v2.8.3
+   Compiling target-lexicon v0.13.5
+   Compiling allocator-api2 v0.2.21
+   Compiling cranelift-codegen v0.134.3
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling arbitrary v1.4.2
+   Compiling rustc-hash v2.1.3
+   Compiling serde v1.0.229
+   Compiling zmij v1.0.23
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-control v0.134.3
+   Compiling icu_properties v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling icu_normalizer v2.2.0
+   Compiling serde_derive v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling crc32fast v1.5.0
+   Compiling anyhow v1.0.104
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.36 (/work/crates/wolf_mem)
+   Compiling percent-encoding v2.3.2
+   Compiling itoa v1.0.18
+   Compiling object v0.39.1
+   Compiling form_urlencoded v1.2.2
+   Compiling wolf_wir v0.2.36 (/work/crates/wolf_wir)
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.36 (/work/crates/wolf_fmt)
+   Compiling wolf_query v0.2.36 (/work/crates/wolf_query)
+   Compiling cranelift-module v0.134.3
+   Compiling url v2.5.8
+   Compiling wolf_backend v0.2.36 (/work/crates/wolf_backend)
+   Compiling wolf_rt v0.2.36 (/work/crates/wolf_rt)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling lsp-server v0.10.0
+   Compiling cranelift-object v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling wolf_cimport v0.2.36 (/work/crates/wolf_cimport)
+   Compiling wolf_pkg v0.2.36 (/work/crates/wolf_pkg)
+   Compiling wolf_codegen_llvm v0.2.36 (/work/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.36 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_lsp v0.2.36 (/work/crates/wolf_lsp)
+   Compiling wolf_doc v0.2.36 (/work/crates/wolf_doc)
+   Compiling wolf_driver v0.2.36 (/work/crates/wolf_driver)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2m 16s
+END baseline-build exit=0 2026-11-04T05:45:09Z
+f9c3cf60a81820b5b88a8023da4a14399d2e1d807701479e0fd513626a0b9f33  native
+f3671efadbd24d5ea0bb10b76d19fd9d92c5f364c2b3d382bf2cf65fe31ca12d  release
+1fdc9182847fa9a6f61be1af96444a2ad7ff17aa1600c4879d1ab285d49bd0a8  c972
+70d67d03fbc670b5d71c72b85d0d85edbe0f5926c723125021427621155bf3dd  /work/target/release/wolf
+046b56624e9604ab7918f81db266a178493264d232d5653f0bfb9669141737be  /work/target/release/libwolf_rt.a
+BEGIN base-C-10000 2026-11-04T05:45:09Z
+10000
+MEASURE elapsed_s=0.00 peak_kib=2320 exit=0
+END base-C-10000 exit=0 2026-11-04T05:45:09Z
+BEGIN base-native-issue-10000 2026-11-04T05:45:09Z
+10000
+MEASURE elapsed_s=0.40 peak_kib=2664 exit=0
+END base-native-issue-10000 exit=0 2026-11-04T05:45:10Z
+BEGIN base-release-issue-10000 2026-11-04T05:45:10Z
+10000
+MEASURE elapsed_s=0.16 peak_kib=2668 exit=0
+END base-release-issue-10000 exit=0 2026-11-04T05:45:10Z
+BEGIN base-checked-issue-10000 2026-11-04T05:45:10Z
+wolf conform-run --checked: unsupported — step budget exhausted
+   --> ./main.lu:12:1
+    |
+ 12 | fn num(s: str) -> int {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+ 13 |     var n = 0
+...
+141 | }
+    | ^
+    |
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"./main.lu","x-unsupported-line":12,"x-unsupported-span":[702,3818]}
+MEASURE elapsed_s=6.05 peak_kib=17372 exit=0
+END base-checked-issue-10000 exit=0 2026-11-04T05:45:16Z
+BEGIN base-native-index-10000 2026-11-04T05:45:16Z
+10000
+MEASURE elapsed_s=0.16 peak_kib=2704 exit=0
+END base-native-index-10000 exit=0 2026-11-04T05:45:16Z
+BEGIN base-release-index-10000 2026-11-04T05:45:16Z
+10000
+MEASURE elapsed_s=0.16 peak_kib=2648 exit=0
+END base-release-index-10000 exit=0 2026-11-04T05:45:16Z
+BEGIN base-checked-index-10000 2026-11-04T05:45:16Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=0.21 peak_kib=14128 exit=0
+END base-checked-index-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-native-setonly-10000 2026-11-04T05:45:17Z
+10000
+MEASURE elapsed_s=0.08 peak_kib=2488 exit=0
+END base-native-setonly-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-release-setonly-10000 2026-11-04T05:45:17Z
+10000
+MEASURE elapsed_s=0.08 peak_kib=2512 exit=0
+END base-release-setonly-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-checked-setonly-10000 2026-11-04T05:45:17Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=0.12 peak_kib=13036 exit=0
+END base-checked-setonly-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-native-intmap-10000 2026-11-04T05:45:17Z
+10000
+MEASURE elapsed_s=0.10 peak_kib=2224 exit=0
+END base-native-intmap-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-release-intmap-10000 2026-11-04T05:45:17Z
+10000
+MEASURE elapsed_s=0.09 peak_kib=2148 exit=0
+END base-release-intmap-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-checked-intmap-10000 2026-11-04T05:45:17Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"10000\n","stdout_sha256":"876e13f4e07bb39705302c01f445ffd2d2c3b180a207e4d959d6b671c67da09b","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=0.03 peak_kib=13224 exit=0
+END base-checked-intmap-10000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-C-100000 2026-11-04T05:45:17Z
+100000
+MEASURE elapsed_s=0.01 peak_kib=8824 exit=0
+END base-C-100000 exit=0 2026-11-04T05:45:17Z
+BEGIN base-native-issue-100000 2026-11-04T05:45:17Z
+100000
+MEASURE elapsed_s=41.57 peak_kib=9888 exit=0
+END base-native-issue-100000 exit=0 2026-11-04T05:45:59Z
+BEGIN base-release-issue-100000 2026-11-04T05:45:59Z
+100000
+MEASURE elapsed_s=16.35 peak_kib=10184 exit=0
+END base-release-issue-100000 exit=0 2026-11-04T05:46:15Z
+BEGIN base-checked-issue-100000 2026-11-04T05:46:15Z
+wolf conform-run --checked: unsupported — step budget exhausted
+   --> ./main.lu:12:1
+    |
+ 12 | fn num(s: str) -> int {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+ 13 |     var n = 0
+...
+141 | }
+    | ^
+    |
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"./main.lu","x-unsupported-line":12,"x-unsupported-span":[702,3818]}
+MEASURE elapsed_s=45.58 peak_kib=55464 exit=0
+END base-checked-issue-100000 exit=0 2026-11-04T05:47:01Z
+BEGIN base-native-index-100000 2026-11-04T05:47:01Z
+100000
+MEASURE elapsed_s=16.12 peak_kib=9984 exit=0
+END base-native-index-100000 exit=0 2026-11-04T05:47:17Z
+BEGIN base-release-index-100000 2026-11-04T05:47:17Z
+100000
+MEASURE elapsed_s=16.15 peak_kib=9824 exit=0
+END base-release-index-100000 exit=0 2026-11-04T05:47:33Z
+BEGIN base-checked-index-100000 2026-11-04T05:47:33Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=19.52 peak_kib=29380 exit=0
+END base-checked-index-100000 exit=0 2026-11-04T05:47:52Z
+BEGIN base-native-setonly-100000 2026-11-04T05:47:52Z
+100000
+MEASURE elapsed_s=8.10 peak_kib=8424 exit=0
+END base-native-setonly-100000 exit=0 2026-11-04T05:48:01Z
+BEGIN base-release-setonly-100000 2026-11-04T05:48:01Z
+100000
+MEASURE elapsed_s=8.07 peak_kib=8584 exit=0
+END base-release-setonly-100000 exit=0 2026-11-04T05:48:09Z
+BEGIN base-checked-setonly-100000 2026-11-04T05:48:09Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=10.39 peak_kib=22732 exit=0
+END base-checked-setonly-100000 exit=0 2026-11-04T05:48:19Z
+BEGIN base-native-intmap-100000 2026-11-04T05:48:19Z
+100000
+MEASURE elapsed_s=10.28 peak_kib=5204 exit=0
+END base-native-intmap-100000 exit=0 2026-11-04T05:48:29Z
+BEGIN base-release-intmap-100000 2026-11-04T05:48:29Z
+100000
+MEASURE elapsed_s=9.35 peak_kib=5416 exit=0
+END base-release-intmap-100000 exit=0 2026-11-04T05:48:39Z
+BEGIN base-checked-intmap-100000 2026-11-04T05:48:39Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"100000\n","stdout_sha256":"b80500a01f984c764f1a3b486622d0ef7cc5b13fa9bd57ec9015113eaf875597","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=5.17 peak_kib=20084 exit=0
+END base-checked-intmap-100000 exit=0 2026-11-04T05:48:44Z
+BEGIN base-C-236000 2026-11-04T05:48:44Z
+236000
+MEASURE elapsed_s=0.04 peak_kib=18428 exit=0
+END base-C-236000 exit=0 2026-11-04T05:48:44Z
+BEGIN base-native-issue-236000 2026-11-04T05:48:44Z
+236000
+MEASURE elapsed_s=169.68 peak_kib=20088 exit=0
+END base-native-issue-236000 exit=0 2026-11-04T05:51:34Z
+BEGIN base-release-issue-236000 2026-11-04T05:51:34Z
+236000
+MEASURE elapsed_s=67.97 peak_kib=20368 exit=0
+END base-release-issue-236000 exit=0 2026-11-04T05:52:42Z
+BEGIN base-checked-issue-236000 2026-11-04T05:52:42Z
+wolf conform-run --checked: unsupported — step budget exhausted
+   --> ./main.lu:12:1
+    |
+ 12 | fn num(s: str) -> int {
+    | ^^^^^^^^^^^^^^^^^^^^^^^
+ 13 |     var n = 0
+...
+141 | }
+    | ^
+    |
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":1,"x-unsupported-construct":"step budget exhausted","x-unsupported-file":"./main.lu","x-unsupported-line":12,"x-unsupported-span":[702,3818]}
+MEASURE elapsed_s=134.44 peak_kib=113492 exit=0
+END base-checked-issue-236000 exit=0 2026-11-04T05:54:56Z
+BEGIN base-native-index-236000 2026-11-04T05:54:56Z
+236000
+MEASURE elapsed_s=62.36 peak_kib=20532 exit=0
+END base-native-index-236000 exit=0 2026-11-04T05:55:58Z
+BEGIN base-release-index-236000 2026-11-04T05:55:58Z
+236000
+MEASURE elapsed_s=63.21 peak_kib=20460 exit=0
+END base-release-index-236000 exit=0 2026-11-04T05:57:02Z
+BEGIN base-checked-index-236000 2026-11-04T05:57:02Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"236000\n","stdout_sha256":"d487d03f24cb3a74e35f05b8292fd1e8797ef1606bff5cfb8268580436c647d0","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=116.15 peak_kib=53092 exit=0
+END base-checked-index-236000 exit=0 2026-11-04T05:58:58Z
+BEGIN base-native-setonly-236000 2026-11-04T05:58:58Z
+236000
+MEASURE elapsed_s=30.83 peak_kib=16916 exit=0
+END base-native-setonly-236000 exit=0 2026-11-04T05:59:29Z
+BEGIN base-release-setonly-236000 2026-11-04T05:59:29Z
+236000
+MEASURE elapsed_s=31.23 peak_kib=16588 exit=0
+END base-release-setonly-236000 exit=0 2026-11-04T06:00:00Z
+BEGIN base-checked-setonly-236000 2026-11-04T06:00:00Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"236000\n","stdout_sha256":"d487d03f24cb3a74e35f05b8292fd1e8797ef1606bff5cfb8268580436c647d0","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=62.02 peak_kib=37648 exit=0
+END base-checked-setonly-236000 exit=0 2026-11-04T06:01:02Z
+BEGIN base-native-intmap-236000 2026-11-04T06:01:02Z
+236000
+MEASURE elapsed_s=55.22 peak_kib=9216 exit=0
+END base-native-intmap-236000 exit=0 2026-11-04T06:01:57Z
+BEGIN base-release-intmap-236000 2026-11-04T06:01:57Z
+236000
+MEASURE elapsed_s=54.82 peak_kib=9228 exit=0
+END base-release-intmap-236000 exit=0 2026-11-04T06:02:52Z
+BEGIN base-checked-intmap-236000 2026-11-04T06:02:52Z
+{"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.36+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"236000\n","stdout_sha256":"d487d03f24cb3a74e35f05b8292fd1e8797ef1606bff5cfb8268580436c647d0","verdict":"exit(0)","warnings":[]}
+MEASURE elapsed_s=34.91 peak_kib=30312 exit=0
+END base-checked-intmap-236000 exit=0 2026-11-04T06:03:27Z
+BEGIN base-complexity-1-50000 2026-11-04T06:03:27Z
+50000
+MEASURE elapsed_s=3.38 peak_kib=5896 exit=0
+END base-complexity-1-50000 exit=0 2026-11-04T06:03:30Z
+BEGIN base-complexity-1-100000 2026-11-04T06:03:30Z
+100000
+MEASURE elapsed_s=16.00 peak_kib=9928 exit=0
+END base-complexity-1-100000 exit=0 2026-11-04T06:03:46Z
+BEGIN base-complexity-2-50000 2026-11-04T06:03:46Z
+50000
+MEASURE elapsed_s=3.38 peak_kib=5884 exit=0
+END base-complexity-2-50000 exit=0 2026-11-04T06:03:50Z
+BEGIN base-complexity-2-100000 2026-11-04T06:03:50Z
+100000
+MEASURE elapsed_s=16.01 peak_kib=10164 exit=0
+END base-complexity-2-100000 exit=0 2026-11-04T06:04:06Z
+BEGIN base-complexity-3-50000 2026-11-04T06:04:06Z
+50000
+MEASURE elapsed_s=3.39 peak_kib=6048 exit=0
+END base-complexity-3-50000 exit=0 2026-11-04T06:04:09Z
+BEGIN base-complexity-3-100000 2026-11-04T06:04:09Z
+100000
+MEASURE elapsed_s=15.91 peak_kib=10160 exit=0
+END base-complexity-3-100000 exit=0 2026-11-04T06:04:25Z
+BEGIN base-ledger-region-10000 2026-11-04T06:04:25Z
+10000 1106320
+MEASURE elapsed_s=0.38 peak_kib=2656 exit=0
+END base-ledger-region-10000 exit=0 2026-11-04T06:04:25Z
+BEGIN base-ledger-rindex-10000 2026-11-04T06:04:25Z
+10000 1106320
+MEASURE elapsed_s=0.15 peak_kib=2540 exit=0
+END base-ledger-rindex-10000 exit=0 2026-11-04T06:04:25Z
+BEGIN base-ledger-rset-10000 2026-11-04T06:04:25Z
+10000 946320
+MEASURE elapsed_s=0.08 peak_kib=2380 exit=0
+END base-ledger-rset-10000 exit=0 2026-11-04T06:04:26Z
+BEGIN base-ledger-region-100000 2026-11-04T06:04:26Z
+100000 9491344
+MEASURE elapsed_s=40.77 peak_kib=9984 exit=0
+END base-ledger-region-100000 exit=0 2026-11-04T06:05:06Z
+BEGIN base-ledger-rindex-100000 2026-11-04T06:05:06Z
+100000 9491344
+MEASURE elapsed_s=15.87 peak_kib=10096 exit=0
+END base-ledger-rindex-100000 exit=0 2026-11-04T06:05:22Z
+BEGIN base-ledger-rset-100000 2026-11-04T06:05:22Z
+100000 7891344
+MEASURE elapsed_s=7.95 peak_kib=8700 exit=0
+END base-ledger-rset-100000 exit=0 2026-11-04T06:05:30Z
+BEGIN base-ledger-region-236000 2026-11-04T06:05:30Z
+236000 20134800
+MEASURE elapsed_s=167.07 peak_kib=20256 exit=0
+END base-ledger-region-236000 exit=0 2026-11-04T06:08:17Z
+BEGIN base-ledger-rindex-236000 2026-11-04T06:08:17Z
+236000 20134800
+MEASURE elapsed_s=62.21 peak_kib=20464 exit=0
+END base-ledger-rindex-236000 exit=0 2026-11-04T06:09:19Z
+BEGIN base-ledger-rset-236000 2026-11-04T06:09:19Z
+236000 16358800
+MEASURE elapsed_s=31.51 peak_kib=17052 exit=0
+END base-ledger-rset-236000 exit=0 2026-11-04T06:09:51Z
+BASE_COMPLETE 2026-11-04T06:09:51Z
+JOB_END exit=0 2026-11-04T06:09:51Z

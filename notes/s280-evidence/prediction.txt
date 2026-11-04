@@ -1,0 +1,90 @@
+s280 prediction — committed before the runtime or test changes
+2026-11-04; base 5f1f1c949582f53121e4047bc83c86f23ff72240
+
+Inputs: hasu, Intel i7-12700KF, CPUs 0–5, rustc 1.97.1,
+Ubuntu cc 13.3.0 -O2; release-profile wolf_driver and wolf_rt.
+std 78b9d3cbc41d51db44d18c40b6694403644d1c83. Every witness has
+RLIMIT_AS=3 GiB, a 240-second timeout, inside a 12 GiB container.
+Raw measurements: baseline.log. Seconds below include process startup;
+GNU time has only 0.01-second precision. Checked is conform-run --checked.
+U means the JSON verdict is unsupported, NOT a successful execution:
+the conform-run process itself exits zero for those records.
+
+N        mode       native s  release s  checked s / verdict   C s
+10000    issue         0.40       0.16       6.05 U              0.00
+10000    index         0.16       0.16       0.21 exit(0)
+10000    setonly       0.08       0.08       0.12 exit(0)
+10000    intmap        0.10       0.09       0.03 exit(0)
+100000   issue        41.57      16.35      45.58 U              0.01
+100000   index        16.12      16.15      19.52 exit(0)
+100000   setonly       8.10       8.07      10.39 exit(0)
+100000   intmap       10.28       9.35       5.17 exit(0)
+236000   issue       169.68      67.97     134.44 U              0.04
+236000   index        62.36      63.21     116.15 exit(0)
+236000   setonly      30.83      31.23      62.02 exit(0)
+236000   intmap       55.22      54.82      34.91 exit(0)
+All successful program executions printed N. C is c972.c's inserts plus
+lookups, the same C program for each mode's comparison (not int-only C).
+
+Native index 50k -> 100k, three paired runs:
+3.38 -> 16.00 s (4.7337x), 3.38 -> 16.01 (4.7367x),
+3.39 -> 15.91 (4.6932x). Median ratio exceeds 2.5.
+100k index/C is approximately 1612x with the coarse baseline clock;
+the committed gate will use a monotonic high-resolution clock and
+median samples, not divide a rounded zero.
+
+N          native index peak KiB   region/rindex ledger B   rset ledger B
+10000                2704                   1106320                946320
+100000               9984                   9491344               7891344
+236000              20532                  20134800              16358800
+C peaks: 2320 / 8824 / 18428 KiB. The raw log holds all other peaks.
+
+Design and prediction:
+- Keep the first five MapHdr words and dense insertion-ordered entries.
+  Append only index pointer and slot count. No codegen, spec, dependency,
+  or entry-point signature changes. wolf_rt_none includes the same file.
+- Deterministic FNV-1a over exactly the equality bytes, followed by a
+  deterministic integer avalanche. Strings hash their contents, not
+  pointer/length representation. Linear probing stores entry index + 1;
+  zero means vacant. Power-of-two table, at most half full. Probe loops
+  are bounded even for a synthetically full table.
+- On growth, allocate/zero the index in the birth region and rebuild it.
+  Remove shifts entries and rebuilds in the retained table; clear zeros
+  slots and keeps both buffers; copy allocates an independent index in
+  the ambient region. Neither remove nor clear allocates or charges.
+- Extra header charge: 16 B. Current index: 8 B per slot, 16–32 B per
+  live entry beyond the initial small table. Abandoned geometric tables
+  stay charged: less than 64 B per peak entry (plus the small-table
+  constant); growth remains linear. Expected native ledger deltas for
+  10k/100k/236k: 524176 / 4194192 / 8388496 B. Exact new index ledgers:
+  1630496 / 13685536 / 28523296 B. Checked ledgers do not change.
+- Normal indexed inserts/lookups become approximately linear; the dense
+  order and all semantic outputs stay identical. Existing memory bars,
+  corpus rows, differ, checked observations and lupin agreement stay.
+- The pinned std get walks pairs(); its lookup half remains quadratic.
+  Record issue mode without claiming it has become linear. The std
+  change belongs to its own follow-on; do not change the pin here.
+
+Gate bounds (R-s280-1 recommendation, implemented by the new rows):
+- Native string index inserts + lookups: median time(100k)/time(50k)
+  <= 2.5, three interleaved pairs. Base measured about 4.73.
+- Native 100k and 236k string index workload: <= 20 times same-run C,
+  three interleaved samples per size. The compiler/runtime profile and
+  host are stated in every report. Base is over 1000x at both sizes.
+- Also count equality comparisons in runtime unit tests to guard the
+  algorithm without wall-clock noise. Functional invariants already
+  true at the base are not falsely called regressions: their new
+  indexed-cost assertions go red first, and the final one-hunk plant
+  must break indexed removal by name.
+
+Sequence:
+1. Commit this prediction and base evidence.
+2. Commit tests before implementation; witness named red complexity,
+   C-relative and indexed-operation/accounting rows under Linux caps.
+3. Implement the index and its focused full-table test; run targeted
+   hosted and freestanding tests, all machine agreement rows and gates.
+4. Repeat the complete measurement matrix on hasu at a pinned head.
+5. Final-head gauntlet, chunked into <=2-hour lock takes, recorded with
+   every END line; one one-file/one-hunk local plant on that head.
+6. PR body carries the five sections, records, rulings and test list.
+   Footprint cross-cutting. Audit once; read the run id once; hand back.
