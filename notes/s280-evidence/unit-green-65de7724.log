@@ -1,0 +1,84 @@
+   Compiling libc v0.2.189
+   Compiling wolf_rt v0.2.36 (/Users/mfwolffe/lanes/s280/unit-65de7724/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.55s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-90f255db9a814193)
+
+running 13 tests
+test map::tests::scalar_hash_ignores_entry_padding_and_value_bytes ... ok
+test map::tests::int_keys_round_trip ... ok
+test map::tests::remove_erases_and_keeps_insertion_order ... ok
+test map::tests::full_index_miss_is_bounded_and_next_insert_grows ... ok
+test map::tests::str_keys_compare_by_bytes ... ok
+test map::tests::copy_is_independent ... ok
+test map::tests::indexed_growth_charges_abandoned_tables_to_birth_region ... ok
+test map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity ... ok
+test map::tests::deterministic_hash_vectors_and_empty_binary_strings ... ok
+test map::tests::indexed_integer_collisions_survive_rehash ... ok
+test map::tests::indexed_string_collisions_compare_contents_after_growth ... ok
+test map::tests::indexed_clear_reuses_storage_and_forgets_old_keys ... ok
+test map::tests::indexed_remove_patches_survivors_without_reordering ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 357 filtered out; finished in 0.00s
+
+     Running tests/chan_bench.rs (target/debug/deps/chan_bench-4f8e3af176225116)
+chan_bench: rendezvous_rt=7.864µs bounded16_rt=7.84µs bounded16_stream=405ns select_2ready=379ns
+     Running tests/handle_residue.rs (target/debug/deps/handle_residue-1fe58c478b2d0afe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/main_stack_bounds.rs (target/debug/deps/main_stack_bounds-7ea8ac6e68d0cbf6)
+     Running tests/no_io.rs (target/debug/deps/no_io-25b81cb62ebed9ef)
+no_io: ok (reactor lazy; one thread after first wait)
+     Running tests/no_spawn.rs (target/debug/deps/no_spawn-0e7d052530fc7d34)
+no_spawn: ok (target=18, running=18)
+     Running tests/pool_growth.rs (target/debug/deps/pool_growth-c26caed0c33dde8f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/pool_retire.rs (target/debug/deps/pool_retire-28f7667da5b1c32d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/proc_root.rs (target/debug/deps/proc_root-88b0cc905e9a7c2f)
+proc_root: ok (root death exits 121, killed procs skip defers)
+     Running tests/quarantine_alloc.rs (target/debug/deps/quarantine_alloc-28df57fd4aad515b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/reactor_limit.rs (target/debug/deps/reactor_limit-b342f4780d394016)
+park: ok
+start: ok
+hub: ok
+reactor_limit: ok (no abort at the limit; the set and the hub are made once descriptors return)
+     Running tests/read_write_alloc.rs (target/debug/deps/read_write_alloc-693cb33ed1404071)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/region_containers.rs (target/debug/deps/region_containers-fa50b2c8765eaa49)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/spawn_bench.rs (target/debug/deps/spawn_bench-e1e4197415811499)
+spawn_bench: spawn_median=2.833µs worker_spawn_median=2.584µs per_task_join=4.894µs spawn_wake_join_median=20.25µs
+     Running tests/stack_overflow.rs (target/debug/deps/stack_overflow-a97a8098a62acb8c)
+stack_overflow: ok (named deterministic fault)
+     Running tests/syscall_shape.rs (target/debug/deps/syscall_shape-067011339dec0040)
+     Running tests/umask.rs (target/debug/deps/umask-161a952c9b3665db)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+END mac-map-unit exit=0 2026-11-04T06:33:39Z
