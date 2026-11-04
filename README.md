@@ -42,10 +42,11 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-The current release is v0.2.37, under the codename wolfgang.
-See the [0.2.37 release note](docs/releases/0.2.37.md) for descriptor-relative
-filesystem calls, OS records, signal-drain recovery, compiler corrections
-and the paired interpreter's unsupported cells.
+The current release is v0.2.37, under the codename wolfgang. See the
+[0.2.37 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.37.md)
+for descriptor-relative filesystem calls, OS records, signal-drain
+recovery, compiler corrections and the paired interpreter's unsupported
+cells.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
