@@ -23,6 +23,20 @@ nomad/mac-job4-3972d9d3.log
                   the head before the note: every probe again (the sweep after the fix), cargo fmt
                   --all --check, clippy -p wolf_wir -p wolf_driver --all-targets -D warnings, the corpus
                   snapshot tests (no update), the wolf_wir suite, the release-parity row
+hasu/red-linux-0fa55804.log, red-linux-0fa55804.side.log
+                  the first linux record at 0fa55804 (hasu block A, r41-toolchain, uid 1000 under a foreign
+                  pid 1, the taskset shim): prep and lint every END 0; the test step `END test exit=101
+                  secs=3077`, red by wolf_parse's ambiguity_trees alone (`snapshot assertion for
+                  'expr_tree__match_nested_bare_variant' failed in line 34`); 238 `test result: ok` lines before
+                  it, and `cargo test --workspace` stopped there. The side log holds the lock waits
+nomad/mac-job5-0fa55804.log
+                  ambiguity_trees red at 0fa55804 on nomad (the same line), then the eight parse-tree
+                  snapshots of the grammar rows made with insta's update and copied out
+nomad/mac-job6-9d7cd68c.log
+                  at 9d7cd68c, INSTA_UPDATE=no and --no-fail-fast: the whole wolf_parse suite; wolf_driver's
+                  corpus-walking binaries, the four-machine rows and the release-parity row; every crate
+                  the red take's test step never reached (wolf_pkg, wolf_query, wolf_rt, wolf_sema,
+                  wolf_span, wolf_wir, xtask)
 rig/              the scripts as run: the Mac lock (locked.sh; lock-run.sh with its own lines on
                   stderr, for a record), build-at.sh, the probe runner, the Mac jobs, the plant's record
                   scripts; hasu's gauntlet scripts (adapted by copy from s277's) and the taskset shim.
