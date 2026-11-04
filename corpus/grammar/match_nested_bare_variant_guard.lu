@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="other\nbig drink\ndrink\n")
+//! phase: run
+//! conforms: gram.pat.nullary, gram.pat
+//!
+//! s281 (wolf-lang#1043): a guarded arm whose payload names a bare
+//! variant tests the variant before the guard runs. `K(Drink, n) if n > 1`
+//! is a drink of more than one, never a food of five. Until s281 the
+//! native and release tiers bound `Drink` as a name, so the guard alone
+//! decided the arm and the food printed `big drink`.
+
+enum Kind {
+    Drink,
+    Food,
+    Gratuity,
+}
+
+enum W {
+    K(Kind, int),
+}
+
+fn say(w: W) -> str {
+    match w {
+        K(Drink, n) if n > 1 => "big drink",
+        K(Drink, _) => "drink",
+        K(_, _) => "other",
+    }
+}
+
+fn main() -> !int {
+    print(say(W.K(Kind.Food, 5)))
+    print(say(W.K(Kind.Drink, 5)))
+    print(say(W.K(Kind.Drink, 1)))
+    0
+}
