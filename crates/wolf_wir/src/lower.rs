@@ -23336,8 +23336,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
-    /// Classify one arm pattern against the domain.
-    fn pattern_shape(&mut self, pat: &'t GreenNode, domain: &MatchDomain) -> R<PatShape> {
+    /// Classify one arm pattern against the domain. `scrut_sema` is the
+    /// scrutinee's sema type: a payload slot's own type, which decides
+    /// whether a bare name there is a test or a binding, comes from it.
+    fn pattern_shape(
+        &mut self,
+        pat: &'t GreenNode,
+        domain: &MatchDomain,
+        scrut_sema: TyId,
+    ) -> R<PatShape> {
         match pat.kind {
             SyntaxKind::WildcardPat => Ok(PatShape::Irrefutable(None)),
             SyntaxKind::IdentPat => {
@@ -23389,9 +23396,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             SyntaxKind::PathPat => {
                 // `Tag(subpats…)` / `Type.Variant(subpats…)`: the path
-                // names the tag; payload subpatterns bind slots. The
-                // path may be a nested node, so read it as the source
-                // text before the payload parenthesis.
+                // names the tag; payload names and `_` bind or skip
+                // slots, and anything else (a case test included) makes
+                // a product arm. The path may be a nested node, so read
+                // it as the source text before the payload parenthesis.
                 let end = pat
                     .nodes()
                     .find(|n| wolf_ast::is_pattern_kind(n.kind))
@@ -23417,9 +23425,41 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     ));
                 }
                 let mut binds = Vec::new();
+                // The slots' sema types, read once, and only when a bare
+                // name needs them.
+                let mut slot_tys: Option<Vec<(&'t TypeTable, TyId)>> = None;
                 for (j, s) in subs.iter().enumerate() {
                     match s.kind {
-                        SyntaxKind::IdentPat => binds.push((j, self.text(s.span))),
+                        // s281 (wolf-lang#1043): a bare name binds the slot
+                        // only when it spells none of the SLOT type's own
+                        // cases. One that does (`K(Drink)` over `K(Kind)`)
+                        // is a tag test on the slot, exactly as at the top
+                        // of a `match` and inside a tuple: the checker's #4
+                        // rule, decided by the payload's type. The product
+                        // walk lowers that test (`product_sub` asks the
+                        // same `names_sema_case`). Until s281 every bare
+                        // name here bound, so `K(Drink)` matched every `K`.
+                        SyntaxKind::IdentPat => {
+                            let sub = self.text(s.span);
+                            if slot_tys.is_none() {
+                                // A slot type this lowering cannot name
+                                // (a generic payload's compound type) has
+                                // no cases `names_sema_case` admits, so
+                                // its names bind, as they always did.
+                                let tys = self
+                                    .payload_sema_tys(scrut_sema, domain, c, &name, pat.span)
+                                    .unwrap_or_default();
+                                slot_tys = Some(tys);
+                            }
+                            let test = slot_tys
+                                .as_ref()
+                                .and_then(|tys| tys.get(j))
+                                .is_some_and(|&(tbl, ty)| self.names_sema_case(tbl, ty, &sub));
+                            if test {
+                                return Ok(PatShape::Product);
+                            }
+                            binds.push((j, sub));
+                        }
                         SyntaxKind::WildcardPat => {}
                         // A payload carrying more than a name (s130):
                         // products, literals, `@`-bindings — the
@@ -23433,7 +23473,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let mut consts = Vec::new();
                 let mut strs: Vec<Vec<u8>> = Vec::new();
                 for alt in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
-                    match self.pattern_shape(alt, domain)? {
+                    match self.pattern_shape(alt, domain, scrut_sema)? {
                         PatShape::Irrefutable(_) => return Ok(PatShape::Irrefutable(None)),
                         PatShape::Tests(cs, binds) => {
                             if !binds.is_empty() {
@@ -24661,7 +24701,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 break; // an irrefutable arm ended the chain (E0802'd)
             }
             let Some(pat) = arm.pattern() else { continue };
-            let shape = self.pattern_shape(pat, domain)?;
+            let shape = self.pattern_shape(pat, domain, scrut_sema)?;
             let is_last = i + 1 == n;
             match shape {
                 PatShape::Irrefutable(bind) => {
