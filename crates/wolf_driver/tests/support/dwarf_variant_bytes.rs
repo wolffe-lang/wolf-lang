@@ -241,19 +241,75 @@ pub fn check(row: &str, exe: &Path, expected_type: &str) {
     }
 }
 
-fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String> {
-    let dir = exe.parent().ok_or("fixture has no directory")?;
-    let tool = match std::env::var_os("LLVM_DWARFDUMP") {
-        Some(path) => PathBuf::from(path),
-        None => PathBuf::from(
+pub fn recursive_gap(exe: &Path) {
+    let result = (|| -> Result<(), String> {
+        let dir = exe.parent().ok_or("fixture directory")?;
+        let tool = dwarf_tool(dir)?;
+        let artifact = if cfg!(target_os = "macos") {
+            exe.with_extension("dSYM")
+                .join("Contents/Resources/DWARF")
+                .join(exe.file_name().ok_or("fixture name")?)
+        } else {
+            exe.to_owned()
+        };
+        let text = output(
+            Command::new(tool)
+                .args([
+                    "--debug-info",
+                    "--name=opaque recursive Node",
+                    "--show-children",
+                ])
+                .arg(artifact),
+            dir,
+            "recursive-gap-die",
+        )?;
+        let dies = parse(&text)?;
+        let cut = one(
+            dies.values()
+                .filter(|d| d.name() == Some("opaque recursive Node"))
+                .cloned()
+                .collect(),
+            "named recursive cut",
+        )?;
+        if cut.tag != "DW_TAG_structure_type"
+            || !cut.attrs.contains_key("declaration")
+            || cut.attrs.contains_key("byte_size")
+            || dies.values().any(|d| d.parent == Some(cut.offset))
+        {
+            return Err(format!(
+                "recursive gap changed; reassess complete cycle support: {text}"
+            ));
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("FAIL dwarf-recursive-nominal-gap");
+        panic!("{error}");
+    }
+    println!("KNOWN-GAP dwarf-recursive-nominal type=Node cut=opaque-recursive-declaration");
+}
+
+fn dwarf_tool(dir: &Path) -> Result<PathBuf, String> {
+    if let Some(path) = std::env::var_os("LLVM_DWARFDUMP") {
+        return Ok(PathBuf::from(path));
+    }
+    if cfg!(target_os = "macos") {
+        Ok(PathBuf::from(
             output(
                 Command::new("xcrun").args(["--find", "dwarfdump"]),
                 dir,
                 "sdk-tool",
             )?
             .trim(),
-        ),
-    };
+        ))
+    } else {
+        Ok(PathBuf::from("llvm-dwarfdump"))
+    }
+}
+
+fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String> {
+    let dir = exe.parent().ok_or("fixture has no directory")?;
+    let tool = dwarf_tool(dir)?;
     let pin = pins();
     let version = output(Command::new(&tool).arg("--version"), dir, "sdk-version")?;
     if !version.contains(
