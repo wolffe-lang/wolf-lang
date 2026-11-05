@@ -1,5 +1,8 @@
 //! DWARF v1 source-type witnesses. Each transcript belongs to one type row.
 //! These use the debug tier; the release tier has no source DWARF yet.
+#[path = "support/dwarf_variant_bytes.rs"]
+mod dwarf_variant_bytes;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -33,7 +36,7 @@ fn fixture(row: &str, src: &str, debug_frame: bool) -> Option<PathBuf> {
     Some(exe)
 }
 
-fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&str]) {
+fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&str]) -> bool {
     let debugger = if cfg!(target_os = "macos") {
         "lldb"
     } else {
@@ -41,10 +44,10 @@ fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&s
     };
     if cfg!(windows) || Command::new(debugger).arg("--version").output().is_err() {
         eprintln!("SKIP: {row}: {debugger} unavailable on this platform");
-        return;
+        return false;
     }
     let Some(exe) = fixture(row, src, false) else {
-        return;
+        return false;
     };
     let mut cmd = Command::new(debugger);
     if debugger == "gdb" {
@@ -118,6 +121,7 @@ fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&s
         panic!("{row}: missing {missing:?}, status {}\n{text}", out.status);
     }
     println!("PASS {row}");
+    true
 }
 
 #[test]
@@ -194,35 +198,54 @@ fn dwarf_v1_enum() {
     );
 }
 
+fn variant_transcript(row: &str, source: &str, ty: &str, expected: &str, wants: &[&str]) {
+    if cfg!(target_os = "macos") {
+        if let Some(exe) = fixture(row, source, true) {
+            dwarf_variant_bytes::check(row, &exe, ty);
+        }
+    } else if transcript(row, source, "print value", "frame variable value", wants) {
+        let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_v1_{row}"));
+        let oracle_row = format!("{row}-lupin");
+        match dwarf_variant_bytes::reference(&oracle_row, &dir, expected) {
+            Ok(true) => println!("PASS {oracle_row}"),
+            Ok(false) => {}
+            Err(error) => {
+                eprintln!("FAIL {oracle_row}");
+                panic!("{oracle_row}: {error}");
+            }
+        }
+    }
+}
+
 #[test]
 fn dwarf_v1_payload_enum() {
-    transcript(
+    variant_transcript(
         "dwarf-v1-payload-enum",
-        "enum Choice { Number(int), Text(str) }\nfn inspect(value: Choice) -> int { match value { Number(n) => n - 73, Text(_) => 1 } }\nfn main() -> int { inspect(Choice.Number(73)) }\n",
-        "print value",
-        "frame variable value",
-        &["Number", "73"],
+        "enum Choice { Number(int), Text(str) }\nfn inspect(value: Choice) -> int { match value { Number(n) => { print(\"Number {n}\")\n0 }, Text(_) => 1 } }\nfn main() -> int { inspect(Choice.Number(73)) }\n",
+        "Choice",
+        "Number 73\n",
+        &["Number =", "73"],
     );
 }
 
 #[test]
 fn dwarf_v1_error_union() {
-    transcript(
+    variant_transcript(
         "dwarf-v1-error-union",
-        "fn inspect(value: int ! {Bad(int)}) -> int { match value { Bad(n) => n - 61, n => n } }\nfn main() -> int { inspect(Bad(61)) }\n",
-        "print value",
-        "frame variable value",
-        &["Bad", "61"],
+        "fn inspect(value: int ! {Bad(int)}) -> int { match value { Bad(n) => { print(\"Bad {n}\")\n0 }, n => { print(\"ok {n}\")\n0 } } }\nfn main() -> int { inspect(Bad(61)) }\n",
+        "int ! {Bad(int)}",
+        "Bad 61\n",
+        &["Bad =", "61"],
     );
 }
 
 #[test]
 fn dwarf_v1_optional() {
-    transcript(
+    variant_transcript(
         "dwarf-v1-optional",
-        "fn inspect(value: int ! {none}) -> int { value else { 0 } }\nfn main() -> int { inspect(none) }\n",
-        "print value",
-        "frame variable value",
+        "fn inspect(value: int ! {none}) -> int { match value { none => { print(\"none\")\n0 }, n => { print(\"ok {n}\")\n0 } } }\nfn main() -> int { inspect(none) }\n",
+        "int ! {none}",
+        "none\n",
         &["none ="],
     );
 }
@@ -265,6 +288,19 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
     }
 }
 
+fn reference_stdout(row: &str, expected: &str) {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_v1_{row}"));
+    let oracle_row = format!("{row}-lupin");
+    match dwarf_variant_bytes::reference(&oracle_row, &dir, expected) {
+        Ok(true) => println!("PASS {oracle_row}"),
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("FAIL {oracle_row}");
+            panic!("{oracle_row}: {error}");
+        }
+    }
+}
+
 // LLDB renders one-byte C-compatible integers as characters. Widen using
 // the emitted type's signedness, so a signed/unsigned DIE bug still fails.
 fn scalar_lldb_command(ty: &str) -> &'static str {
@@ -279,16 +315,16 @@ macro_rules! unsigned_boundary {
         #[test]
         fn $test() {
             let source = format!(
-                "fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n",
+                "fn inspect(value: {}) -> int {{ print(\"{{value}}\")\n0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n",
                 $ty, $ty, $value
             );
-            transcript(
+            if transcript(
                 concat!("dwarf-v1-", $ty, "-boundary"),
                 &source,
                 "print value",
                 scalar_lldb_command($ty),
                 &[concat!("= ", $value)],
-            );
+            ) { reference_stdout(concat!("dwarf-v1-", $ty, "-boundary"), concat!($value, "\n")); }
         }
     };
 }
@@ -302,8 +338,10 @@ macro_rules! scalar_value {
     ($test:ident, $ty:literal, $value:literal, $expected:literal) => {
         #[test]
         fn $test() {
-            let source = format!("fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n", $ty, $ty, $value);
-            transcript(concat!("dwarf-v1-", $ty, "-value"), &source, "print value", scalar_lldb_command($ty), &[concat!("= ", $expected)]);
+            let source = format!("fn inspect(value: {}) -> int {{ print(\"{{value}}\")\n0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n", $ty, $ty, $value);
+            if transcript(concat!("dwarf-v1-", $ty, "-value"), &source, "print value", scalar_lldb_command($ty), &[concat!("= ", $expected)]) {
+                reference_stdout(concat!("dwarf-v1-", $ty, "-value"), concat!($expected, "\n"));
+            }
         }
     };
 }
@@ -329,13 +367,15 @@ scalar_value!(dwarf_v1_scalar_byte, "byte", "255 as byte", "255");
 
 #[test]
 fn dwarf_v1_scalar_char() {
-    transcript(
+    if transcript(
         "dwarf-v1-char-value",
-        "fn inspect(value: char) -> int { 0 }\nfn main() -> int { let n: char = 955 as char\ninspect(n) }\n",
+        "fn inspect(value: char) -> int { let numeric: u32 = value as u32\nprint(\"{numeric}\")\n0 }\nfn main() -> int { let n: char = 955 as char\ninspect(n) }\n",
         "print (unsigned)value",
         "expression -- (unsigned)value",
         &["= 955"],
-    );
+    ) {
+        reference_stdout("dwarf-v1-char-value", "955\n");
+    }
 }
 
 #[test]
