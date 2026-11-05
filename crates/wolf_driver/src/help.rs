@@ -75,7 +75,7 @@ pub const COMMANDS: &[Cmd] = &[
         summary: "compile an entry file to a native executable",
         usage: &[
             "build <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]",
-            "[--verbose] [--checked] [--release] [--codegen-report]",
+            "[--verbose] [--checked] [-g] [--release] [--codegen-report]",
             "[-q|--quiet] [--timings|--timings=json:<file>]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
@@ -88,6 +88,14 @@ beside it is part of the same module. Two tiers compile the same source
 through LLVM. A construct the pipeline cannot yet handle is REFUSED by
 name, with the deepest phase that completed; nothing is silently
 interpreted instead.
+
+Native debug builds include source types and whole-function variable slots.
+`-g` additionally emits nonallocated `.debug_frame` information for debugger
+and profiler stack walks. Frame pointers remain enabled. This is not runtime
+unwinding: no loaded unwind tables, personality routines or landing pads are
+introduced. Unknown teardown forms are reported as CFI_GAP and left uncovered
+rather than described with a wrong rule. The release tier does not yet emit
+source debug information and refuses `-g`.
 
 `--assembler PATH` (or `--assembler=PATH`) overrides `WOLF_AS` for
 root-manifest assembly sources. The selected program receives `--64`
@@ -128,7 +136,7 @@ hosted runtime, allocates, or uses a float is refused by name.",
         summary: "build an entry file and run it, passing on its exit code",
         usage: &[
             "run <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]",
-            "[--verbose] [--checked] [--release] [--codegen-report]",
+            "[--verbose] [--checked] [-g] [--release] [--codegen-report]",
             "[-q|--quiet] [--timings|--timings=json:<file>]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
