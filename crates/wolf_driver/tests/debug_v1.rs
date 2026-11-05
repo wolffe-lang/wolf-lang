@@ -223,7 +223,7 @@ fn dwarf_v1_optional() {
         "fn inspect(value: int ! {none}) -> int { value else { 0 } }\nfn main() -> int { inspect(none) }\n",
         "print value",
         "frame variable value",
-        &["none"],
+        &["none ="],
     );
 }
 
@@ -265,6 +265,15 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
     }
 }
 
+// LLDB renders one-byte C-compatible integers as characters. Widen using
+// the emitted type's signedness, so a signed/unsigned DIE bug still fails.
+fn scalar_lldb_command(ty: &str) -> &'static str {
+    match ty {
+        "i8" | "u8" | "byte" => "expression -- (int)value",
+        _ => "frame variable value",
+    }
+}
+
 macro_rules! unsigned_boundary {
     ($test:ident, $ty:literal, $value:literal) => {
         #[test]
@@ -277,7 +286,7 @@ macro_rules! unsigned_boundary {
                 concat!("dwarf-v1-", $ty, "-boundary"),
                 &source,
                 "print value",
-                "frame variable value",
+                scalar_lldb_command($ty),
                 &[concat!("= ", $value)],
             );
         }
@@ -289,30 +298,44 @@ unsigned_boundary!(dwarf_v1_unsigned_u32, "u32", "4294967295");
 unsigned_boundary!(dwarf_v1_unsigned_u64, "u64", "18446744073709551615");
 unsigned_boundary!(dwarf_v1_unsigned_uint, "uint", "18446744073709551615");
 
+macro_rules! scalar_value {
+    ($test:ident, $ty:literal, $value:literal, $expected:literal) => {
+        #[test]
+        fn $test() {
+            let source = format!("fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n", $ty, $ty, $value);
+            transcript(concat!("dwarf-v1-", $ty, "-value"), &source, "print value", scalar_lldb_command($ty), &[concat!("= ", $expected)]);
+        }
+    };
+}
+scalar_value!(dwarf_v1_scalar_i8, "i8", "-127 - 1", "-128");
+scalar_value!(dwarf_v1_scalar_i16, "i16", "-32767 - 1", "-32768");
+scalar_value!(dwarf_v1_scalar_i32, "i32", "-2147483647 - 1", "-2147483648");
+scalar_value!(
+    dwarf_v1_scalar_i64,
+    "i64",
+    "-9223372036854775807 - 1",
+    "-9223372036854775808"
+);
+scalar_value!(
+    dwarf_v1_scalar_int,
+    "int",
+    "-9223372036854775807 - 1",
+    "-9223372036854775808"
+);
+scalar_value!(dwarf_v1_scalar_bool, "bool", "true", "true");
+scalar_value!(dwarf_v1_scalar_f32, "f32", "1.25", "1.25");
+scalar_value!(dwarf_v1_scalar_f64, "f64", "1.25", "1.25");
+scalar_value!(dwarf_v1_scalar_byte, "byte", "255 as byte", "255");
+
 #[test]
-fn dwarf_v1_scalar_values() {
-    for (ty, value, expected) in [
-        ("i8", "-127 - 1", "-128"),
-        ("i16", "-32767 - 1", "-32768"),
-        ("i32", "-2147483647 - 1", "-2147483648"),
-        ("i64", "-9223372036854775807 - 1", "-9223372036854775808"),
-        ("int", "-9223372036854775807 - 1", "-9223372036854775808"),
-        ("bool", "true", "true"),
-        ("f32", "1.25 as f32", "1.25"),
-        ("f64", "1.25", "1.25"),
-        ("byte", "255 as byte", "255"),
-    ] {
-        let source = format!(
-            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ let n: {ty} = {value}\ninspect(n) }}\n"
-        );
-        transcript(
-            &format!("dwarf-v1-{ty}-value"),
-            &source,
-            "print value",
-            "frame variable value",
-            &[&format!("= {expected}")],
-        );
-    }
+fn dwarf_v1_scalar_char() {
+    transcript(
+        "dwarf-v1-char-value",
+        "fn inspect(value: char) -> int { 0 }\nfn main() -> int { let n: char = 955 as char\ninspect(n) }\n",
+        "print (unsigned)value",
+        "expression -- (unsigned)value",
+        &["= 955"],
+    );
 }
 
 #[test]
@@ -332,7 +355,7 @@ fn dwarf_v1_packed_list_element() {
         "dwarf-v1-packed-element",
         "struct Pair { small: i8, wide: int }\nfn inspect(value: List[Pair]) -> int { value.len - 2 }\nfn main() -> int { var xs = List[Pair]()\n(mut xs).push(Pair { small: 7 as i8, wide: 42 })\n(mut xs).push(Pair { small: 8 as i8, wide: 97 })\ninspect(xs) }\n",
         "print value->data[1]",
-        "frame variable value->data[1]",
-        &["small = 8", "wide = 97"],
+        "frame variable value->data[1]\nexpression -- (int)value->data[1].small",
+        &["= 8", "wide = 97"],
     );
 }
