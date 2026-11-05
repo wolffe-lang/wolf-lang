@@ -312,7 +312,27 @@ impl DwarfBuilder {
         let mut source_types = crate::dwarf_types::Types::new(self.error_tags.clone());
         for f in &self.fns {
             let Some((file_idx, lo)) = f.span else {
-                continue; // synthetic (entry shim): no DIE
+                if self.frame_info && f.size != 0 {
+                    // dsymutil retains frame contributions through the owning
+                    // CU's subprogram ranges. Synthetic code has real ranges,
+                    // but must not acquire invented source coordinates.
+                    let sub = dwarf.unit.add(root, constants::DW_TAG_subprogram);
+                    let die = dwarf.unit.get_mut(sub);
+                    die.set(
+                        constants::DW_AT_name,
+                        AttributeValue::String(f.symbol.as_bytes().to_vec()),
+                    );
+                    die.set(constants::DW_AT_artificial, AttributeValue::Flag(true));
+                    die.set(
+                        constants::DW_AT_low_pc,
+                        AttributeValue::Address(function_address(f.id)),
+                    );
+                    die.set(
+                        constants::DW_AT_high_pc,
+                        AttributeValue::Udata(u64::from(f.size)),
+                    );
+                }
+                continue;
             };
             let sub = dwarf.unit.add(root, constants::DW_TAG_subprogram);
             {
@@ -628,6 +648,27 @@ mod tests {
                 .collect()
         };
         assert_eq!(flat(&a), flat(&b));
+    }
+
+    #[test]
+    fn synthetic_debug_frame_owners_have_ranges_without_source_locations() {
+        let mut b = DwarfBuilder::new("/src", HashMap::new()).with_frame_info(true);
+        b.function(FuncId::new(0), "__wolf_main_shim", "main");
+        b.function_size(16);
+        let sections = b.finish().unwrap();
+        let info = sections.iter().find(|s| s.name == ".debug_info").unwrap();
+        assert!(info.data.windows(5).any(|bytes| bytes == b"main\0"));
+        assert!(
+            info.relocs
+                .iter()
+                .any(|r| matches!(r.target, DebugRelocTarget::Func(_)))
+        );
+        assert!(
+            sections
+                .iter()
+                .filter(|s| s.name == ".debug_line")
+                .all(|s| s.relocs.is_empty())
+        );
     }
 
     #[test]
