@@ -1,4 +1,4 @@
-//! The s30 DWARF v0 builder — a [`DebugSink`] that turns the
+//! The DWARF v1 source-description builder — a [`DebugSink`] that turns the
 //! backend's per-function debug stream into `.debug_*` sections via
 //! gimli's write API (D6).
 //!
@@ -8,20 +8,22 @@
 //! `DebugSink` seam, and THIS builder owns every DWARF decision, so
 //! the c12 backend swap does not touch it.
 //!
-//! v0 coverage (the contract's honesty bar):
+//! Coverage (DWARF 4 containers, DWARF 5 section 5 type constructs):
 //! - **Line tables**: one sequence per function, statement-grain rows
 //!   from WIR spans (byte-exact s07 chain), `is_stmt` on every row,
 //!   `prologue_end` on the first — breakpoints land after frame setup.
 //! - **Subprogram DIEs**: name (the WIR name — `main`, `geometry.area`;
-//!   `break main` works by DW_AT_name), linkage name (mangled symbol),
+//!   `break main` works by DW_AT_name),
 //!   low/high pc, decl file/line, frame base = the frame pointer.
-//! - **Variables**: scalar params and lets as
+//! - **Variables**: typed scalar and aggregate params and lets as
 //!   `DW_TAG_formal_parameter`/`DW_TAG_variable` with whole-function
 //!   `DW_OP_fbreg` locations (the s28 forced-spill decision; no
 //!   live-range fidelity until s58's Tier-F).
-//! - **Types**: the closed scalar set ([`DebugTy`]) as
-//!   `DW_TAG_base_type`; aggregates/error unions are s31+ (recorded
-//!   deltas, not silent gaps).
+//! - **Types**: source scalars, structures, tuples, string/header views, typed
+//!   pointers/references, enumerations and discriminated variant parts.
+//! - **Frames**: explicit `-g` emits nonallocated `.debug_frame` only, from
+//!   backend prologue facts and proven return sequences. Unsupported teardowns
+//!   leave named coverage gaps; runtime unwinding is never enabled.
 //!
 //! Language code: `DW_LANG_C11`, deliberately NOT the contract's
 //! `DW_LANG_lo_user` — a recorded s30 delta: gdb refuses to consume
@@ -35,7 +37,8 @@ use std::collections::HashMap;
 
 use gimli::constants;
 // Backend adapters can use these interface types without a second writer dependency.
-pub use gimli::write::{CommonInformationEntry, FrameDescriptionEntry};
+pub use gimli::Register;
+pub use gimli::write::{CallFrameInstruction, CommonInformationEntry, FrameDescriptionEntry};
 
 use gimli::write::{
     Address, AttributeValue, DwarfUnit, EndianVec, Expression, LineProgram, LineString, Relocation,
@@ -49,9 +52,14 @@ use wolf_wir::ir::FuncId;
 
 /// Relocatable start address shared with backend-generated frame rules.
 pub fn function_address(id: FuncId) -> Address {
+    function_address_at(id, 0)
+}
+
+/// Start of one proven range within a function's debug FDE coverage.
+pub fn function_address_at(id: FuncId, offset: u32) -> Address {
     Address::Symbol {
         symbol: id.index(),
-        addend: 0,
+        addend: i64::from(offset),
     }
 }
 
@@ -103,9 +111,10 @@ struct FnRec {
     locs: Vec<(u32, u32)>,
     vars: Vec<VarRec>,
     size: u32,
+    frame_base_register: u16,
 }
 
-/// The DWARF v0 builder. Feed it as the `DebugSink` of a whole-module
+/// The DWARF source-description builder. Feed it as the `DebugSink` of a whole-module
 /// compile, then [`DwarfBuilder::finish`] the collected stream into
 /// [`DebugSection`]s for [`crate::Backend::add_debug_sections`].
 pub struct DwarfBuilder {
@@ -339,17 +348,9 @@ impl DwarfBuilder {
                     );
                     die.set(constants::DW_AT_decl_line, AttributeValue::Udata(line));
                 }
-                // Debug tier: frame pointers on, frame base = the
-                // host's frame-pointer register — DWARF reg 6 (%rbp)
-                // on x86-64, reg 29 (x29) on aarch64. Host-cfg is the
-                // honest spelling here: this builder describes code
-                // the clif backend generated for the HOST (its own
-                // gate enforces that), so the two can never disagree.
-                let fp_reg = if cfg!(target_arch = "aarch64") {
-                    gimli::Register(29)
-                } else {
-                    gimli::Register(6)
-                };
+                // Frame pointers stay enabled. The backend reports the target
+                // register explicitly, including cross-host freestanding code.
+                let fp_reg = gimli::Register(f.frame_base_register);
                 let mut fb = Expression::new();
                 fb.op_reg(fp_reg);
                 die.set(constants::DW_AT_frame_base, AttributeValue::Exprloc(fb));
@@ -420,6 +421,11 @@ impl DwarfBuilder {
 }
 
 impl DebugSink for DwarfBuilder {
+    fn frame_base_register(&mut self, register: u16) {
+        if let Some(f) = self.cur() {
+            f.frame_base_register = register;
+        }
+    }
     fn error_tags(&mut self, tags: &[String]) {
         self.error_tags = tags.to_vec();
     }
@@ -442,6 +448,7 @@ impl DebugSink for DwarfBuilder {
             locs: Vec::new(),
             vars: Vec::new(),
             size: 0,
+            frame_base_register: if cfg!(target_arch = "aarch64") { 29 } else { 6 },
         });
     }
 
