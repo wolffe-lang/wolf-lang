@@ -1,0 +1,33 @@
+{
+  "lupin": {
+    "version": "0.1.59",
+    "tag": "v0.1.59",
+    "tag_object": "1d2e11149adbfcf62df3cf7a6c04f4134551826c",
+    "commit": "668fb752c690f33cf124c052cc9bae2e9696eeef",
+    "spec_pin": "b16353e8ae616ff3a35bd27adc56b727c50df345",
+    "linux_x86_64": {
+      "asset": "lupin-0.1.59-x86_64-unknown-linux-gnu.tar.gz",
+      "archive_sha256": "12121909c289ac8ff4a138de8faabdb86b72df97988832b39047d5f312ec3a18",
+      "binary_sha256": "8c32a385ea43145253c012c9366f2306732bc0109e47f4a4bec7db593ed2a5d0"
+    },
+    "macos_aarch64": {
+      "asset": "lupin-0.1.59-aarch64-apple-darwin.tar.gz",
+      "archive_sha256": "9f091af873768677593659bf2fda97243db01c489e6836b15c17ed50aabbf5f5",
+      "binary_sha256": "68e0379060f7d71e90e31768d20d67614934fec7b04c568302028c603641c8b7"
+    }
+  },
+  "macos_aarch64": {
+    "lldb_version": "lldb-2100.0.16.4",
+    "lldb_sha256": "cf18d0fcf3a222a54ce93f4b9ffd144f8e6512a7e8accd6e54272850c21d3b28",
+    "sdk_dwarfdump_version": "Apple LLVM version 21.0.0",
+    "sdk_dwarfdump_sha256": "93be00ae40dad30cd857f8335e92bbc1bfbd967ea98571ba29a13bb08569c906"
+  },
+  "linux_x86_64": {
+    "gdb_version": "GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1",
+    "dwarfdump_version": "LLVM version 21.1.8"
+  },
+  "producer_libraries": {
+    "cranelift": "0.134.3",
+    "gimli": "0.33.0"
+  }
+}
