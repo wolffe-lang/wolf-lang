@@ -494,6 +494,8 @@ fn spec_name(base: &str, key: &SpecKey) -> String {
 /// The canonical spelling of a type binding: sema's own renderer. This
 /// is what the KEY holds, so two bindings are the same instance exactly
 /// when sema would print them the same way.
+mod debug_types;
+
 fn mono_spelling(table: &TypeTable, ty: TyId) -> String {
     wolf_sema::types::render(table, ty, &|_| Err("_"))
 }
@@ -1243,6 +1245,7 @@ fn lower_task_body<'t>(
                 let var = lo.b.declare_var(wty);
                 lo.b.def_var(var, val);
                 lo.b.func.add_debug_var(name.clone(), val, true);
+                lo.annotate_debug_var(lo.table, *sema, task.span, false);
                 let bind = LocalBind::Val {
                     var,
                     wrapping: matches!(lo.table.kind(*sema), TyKind::Wrapping(_)),
@@ -1277,6 +1280,7 @@ fn lower_task_body<'t>(
                     let var = lo.b.declare_var(wty);
                     lo.b.def_var(var, val);
                     lo.b.func.add_debug_var(name.clone(), val, true);
+                    lo.annotate_debug_var(lo.table, *sema, task.span, false);
                     let bind = LocalBind::Val {
                         var,
                         wrapping: matches!(lo.table.kind(*sema), TyKind::Wrapping(_)),
@@ -1311,6 +1315,7 @@ fn lower_task_body<'t>(
                         unreachable!("unit params refused at sig build");
                     };
                     lo.b.func.add_debug_var(name.clone(), ptr, true);
+                    lo.annotate_debug_var(lo.table, *sema, task.span, true);
                     mut_ptrs.push((ptr, elem));
                     lo.scopes.last_mut().expect("scope").binds.push((
                         name.clone(),
@@ -1330,6 +1335,7 @@ fn lower_task_body<'t>(
                 let var = lo.b.declare_var(wty);
                 lo.b.def_var(var, val);
                 lo.b.func.add_debug_var(name.clone(), val, true);
+                lo.annotate_debug_var(lo.table, *sema, task.span, false);
                 let bind = LocalBind::Val {
                     var,
                     wrapping,
@@ -3902,6 +3908,25 @@ struct PendingTask<'t> {
 }
 
 impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
+    fn annotate_debug_var(&mut self, table: &TypeTable, ty: TyId, span: Span, reference: bool) {
+        use crate::debug::{DebugKind, DebugTypeData};
+        let storage = if reference {
+            debug_types::Storage::Flat
+        } else {
+            debug_types::Storage::Native
+        };
+        let ty = debug_types::source_type(table, self.sigs, ty, span, storage).map(|ty| {
+            if reference {
+                DebugTypeData::new(format!("read {}", ty.name), 8, DebugKind::Reference(ty))
+            } else {
+                ty
+            }
+        });
+        if let Some(var) = self.b.func.debug_vars.last_mut() {
+            var.ty = ty;
+        }
+    }
+
     fn text(&self, span: Span) -> String {
         String::from_utf8_lossy(&self.src[span.lo as usize..span.hi as usize]).into_owned()
     }
@@ -3990,6 +4015,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let val = entry_params[wir_idx];
                 wir_idx += 1;
                 self.b.func.add_debug_var(p.name.clone(), val, true);
+                self.annotate_debug_var(self.sig_table, p.ty, p.span, false);
                 let region = self.b.fresh_region();
                 self.scopes.last_mut().expect("scope").binds.push((
                     p.name.clone(),
@@ -4017,6 +4043,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     unreachable!("mut params carry their token param");
                 };
                 mut_ptrs.push((ptr, wty));
+                self.b.func.add_debug_var(p.name.clone(), ptr, true);
+                self.annotate_debug_var(self.sig_table, p.ty, p.span, true);
                 LocalBind::MutRef {
                     ptr,
                     region,
@@ -4043,6 +4071,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // s30 debug aux: the parameter's name and entry value
                 // (DW_TAG_formal_parameter rides this).
                 self.b.func.add_debug_var(p.name.clone(), val, true);
+                self.annotate_debug_var(self.sig_table, p.ty, p.span, false);
                 LocalBind::Val {
                     var,
                     wrapping,
@@ -4662,6 +4691,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 self.b.def_var(var, ev);
                 self.b.func.add_debug_var(name.clone(), ev, false);
+                self.annotate_debug_var(tbl, elem_sema, span, false);
                 let bind = LocalBind::Val {
                     var,
                     wrapping: matches!(tbl.kind(elem_sema), TyKind::Wrapping(_)),
@@ -4857,6 +4887,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.def_var(var, val);
                 // s30 debug aux: `let`/`var`/`const` binding.
                 self.b.func.add_debug_var(name.clone(), val, false);
+                self.annotate_debug_var(self.table, sema_ty, span, false);
                 LocalBind::Val {
                     var,
                     wrapping: matches!(self.table.kind(sema_ty), TyKind::Wrapping(_)),

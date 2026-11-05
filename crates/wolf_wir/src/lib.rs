@@ -84,6 +84,7 @@
 
 pub mod build;
 pub mod ct;
+pub mod debug;
 pub mod entity;
 pub mod facts;
 pub mod hash;
