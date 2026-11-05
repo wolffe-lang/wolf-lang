@@ -60,6 +60,30 @@ pub(crate) struct ListHdr {
     region: *mut c_void,
 }
 
+/// Actual layout, not a duplicated compiler layout table. Rust-only test data.
+#[doc(hidden)]
+pub const DEBUG_LAYOUT: crate::debug_layout::HeaderLayout = {
+    macro_rules! field {
+        ($name:ident) => {
+            crate::debug_layout::HeaderField {
+                name: stringify!($name),
+                offset: core::mem::offset_of!(ListHdr, $name) as u64,
+                size: crate::debug_layout::field_size(|header: &ListHdr| &header.$name),
+            }
+        };
+    }
+    crate::debug_layout::HeaderLayout {
+        size: core::mem::size_of::<ListHdr>() as u64,
+        fields: &[
+            field!(data),
+            field!(len),
+            field!(cap),
+            field!(elem),
+            field!(region),
+        ],
+    }
+};
+
 /// Allocate `size` bytes in `region`, or in the process root when
 /// `region` is null. Shared with the closure-record seam
 /// (`native::__wolf_rt_closure_alloc`, s150).
@@ -505,6 +529,19 @@ pub(crate) unsafe fn str_pair_elems<'a>(hdr: i64) -> Option<&'a [[i64; 2]]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_layout_tracks_the_runtime_header() {
+        assert_eq!(DEBUG_LAYOUT.size, 40);
+        assert_eq!(
+            DEBUG_LAYOUT
+                .fields
+                .iter()
+                .map(|f| (f.offset, f.size))
+                .collect::<Vec<_>>(),
+            (0..5).map(|i| (i * 8, 8)).collect::<Vec<_>>()
+        );
+    }
 
     /// s75: compiled code addresses `data` and `len` DIRECTLY —
     /// element access is `ptr.off` + `load`, not a shim call — so

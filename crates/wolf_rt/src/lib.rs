@@ -52,6 +52,8 @@ pub mod io;
 // of `wolf_mem::json` — the locked graph keeps the reference out of
 // reach (D15), the driver's `json_parity` test keeps the copies from
 // drifting (the fmtspec precedent).
+#[doc(hidden)]
+pub mod debug_layout;
 pub mod json;
 pub mod list;
 // The s152 keyed store (`[type.map]`): the list buffer discipline
