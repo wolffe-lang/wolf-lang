@@ -184,10 +184,10 @@ fn epilogue(
     let mut state = body.clone();
     let mut rows = Vec::new();
     for (i, step) in steps.iter().enumerate() {
-        if let SpChange::FromFp(offset) = step.sp {
-            if state.cfa.0 != arch.fp() || after[i] != Some(state.cfa.1 - offset) {
-                return Err("SP-from-FP teardown disagrees with the producer's CFA fact");
-            }
+        if let SpChange::FromFp(offset) = step.sp
+            && (state.cfa.0 != arch.fp() || after[i] != Some(state.cfa.1 - offset))
+        {
+            return Err("SP-from-FP teardown disagrees with the producer's CFA fact");
         }
         let mut restored_fp = false;
         for access in &step.loads {
