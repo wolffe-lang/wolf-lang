@@ -58,10 +58,13 @@ AAPCS64, win64, Apple arm64 deltas).
   "allocator-tuned within a target's published contract" — each target
   backend publishes its contract file; Tier-F is the reference
   implementation.
-- `[abi.native.nounwind]` There are **no unwind tables and no landing
-  pads** anywhere in wolf code (D30/Perceus precondition, s04
-  `[mem.shared.drop]`): every control transfer is a call, return,
-  branch, or trap.
+- `[abi.native.nounwind]` There is **no runtime unwinding** in wolf code
+  (D30/Perceus precondition, s04 `[mem.shared.drop]`): no unwind tables
+  in loaded sections, no personality routines and no landing pads.
+  Every control transfer is a call, return, branch, or trap. Debug-only
+  call-frame information in the non-allocated `.debug_frame` section,
+  emitted under `-g`, is permitted for debuggers and profilers. It does
+  not enable exception propagation or change the `nounwind` contract.
 - `[abi.native.taskenv]` A spawned task's captures cross to the
   runtime as ONE pointer to a **capture record** whose layout is
   `wolf-abi-0` internal, paired with a task-entry function that reads
