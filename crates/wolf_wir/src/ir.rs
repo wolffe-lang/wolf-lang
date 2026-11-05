@@ -231,6 +231,8 @@ pub struct CtContract {
 /// printer ignores them, backends read them to emit variable DIEs.
 #[derive(Clone, Debug)]
 pub struct DebugVarData {
+    /// Source type and storage view, independent of canonical SSA shape.
+    pub ty: Option<crate::debug::DebugType>,
     pub name: String,
     pub val: Value,
     /// True for function parameters (DW_TAG_formal_parameter).
@@ -365,8 +367,16 @@ impl Function {
     /// Record a named binding's current SSA definition (s30 debug
     /// aux; see [`DebugVarData`]).
     pub fn add_debug_var(&mut self, name: impl Into<String>, val: Value, param: bool) {
+        let name = name.into();
+        let ty = self
+            .debug_vars
+            .iter()
+            .rev()
+            .find(|dv| dv.name == name && self.value_ty(dv.val) == self.value_ty(val))
+            .and_then(|dv| dv.ty.clone());
         self.debug_vars.push(DebugVarData {
-            name: name.into(),
+            ty,
+            name,
             val,
             param,
         });

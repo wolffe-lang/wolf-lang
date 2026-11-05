@@ -119,7 +119,10 @@ pub(crate) fn compact(f: &Function) -> CompactOut {
     // Debug aux: named bindings whose values survived.
     for dv in &f.debug_vars {
         if let Some(&nv) = vmap.get(&dv.val) {
-            nf.add_debug_var(dv.name.clone(), nv, dv.param);
+            nf.debug_vars.push(crate::ir::DebugVarData {
+                val: nv,
+                ..dv.clone()
+            });
         }
     }
     CompactOut { func: nf, vmap }
