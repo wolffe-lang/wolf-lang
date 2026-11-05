@@ -365,7 +365,7 @@ scalar_value!(dwarf_v1_scalar_bool, "bool", "true", "true");
 fn dwarf_v1_scalar_f32() {
     // Native f32 formatting is not implemented. Observe the exact value with
     // a checked equality instead; both machines must take the same branch.
-    let source = "fn inspect(value: f32) -> int { if value == 1.25 { print(\"1.25\") } else { print(\"wrong value\") }\n0 }\nfn main() -> int { let n: f32 = 1.25\ninspect(n) }\n";
+    let source = "fn inspect(value: f32) -> int { let expected: f32 = 1.25\nif value == expected { print(\"1.25\") } else { print(\"wrong value\") }\n0 }\nfn main() -> int { let n: f32 = 1.25\ninspect(n) }\n";
     if transcript(
         "dwarf-v1-f32-value",
         source,
