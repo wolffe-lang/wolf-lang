@@ -469,6 +469,27 @@ impl Backend for ClifBackend {
                 debug.var(name, *ty, off, *param);
             }
         }
+        if debug.wants_frame_info() {
+            use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
+            let isa = self.module.isa();
+            let cie = isa
+                .create_systemv_cie()
+                .ok_or_else(|| BackendError::Unsupported("debug CFI for this target".into()))?;
+            let unwind = isa
+                .emit_unwind_info(compiled, UnwindInfoKind::SystemV)
+                .map_err(|e| BackendError::Internal(format!("{}: {e}", func.name)))?;
+            match unwind {
+                Some(UnwindInfo::SystemV(info)) => {
+                    debug.frame_info(cie, info.to_fde(wolf_backend::dwarf::function_address(id)));
+                }
+                _ => {
+                    return Err(BackendError::Internal(format!(
+                        "{}: missing backend frame information for -g",
+                        func.name
+                    )));
+                }
+            }
+        }
         debug.function_size(compiled.buffer.total_size());
         Ok(())
     }
@@ -548,6 +569,44 @@ impl Backend for ClifBackend {
             linkage,
             is_function: false,
         });
+        Ok(())
+    }
+
+    fn finish_debug(
+        &mut self,
+        module: &WirModule,
+        debug: &mut dyn DebugSink,
+    ) -> Result<(), BackendError> {
+        if !debug.wants_frame_info() || self.variadic_shims.is_empty() {
+            return Ok(());
+        }
+        let cie = self.module.isa().create_systemv_cie().ok_or_else(|| {
+            BackendError::Unsupported("debug CFI for synthetic frames on this target".into())
+        })?;
+        for (i, shim) in self.variadic_shims.iter().enumerate() {
+            // Reserve IDs beyond the whole module's WIR arena, not just this
+            // object's selected functions, so no synthetic relocation aliases it.
+            let raw = u32::try_from(module.funcs.len() + i)
+                .map_err(|_| BackendError::Internal("debug function ID overflow".into()))?;
+            let id = FuncId::new(raw);
+            self.by_id.insert(raw, shim.fid);
+            let symbol = self
+                .module
+                .declarations()
+                .get_function_decl(shim.fid)
+                .linkage_name(shim.fid)
+                .into_owned();
+            debug.function(id, &symbol, &symbol);
+            let mut fde = wolf_backend::dwarf::FrameDescriptionEntry::new(
+                wolf_backend::dwarf::function_address(id),
+                shim.code.bytes.len() as u32,
+            );
+            for (offset, rule) in &shim.code.frame_instructions {
+                fde.add_instruction(*offset, rule.clone());
+            }
+            debug.frame_info(cie.clone(), fde);
+            debug.function_size(shim.code.bytes.len() as u32);
+        }
         Ok(())
     }
 
@@ -1285,6 +1344,7 @@ pub fn compile_selected(
     for &id in funcs {
         backend.define_function(m, id, &m.funcs[id], debug)?;
     }
+    backend.finish_debug(m, debug)?;
     if trap_table_here {
         backend.define_data(TRAP_TABLE_SYMBOL, &trap_table(), Linkage::Local)?;
     }
