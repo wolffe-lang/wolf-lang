@@ -214,32 +214,43 @@ fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
                 || (name == "fstat_record_rows.lu" && calls == ["fs_fstat_record"])))
 }
 
+/// The calls each container row's lupin leg names, shared by the row and
+/// the predicate's test so the two cannot drift apart.
+const LOCK_CALLS: &[&str] = &["fs_lock", "fs_unlock"];
+const FIFO_CALLS: &[&str] = &["fs_mkfifo", "fs_fstat_record"];
+const NONBLOCK_CALLS: &[&str] = &["fs_set_nonblock", "fs_write_some", "os_signal_wait_fds"];
+const CLIP_CALLS: &[&str] = &["fs_set_nonblock", "fs_write_some"];
+
+// r42: the four container cells were first measured by the release-tier CI
+// run at 5121efc2 (published 0.1.59 answers `fs_lock`, `fs_mkfifo` and
+// `fs_set_nonblock` do not resolve); the local rig has no engine and skips
+// them, which the earlier measurement read as a pass.
 #[test]
-fn published_059_keeps_only_the_two_measured_fs_gap_cells() {
+fn published_059_keeps_the_six_measured_fs_gap_cells() {
     assert!(measured_pre_mirror(
         "0.1.58",
         "access_rows.lu",
         &["fs_access"]
     ));
-    assert!(measured_pre_mirror("0.1.59", "nofollow_rows.lu", &[]));
-    assert!(measured_pre_mirror(
-        "0.1.59",
-        "fstat_record_rows.lu",
-        &["fs_fstat_record"]
-    ));
+    for (name, calls) in [
+        ("nofollow_rows.lu", &[][..]),
+        ("fstat_record_rows.lu", &["fs_fstat_record"][..]),
+        ("lock_rows.lu", LOCK_CALLS),
+        ("fifo_rows.lu", FIFO_CALLS),
+        ("nonblock_rows.lu", NONBLOCK_CALLS),
+        ("clip_write.lu", CLIP_CALLS),
+    ] {
+        assert!(measured_pre_mirror("0.1.59", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.59+dev", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.60", name, calls), "{name}");
+    }
     for (name, calls) in [
         ("access_rows.lu", &["fs_access"][..]),
-        ("lock_rows.lu", &["fs_lock", "fs_unlock"][..]),
-        ("fifo_rows.lu", &["fs_mkfifo", "fs_fstat_record"][..]),
-        (
-            "nonblock_rows.lu",
-            &["fs_set_nonblock", "fs_write_some"][..],
-        ),
+        ("lock_rows.lu", &[][..]),
         ("other_rows.lu", &[][..]),
     ] {
         assert!(!measured_pre_mirror("0.1.59", name, calls), "{name}");
     }
-    assert!(!measured_pre_mirror("0.1.59+dev", "nofollow_rows.lu", &[]));
 }
 
 fn judge_lupin(entry: &Path, dir: &Path, want: &str, calls: &[&str]) {
@@ -713,24 +724,18 @@ fn the_advisory_lock_on_every_machine() {
 b_shared_again=ok\na_shared=ok\nc_excl=busy\na_unlock_again=ok\nb_unlock=ok\nc_excl_free=ok\n\
 a_excl_after_close=ok\na_unlock_third=ok\na_unlock_unlocked=ok\nkind0=invalid\nkind3=invalid\n\
 closed=io\nforged_unlock=io\nforged_lock=io\n";
-    every_place_lane(
-        "lock",
-        "lock_rows.lu",
-        &["fs_lock", "fs_unlock"],
-        &|lane, stdout| {
-            if cfg!(windows) {
-                let relaxed =
-                    stdout.replace("a_excl_after_close=busy\n", "a_excl_after_close=ok\n");
-                assert_eq!(
-                    relaxed.replace("a_unlock_third=io\n", "a_unlock_third=ok\n"),
-                    want,
-                    "the {lane} machine's lock rows (windows)"
-                );
-            } else {
-                assert_eq!(stdout, want, "the {lane} machine's lock rows");
-            }
-        },
-    );
+    every_place_lane("lock", "lock_rows.lu", LOCK_CALLS, &|lane, stdout| {
+        if cfg!(windows) {
+            let relaxed = stdout.replace("a_excl_after_close=busy\n", "a_excl_after_close=ok\n");
+            assert_eq!(
+                relaxed.replace("a_unlock_third=io\n", "a_unlock_third=ok\n"),
+                want,
+                "the {lane} machine's lock rows (windows)"
+            );
+        } else {
+            assert_eq!(stdout, want, "the {lane} machine's lock rows");
+        }
+    });
 }
 
 /// `[os.fs.mkfifo]`: made, its kind and bits, `exists`, `not_found`,
@@ -743,15 +748,10 @@ negative=invalid\nstat_kind=4 bits=384\nopen_nonblock=ok fstat_kind=2 record_kin
 no_writer_read=eof\nread_back=x\n";
     let want_windows = "made=unsupported\nagain=unsupported\nmissing_parent=unsupported\n\
 perm512=invalid\nnegative=invalid\n";
-    every_place_lane(
-        "fifo",
-        "fifo_rows.lu",
-        &["fs_mkfifo", "fs_fstat_record"],
-        &|lane, stdout| {
-            let want = if cfg!(unix) { want_unix } else { want_windows };
-            assert_eq!(stdout, want, "the {lane} machine's fifo rows");
-        },
-    );
+    every_place_lane("fifo", "fifo_rows.lu", FIFO_CALLS, &|lane, stdout| {
+        let want = if cfg!(unix) { want_unix } else { want_windows };
+        assert_eq!(stdout, want, "the {lane} machine's fifo rows");
+    });
 }
 
 /// `[os.fs.nonblock]`, `[os.signal.wait.write]`: the clipboard writer's
@@ -769,7 +769,7 @@ forged_wait=unsupported\n";
     every_place_lane(
         "nonblock",
         "nonblock_rows.lu",
-        &["fs_set_nonblock", "fs_write_some", "os_signal_wait_fds"],
+        NONBLOCK_CALLS,
         &|lane, stdout| {
             let want = if cfg!(unix) { want_unix } else { want_windows };
             assert_eq!(held(stdout), want, "the {lane} machine's pipe rows");
@@ -789,24 +789,18 @@ forged_wait=unsupported\n";
 #[cfg(unix)]
 #[test]
 fn yews_clipboard_writer_gives_up_instead_of_parking() {
-    every_place_lane(
-        "clip",
-        "clip_write.lu",
-        &["fs_set_nonblock", "fs_write_some"],
-        &|lane, stdout| {
+    every_place_lane("clip", "clip_write.lu", CLIP_CALLS, &|lane, stdout| {
+        assert!(
+            stdout.starts_with("rg1: writing 1 MiB into a pipe nobody reads\nrg1: took ")
+                && stdout
+                    .ends_with(" of 1048576, then busy; the write wait answered the deadline\n"),
+            "the {lane} machine's clipboard writer: {stdout}"
+        );
+        if cfg!(target_os = "linux") {
             assert!(
-                stdout.starts_with("rg1: writing 1 MiB into a pipe nobody reads\nrg1: took ")
-                    && stdout.ends_with(
-                        " of 1048576, then busy; the write wait answered the deadline\n"
-                    ),
-                "the {lane} machine's clipboard writer: {stdout}"
+                stdout.contains("took 65536 of"),
+                "the {lane} machine: linux's pipe takes 65536 bytes: {stdout}"
             );
-            if cfg!(target_os = "linux") {
-                assert!(
-                    stdout.contains("took 65536 of"),
-                    "the {lane} machine: linux's pipe takes 65536 bytes: {stdout}"
-                );
-            }
-        },
-    );
+        }
+    });
 }
