@@ -399,3 +399,11 @@ fn dwarf_v1_packed_list_element() {
         &["= 8", "wide = 97"],
     );
 }
+
+#[test]
+fn dwarf_v1_recursive_nominal_gap_is_explicit() {
+    let source = "struct Node { value: int, next: List[Node] }\nfn inspect(value: Node) -> int { value.value - 42 }\nfn main() -> int { let node = Node { value: 42, next: List[Node]() }\ninspect(node) }\n";
+    if let Some(exe) = fixture("recursive-nominal", source, false) {
+        dwarf_variant_bytes::recursive_gap(&exe);
+    }
+}
