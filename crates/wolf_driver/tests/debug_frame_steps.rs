@@ -1119,8 +1119,9 @@ finally:
 const LLDB: &str = r#"
 import lldb
 class API:
-    def __init__(self, target, process, thread, base):
+    def __init__(self, target, process, thread, base, guards):
         self.target, self.process, self.thread, self.base = target, process, thread, base
+        self.guards = guards
     def snapshot(self, disassemble):
         if self.process.GetState() != lldb.eStateStopped:
             raise RuntimeError('inferior not stopped')
@@ -1144,7 +1145,19 @@ class API:
                          size=instruction.GetByteSize(), instruction=str(instruction))
         return state
     def step(self):
-        self.thread.StepInstruction(False)
+        # An armed entry guard at the current PC can cause LLDB to stop twice
+        # at that same instruction. Disable only that guard for this one step;
+        # all guards are armed again before any foreign StepOut interval.
+        pc = self.thread.GetFrameAtIndex(0).GetPC()
+        current = [guard for guard in self.guards
+                   if guard.GetLocationAtIndex(0).GetAddress().GetLoadAddress(self.target) == pc]
+        for guard in current:
+            guard.SetEnabled(False)
+        try:
+            self.thread.StepInstruction(False)
+        finally:
+            for guard in current:
+                guard.SetEnabled(True)
         if self.thread.GetStopReason() not in (lldb.eStopReasonPlanComplete, lldb.eStopReasonBreakpoint):
             raise RuntimeError('unexpected single-step stop reason %s' % self.thread.GetStopReason())
     def finish(self):
@@ -1179,7 +1192,7 @@ def __lldb_init_module(debugger, internal_dict):
                   for s in config['owned']]
         if any(not guard.IsValid() or guard.GetNumLocations() != 1 for guard in guards):
             raise RuntimeError('owned callback guard did not resolve')
-        drive(API(target, process, thread, base))
+        drive(API(target, process, thread, base, guards))
     except Exception as error:
         record('error', error=str(error), traceback=traceback.format_exc())
     finally:
