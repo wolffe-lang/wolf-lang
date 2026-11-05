@@ -679,7 +679,7 @@ fn debugger_trace(fixture: &Fixture, root: &str, row: &str) -> Check<Option<Stri
     cmd.env("S283_FRAME_CONFIG", &config);
     if debugger == "gdb" {
         let script = fixture.dir.join("steps.gdb");
-        fs::write(&script, format!("set pagination off\nset confirm off\nset print thread-events off\npython\n{PY_COMMON}\n{GDB}\nend\nquit\n"))
+        fs::write(&script, format!("set pagination off\nset confirm off\nset print thread-events off\nset backtrace past-main on\npython\n{PY_COMMON}\n{GDB}\nend\nquit\n"))
             .map_err(|e| e.to_string())?;
         cmd.args(["--nx", "--batch", "-x"])
             .arg(script)
