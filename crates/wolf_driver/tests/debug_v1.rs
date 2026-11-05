@@ -290,6 +290,14 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
 
 fn reference_stdout(row: &str, expected: &str) {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_v1_{row}"));
+    let scalar = row
+        .strip_prefix("dwarf-v1-")
+        .and_then(|s| {
+            s.strip_suffix("-value")
+                .or_else(|| s.strip_suffix("-boundary"))
+        })
+        .expect("scalar row name");
+    dwarf_variant_bytes::scalar_encoding(row, &dir.join("probe"), scalar);
     let oracle_row = format!("{row}-lupin");
     match dwarf_variant_bytes::reference(&oracle_row, &dir, expected) {
         Ok(true) => println!("PASS {oracle_row}"),

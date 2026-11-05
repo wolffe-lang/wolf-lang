@@ -241,6 +241,86 @@ pub fn check(row: &str, exe: &Path, expected_type: &str) {
     }
 }
 
+pub fn scalar_encoding(row: &str, exe: &Path, name: &str) {
+    let result = (|| -> Result<(), String> {
+        let (size, encoding) = match name {
+            "i8" => (1, "DW_ATE_signed"),
+            "u8" => (1, "DW_ATE_unsigned"),
+            "i16" => (2, "DW_ATE_signed"),
+            "u16" => (2, "DW_ATE_unsigned"),
+            "i32" => (4, "DW_ATE_signed"),
+            "u32" => (4, "DW_ATE_unsigned"),
+            "i64" | "int" => (8, "DW_ATE_signed"),
+            "u64" | "uint" => (8, "DW_ATE_unsigned"),
+            "bool" => (1, "DW_ATE_boolean"),
+            "byte" => (1, "DW_ATE_unsigned_char"),
+            "f32" => (4, "DW_ATE_float"),
+            "f64" => (8, "DW_ATE_float"),
+            "char" => (4, "DW_ATE_UTF"),
+            _ => return Err(format!("unknown scalar fixture {name}")),
+        };
+        let (_, root) = parameter_schema(exe)?;
+        if root.tag != "DW_TAG_base_type"
+            || root.name() != Some(name)
+            || root.number("byte_size")? != size
+            || root.attr("encoding")? != encoding
+        {
+            return Err(format!("wrong emitted scalar definition: {root:?}"));
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("FAIL {row}-encoding");
+        panic!("{row}-encoding: {error}");
+    }
+    println!("PASS {row}-encoding");
+}
+
+fn parameter_schema(exe: &Path) -> Result<(Schema, Die), String> {
+    let dir = exe.parent().ok_or("fixture directory")?;
+    let tool = dwarf_tool(dir)?;
+    let artifact = if cfg!(target_os = "macos") {
+        exe.with_extension("dSYM")
+            .join("Contents/Resources/DWARF")
+            .join(exe.file_name().ok_or("fixture name")?)
+    } else {
+        exe.to_owned()
+    };
+    let text = output(
+        Command::new(&tool)
+            .args(["--debug-info", "--name=inspect", "--show-children"])
+            .arg(&artifact),
+        dir,
+        "inspect-die",
+    )?;
+    let dies = parse(&text)?;
+    let param = one(
+        dies.values()
+            .filter(|d| {
+                d.tag == "DW_TAG_formal_parameter"
+                    && d.name() == Some("value")
+                    && d.parent.and_then(|id| dies.get(&id)).is_some_and(|parent| {
+                        parent.name() == Some("inspect")
+                            && parent
+                                .attrs
+                                .get("decl_file")
+                                .is_some_and(|file| file.contains("probe.lu"))
+                    })
+            })
+            .cloned()
+            .collect(),
+        "source parameter",
+    )?;
+    let mut schema = Schema {
+        tool,
+        artifact,
+        dir: dir.to_owned(),
+        dies,
+    };
+    let root = schema.load(param.number("type")?)?;
+    Ok((schema, root))
+}
+
 pub fn recursive_gap(exe: &Path) {
     let result = (|| -> Result<(), String> {
         let dir = exe.parent().ok_or("fixture directory")?;
@@ -329,42 +409,7 @@ fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String>
     ) {
         return Err(format!("LLDB differs from known-gap oracle: {version}"));
     }
-    let artifact = exe
-        .with_extension("dSYM")
-        .join("Contents/Resources/DWARF")
-        .join(exe.file_name().ok_or("fixture name")?);
-    let text = output(
-        Command::new(&tool)
-            .args(["--debug-info", "--name=inspect", "--show-children"])
-            .arg(&artifact),
-        dir,
-        "inspect-die",
-    )?;
-    let dies = parse(&text)?;
-    let param = one(
-        dies.values()
-            .filter(|d| {
-                d.tag == "DW_TAG_formal_parameter"
-                    && d.name() == Some("value")
-                    && d.parent.and_then(|id| dies.get(&id)).is_some_and(|parent| {
-                        parent.name() == Some("inspect")
-                            && parent
-                                .attrs
-                                .get("decl_file")
-                                .is_some_and(|file| file.contains("probe.lu"))
-                    })
-            })
-            .cloned()
-            .collect(),
-        "source parameter",
-    )?;
-    let mut schema = Schema {
-        tool,
-        artifact,
-        dir: dir.to_owned(),
-        dies,
-    };
-    let root = schema.load(param.number("type")?)?;
+    let (mut schema, root) = parameter_schema(exe)?;
     if root.name() != Some(expected_type) {
         return Err(format!("wrong source type: {:?}", root.name()));
     }
@@ -409,6 +454,7 @@ fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String>
         .join("\n");
     let gap = format!("({expected_type}) value = {{}}");
     if observed != gap {
+        eprintln!("FAIL lldb-variant-part");
         return Err(format!(
             "KNOWN-GAP lldb-variant-part changed: expected {gap:?}, observed {observed:?}; reassess native variant rendering"
         ));
