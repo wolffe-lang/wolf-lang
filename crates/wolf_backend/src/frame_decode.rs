@@ -209,9 +209,9 @@ fn x64(b: &[u8]) -> Option<Step> {
                     s.sp = SpChange::FromFp(0);
                 } else if matches!(op, 0x89 | 0x8b) && rex & 8 != 0 && (dest, src) == (5, 4) {
                     s.fp_from_sp = Some(0);
-                } else if !volatile_x64(dest) && (dest != src || rex & 8 == 0) {
-                    return None;
-                } else if matches!(op, 0x31 | 0x33) && !volatile_x64(dest) {
+                } else if !volatile_x64(dest)
+                    && (dest != src || rex & 8 == 0 || matches!(op, 0x31 | 0x33))
+                {
                     return None;
                 }
             } else {
