@@ -893,7 +893,7 @@ struct Tx<'a, 'b> {
     /// s30 debug: WIR value → indices into `debug_slots` (a value may
     /// carry several names — GVN dedup; a name may have many values —
     /// rebindings, all stored to ONE slot).
-    debug_names: HashMap<wolf_wir::ir::Value, Vec<usize>>,
+    debug_names: HashMap<wolf_wir::ir::Value, Vec<(usize, u32)>>,
     /// s30 debug: one frame slot per named scalar binding —
     /// (name, scalar shape, slot, is-param). The debug tier forces
     /// named locals addressable (s28 decision) so `DW_OP_fbreg`
@@ -1018,6 +1018,18 @@ impl<'a, 'b> Tx<'a, 'b> {
             let Some(layout) = layout::layout_of(&self.m.types, ty) else {
                 continue;
             };
+            let Some(layout) = dv
+                .pieces
+                .iter()
+                .try_fold(layout, |mut layout, (value, offset)| {
+                    let piece = layout::layout_of(&self.m.types, self.f.value_ty(*value))?;
+                    layout.size = layout.size.max(offset.checked_add(piece.size)?);
+                    layout.align = layout.align.max(piece.align);
+                    Some(layout)
+                })
+            else {
+                continue;
+            };
             let idx = match by_name.get(dv.name.as_str()) {
                 Some(&i) => {
                     if self.debug_slots[i].1 != dty {
@@ -1040,7 +1052,13 @@ impl<'a, 'b> Tx<'a, 'b> {
                     self.debug_slots.len() - 1
                 }
             };
-            self.debug_names.entry(dv.val).or_default().push(idx);
+            self.debug_names.entry(dv.val).or_default().push((idx, 0));
+            for &(value, offset) in &dv.pieces {
+                self.debug_names
+                    .entry(value)
+                    .or_default()
+                    .push((idx, offset));
+            }
         }
     }
 
@@ -1054,9 +1072,9 @@ impl<'a, 'b> Tx<'a, 'b> {
         let Some(&repr) = self.vals.get(&wv) else {
             return;
         };
-        for i in idxs {
+        for (i, offset) in idxs {
             let slot = self.debug_slots[i].2;
-            let addr = self.b.ins().stack_addr(ctypes::I64, slot, 0);
+            let addr = self.b.ins().stack_addr(ctypes::I64, slot, offset as i32);
             match repr {
                 Repr::Scalar(cv) => {
                     self.b.ins().store(MemFlagsData::trusted(), cv, addr, 0);

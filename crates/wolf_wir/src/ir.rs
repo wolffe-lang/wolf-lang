@@ -235,6 +235,10 @@ pub struct DebugVarData {
     pub ty: Option<crate::debug::DebugType>,
     pub name: String,
     pub val: Value,
+    /// Additional SSA pieces and their byte offsets in a debug-only spill.
+    /// A specialized borrowed byte view is (val at 0, length at 8); no
+    /// synthetic aggregate instruction enters canonical WIR just for debug.
+    pub pieces: Vec<(Value, u32)>,
     /// True for function parameters (DW_TAG_formal_parameter).
     pub param: bool,
 }
@@ -378,6 +382,7 @@ impl Function {
             ty,
             name,
             val,
+            pieces: Vec::new(),
             param,
         });
     }
@@ -498,7 +503,10 @@ impl Function {
         self.insts.truncate_to(mark.insts);
         self.srcspans.truncate(mark.insts.0 as usize);
         let first_dead_value = Value::new(mark.values.0);
-        self.debug_vars.retain(|dv| dv.val < first_dead_value);
+        self.debug_vars.retain(|dv| {
+            dv.val < first_dead_value
+                && dv.pieces.iter().all(|(value, _)| *value < first_dead_value)
+        });
         self.values.truncate_to(mark.values);
         self.facts.truncate_to(mark.facts);
         self.ext_funcs.truncate_to(mark.ext_funcs);
