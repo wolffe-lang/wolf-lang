@@ -289,30 +289,44 @@ unsigned_boundary!(dwarf_v1_unsigned_u32, "u32", "4294967295");
 unsigned_boundary!(dwarf_v1_unsigned_u64, "u64", "18446744073709551615");
 unsigned_boundary!(dwarf_v1_unsigned_uint, "uint", "18446744073709551615");
 
+macro_rules! scalar_value {
+    ($test:ident, $ty:literal, $value:literal, $expected:literal) => {
+        #[test]
+        fn $test() {
+            let source = format!("fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n", $ty, $ty, $value);
+            transcript(concat!("dwarf-v1-", $ty, "-value"), &source, "print value", "frame variable value", &[concat!("= ", $expected)]);
+        }
+    };
+}
+scalar_value!(dwarf_v1_scalar_i8, "i8", "-127 - 1", "-128");
+scalar_value!(dwarf_v1_scalar_i16, "i16", "-32767 - 1", "-32768");
+scalar_value!(dwarf_v1_scalar_i32, "i32", "-2147483647 - 1", "-2147483648");
+scalar_value!(
+    dwarf_v1_scalar_i64,
+    "i64",
+    "-9223372036854775807 - 1",
+    "-9223372036854775808"
+);
+scalar_value!(
+    dwarf_v1_scalar_int,
+    "int",
+    "-9223372036854775807 - 1",
+    "-9223372036854775808"
+);
+scalar_value!(dwarf_v1_scalar_bool, "bool", "true", "true");
+scalar_value!(dwarf_v1_scalar_f32, "f32", "1.25", "1.25");
+scalar_value!(dwarf_v1_scalar_f64, "f64", "1.25", "1.25");
+scalar_value!(dwarf_v1_scalar_byte, "byte", "255 as byte", "255");
+
 #[test]
-fn dwarf_v1_scalar_values() {
-    for (ty, value, expected) in [
-        ("i8", "-127 - 1", "-128"),
-        ("i16", "-32767 - 1", "-32768"),
-        ("i32", "-2147483647 - 1", "-2147483648"),
-        ("i64", "-9223372036854775807 - 1", "-9223372036854775808"),
-        ("int", "-9223372036854775807 - 1", "-9223372036854775808"),
-        ("bool", "true", "true"),
-        ("f32", "1.25 as f32", "1.25"),
-        ("f64", "1.25", "1.25"),
-        ("byte", "255 as byte", "255"),
-    ] {
-        let source = format!(
-            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ let n: {ty} = {value}\ninspect(n) }}\n"
-        );
-        transcript(
-            &format!("dwarf-v1-{ty}-value"),
-            &source,
-            "print value",
-            "frame variable value",
-            &[&format!("= {expected}")],
-        );
-    }
+fn dwarf_v1_scalar_char() {
+    transcript(
+        "dwarf-v1-char-value",
+        "fn inspect(value: char) -> int { 0 }\nfn main() -> int { let n: char = 955 as char\ninspect(n) }\n",
+        "print (unsigned)value",
+        "expression -- (unsigned)value",
+        &["= 955"],
+    );
 }
 
 #[test]
