@@ -67,6 +67,34 @@ pub(crate) struct MapHdr {
     index_cap: i64,
 }
 
+/// Actual layout, not a duplicated compiler layout table. Rust-only test data.
+#[doc(hidden)]
+pub const DEBUG_LAYOUT: crate::debug_layout::HeaderLayout = {
+    macro_rules! field {
+        ($name:ident) => {
+            crate::debug_layout::HeaderField {
+                name: stringify!($name),
+                offset: core::mem::offset_of!(MapHdr, $name) as u64,
+                size: crate::debug_layout::field_size(|header: &MapHdr| &header.$name),
+            }
+        };
+    }
+    crate::debug_layout::HeaderLayout {
+        size: core::mem::size_of::<MapHdr>() as u64,
+        fields: &[
+            field!(data),
+            field!(len),
+            field!(cap),
+            field!(elem),
+            field!(region),
+            field!(key_kind),
+            field!(key_size),
+            field!(val_off),
+            field!(val_size),
+        ],
+    }
+};
+
 const KEY_BYTES: i64 = 0;
 const KEY_STR: i64 = 1;
 
@@ -399,6 +427,19 @@ pub unsafe extern "C" fn __wolf_rt_map_clear(hdr: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_layout_tracks_the_runtime_header() {
+        assert_eq!(DEBUG_LAYOUT.size, 72);
+        assert_eq!(
+            DEBUG_LAYOUT
+                .fields
+                .iter()
+                .map(|f| (f.offset, f.size))
+                .collect::<Vec<_>>(),
+            (0..9).map(|i| (i * 8, 8)).collect::<Vec<_>>()
+        );
+    }
     use crate::list::ListHdr;
 
     std::thread_local! {
