@@ -1,11 +1,16 @@
 //! DWARF v1 source-type witnesses. Each transcript belongs to one type row.
 //! These use the debug tier; the release tier has no source DWARF yet.
-mod lane_exit;
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn fixture(row: &str, src: &str, debug_frame: bool) -> Option<PathBuf> {
+    if !cfg!(any(
+        all(target_os = "linux", target_arch = "x86_64"),
+        all(target_os = "macos", target_arch = "aarch64"),
+    )) {
+        eprintln!("SKIP {row} reason=requires x86-64 Linux or arm64 macOS");
+        return None;
+    }
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_v1_{row}"));
     std::fs::create_dir_all(&dir).unwrap();
     let entry = dir.join("probe.lu");
@@ -17,12 +22,6 @@ fn fixture(row: &str, src: &str, debug_frame: bool) -> Option<PathBuf> {
         cmd.arg("-g");
     }
     let out = cmd.arg(&entry).arg("-o").arg(&exe).output().unwrap();
-    if !String::from_utf8_lossy(&out.stderr).contains("unknown flag")
-        && lane_exit::environment_refusal(&out, "wolf build")
-    {
-        eprintln!("SKIP: {row}: {}", String::from_utf8_lossy(&out.stderr));
-        return None;
-    }
     if !out.status.success() {
         eprintln!("FAIL {row}");
     }
@@ -271,8 +270,8 @@ macro_rules! unsigned_boundary {
         #[test]
         fn $test() {
             let source = format!(
-                "fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ inspect({} as {}) }}\n",
-                $ty, $value, $ty
+                "fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n",
+                $ty, $ty, $value
             );
             transcript(
                 concat!("dwarf-v1-", $ty, "-boundary"),
@@ -293,22 +292,18 @@ unsigned_boundary!(dwarf_v1_unsigned_uint, "uint", "18446744073709551615");
 #[test]
 fn dwarf_v1_scalar_values() {
     for (ty, value, expected) in [
-        ("i8", "(0 - 128) as i8", "-128"),
-        ("i16", "(0 - 32768) as i16", "-32768"),
-        ("i32", "(0 - 2147483648) as i32", "-2147483648"),
-        (
-            "i64",
-            "(0 - 9223372036854775807 - 1) as i64",
-            "-9223372036854775808",
-        ),
-        ("int", "0 - 9223372036854775807 - 1", "-9223372036854775808"),
+        ("i8", "-127 - 1", "-128"),
+        ("i16", "-32767 - 1", "-32768"),
+        ("i32", "-2147483647 - 1", "-2147483648"),
+        ("i64", "-9223372036854775807 - 1", "-9223372036854775808"),
+        ("int", "-9223372036854775807 - 1", "-9223372036854775808"),
         ("bool", "true", "true"),
         ("f32", "1.25 as f32", "1.25"),
         ("f64", "1.25", "1.25"),
         ("byte", "255 as byte", "255"),
     ] {
         let source = format!(
-            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ inspect({value}) }}\n"
+            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ let n: {ty} = {value}\ninspect(n) }}\n"
         );
         transcript(
             &format!("dwarf-v1-{ty}-value"),
