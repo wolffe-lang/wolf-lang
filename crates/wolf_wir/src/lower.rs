@@ -3988,14 +3988,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 wir_idx += 2;
                 // This specialized ABI has no List header. Spill its actual
                 // two-word view instead of claiming the pointer names one.
-                let view_ty = str_ty(&mut self.b.module.types);
-                let view = self
-                    .b
-                    .ins(Opcode::AggMake, &[ptr, len], &[view_ty], Aux::None)
-                    .one();
-                self.b.func.add_debug_var(p.name.clone(), view, true);
-                self.b.func.debug_vars.last_mut().expect("view binding").ty =
-                    Some(debug_types::byte_view());
+                self.b.func.add_debug_var(p.name.clone(), ptr, true);
+                let view = self.b.func.debug_vars.last_mut().expect("view binding");
+                view.ty = Some(debug_types::byte_view());
+                view.pieces.push((len, 8));
                 self.scopes
                     .last_mut()
                     .expect("scope")

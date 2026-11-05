@@ -118,9 +118,16 @@ pub(crate) fn compact(f: &Function) -> CompactOut {
     }
     // Debug aux: named bindings whose values survived.
     for dv in &f.debug_vars {
-        if let Some(&nv) = vmap.get(&dv.val) {
+        if let Some(&nv) = vmap.get(&dv.val)
+            && let Some(pieces) = dv
+                .pieces
+                .iter()
+                .map(|(value, offset)| vmap.get(value).map(|&v| (v, *offset)))
+                .collect::<Option<Vec<_>>>()
+        {
             nf.debug_vars.push(crate::ir::DebugVarData {
                 val: nv,
+                pieces,
                 ..dv.clone()
             });
         }
@@ -158,4 +165,35 @@ pub(crate) fn remap_fact(fd: &FactData, vmap: &HashMap<Value, Value>) -> Option<
         just,
         span: fd.span,
     })
+}
+
+#[cfg(test)]
+mod debug_piece_tests {
+    use super::*;
+    use crate::{
+        ir::{Module, Param},
+        types,
+    };
+
+    #[test]
+    fn split_debug_locations_follow_value_renumbering() {
+        let mut module = Module::new();
+        let sig = module.make_sig(vec![Param::val(types::PTR), Param::val(types::I64)], vec![]);
+        let mut f = Function::new("view", sig);
+        let dead = f.make_block(&[types::PTR, types::I64]);
+        let live = f.make_block(&[types::PTR, types::I64]);
+        f.layout = vec![live];
+        let params = f.block_params(live);
+        f.add_debug_var("bytes", params[0], true);
+        f.debug_vars[0].pieces.push((params[1], 8));
+        let result = compact(&f);
+        let mapped = result.vmap[&params[1]];
+        assert_ne!(mapped, params[1], "the test must actually renumber");
+        assert_eq!(result.func.debug_vars[0].pieces, [(mapped, 8)]);
+        f.debug_vars[0].pieces[0].0 = f.block_params(dead)[1];
+        assert!(
+            compact(&f).func.debug_vars.is_empty(),
+            "a missing piece cannot leave a bogus location"
+        );
+    }
 }
