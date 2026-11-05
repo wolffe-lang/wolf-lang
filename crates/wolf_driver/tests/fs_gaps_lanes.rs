@@ -210,9 +210,22 @@ fn lupin_or_skip() -> Option<PathBuf> {
 fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
     PRE_MIRROR_LUPIN.contains(&version)
         || (version == "0.1.59"
-            && ((name == "nofollow_rows.lu" && calls.is_empty())
-                || (name == "fstat_record_rows.lu" && calls == ["fs_fstat_record"])))
+            && MEASURED_059
+                .iter()
+                .any(|&(row, pinned)| row == name && pinned == calls))
 }
+
+/// Published 0.1.59 mirrors only `fs_access` of s254's names
+/// (wolf-interp#278); each of these cells is its measured answer. The four
+/// container rows were measured in CI, where an engine exists.
+const MEASURED_059: &[(&str, &[&str])] = &[
+    ("nofollow_rows.lu", &[]),
+    ("fstat_record_rows.lu", &["fs_fstat_record"]),
+    ("lock_rows.lu", LOCK_CALLS),
+    ("fifo_rows.lu", FIFO_CALLS),
+    ("nonblock_rows.lu", NONBLOCK_CALLS),
+    ("clip_write.lu", CLIP_CALLS),
+];
 
 /// The calls each container row's lupin leg names, shared by the row and
 /// the predicate's test so the two cannot drift apart.
