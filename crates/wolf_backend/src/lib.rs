@@ -19,6 +19,7 @@
 pub mod abi;
 pub mod dwarf;
 mod dwarf_types;
+pub mod frame_decode;
 pub mod layout;
 pub mod read_lend;
 pub mod target;
@@ -137,6 +138,8 @@ pub enum DebugTy {
 /// [`DebugSink::function_size`] exactly once. All methods default to
 /// no-ops so a sink implements only what its fidelity tier needs.
 pub trait DebugSink {
+    /// DWARF register of the actual target frame base, not the compiler host.
+    fn frame_base_register(&mut self, _register: u16) {}
     /// The completed module's runtime error-tag namespace.
     fn error_tags(&mut self, _tags: &[String]) {}
     /// Whether this compilation explicitly requested debug-only CFI (`-g`).
