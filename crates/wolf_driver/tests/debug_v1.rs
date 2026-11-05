@@ -223,7 +223,7 @@ fn dwarf_v1_optional() {
         "fn inspect(value: int ! {none}) -> int { value else { 0 } }\nfn main() -> int { inspect(none) }\n",
         "print value",
         "frame variable value",
-        &["none"],
+        &["none ="],
     );
 }
 
@@ -265,6 +265,15 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
     }
 }
 
+// LLDB renders one-byte C-compatible integers as characters. Widen using
+// the emitted type's signedness, so a signed/unsigned DIE bug still fails.
+fn scalar_lldb_command(ty: &str) -> &'static str {
+    match ty {
+        "i8" | "u8" | "byte" => "expression -- (int)value",
+        _ => "frame variable value",
+    }
+}
+
 macro_rules! unsigned_boundary {
     ($test:ident, $ty:literal, $value:literal) => {
         #[test]
@@ -277,7 +286,7 @@ macro_rules! unsigned_boundary {
                 concat!("dwarf-v1-", $ty, "-boundary"),
                 &source,
                 "print value",
-                "frame variable value",
+                scalar_lldb_command($ty),
                 &[concat!("= ", $value)],
             );
         }
@@ -294,7 +303,7 @@ macro_rules! scalar_value {
         #[test]
         fn $test() {
             let source = format!("fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ let n: {} = {}\ninspect(n) }}\n", $ty, $ty, $value);
-            transcript(concat!("dwarf-v1-", $ty, "-value"), &source, "print value", "frame variable value", &[concat!("= ", $expected)]);
+            transcript(concat!("dwarf-v1-", $ty, "-value"), &source, "print value", scalar_lldb_command($ty), &[concat!("= ", $expected)]);
         }
     };
 }
@@ -346,7 +355,7 @@ fn dwarf_v1_packed_list_element() {
         "dwarf-v1-packed-element",
         "struct Pair { small: i8, wide: int }\nfn inspect(value: List[Pair]) -> int { value.len - 2 }\nfn main() -> int { var xs = List[Pair]()\n(mut xs).push(Pair { small: 7 as i8, wide: 42 })\n(mut xs).push(Pair { small: 8 as i8, wide: 97 })\ninspect(xs) }\n",
         "print value->data[1]",
-        "frame variable value->data[1]",
-        &["small = 8", "wide = 97"],
+        "frame variable value->data[1]\nexpression -- (int)value->data[1].small",
+        &["= 8", "wide = 97"],
     );
 }
