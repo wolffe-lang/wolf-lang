@@ -266,27 +266,29 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
     }
 }
 
-#[test]
-fn dwarf_v1_unsigned_boundaries() {
-    for (ty, value) in [
-        ("u8", "255"),
-        ("u16", "65535"),
-        ("u32", "4294967295"),
-        ("u64", "18446744073709551615"),
-        ("uint", "18446744073709551615"),
-    ] {
-        let source = format!(
-            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ inspect({value} as {ty}) }}\n"
-        );
-        transcript(
-            &format!("dwarf-v1-{ty}-boundary"),
-            &source,
-            "print value",
-            "frame variable value",
-            &[&format!("= {value}")],
-        );
-    }
+macro_rules! unsigned_boundary {
+    ($test:ident, $ty:literal, $value:literal) => {
+        #[test]
+        fn $test() {
+            let source = format!(
+                "fn inspect(value: {}) -> int {{ 0 }}\nfn main() -> int {{ inspect({} as {}) }}\n",
+                $ty, $value, $ty
+            );
+            transcript(
+                concat!("dwarf-v1-", $ty, "-boundary"),
+                &source,
+                "print value",
+                "frame variable value",
+                &[concat!("= ", $value)],
+            );
+        }
+    };
 }
+unsigned_boundary!(dwarf_v1_unsigned_u8, "u8", "255");
+unsigned_boundary!(dwarf_v1_unsigned_u16, "u16", "65535");
+unsigned_boundary!(dwarf_v1_unsigned_u32, "u32", "4294967295");
+unsigned_boundary!(dwarf_v1_unsigned_u64, "u64", "18446744073709551615");
+unsigned_boundary!(dwarf_v1_unsigned_uint, "uint", "18446744073709551615");
 
 #[test]
 fn dwarf_v1_scalar_values() {
