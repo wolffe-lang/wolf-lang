@@ -3917,7 +3917,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let ty = debug_types::source_type(table, self.sigs, ty, span, storage).map(|ty| {
             if reference {
-                DebugTypeData::new(format!("read {}", ty.name), 8, DebugKind::Reference(ty))
+                DebugTypeData::new(format!("mut {}", ty.name), 8, DebugKind::Reference(ty))
             } else {
                 ty
             }

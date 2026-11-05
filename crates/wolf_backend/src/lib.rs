@@ -105,16 +105,15 @@ pub struct Capabilities {
 pub enum DwarfFidelity {
     /// No debug info.
     None,
-    /// Line tables only (Cranelift's tier in s28; s30 rides this).
+    /// Line tables and whole-function spills; no live-range location lists.
     Lines,
     /// Full variable-location fidelity (Tier-F's DWARF-first design).
     Full,
 }
 
-/// The scalar shape of a debug variable ([`DebugSink::var`]): the
-/// closed v0 set the type-DIE mapping covers. Signedness is an op
-/// property in WIR, not a type property, so integers report as signed
-/// wolf ints at v0 (honest, documented; s58 refines).
+/// A source description, or a legacy machine-shape fallback for hand-built
+/// WIR without source metadata. Source integers retain their own signedness,
+/// sizes and names even though canonical WIR intentionally erases signedness.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum DebugTy {
     /// Source type retained before machine-shape erasure.
