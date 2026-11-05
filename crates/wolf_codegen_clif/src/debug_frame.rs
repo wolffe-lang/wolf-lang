@@ -184,6 +184,11 @@ fn epilogue(
     let mut state = body.clone();
     let mut rows = Vec::new();
     for (i, step) in steps.iter().enumerate() {
+        if let SpChange::FromFp(offset) = step.sp {
+            if state.cfa.0 != arch.fp() || after[i] != Some(state.cfa.1 - offset) {
+                return Err("SP-from-FP teardown disagrees with the producer's CFA fact");
+            }
+        }
         let mut restored_fp = false;
         for access in &step.loads {
             let Some(rule) = body.regs.get(&access.reg) else {
@@ -376,6 +381,17 @@ mod tests {
         assert_eq!(rows[1].1.cfa, (7, 8));
         assert_eq!(rows[1].1.regs[&6], Rule::Same);
     }
+    #[test]
+    fn sp_from_fp_must_agree_with_the_return_derived_distance() {
+        let body = State {
+            cfa: (6, 32),
+            regs: BTreeMap::from([(6, Rule::Offset(-16)), (16, Rule::Offset(-8))]),
+            signed_ra: false,
+        };
+        let steps = frame_decode::teardown(Arch::X64, &[0x48, 0x89, 0xec, 0x5d, 0xc3]).unwrap();
+        assert!(epilogue(Arch::X64, &body, &steps).is_err());
+    }
+
     #[test]
     fn mismatched_save_locations_leave_the_range_uncovered() {
         let body = State {
