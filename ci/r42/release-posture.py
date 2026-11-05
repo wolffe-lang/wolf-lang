@@ -47,6 +47,16 @@ class ReleasePosture(unittest.TestCase):
             self.assertIn(f"`{name}", note)
         self.assertIn("bit 32", note)
 
+    def test_release_note_states_the_std_ledger_lag(self):
+        # The fixed std's own ledgers still describe lupin 0.1.58: four test
+        # rows and two doc examples in std/os/os.lu run under 0.1.59.
+        note = (ROOT / "docs/releases/0.2.37.md").read_text()
+        for row in ("env/arg0_rows", "fs/access_rows", "os/host_rows",
+                    "process/core_limit_rows"):
+            self.assertIn(f"`{row}`", note)
+        self.assertIn("`std/os/os.lu` lines 101 and 121", note)
+        self.assertIn("The shipped standard library is unchanged", note)
+
     def test_changelog_carries_previously_omitted_changes(self):
         changelog = (ROOT / "CHANGELOG.md").read_text()
         current = changelog.split("## 0.2.37", 1)[1].split("## 0.2.36", 1)[0]
