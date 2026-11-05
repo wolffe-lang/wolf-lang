@@ -25,6 +25,7 @@ pub(super) fn source_type(
         types: types::TypeInterner::new(),
         sigs,
         span,
+        active: Vec::new(),
     }
     .describe(table, id, storage, None, 0)
 }
@@ -33,6 +34,22 @@ struct Describer<'a> {
     types: types::TypeInterner,
     sigs: &'a SigTables,
     span: Span,
+    active: Vec<(u32, String, Storage)>,
+}
+
+pub(super) fn byte_view() -> DebugType {
+    Type::new(
+        "borrowed List[byte] view",
+        16,
+        Kind::Struct(vec![
+            member(
+                "data",
+                0,
+                pointer(Type::new("byte", 1, Kind::Base(Enc::UnsignedChar))),
+            ),
+            member("len", 8, int()),
+        ]),
+    )
 }
 
 fn int() -> DebugType {
@@ -54,6 +71,31 @@ fn member(name: impl Into<String>, offset: u64, ty: DebugType) -> Member {
 
 impl Describer<'_> {
     fn describe(
+        &mut self,
+        table: &TypeTable,
+        id: TyId,
+        storage: Storage,
+        frame: Option<&RigidFrame<'_>>,
+        depth: u32,
+    ) -> Option<DebugType> {
+        let nominal = match table.kind(id) {
+            TyKind::Nominal { module, .. } => Some((*module, mono_spelling(table, id), storage)),
+            _ => None,
+        };
+        if let Some(key) = &nominal {
+            if self.active.contains(key) {
+                return Some(opaque(&format!("opaque recursive {}", key.1)));
+            }
+            self.active.push(key.clone());
+        }
+        let result = self.describe_inner(table, id, storage, frame, depth);
+        if nominal.is_some() {
+            self.active.pop();
+        }
+        result
+    }
+
+    fn describe_inner(
         &mut self,
         table: &TypeTable,
         id: TyId,
@@ -117,9 +159,8 @@ impl Describer<'_> {
                 Prim::Bool => Enc::Boolean,
                 Prim::F32 | Prim::F64 => Enc::Float,
                 Prim::Byte => Enc::UnsignedChar,
-                Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64 | Prim::Uint | Prim::Char => {
-                    Enc::Unsigned
-                }
+                Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64 | Prim::Uint => Enc::Unsigned,
+                Prim::Char => Enc::Utf,
                 _ => Enc::Signed,
             }),
             TyKind::Wrapping(inner) | TyKind::Distinct(inner) => {
@@ -313,7 +354,12 @@ impl Describer<'_> {
             _ if wire == types::PTR => return Some(pointer(opaque(&format!("opaque {name}")))),
             _ => Kind::Opaque,
         };
-        Some(Type::new(name, size, kind))
+        let mut result = Type::new(name, size, kind);
+        if let TyKind::Nominal { module, .. } = table.kind(id) {
+            let identity = (*module, result.name.clone());
+            std::sync::Arc::make_mut(&mut result).identity = Some(identity);
+        }
+        Some(result)
     }
 
     fn header(&self, name: &str, element: DebugType, map: bool) -> DebugType {
@@ -375,5 +421,133 @@ impl Describer<'_> {
             });
         }
         Some(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use wolf_sema::sig::{FieldSig, StructSig};
+
+    fn setup() -> (SigTables, Span) {
+        let mut files = wolf_span::SourceMap::new();
+        let span = Span::new(files.intern(std::path::Path::new("debug-types.lu")), 0, 0);
+        (
+            SigTables {
+                table: TypeTable::new(),
+                modules: Vec::new(),
+                module_names: Vec::new(),
+                traits: BTreeMap::new(),
+                impls: Vec::new(),
+                diagnostics: Vec::new(),
+                sealed: Vec::new(),
+                origins: Default::default(),
+            },
+            span,
+        )
+    }
+
+    #[test]
+    fn every_scalar_retains_source_name_size_and_encoding() {
+        let (sigs, span) = setup();
+        let mut table = TypeTable::new();
+        for (prim, size, enc) in [
+            (Prim::I8, 1, Enc::Signed),
+            (Prim::U8, 1, Enc::Unsigned),
+            (Prim::I16, 2, Enc::Signed),
+            (Prim::U16, 2, Enc::Unsigned),
+            (Prim::I32, 4, Enc::Signed),
+            (Prim::U32, 4, Enc::Unsigned),
+            (Prim::I64, 8, Enc::Signed),
+            (Prim::U64, 8, Enc::Unsigned),
+            (Prim::Int, 8, Enc::Signed),
+            (Prim::Uint, 8, Enc::Unsigned),
+            (Prim::Bool, 1, Enc::Boolean),
+            (Prim::Byte, 1, Enc::UnsignedChar),
+            (Prim::F32, 4, Enc::Float),
+            (Prim::F64, 8, Enc::Float),
+            (Prim::Char, 4, Enc::Utf),
+        ] {
+            let id = table.intern(TyKind::Prim(prim));
+            let ty = source_type(&table, &sigs, id, span, Storage::Native).unwrap();
+            assert_eq!(
+                (ty.name.as_str(), ty.size, &ty.kind),
+                (prim.name(), size, &Kind::Base(enc))
+            );
+        }
+    }
+
+    #[test]
+    fn equal_shaped_nominals_and_storage_views_remain_distinct() {
+        let (mut sigs, span) = setup();
+        let byte = sigs.table.intern(TyKind::Prim(Prim::U8));
+        let wide = sigs.table.intern(TyKind::Prim(Prim::U64));
+        let definition = ItemSig::Struct(StructSig {
+            generic: false,
+            generics: Vec::new(),
+            name_span: span,
+            fields: vec![
+                FieldSig {
+                    name: "small".into(),
+                    ty: byte,
+                    span,
+                },
+                FieldSig {
+                    name: "wide".into(),
+                    ty: wide,
+                    span,
+                },
+            ],
+            repr_c: true,
+            packed: false,
+            align: None,
+        });
+        sigs.modules = vec![
+            BTreeMap::from([("Pair".into(), definition.clone())]),
+            BTreeMap::from([("Pair".into(), definition)]),
+        ];
+        let mut table = TypeTable::new();
+        let left = table.intern(TyKind::Nominal {
+            module: 0,
+            name: "Pair".into(),
+            args: Vec::new(),
+        });
+        let right = table.intern(TyKind::Nominal {
+            module: 1,
+            name: "Pair".into(),
+            args: Vec::new(),
+        });
+        let native = source_type(&table, &sigs, left, span, Storage::Native).unwrap();
+        let other = source_type(&table, &sigs, right, span, Storage::Native).unwrap();
+        assert_ne!(native, other, "module identity is not structural shape");
+        let flat = source_type(&table, &sigs, left, span, Storage::Flat).unwrap();
+        let Kind::Struct(n) = &native.kind else {
+            panic!("structure")
+        };
+        let Kind::Struct(f) = &flat.kind else {
+            panic!("structure")
+        };
+        assert_eq!((native.size, n[1].offset), (16, 8));
+        assert_eq!((flat.size, f[1].offset), (9, 1));
+        let list = table.intern(TyKind::List(left));
+        let header = source_type(&table, &sigs, list, span, Storage::Native).unwrap();
+        let Kind::Pointer(header) = &header.kind else {
+            panic!("header pointer")
+        };
+        let Kind::Struct(fields) = &header.kind else {
+            panic!("header structure")
+        };
+        let Kind::Pointer(element) = &fields[0].ty.kind else {
+            panic!("element pointer")
+        };
+        let Kind::Struct(fields) = &element.kind else {
+            panic!("element structure")
+        };
+        assert_eq!(
+            (element.size, fields[1].offset),
+            (16, 1),
+            "packed fields, padded element stride"
+        );
     }
 }

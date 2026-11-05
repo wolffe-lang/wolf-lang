@@ -3986,7 +3986,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let ptr = entry_params[wir_idx];
                 let len = entry_params[wir_idx + 1];
                 wir_idx += 2;
-                self.b.func.add_debug_var(p.name.clone(), ptr, true);
+                // This specialized ABI has no List header. Spill its actual
+                // two-word view instead of claiming the pointer names one.
+                let view_ty = str_ty(&mut self.b.module.types);
+                let view = self
+                    .b
+                    .ins(Opcode::AggMake, &[ptr, len], &[view_ty], Aux::None)
+                    .one();
+                self.b.func.add_debug_var(p.name.clone(), view, true);
+                self.b.func.debug_vars.last_mut().expect("view binding").ty =
+                    Some(debug_types::byte_view());
                 self.scopes
                     .last_mut()
                     .expect("scope")
@@ -4553,6 +4562,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 self.b.def_var(var, v);
                 self.b.func.add_debug_var(name.clone(), v, false);
+                self.annotate_debug_var(self.table, sema_ty, stmt.span, false);
                 self.scopes.last_mut().expect("scope").binds.push((
                     name,
                     LocalBind::Val {
@@ -5357,6 +5367,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // s30 debug aux: the rebinding is the name's current
                 // definition from here on.
                 self.b.func.add_debug_var(name.clone(), newval, false);
+                if let Some(sema_ty) = self.expr_sema_ty(place.span) {
+                    self.annotate_debug_var(self.table, sema_ty, place.span, false);
+                }
                 Ok(Flow::Val(None))
             }
             // s25's honest refusal, repaid: a write through a `mut`
@@ -23996,6 +24009,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let var = self.b.declare_var(fty);
         self.b.def_var(var, v);
         self.b.func.add_debug_var(name.clone(), v, false);
+        self.annotate_debug_var(tbl, sema_ty, span, false);
         binds.push((
             name,
             LocalBind::Val {
@@ -25801,6 +25815,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s30 debug aux: the induction variable is the loop-carried
             // block param — `print i` in the body reads the live value.
             self.b.func.add_debug_var(name.clone(), iparam, false);
+            if let Some(pattern) = d.pattern()
+                && let Some(&sema_ty) = self.local_tys.get(&pattern.span)
+            {
+                self.annotate_debug_var(self.table, sema_ty, pattern.span, false);
+            }
             self.scopes.last_mut().expect("scope").binds.push((
                 name,
                 LocalBind::Val {
