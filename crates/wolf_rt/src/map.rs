@@ -348,7 +348,6 @@ pub unsafe extern "C" fn __wolf_rt_map_remove(hdr: i64, kv: i64) -> i64 {
             core::ptr::copy(entry.add(stride), entry, after);
         }
         h.len -= 1;
-        rebuild_index(h);
         1
     }
 }
