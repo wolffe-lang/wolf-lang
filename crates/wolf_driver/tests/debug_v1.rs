@@ -17,10 +17,13 @@ fn fixture(row: &str, src: &str, debug_frame: bool) -> Option<PathBuf> {
         cmd.arg("-g");
     }
     let out = cmd.arg(&entry).arg("-o").arg(&exe).output().unwrap();
-    if lane_exit::environment_refusal(&out, "wolf build") {
+    if !String::from_utf8_lossy(&out.stderr).contains("unknown flag")
+        && lane_exit::environment_refusal(&out, "wolf build")
+    {
         eprintln!("SKIP: {row}: {}", String::from_utf8_lossy(&out.stderr));
         return None;
     }
+    if !out.status.success() { eprintln!("FAIL {row}"); }
     assert!(
         out.status.success(),
         "{row}: compile failed: {}",
@@ -39,17 +42,22 @@ fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&s
     let mut cmd = Command::new(debugger);
     if debugger == "gdb" {
         cmd.args(["--batch", "-ex", "set pagination off", "-ex", "break inspect", "-ex", "run"])
-            .args(["-ex", "ptype value", "-ex", "print value"])
-            .args(["-ex", gdb_expr, "-ex", "bt", "-ex", "continue"]);
+            .args(["-ex", "echo S283_VALUES_BEGIN\\n", "-ex", "ptype value", "-ex", "print value"])
+            .args(["-ex", gdb_expr, "-ex", "echo S283_VALUES_END\\n", "-ex", "bt", "-ex", "continue"]);
     } else {
         cmd.args(["-b", "-o", "breakpoint set --name inspect", "-o", "run"])
-            .args(["-o", "frame variable --show-types value", "-o", lldb_expr])
-            .args(["-o", "bt", "-o", "continue"]);
+            .args(["-o", "script print('S283_VALUES_BEGIN')", "-o", "frame variable --show-types value", "-o", lldb_expr])
+            .args(["-o", "script print('S283_VALUES_END')", "-o", "bt", "-o", "continue"]);
     }
     let out = cmd.arg(&exe).output().unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
     std::fs::write(exe.parent().unwrap().join(format!("{debugger}.txt")), &text).unwrap();
-    let missing: Vec<_> = wants.iter().filter(|s| !text.contains(**s)).collect();
+    // Source-line echoes can contain every expected literal while the debugger
+    // has no variable at all. Compare only the explicitly delimited value output.
+    let values = text.lines().skip_while(|line| line.trim() != "S283_VALUES_BEGIN")
+        .skip(1).take_while(|line| line.trim() != "S283_VALUES_END")
+        .collect::<Vec<_>>().join("\n");
+    let missing: Vec<_> = wants.iter().filter(|s| !values.contains(**s)).collect();
     if !out.status.success() || !missing.is_empty() {
         eprintln!("FAIL {row}");
         panic!("{row}: missing {missing:?}, status {}\n{text}", out.status);
@@ -108,7 +116,7 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
     use object::{Object, ObjectSection};
     let src = "fn inspect(a: int) -> int { a + 1 }\nfn middle(a: int) -> int { inspect(a) + 1 }\nfn main() -> int { middle(3) - 5 }\n";
     for enabled in [false, true] {
-        let row = if enabled { "frame-on" } else { "frame-off" };
+        let row = if enabled { "dwarf-v1-debug-frame" } else { "frame-off" };
         let Some(exe) = fixture(row, src, enabled) else { return };
         let artifact = if cfg!(target_os = "macos") {
             exe.with_extension("dSYM").join("Contents/Resources/DWARF/probe")
