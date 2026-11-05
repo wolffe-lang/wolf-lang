@@ -58,6 +58,7 @@ impl Types {
                     DebugEncoding::Float => dw::DW_ATE_float,
                     DebugEncoding::Boolean => dw::DW_ATE_boolean,
                     DebugEncoding::UnsignedChar => dw::DW_ATE_unsigned_char,
+                    DebugEncoding::Utf => dw::DW_ATE_UTF,
                 };
                 dwarf
                     .unit

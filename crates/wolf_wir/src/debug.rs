@@ -9,6 +9,8 @@ pub type DebugType = Arc<DebugTypeData>;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DebugTypeData {
     pub name: String,
+    /// Distinguish equal-shaped nominals from different source modules.
+    pub identity: Option<(u32, String)>,
     pub size: u64,
     pub kind: DebugKind,
 }
@@ -17,6 +19,7 @@ impl DebugTypeData {
     pub fn new(name: impl Into<String>, size: u64, kind: DebugKind) -> DebugType {
         Arc::new(Self {
             name: name.into(),
+            identity: None,
             size,
             kind,
         })
@@ -30,6 +33,7 @@ pub enum DebugEncoding {
     Float,
     Boolean,
     UnsignedChar,
+    Utf,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
