@@ -116,6 +116,7 @@ pub struct DwarfBuilder {
     fns: Vec<FnRec>,
     frame_info: bool,
     frames: Vec<(CommonInformationEntry, FrameDescriptionEntry)>,
+    error_tags: Vec<String>,
 }
 
 impl DwarfBuilder {
@@ -130,6 +131,7 @@ impl DwarfBuilder {
             fns: Vec::new(),
             frame_info: false,
             frames: Vec::new(),
+            error_tags: Vec::new(),
         }
     }
 
@@ -276,6 +278,7 @@ impl DwarfBuilder {
                 return id;
             }
             let (name, enc, size) = match ty {
+                DebugTy::Source(_) => unreachable!("source types use the structural emitter"),
                 DebugTy::I8 => ("i8", constants::DW_ATE_signed, 1),
                 DebugTy::I16 => ("i16", constants::DW_ATE_signed, 2),
                 DebugTy::I32 => ("i32", constants::DW_ATE_signed, 4),
@@ -297,6 +300,7 @@ impl DwarfBuilder {
             id
         };
 
+        let mut source_types = crate::dwarf_types::Types::new(self.error_tags.clone());
         for f in &self.fns {
             let Some((file_idx, lo)) = f.span else {
                 continue; // synthetic (entry shim): no DIE
@@ -351,7 +355,10 @@ impl DwarfBuilder {
                 die.set(constants::DW_AT_frame_base, AttributeValue::Exprloc(fb));
             }
             for v in &f.vars {
-                let tid = base_ty(&mut dwarf, v.ty);
+                let tid = match &v.ty {
+                    DebugTy::Source(ty) => source_types.emit(&mut dwarf, ty),
+                    ty => base_ty(&mut dwarf, ty.clone()),
+                };
                 let tag = if v.param {
                     constants::DW_TAG_formal_parameter
                 } else {
@@ -413,6 +420,9 @@ impl DwarfBuilder {
 }
 
 impl DebugSink for DwarfBuilder {
+    fn error_tags(&mut self, tags: &[String]) {
+        self.error_tags = tags.to_vec();
+    }
     fn wants_frame_info(&self) -> bool {
         self.frame_info
     }

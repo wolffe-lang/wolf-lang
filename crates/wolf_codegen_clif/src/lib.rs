@@ -416,6 +416,7 @@ impl Backend for ClifBackend {
             .get_function_decl(fid)
             .linkage_name(fid)
             .into_owned();
+        debug.error_tags(&module.tags);
         debug.function(id, &func.name, &symbol);
         // The function's source coordinates (s30): the file plus the
         // earliest span any of its instructions carries (the decl-site
@@ -466,7 +467,7 @@ impl Backend for ClifBackend {
                 let Ok(off) = i32::try_from(off) else {
                     continue;
                 };
-                debug.var(name, *ty, off, *param);
+                debug.var(name, ty.clone(), off, *param);
             }
         }
         if debug.wants_frame_info() {
