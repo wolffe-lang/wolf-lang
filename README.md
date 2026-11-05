@@ -89,6 +89,16 @@ heartbeat every 60 seconds. `--quiet` hides this reporter, not diagnostics;
 These apply to build/run/test compilation, not program execution. See the
 [CLI timing schema](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/cli.md) for nested and parallel elapsed scopes.
 
+### Debugging native programs
+
+Native debug builds describe source scalars, structs, tuples, strings, container
+headers, enums and error unions in DWARF. `wolf build -g program.lu` also emits
+nonallocated `.debug_frame` information for debugger and profiler stack walks.
+Frame pointers remain enabled; this does not introduce runtime unwinding.
+Unknown teardown forms are reported as `CFI_GAP` and left uncovered rather than
+described with an incorrect unwind rule. The release tier does not yet emit
+source debug information and refuses `-g`.
+
 ### Building from source
 
 ```sh
