@@ -387,6 +387,36 @@ mod tests {
         );
     }
     #[test]
+    fn a_wrong_discriminant_offset_cannot_pass_the_byte_witness() {
+        let text = "0x10: DW_TAG_structure_type\n DW_AT_name (\"Choice\")\n DW_AT_byte_size (24)\n0x20:   DW_TAG_variant_part\n DW_AT_discr (0x30)\n0x30:     DW_TAG_member\n DW_AT_type (0x80)\n DW_AT_data_member_location (0)\n0x40:     DW_TAG_variant\n DW_AT_discr_value (0)\n0x50:       DW_TAG_member\n DW_AT_name (\"Number\")\n DW_AT_type (0x90)\n DW_AT_data_member_location (0)\n0x80: DW_TAG_base_type\n DW_AT_name (\"int\")\n DW_AT_byte_size (8)\n DW_AT_encoding (DW_ATE_signed)\n0x90: DW_TAG_structure_type\n DW_AT_name (\"Choice::Number\")\n DW_AT_byte_size (24)\n0xa0:   DW_TAG_member\n DW_AT_name (\"_0\")\n DW_AT_type (0x80)\n DW_AT_data_member_location (8)\n";
+        let dies = parse(text).unwrap();
+        let root = dies[&0x10].clone();
+        let mut schema = Schema {
+            tool: PathBuf::new(),
+            artifact: PathBuf::new(),
+            dir: PathBuf::new(),
+            dies,
+        };
+        let mut bytes = [0u8; 24];
+        bytes[8..16].copy_from_slice(&73i64.to_le_bytes());
+        assert_eq!(
+            active_value(&mut schema, &root, &bytes).unwrap(),
+            "Number 73\n"
+        );
+        schema
+            .dies
+            .get_mut(&0x30)
+            .unwrap()
+            .attrs
+            .insert("data_member_location".into(), "8".into());
+        assert!(
+            active_value(&mut schema, &root, &bytes)
+                .unwrap_err()
+                .contains("discriminator 73")
+        );
+    }
+
+    #[test]
     fn byte_reads_are_bounded_and_signed_by_the_dwarf_type() {
         assert_eq!(integer(&[255], 0, 1, false).unwrap(), 255);
         assert_eq!(integer(&[255], 0, 1, true).unwrap(), -1);
