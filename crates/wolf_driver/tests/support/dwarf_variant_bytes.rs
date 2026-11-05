@@ -321,6 +321,49 @@ fn parameter_schema(exe: &Path) -> Result<(Schema, Die), String> {
     Ok((schema, root))
 }
 
+pub fn runtime_header(row: &str, exe: &Path, layout: wolf_rt::debug_layout::HeaderLayout) {
+    let result = (|| -> Result<(), String> {
+        let (mut schema, pointer) = parameter_schema(exe)?;
+        if pointer.tag != "DW_TAG_pointer_type" {
+            return Err("runtime header value is not a pointer".into());
+        }
+        let header = schema.load(pointer.number("type")?)?;
+        if header.tag != "DW_TAG_structure_type" || header.number("byte_size")? != layout.size {
+            return Err(format!(
+                "DWARF header size differs from sizeof(runtime header): {header:?}; runtime {layout:?}"
+            ));
+        }
+        let members = schema.children(header.offset, "DW_TAG_member");
+        if members.len() != layout.fields.len() {
+            return Err("runtime and DWARF header field counts differ".into());
+        }
+        for field in layout.fields {
+            let member = one(
+                members
+                    .iter()
+                    .filter(|d| d.name() == Some(field.name))
+                    .cloned()
+                    .collect(),
+                field.name,
+            )?;
+            let ty = schema.load(member.number("type")?)?;
+            if member.number("data_member_location")? != field.offset
+                || ty.number("byte_size")? != field.size
+            {
+                return Err(format!(
+                    "DWARF member {member:?} disagrees with runtime field {field:?}"
+                ));
+            }
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("FAIL {row}");
+        panic!("{row}: {error}");
+    }
+    println!("PASS {row}");
+}
+
 pub fn recursive_gap(exe: &Path) {
     let result = (|| -> Result<(), String> {
         let dir = exe.parent().ok_or("fixture directory")?;

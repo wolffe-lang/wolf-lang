@@ -429,3 +429,27 @@ fn dwarf_v1_recursive_nominal_gap_is_explicit() {
         dwarf_variant_bytes::recursive_gap(&exe);
     }
 }
+
+#[test]
+fn dwarf_v1_map_layout_matches_runtime() {
+    let source = "fn inspect(value: Map[int, int]) -> int { value.len }\nfn main() -> int { inspect(Map[int, int]()) }\n";
+    if let Some(exe) = fixture("map-layout", source, false) {
+        dwarf_variant_bytes::runtime_header(
+            "dwarf-v1-map-runtime-layout",
+            &exe,
+            wolf_rt::map::DEBUG_LAYOUT,
+        );
+    }
+}
+
+#[test]
+fn dwarf_v1_list_layout_matches_runtime() {
+    let source = "fn inspect(value: List[int]) -> int { value.len }\nfn main() -> int { inspect(List[int]()) }\n";
+    if let Some(exe) = fixture("list-layout", source, false) {
+        dwarf_variant_bytes::runtime_header(
+            "dwarf-v1-list-runtime-layout",
+            &exe,
+            wolf_rt::list::DEBUG_LAYOUT,
+        );
+    }
+}
