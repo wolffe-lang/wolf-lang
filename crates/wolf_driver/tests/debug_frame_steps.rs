@@ -78,10 +78,32 @@ fn run(cmd: &mut Command, dir: &Path, label: &str, seconds: u64) -> Check<(ExitS
     };
     let text = format!(
         "{}\n{}",
-        fs::read_to_string(stdout).map_err(|e| e.to_string())?,
-        fs::read_to_string(stderr).map_err(|e| e.to_string())?
+        diagnostic_excerpt(&stdout)?,
+        diagnostic_excerpt(&stderr)?
     );
     Ok((status, text))
+}
+
+// Keep full raw artifacts, but never duplicate an unbounded verifier dump in a
+// Rust panic or the lane's gauntlet log. Head and tail retain the verdict.
+fn diagnostic_excerpt(path: &Path) -> Check<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = File::open(path).map_err(|e| e.to_string())?;
+    let size = file.metadata().map_err(|e| e.to_string())?.len();
+    let mut bytes = Vec::new();
+    if size <= 65536 {
+        file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    } else {
+        (&mut file)
+            .take(32768)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        bytes.extend_from_slice(b"\n[diagnostics truncated; full output in raw artifact]\n");
+        file.seek(SeekFrom::End(-32768))
+            .map_err(|e| e.to_string())?;
+        file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Missing executables are real environment skips; a broken installed tool,
@@ -312,8 +334,24 @@ fn ledger(fixture: &Fixture, row: &str) -> Check<bool> {
             ));
         }
     }
+    // Verify our producer's object, not the linked Rust runtime's foreign CUs.
+    // Linked FDE ranges above are still checked against the executable symbols.
+    let object = fixture.dir.join("probe.o");
     let (status, text) = run(
-        Command::new(&dump).arg("--verify").arg(&fixture.dwarf),
+        Command::new(env!("CARGO_BIN_EXE_wolf"))
+            .args(["build", "-g", "--no-cache", "--emit=obj"])
+            .arg(fixture.dir.join("probe.lu"))
+            .arg("-o")
+            .arg(&object),
+        &fixture.dir,
+        "compile-object",
+        180,
+    )?;
+    if !status.success() || text.contains("CFI_GAP") {
+        return Err(format!("object-only debug build: {status}\n{text}"));
+    }
+    let (status, text) = run(
+        Command::new(&dump).arg("--verify").arg(&object),
         &fixture.dir,
         "verify",
         60,
