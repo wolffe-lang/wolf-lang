@@ -266,3 +266,21 @@ size on the child's terminal before exec, so the first frame always sees
 40 columns. Predicted: the stress row red at its own commit and green
 after the fix; the success, dumb, SIGINT and refusal rows unchanged; the
 new head, strict plant and full chain restart from prep.
+
+Release-tier filesystem gap prediction before its test changes:
+The labelled release-tier run at 5121efc2 failed four fs_gaps_lanes
+tests in its linux job: the advisory lock, the fifo, and the two pipe
+rows a clipboard writer feeds. CI's lupin is the published 0.1.59
+archive the pairing names, checked against its release digest, and it
+answers each row `unsupported` by name: `fs_lock`, `fs_mkfifo` and
+`fs_set_nonblock` do not resolve. Of s254's names 0.1.59 mirrors only
+fs_access (wolf-interp#278); the issue's other filesystem gaps remain.
+The 0.1.59 pins kept only the no-follow and handle-record cells because
+the measurement that chose them ran without a container engine: these
+four rows run inside a throwaway container, skipped, and the skip passed
+as a measurement. The four cells join the measured 0.1.59 set with the
+refusals CI recorded. access_rows stays held to the compiler's answer,
+and so do an unlisted release and a development build. Predicted: the
+predicate test red at its own commit and green after the change; the
+four lupin legs pass in the next labelled CI run; no other test moves.
+The local gauntlet still skips these four rows, having no engine.
