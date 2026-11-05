@@ -1,0 +1,98 @@
+# DWARF v1: source types and debug-only call frames
+
+Prepared PR body. Final rebase, whole-compiler records, census and plant are still pending.
+
+Footprint: cross-cutting — source debug metadata, native codegen, runtime layout witnesses, ABI documentation and census tooling.
+
+## Forbidden
+
+No other compiler, debugger, DWARF library or decoder implementation was consulted. The format comes from DWARF 5, the processor ABIs and the Intel/Arm instruction manuals; backend integration uses public API documentation. No runtime unwinding, personality routines, landing pads or new language features are introduced. The CU remains C11 for existing debugger compatibility. There is no Rust-language masquerade, always-live payload union, dynamic-count array, location-list extension or release-tier DWARF claim.
+
+## Inputs, verified
+
+- Development base: `e2757a7bd702d3b21f06396291010d2d1cb6101d`. The final comparison base will be the trunk head after the preceding compiler changes land.
+- `notes/s283-dwarf-v1-prediction.txt` was committed before implementation.
+- `notes/s283-dwarf-oracles.json` records the paired lupin 0.1.59 release/tag/spec pins, archive and executable digests, SDK tools and observed debugger versions. Archive digests and release references were checked twice. The tests use the explicitly supplied oracle, not an arbitrary PATH interpreter.
+- DWARF 5 sections 2, 5, 6.4 and 7; System V AMD64 register conventions; AArch64 DWARF ABI; Intel SDM volume 2 and Arm A64 instruction descriptions.
+- Native value layout, packed container-element layout and raw pointee layout are distinct. The runtime's Rust-only `DEBUG_LAYOUT` constants derive header sizes and offsets with `size_of`/`offset_of`, and debug rows compare the emitted DIEs directly with those facts. They add no C ABI entry point.
+
+## Prediction
+
+Source names, signedness, fields, variants and pointees must survive canonical WIR's machine-shape erasure. Aggregate bindings need real addressable debug spills, not just new type DIEs. Borrowed byte views need their actual pointer/length pieces, without adding executable WIR instructions for metadata.
+
+The native tier keeps frame pointers. Explicit `-g` additionally emits nonallocated `.debug_frame`; no `.eh_frame` is emitted by this change. Producer sequence-point markers establish real instruction boundaries before returns. Backend unwind records describe prologues; the owned decoder proves teardown effects against those save facts. An unrecognized return suffix is reported as `CFI_GAP` and excluded from FDE coverage rather than described with an incorrect rule. Synthetic entry/trampoline frames receive real ranges without invented source coordinates.
+
+The initial size prediction was under 10% growth on scalar-only inputs, hundreds to a few thousand bytes per aggregate-heavy compile unit, and roughly 24–128 frame bytes per function plus CIEs. These remain predictions until the paired census runs. Fixed arrays are absent from wolf's source language and outside this change.
+
+The prepared head still uses the current 72-byte Map header. After the runtime update, the mapping must be 88 bytes: the existing nine words, `index` at 72 as a named opaque map-index pointer, and `index_cap` at 80 as `int`. The allocator's rounded 96-byte charge is not the type's byte size.
+
+## Evidence index
+
+### Tests and tools
+
+- `crates/wolf_driver/tests/debug_v1.rs`: GDB/LLDB source values, every scalar encoding/name/width, typed container contents, packed element strides, borrowed values, runtime-layout ties, paired interpreter observations and explicit gap rows.
+- `crates/wolf_driver/tests/support/dwarf_variant_bytes.rs`: the pinned SDK's DIE output supplies discriminant/payload locations and sizes; LLDB's plain `memory read --binary` supplies bytes from the same dSYM-backed variable. The selected variant and value must agree with lupin. This is not a formatter.
+- `crates/wolf_driver/tests/debug_frame_steps.rs`: exact machine-entry through return, backtrace at every executed owned instruction, stable caller suffixes, nested calls/tail calls, synthetic main and both AL=0/AL>0 variadic paths. Foreign startup is an explicitly unmeasured interval, not claimed as wolf instruction coverage. Independent linked FDE ranges and wolf-only object verification avoid attributing foreign runtime debug defects to this producer.
+- `crates/wolf_backend/src/frame_decode.rs` and native frame-state unit rows: bounded decoding, correct instruction-end transitions, malformed/unknown forms, save-address disagreement and return-derived CFA consistency.
+- `crates/wolf_wir/src/midend/compact.rs`: split debug pieces survive value renumbering and disappear if a required piece is removed.
+- `crates/wolf_driver/examples/dwarf_sections.rs` and `ci/dwarf-census.py`: per-section sizes/digests, byte-and-relocation determinism, raw dwarfdump SHA256s and observed vocabulary over selected positive corpus inputs. Compilation refusals are reported as not measured; a head-only refusal or inconsistent repeat is a failure. The JSON records the full candidate count and any explicit shard selection.
+
+The ten original source-type rows failed at `b9e4c072`. All five unsigned boundary rows ran and failed by name at `71474842`, with no compile-error skips. The per-instruction control at `c7e8710f` failed at `inspect`'s RET when the prologue-only FDE dropped its caller. These are development controls, not the final plant.
+
+Targeted Linux evidence at `41a0727f` passed lint, actual anchor regeneration, both-direction anchor comparison, build, runtime layout assertions, backend/source/frame/piece tests and all debug-value/instruction/help rows. Anchor regeneration retained all 724 keys, added none, removed none, changed no owners and produced no tracked generated-file diff. This is not a final rebased whole-compiler record.
+
+The Mac take at `1ba97fbe` passed source values, pinned-interpreter comparisons, byte-directed variant observations, ordinary per-instruction unwinding, synthetic-main coverage, FDE verification and CLI checks. Variadic ABI rows are unsupported on that platform and are explicit skips, not measurements. Later scalar-DIE and runtime-layout checks still require their Mac retake.
+
+### Explicit presentation and fidelity gaps
+
+| Gap | Asserted observation | Independent value coverage |
+|---|---|---|
+| `KNOWN-GAP lldb-variant-part`, payload enum | `(Choice) value = {}` | SDK DIE-directed bytes select `Number 73`; lupin agrees |
+| `KNOWN-GAP lldb-variant-part`, error union | `(int ! {Bad(int)}) value = {}` | SDK DIE-directed bytes select `Bad 61`; lupin agrees |
+| `KNOWN-GAP lldb-variant-part`, optional | `(int ! {none}) value = {}` | SDK DIE-directed bytes select `none`; lupin agrees |
+| `KNOWN-GAP dwarf-recursive-nominal` | Named incomplete `opaque recursive Node` declaration | Complete recursive DIE cycles are not claimed |
+
+The known-gap assertions fail if presentation changes. They are not counted as native rendering passes. Byte integers are displayed numerically with an ordinary widening expression that preserves the emitted signedness, not a forced unsigned reinterpretation. The release emitter, location lists and inlined frames remain follow-on work.
+
+### Reader contract for sniff
+
+This is the producer contract; the final census will attach the observed vocabulary and fixture dump digests.
+
+| Surface | Reader requirements |
+|---|---|
+| Unit/sections | DWARF32 CU version 4, little endian, 8-byte addresses; `.debug_info`, `.debug_abbrev`, `.debug_line`, optional `.debug_frame`; Mach-O uses `__debug_*` in `__DWARF`/dSYM |
+| Forms | `DW_FORM_addr`, `string`, `data1`, `data2`, `udata`, `sdata`, `ref4`, `sec_offset`, `exprloc`, `flag` |
+| CU/function attributes | producer/name/comp_dir/language/stmt_list; low_pc and constant high_pc; decl_file/decl_line; frame_base; artificial synthetic ranges without fabricated declarations |
+| Variables/locations | formal_parameter and variable; name/type/location; frame base `DW_OP_reg6` or `DW_OP_reg29`, variable location `DW_OP_fbreg`; whole-function spills, not location lists |
+| Scalars | distinct wolf names, byte_size and signed/unsigned/boolean/float/unsigned_char/UTF encoding; never infer signedness only from width |
+| Structures and tuples | structure_type/member, type references, constant data_member_location and byte_size; `_0`, `_1`, … tuple fields |
+| Indirection/headers | pointer_type/reference_type; named incomplete structure declarations for opaque runtime objects; typed data pointers and separate count/stride fields, never a fabricated dynamic array |
+| Enumerations | enumeration_type/enumerator with underlying integer type and signed const_value |
+| Variants | structure_type owns variant_part; discr refers to its discriminant member; variant discr_value selects conditional payload members; a variant without a selector is the default case. Interpret only the active typed view |
+| CFI | CIE/FDEs in `.debug_frame`, not `.eh_frame`; production CIE version 1, absolute initial addresses and CIE offsets. CFA register/offset rules; saved-register offset/value-offset/same-value/restore rules; advance_loc families and nop padding; AArch64 negate_ra_state when authentication requires it |
+| Registers | AMD64 RSP=7, RBP=6, return address=16. AArch64 SP=31, FP=29, LR=30; these are 64-bit architectural values even if a dump spells WSP/W29/W30 |
+| Coverage holes | Multiple FDE ranges are possible; uncovered teardown intervals require a fallback, not reuse of the preceding function-wide rule |
+| Presentation | LLDB under this C-language CU does not present variant parts. sniff S5 renders the active variant itself from the DWARF; it must not imitate the empty LLDB presentation |
+
+### Final records still pending
+
+- Paired corpus size totals, measured/refused counts and largest increases.
+- Same-input `.debug_*` bytes and canonical relocation identity, with/without `-g`.
+- Fixture llvm-dwarfdump digests and observed forms/opcodes.
+- Final exact-head full gauntlet, differential and corpus records.
+- One final-head, one-file, one-hunk discriminant-offset plant, red by name at the Mac byte witness.
+
+## Done-when
+
+- [x] Prediction committed before implementation; clean-room sources retained.
+- [x] Source types and aggregate/split debug locations implemented.
+- [x] Debug-only CFI, fail-closed teardown coverage, instruction-level witnesses implemented.
+- [x] Named LLDB/recursive gaps separated from value passes.
+- [x] Paired lupin 0.1.59 values observed; scalar encodings and runtime layout ties checked on Linux.
+- [x] Anchor regeneration checked in both directions without key loss.
+- [ ] Rebase once after the preceding two compiler changes merge; update Map to the actual 88-byte runtime header and its tie assertions.
+- [ ] Final census, digest, determinism, Mac retakes and whole-compiler gates.
+- [ ] Final-head discriminant-offset plant and record.
+- [ ] Final head pushed; PR opened with this body; run id read once; one lane audit.
+
+Commit and final-record references will be filled after the rebase. No final acceptance is claimed by this prepared body.
