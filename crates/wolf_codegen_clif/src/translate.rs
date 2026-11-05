@@ -1007,8 +1007,16 @@ impl<'a, 'b> Tx<'a, 'b> {
         let mut by_name: HashMap<&str, usize> = HashMap::new();
         for dv in &self.f.debug_vars {
             let ty = self.f.value_ty(dv.val);
-            let Some(dty) = debug_ty(self.m, ty) else {
-                continue; // aggregate/token-shaped: no scalar slot at v0
+            let Some(dty) = dv
+                .ty
+                .clone()
+                .map(DebugTy::Source)
+                .or_else(|| debug_ty(self.m, ty))
+            else {
+                continue; // no source description for this non-scalar binding
+            };
+            let Some(layout) = layout::layout_of(&self.m.types, ty) else {
+                continue;
             };
             let idx = match by_name.get(dv.name.as_str()) {
                 Some(&i) => {
@@ -1023,8 +1031,8 @@ impl<'a, 'b> Tx<'a, 'b> {
                 None => {
                     let slot = self.b.create_sized_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
-                        8,
-                        3,
+                        layout.size.max(1),
+                        layout.align.trailing_zeros() as u8,
                     ));
                     self.debug_slots
                         .push((dv.name.clone(), dty, slot, dv.param));
@@ -1043,13 +1051,24 @@ impl<'a, 'b> Tx<'a, 'b> {
         let Some(idxs) = self.debug_names.get(&wv).cloned() else {
             return;
         };
-        let Some(&Repr::Scalar(cv)) = self.vals.get(&wv) else {
+        let Some(&repr) = self.vals.get(&wv) else {
             return;
         };
         for i in idxs {
             let slot = self.debug_slots[i].2;
             let addr = self.b.ins().stack_addr(ctypes::I64, slot, 0);
-            self.b.ins().store(MemFlagsData::trusted(), cv, addr, 0);
+            match repr {
+                Repr::Scalar(cv) => {
+                    self.b.ins().store(MemFlagsData::trusted(), cv, addr, 0);
+                }
+                Repr::Addr(src) => {
+                    let size = layout::layout_of(&self.m.types, self.f.value_ty(wv))
+                        .expect("addressable debug value has a layout")
+                        .size;
+                    self.copy_bytes(addr, src, size);
+                }
+                Repr::Token => {}
+            }
         }
     }
 

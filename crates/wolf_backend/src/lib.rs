@@ -18,6 +18,7 @@
 
 pub mod abi;
 pub mod dwarf;
+mod dwarf_types;
 pub mod layout;
 pub mod read_lend;
 pub mod target;
@@ -113,8 +114,10 @@ pub enum DwarfFidelity {
 /// closed v0 set the type-DIE mapping covers. Signedness is an op
 /// property in WIR, not a type property, so integers report as signed
 /// wolf ints at v0 (honest, documented; s58 refines).
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum DebugTy {
+    /// Source type retained before machine-shape erasure.
+    Source(wolf_wir::debug::DebugType),
     I8,
     I16,
     I32,
@@ -134,6 +137,8 @@ pub enum DebugTy {
 /// [`DebugSink::function_size`] exactly once. All methods default to
 /// no-ops so a sink implements only what its fidelity tier needs.
 pub trait DebugSink {
+    /// The completed module's runtime error-tag namespace.
+    fn error_tags(&mut self, _tags: &[String]) {}
     /// Whether this compilation explicitly requested debug-only CFI (`-g`).
     fn wants_frame_info(&self) -> bool {
         false
