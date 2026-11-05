@@ -41,6 +41,8 @@ The ten original source-type rows failed at `b9e4c072`. All five unsigned bounda
 
 Targeted Linux evidence at `41a0727f` passed lint, actual anchor regeneration, both-direction anchor comparison, build, runtime layout assertions, backend/source/frame/piece tests and all debug-value/instruction/help rows. Anchor regeneration retained all 724 keys, added none, removed none, changed no owners and produced no tracked generated-file diff. This is not a final rebased whole-compiler record.
 
+The prepared-tooling take at `25abd765` also passed all targeted steps and a two-case census smoke. This is **not the full 781-candidate census**. Both cases were measured and byte/relocation-identical across repeats: baseline 742 debug bytes, typed head 926, head with `-g` 1273. The smoke reported two uncovered `main` teardown suffixes (not CFI passes): `comptime/derive_eq.lu` at 127..141 and `comptime/fold_reaches_lane.lu` at 158..182, both with unknown SP before a restore. Their raw dump SHA256s were `6e2650e424a9b103e4944134d4af0af5d759db552ceb847ed709391914834840` and `7e4778972a39ce9d9e7e86d0a82941e1178a6f082833507dc4dc588d2bda6fdb`. The final census must retain the refused-case and CFI-gap counts alongside its size totals.
+
 The Mac take at `1ba97fbe` passed source values, pinned-interpreter comparisons, byte-directed variant observations, ordinary per-instruction unwinding, synthetic-main coverage, FDE verification and CLI checks. Variadic ABI rows are unsupported on that platform and are explicit skips, not measurements. Later scalar-DIE and runtime-layout checks still require their Mac retake.
 
 ### Explicit presentation and fidelity gaps
@@ -61,7 +63,7 @@ This is the producer contract; the final census will attach the observed vocabul
 | Surface | Reader requirements |
 |---|---|
 | Unit/sections | DWARF32 CU version 4, little endian, 8-byte addresses; `.debug_info`, `.debug_abbrev`, `.debug_line`, optional `.debug_frame`; Mach-O uses `__debug_*` in `__DWARF`/dSYM |
-| Forms | `DW_FORM_addr`, `string`, `data1`, `data2`, `udata`, `sdata`, `ref4`, `sec_offset`, `exprloc`, `flag` |
+| Forms | `DW_FORM_addr`, `string`, `udata`, `sdata`, `ref4`, `sec_offset`, `exprloc`, `flag` |
 | CU/function attributes | producer/name/comp_dir/language/stmt_list; low_pc and constant high_pc; decl_file/decl_line; frame_base; artificial synthetic ranges without fabricated declarations |
 | Variables/locations | formal_parameter and variable; name/type/location; frame base `DW_OP_reg6` or `DW_OP_reg29`, variable location `DW_OP_fbreg`; whole-function spills, not location lists |
 | Scalars | distinct wolf names, byte_size and signed/unsigned/boolean/float/unsigned_char/UTF encoding; never infer signedness only from width |

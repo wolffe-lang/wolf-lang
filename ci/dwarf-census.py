@@ -80,7 +80,7 @@ def build(binary, entry, output, cwd, debug, timeout):
         argv.append("-g")
     argv += [str(entry), "-o", str(output / "object.o")]
     code, _, stderr = command(argv, cwd, output, "compile", timeout)
-    objects = sorted(output.glob("*.o"))
+    objects = sorted(p for p in output.glob("*.o") if ".asm-" not in p.name)
     gaps = [line for line in stderr.read_text(errors="replace").splitlines()
             if line.startswith("CFI_GAP ")]
     return code, objects, gaps
@@ -201,6 +201,8 @@ def main():
             manifest["paired_head_bytes"] += totals["head-a"]
             manifest["paired_head_g_bytes"] += totals["head-g-a"]
             manifest["cfi_gap_count"] += len(attempts["head-g-a"]["cfi_gaps"])
+            for gap in attempts["head-g-a"]["cfi_gaps"]:
+                print(f"KNOWN-GAP cfi-teardown source={relative} {gap}", flush=True)
             print(f"PASS dwarf-census {relative} baseline={totals['baseline']} head={totals['head-a']} head-g={totals['head-g-a']}", flush=True)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             row["status"] = "failed"
