@@ -202,3 +202,19 @@ fn there_are_completions_for_three_shells() {
         "a missing shell name is refused"
     );
 }
+
+#[test]
+fn debug_frame_flag_is_documented_and_refuses_release() {
+    let help = stdout(&["build", "--help"]);
+    assert!(
+        help.contains("[-g]") && help.contains(".debug_frame"),
+        "{help}"
+    );
+    assert!(stdout(&["run", "--help"]).contains("[-g]"));
+    let out = run(&["build", "--release", "-g", "unused.lu"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains("-g source debug information is not implemented for the release tier")
+    );
+}
