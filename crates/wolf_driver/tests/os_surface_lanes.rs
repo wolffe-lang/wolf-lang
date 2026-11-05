@@ -58,7 +58,7 @@ fn report(line: &str) {
 
 /// The pairing at this lane, which predates the mirror of the five names
 /// (wolf-interp#315): its measured answers are pinned per row (`Lupin`).
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.59"];
 
 #[derive(Debug)]
 struct Obs {
