@@ -45,6 +45,7 @@
 //! through `wolf_backend::layout` — locals stay addressable (no SROA
 //! heroics; s30's debugger story depends on it).
 
+mod debug_frame;
 mod dense;
 mod translate;
 
@@ -186,6 +187,11 @@ impl ClifBackend {
         // work even where .eh_frame coverage is thin.
         flags
             .set("preserve_frame_pointers", "true")
+            .map_err(|e| BackendError::Internal(e.to_string()))?;
+        // Actual block boundaries constrain return decoding; metadata only,
+        // never a machine-code optimization or an inferred byte pattern.
+        flags
+            .set("machine_code_cfg_info", "true")
             .map_err(|e| BackendError::Internal(e.to_string()))?;
         let isa = cranelift_codegen::isa::lookup(triple)
             .map_err(|e| BackendError::Internal(e.to_string()))?
@@ -418,6 +424,13 @@ impl Backend for ClifBackend {
             .into_owned();
         debug.error_tags(&module.tags);
         debug.function(id, &func.name, &symbol);
+        debug.frame_base_register(
+            if self.module.isa().triple().architecture == target_lexicon::Architecture::X86_64 {
+                6
+            } else {
+                29
+            },
+        );
         // The function's source coordinates (s30): the file plus the
         // earliest span any of its instructions carries (the decl-site
         // span lowering seeds the cursor with). Synthetic functions
@@ -432,6 +445,11 @@ impl Backend for ClifBackend {
                 debug.function_span(file, sp.lo, sp.hi);
             }
         }
+        let return_count = if debug.wants_frame_info() {
+            debug_frame::mark_returns(&mut ctx)
+        } else {
+            0
+        };
         self.clif_texts
             .push((func.name.clone(), ctx.func.display().to_string()));
         self.module
@@ -471,25 +489,14 @@ impl Backend for ClifBackend {
             }
         }
         if debug.wants_frame_info() {
-            use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
-            let isa = self.module.isa();
-            let cie = isa
-                .create_systemv_cie()
-                .ok_or_else(|| BackendError::Unsupported("debug CFI for this target".into()))?;
-            let unwind = isa
-                .emit_unwind_info(compiled, UnwindInfoKind::SystemV)
-                .map_err(|e| BackendError::Internal(format!("{}: {e}", func.name)))?;
-            match unwind {
-                Some(UnwindInfo::SystemV(info)) => {
-                    debug.frame_info(cie, info.to_fde(wolf_backend::dwarf::function_address(id)));
-                }
-                _ => {
-                    return Err(BackendError::Internal(format!(
-                        "{}: missing backend frame information for -g",
-                        func.name
-                    )));
-                }
-            }
+            debug_frame::emit(
+                compiled,
+                self.module.isa(),
+                id,
+                &func.name,
+                return_count,
+                debug,
+            )?;
         }
         debug.function_size(compiled.buffer.total_size());
         Ok(())
