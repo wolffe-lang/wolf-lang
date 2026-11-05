@@ -65,10 +65,11 @@ fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&s
             "ptype value",
             "-ex",
             "print value",
-        ])
-        .args([
-            "-ex",
-            gdb_expr,
+        ]);
+        for expression in gdb_expr.lines() {
+            cmd.args(["-ex", expression]);
+        }
+        cmd.args([
             "-ex",
             "echo S283_VALUES_END\\n",
             "-ex",
@@ -83,17 +84,18 @@ fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&s
                 "script print('S283_VALUES_BEGIN')",
                 "-o",
                 "frame variable --show-types value",
-                "-o",
-                lldb_expr,
-            ])
-            .args([
-                "-o",
-                "script print('S283_VALUES_END')",
-                "-o",
-                "bt",
-                "-o",
-                "continue",
             ]);
+        for expression in lldb_expr.lines() {
+            cmd.args(["-o", expression]);
+        }
+        cmd.args([
+            "-o",
+            "script print('S283_VALUES_END')",
+            "-o",
+            "bt",
+            "-o",
+            "continue",
+        ]);
     }
     let out = cmd.arg(&exe).output().unwrap();
     let text = format!(
@@ -148,8 +150,8 @@ fn dwarf_v1_str() {
         "dwarf-v1-str",
         "fn inspect(value: str) -> int { value.len - 4 }\nfn main() -> int { inspect(\"wolf\") }\n",
         "print *value.data@4",
-        "memory read --size 1 --count 4 --format c `value.data`",
-        &["len = 4", "data"],
+        "expression -- *(char (*)[4])value.data",
+        &["len = 4", "data", "wolf"],
     );
 }
 
@@ -158,9 +160,9 @@ fn dwarf_v1_list() {
     transcript(
         "dwarf-v1-list",
         "fn inspect(value: List[int]) -> int { value.len - 2 }\nfn main() -> int { var xs = List[int]()\n(mut xs).push(31)\n(mut xs).push(47)\ninspect(xs) }\n",
-        "print *value",
-        "frame variable --ptr-depth 1 value",
-        &["len = 2", "elem = 8", "region"],
+        "print *value\nprint value->data[0]\nprint value->data[1]",
+        "frame variable --ptr-depth 1 value\nframe variable value->data[0]\nframe variable value->data[1]",
+        &["len = 2", "elem = 8", "region", "= 31", "= 47"],
     );
 }
 
@@ -169,9 +171,16 @@ fn dwarf_v1_map() {
     transcript(
         "dwarf-v1-map",
         "fn inspect(value: Map[int, int]) -> int { value.len - 1 }\nfn main() -> int { var xs = Map[int, int]()\nxs[3] = 47\ninspect(xs) }\n",
-        "print *value",
-        "frame variable --ptr-depth 1 value",
-        &["len = 1", "key_size = 8", "val_off = 8", "val_size = 8"],
+        "print *value\nprint value->data[0]",
+        "frame variable --ptr-depth 1 value\nframe variable value->data[0]",
+        &[
+            "len = 1",
+            "key_size = 8",
+            "val_off = 8",
+            "val_size = 8",
+            "key = 3",
+            "value = 47",
+        ],
     );
 }
 
@@ -255,4 +264,78 @@ fn dwarf_v1_debug_frame_is_opt_in_and_nonallocated() {
             assert_eq!(sh_flags & u64::from(object::elf::SHF_ALLOC), 0);
         }
     }
+}
+
+#[test]
+fn dwarf_v1_unsigned_boundaries() {
+    for (ty, value) in [
+        ("u8", "255"),
+        ("u16", "65535"),
+        ("u32", "4294967295"),
+        ("u64", "18446744073709551615"),
+        ("uint", "18446744073709551615"),
+    ] {
+        let source = format!(
+            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ inspect({value} as {ty}) }}\n"
+        );
+        transcript(
+            &format!("dwarf-v1-{ty}-boundary"),
+            &source,
+            "print value",
+            "frame variable value",
+            &[&format!("= {value}")],
+        );
+    }
+}
+
+#[test]
+fn dwarf_v1_scalar_values() {
+    for (ty, value, expected) in [
+        ("i8", "(0 - 128) as i8", "-128"),
+        ("i16", "(0 - 32768) as i16", "-32768"),
+        ("i32", "(0 - 2147483648) as i32", "-2147483648"),
+        (
+            "i64",
+            "(0 - 9223372036854775807 - 1) as i64",
+            "-9223372036854775808",
+        ),
+        ("int", "0 - 9223372036854775807 - 1", "-9223372036854775808"),
+        ("bool", "true", "true"),
+        ("f32", "1.25 as f32", "1.25"),
+        ("f64", "1.25", "1.25"),
+        ("byte", "255 as byte", "255"),
+    ] {
+        let source = format!(
+            "fn inspect(value: {ty}) -> int {{ 0 }}\nfn main() -> int {{ inspect({value}) }}\n"
+        );
+        transcript(
+            &format!("dwarf-v1-{ty}-value"),
+            &source,
+            "print value",
+            "frame variable value",
+            &[&format!("= {expected}")],
+        );
+    }
+}
+
+#[test]
+fn dwarf_v1_borrowed_packed_value() {
+    transcript(
+        "dwarf-v1-borrowed-value",
+        "struct Pair { small: i8, wide: int }\nfn inspect(mut value: Pair) -> int { value.wide - 42 }\nfn main() -> int { var p = Pair { small: 7 as i8, wide: 42 }\ninspect(mut p) }\n",
+        "print value.wide",
+        "frame variable value.wide",
+        &["wide = 42"],
+    );
+}
+
+#[test]
+fn dwarf_v1_packed_list_element() {
+    transcript(
+        "dwarf-v1-packed-element",
+        "struct Pair { small: i8, wide: int }\nfn inspect(value: List[Pair]) -> int { value.len - 2 }\nfn main() -> int { var xs = List[Pair]()\n(mut xs).push(Pair { small: 7 as i8, wide: 42 })\n(mut xs).push(Pair { small: 8 as i8, wide: 97 })\ninspect(xs) }\n",
+        "print value->data[1]",
+        "frame variable value->data[1]",
+        &["small = 8", "wide = 97"],
+    );
 }
