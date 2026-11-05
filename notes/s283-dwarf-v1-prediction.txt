@@ -1,0 +1,79 @@
+s283 — DWARF v1 prediction (before implementation)
+
+Base: e2757a7bd702d3b21f06396291010d2d1cb6101d
+
+Scope
+The debug tier retains source types and emits aggregate variable locations.
+Explicit -g additionally requests non-allocated .debug_frame. No .eh_frame,
+personality, landing pad or runtime unwind is introduced; nounwind remains.
+Release-tier debug information, location lists and inlined frames are follow-ons.
+Fixed arrays are not a source-language feature and are outside this change.
+
+Type mapping and predicted observations
+- Scalars retain their source signedness and names where metadata is available.
+- Structs: DW_TAG_structure_type, size and named DW_TAG_member children with
+  native-layout offsets. A probe with fields small=7 and wide=42 must print
+  both values; ptype must name the fields and their types.
+- Tuples: structures with positional member names _0, _1, etc. A probe (11,22)
+  must expose those values without confusing its type with an equal-shaped
+  nominal struct.
+- str: a 16-byte structure with data (pointer to an unsigned character byte)
+  at 0 and len at 8. A bounded text read must show exactly the bytes of
+  "wolf", length 4. A C-string renderer is not authoritative: str is not
+  NUL-terminated and can contain embedded NUL bytes.
+- List[T]: a pointer to the native 40-byte header {data,len,cap,elem,region},
+  offsets 0,8,16,24,32. data points to T in its actual element-storage layout;
+  region is an explicitly opaque pointer. Probe [31,47] must have len=2,
+  elem=8 and those data elements. No dynamic-count array type is emitted.
+- Map[K,V]: a pointer to the 72-byte native header, the List prefix followed
+  by key_kind,key_size,val_off,val_size at 40,48,56,64. The entries have the
+  runtime's flat tuple layout; runtime region internals remain opaque.
+- Payload-free enums: DW_TAG_enumeration_type with the 8-byte underlying
+  integer and declared DW_TAG_enumerator values. Probe Color.Green must
+  print its named enumerator, not an unlabelled integer.
+- Payload enums: structure plus DW_TAG_variant_part; DW_AT_discr references
+  its tag member, each DW_TAG_variant has a discriminant value and its own
+  typed payload members at the native position-unified slot offsets.
+  Probe Choice.Number(73) must expose 73 and not read inactive payload bytes.
+- Error unions and optionals: variant parts over the real tag and payload
+  storage; zero is the success case, error tags use their module-interned
+  values. A T ! {none} is the optional shape, not a new builtin type.
+- Pointers and borrowed parameters: typed pointer/reference entries retaining
+  pointees and the actual indirect storage location; opaque runtime objects
+  remain named as opaque, never fabricated structures.
+
+Debugger prediction
+GDB ptype/print and LLDB frame variable should agree on every supported
+structure/header/scalar value above. Variant support differs among debugger
+versions: the transcript rows will expose any missing renderer support rather
+than replace a variant part with an always-live union or assert invented output.
+A three-function backtrace must retain all wolf frames. Native frame pointers
+remain enabled, so that transcript alone is not evidence that CFI is correct;
+llvm-dwarfdump and decoded FDE rules must independently cover entry, prologue,
+body and epilogues, including synthetic frames. No runtime execution unwinds.
+
+Size and determinism prediction
+The scalar-only corpus should have small type-info growth (under 10%);
+aggregate-heavy probes should grow by hundreds to a few thousand bytes per
+compile unit, with type interning preventing per-binding type duplication.
+-g .debug_frame should add roughly 24–128 bytes per function plus shared CIEs.
+These are predictions, not measurements. Measure .debug_* bytes on matched
+corpus inputs, report totals and largest increases, and compare two identical
+builds byte for byte. A different compilation directory is not identical input.
+
+Acceptance sequence
+Commit failing source-type and CFI rows before fixes. Preserve semantic metadata
+on DebugVarData before WIR shape erasure, and carry it through WIR transforms.
+Use actual backend frame information, never guessed instruction offsets. Test
+all native-layout and packed-element distinctions. Amend the no-runtime-unwind
+spec anchor without changing its id; verify anchor key sets in both directions.
+After the preceding queued compiler changes land, rebase once, then take final
+local gauntlet/differ/corpus, debugger, determinism and size records. Plant one
+wrong member offset in one hunk on a separate branch at the final green head;
+require a named red value row. No final acceptance is claimed by this prediction.
+
+Sources
+DWARF 5 sections 2, 5, 6.4 and 7; System V AMD64 psABI register and frame
+conventions; AArch64 DWARF ABI. The compiler's native layout and runtime header
+contracts determine sizes and offsets. Dependency write APIs are interfaces,
+not sources for the format design.
