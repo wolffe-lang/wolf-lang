@@ -6,6 +6,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+fn pins() -> serde_json::Value {
+    serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../notes/s283-dwarf-oracles.json"
+    )))
+    .expect("oracle manifest")
+}
+
 #[derive(Clone, Debug)]
 struct Die {
     offset: u64,
@@ -246,7 +254,25 @@ fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String>
             .trim(),
         ),
     };
-    output(Command::new(&tool).arg("--version"), dir, "sdk-version")?;
+    let pin = pins();
+    let version = output(Command::new(&tool).arg("--version"), dir, "sdk-version")?;
+    if !version.contains(
+        pin["macos_aarch64"]["sdk_dwarfdump_version"]
+            .as_str()
+            .ok_or("SDK version pin")?,
+    ) {
+        return Err(format!(
+            "SDK dwarfdump differs from pinned oracle: {version}"
+        ));
+    }
+    let version = output(Command::new("lldb").arg("--version"), dir, "lldb-version")?;
+    if !version.contains(
+        pin["macos_aarch64"]["lldb_version"]
+            .as_str()
+            .ok_or("LLDB version pin")?,
+    ) {
+        return Err(format!("LLDB differs from known-gap oracle: {version}"));
+    }
     let artifact = exe
         .with_extension("dSYM")
         .join("Contents/Resources/DWARF")
@@ -357,7 +383,9 @@ pub fn reference(row: &str, dir: &Path, actual: &str) -> Result<bool, String> {
         "lupin-variant",
     )?;
     let record: serde_json::Value = serde_json::from_str(&record).map_err(|e| e.to_string())?;
-    if record["impl_version"].as_str() != Some("0.1.59") || record["verdict"] != "exit(0)" {
+    if record["impl_version"].as_str() != pins()["lupin"]["version"].as_str()
+        || record["verdict"] != "exit(0)"
+    {
         return Err(format!(
             "paired oracle did not execute this fixture: {record}"
         ));
