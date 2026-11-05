@@ -134,6 +134,19 @@ pub enum DebugTy {
 /// [`DebugSink::function_size`] exactly once. All methods default to
 /// no-ops so a sink implements only what its fidelity tier needs.
 pub trait DebugSink {
+    /// Whether this compilation explicitly requested debug-only CFI (`-g`).
+    fn wants_frame_info(&self) -> bool {
+        false
+    }
+    /// Actual backend unwind rules for the current function. These are written
+    /// only to non-allocated `.debug_frame`, never runtime unwind tables.
+    fn frame_info(
+        &mut self,
+        _cie: gimli::write::CommonInformationEntry,
+        _fde: gimli::write::FrameDescriptionEntry,
+    ) {
+    }
+
     /// A function's definition begins (name is the pre-mangling WIR
     /// name; `symbol` the linker-visible one).
     fn function(&mut self, _func: FuncId, _name: &str, _symbol: &str) {}
@@ -261,6 +274,16 @@ pub trait Backend {
         Err(BackendError::Unsupported(
             "module state on this backend".to_string(),
         ))
+    }
+
+    /// Finish debug facts for backend-owned synthetic functions (for example,
+    /// C variadic entry trampolines), after all WIR functions are defined.
+    fn finish_debug(
+        &mut self,
+        _module: &Module,
+        _debug: &mut dyn DebugSink,
+    ) -> Result<(), BackendError> {
+        Ok(())
     }
 
     /// Hand finished DWARF sections (built by the caller's

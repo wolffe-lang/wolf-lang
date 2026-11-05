@@ -9,6 +9,9 @@ pub struct Code {
     pub bytes: Vec<u8>,
     /// Offset of the rel32 displacement; the ELF relocation addend is -4.
     pub branch_offset: u32,
+    /// Frame-state transitions at the exact offsets where this encoder emits
+    /// stack changes. Consumers must not infer these from instruction lengths.
+    pub frame_instructions: Vec<(u32, gimli::write::CallFrameInstruction)>,
 }
 
 const GP: [u8; 6] = [7, 6, 2, 1, 8, 9];
@@ -41,7 +44,14 @@ pub fn incoming(frame: &Frame, start: Start) -> Code {
         frame.save_offset + super::SAVE_AREA_SIZE + 8
     );
     let stack_bytes = frame.frame_bytes - 8;
-    let mut bytes = vec![0x55, 0x48, 0x89, 0xe5]; // push rbp; mov rbp, rsp
+    use gimli::{Register, write::CallFrameInstruction as Cfi};
+    let mut bytes = vec![0x55]; // push rbp
+    let mut frame_instructions = vec![
+        (bytes.len() as u32, Cfi::CfaOffset(16)),
+        (bytes.len() as u32, Cfi::Offset(Register(6), -16)),
+    ];
+    bytes.extend([0x48, 0x89, 0xe5]); // mov rbp, rsp
+    frame_instructions.push((bytes.len() as u32, Cfi::CfaRegister(Register(6))));
     bytes.extend([0x48, 0x81, 0xec]); // sub rsp, imm32
     disp(&mut bytes, stack_bytes);
     for (i, reg) in GP.iter().enumerate() {
@@ -90,10 +100,14 @@ pub fn incoming(frame: &Frame, start: Start) -> Code {
     disp(&mut bytes, 0);
     bytes.extend([0x48, 0x81, 0xc4]); // add rsp, imm32
     disp(&mut bytes, stack_bytes);
-    bytes.extend([0x5d, 0xc3]); // pop rbp; ret
+    bytes.push(0x5d); // pop rbp
+    frame_instructions.push((bytes.len() as u32, Cfi::Cfa(Register(7), 8)));
+    frame_instructions.push((bytes.len() as u32, Cfi::Restore(Register(6))));
+    bytes.push(0xc3); // ret
     Code {
         bytes,
         branch_offset,
+        frame_instructions,
     }
 }
 
@@ -108,6 +122,7 @@ pub fn outgoing(vector_registers: u8) -> Code {
     Code {
         bytes,
         branch_offset,
+        frame_instructions: Vec::new(), // tail jump: entry CFA stays unchanged
     }
 }
 
