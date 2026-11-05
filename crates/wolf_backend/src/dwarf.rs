@@ -34,6 +34,9 @@
 use std::collections::HashMap;
 
 use gimli::constants;
+// Backend adapters can use these interface types without a second writer dependency.
+pub use gimli::write::{CommonInformationEntry, FrameDescriptionEntry};
+
 use gimli::write::{
     Address, AttributeValue, DwarfUnit, EndianVec, Expression, LineProgram, LineString, Relocation,
     RelocationTarget, Sections, UnitEntryId,
@@ -43,6 +46,14 @@ use gimli::{Encoding, Format, LittleEndian};
 use crate::{DebugReloc, DebugRelocTarget, DebugSection, DebugSink, DebugTy};
 use wolf_wir::entity::EntityRef;
 use wolf_wir::ir::FuncId;
+
+/// Relocatable start address shared with backend-generated frame rules.
+pub fn function_address(id: FuncId) -> Address {
+    Address::Symbol {
+        symbol: id.index(),
+        addend: 0,
+    }
+}
 
 /// One source file the builder can map byte offsets into: display
 /// path plus its line-start table (byte offset of each line's first
@@ -103,6 +114,8 @@ pub struct DwarfBuilder {
     comp_dir: String,
     producer: String,
     fns: Vec<FnRec>,
+    frame_info: bool,
+    frames: Vec<(CommonInformationEntry, FrameDescriptionEntry)>,
 }
 
 impl DwarfBuilder {
@@ -115,7 +128,15 @@ impl DwarfBuilder {
             comp_dir: comp_dir.into(),
             producer: format!("wolf v0 (wolfgang {})", env!("CARGO_PKG_VERSION")),
             fns: Vec::new(),
+            frame_info: false,
+            frames: Vec::new(),
         }
+    }
+
+    /// Enable debug-only CFI for an explicit `-g` build.
+    pub fn with_frame_info(mut self, enabled: bool) -> Self {
+        self.frame_info = enabled;
+        self
     }
 
     fn cur(&mut self) -> Option<&mut FnRec> {
@@ -352,6 +373,14 @@ impl DwarfBuilder {
         // ---- serialize ---------------------------------------------------
         let mut sections = Sections::new(RelocSection::default());
         dwarf.write(&mut sections)?;
+        if self.frame_info {
+            let mut frames = gimli::write::FrameTable::default();
+            for (cie, fde) in &self.frames {
+                let id = frames.add_cie(cie.clone());
+                frames.add_fde(id, fde.clone());
+            }
+            frames.write_debug_frame(&mut sections.debug_frame)?;
+        }
         let mut out = Vec::new();
         sections.for_each(|id, sec| -> gimli::write::Result<()> {
             if sec.writer.slice().is_empty() {
@@ -384,6 +413,16 @@ impl DwarfBuilder {
 }
 
 impl DebugSink for DwarfBuilder {
+    fn wants_frame_info(&self) -> bool {
+        self.frame_info
+    }
+
+    fn frame_info(&mut self, cie: CommonInformationEntry, fde: FrameDescriptionEntry) {
+        if self.frame_info {
+            self.frames.push((cie, fde));
+        }
+    }
+
     fn function(&mut self, func: FuncId, name: &str, symbol: &str) {
         self.fns.push(FnRec {
             id: func,
@@ -511,6 +550,42 @@ mod tests {
                 .iter()
                 .any(|r| matches!(r.target, DebugRelocTarget::Func(_))),
             "low_pc relocation present"
+        );
+    }
+
+    #[test]
+    fn debug_frames_are_opt_in_and_relocatable() {
+        use gimli::write::CallFrameInstruction;
+        let mut b = one_fn_builder().with_frame_info(true);
+        let mut cie = CommonInformationEntry::new(
+            Encoding {
+                format: Format::Dwarf32,
+                version: 4,
+                address_size: 8,
+            },
+            1,
+            -8,
+            gimli::Register(16),
+        );
+        cie.add_instruction(CallFrameInstruction::Cfa(gimli::Register(7), 8));
+        cie.add_instruction(CallFrameInstruction::Offset(gimli::Register(16), -8));
+        let fde = FrameDescriptionEntry::new(function_address(FuncId::new(0)), 32);
+        b.frame_info(cie, fde);
+        let sections = b.finish().unwrap();
+        let frame = sections.iter().find(|s| s.name == ".debug_frame").unwrap();
+        assert!(!frame.data.is_empty());
+        assert!(
+            frame
+                .relocs
+                .iter()
+                .any(|r| matches!(r.target, DebugRelocTarget::Func(_)))
+        );
+        assert!(!sections.iter().any(|s| s.name == ".eh_frame"));
+        let sections = b.with_frame_info(false).finish().unwrap();
+        assert!(
+            !sections
+                .iter()
+                .any(|s| s.name == ".debug_frame" || s.name == ".eh_frame")
         );
     }
 

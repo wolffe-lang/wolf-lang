@@ -909,6 +909,8 @@ struct BuildOpts {
     /// profile-independent — only the speed changes). Folds into
     /// every rebuild key.
     release: bool,
+    /// Explicit `-g`: debug-only call-frame information, never loaded unwind tables.
+    debug_frame: bool,
     emit: Emit,
     /// Where `.lu-cache/` lives; `None` disables persistence entirely
     /// (conform-run's native rung — corpus directories must not grow
@@ -969,6 +971,7 @@ impl BuildOpts {
             verbose: false,
             checked: false,
             release: false,
+            debug_frame: false,
             emit: Emit::Bin,
             cache_root: None,
             lints: LintLevels::new(),
@@ -1730,6 +1733,10 @@ fn compile_native_inner(
         },
         pgo_comp,
     );
+    // Debug CFI changes object bytes independently of the selected tier.
+    if opts.debug_frame {
+        env_comp.push_str(" debug-frame-v1");
+    }
     // kw04: a freestanding object is a different object for the same
     // source; a hosted build's key is unchanged.
     if target.is_freestanding() {
@@ -2004,15 +2011,7 @@ fn compile_native_inner(
             };
             format!("wolf build: {}: compiled ({reason})", u.name)
         });
-        let bytes = compile_unit(
-            &module,
-            u,
-            shim,
-            pkg,
-            opts.release,
-            branch_weights.clone(),
-            target,
-        )?;
+        let bytes = compile_unit(&module, u, shim, pkg, opts, branch_weights.clone(), target)?;
         if let Some(p) = &obj_file {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -2293,7 +2292,7 @@ fn compile_unit(
     u: &ModUnit,
     shim: Option<wolf_wir::FuncId>,
     pkg: &wolf_sema::Package,
-    release: bool,
+    opts: &BuildOpts,
     branch_weights: Option<wolf_codegen_llvm::BranchWeights>,
     target: wolf_backend::target::Target,
 ) -> Result<Vec<u8>, BuildStop> {
@@ -2309,7 +2308,7 @@ fn compile_unit(
             std::process::exit(2);
         }
     };
-    let mut backend: Box<dyn wolf_backend::Backend> = if release {
+    let mut backend: Box<dyn wolf_backend::Backend> = if opts.release {
         Box::new(
             wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights, target))
                 .map_err(refuse)?,
@@ -2360,7 +2359,10 @@ fn compile_unit(
         let comp_dir = std::env::current_dir()
             .map(|d| d.display().to_string())
             .unwrap_or_else(|_| ".".to_string());
-        Some(wolf_backend::dwarf::DwarfBuilder::new(comp_dir, files))
+        Some(
+            wolf_backend::dwarf::DwarfBuilder::new(comp_dir, files)
+                .with_frame_info(opts.debug_frame),
+        )
     } else {
         None
     };
@@ -2909,6 +2911,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         verbose: false,
         checked: false,
         release: false,
+        debug_frame: false,
         emit: Emit::Bin,
         cache_root: None,
         lints: LintLevels::new(),
@@ -3038,6 +3041,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
             opts.verbose = true;
         } else if a == "--checked" {
             opts.checked = true;
+        } else if a == "-g" {
+            opts.debug_frame = true;
         } else if a == "--debug" {
             // The default tier: DWARF on, Cranelift. Accepted for
             // symmetry.
@@ -3083,6 +3088,9 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         i += 1;
     }
     let Some(file) = file else { usage() };
+    if opts.debug_frame && opts.release {
+        fail("-g source debug information is not implemented for the release tier");
+    }
     if opts.emit == Emit::LlvmIr && !opts.release {
         fail("--emit=llvm-ir is the release tier's IR; pass --release");
     }
