@@ -146,13 +146,24 @@ struct Fixture {
     symbols: Vec<Symbol>,
 }
 
-fn fixture(name: &str, variadic: bool) -> Check<Fixture> {
+fn fixture(name: &str, variadic: bool, vector_args: bool) -> Check<Fixture> {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_frame_steps_{name}"));
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let source = dir.join("probe.lu");
     let exe = dir.join("probe");
-    fs::write(&source, if variadic { VARIADIC_SOURCE } else { SOURCE })
-        .map_err(|e| e.to_string())?;
+    let body = if vector_args {
+        // An extra, deliberately unread double sets AL=1 and executes all
+        // guarded XMM saves. The core still consumes its one declared i64.
+        VARIADIC_SOURCE.replace(
+            "s283_variadic(1 as i32, a as i64)",
+            "s283_variadic(1 as i32, a as i64, 1.25)",
+        )
+    } else if variadic {
+        VARIADIC_SOURCE.to_owned()
+    } else {
+        SOURCE.to_owned()
+    };
+    fs::write(&source, body).map_err(|e| e.to_string())?;
     let (status, text) = run(
         Command::new(env!("CARGO_BIN_EXE_wolf"))
             .args(["build", "-g", "--no-cache"])
@@ -385,7 +396,10 @@ fn variadic_host(row: &str) -> bool {
 fn dwarf_frame_ranges_and_verifier() {
     const ROW: &str = "dwarf-frame-wolf-fde-ranges";
     if supported(ROW) {
-        report(ROW, fixture("ledger", false).and_then(|f| ledger(&f, ROW)));
+        report(
+            ROW,
+            fixture("ledger", false, false).and_then(|f| ledger(&f, ROW)),
+        );
     }
 }
 
@@ -395,7 +409,7 @@ fn dwarf_frame_variadic_ranges_and_verifier() {
     if variadic_host(ROW) {
         report(
             ROW,
-            fixture("variadic-ledger", true).and_then(|f| ledger(&f, ROW)),
+            fixture("variadic-ledger", true, false).and_then(|f| ledger(&f, ROW)),
         );
     }
 }
@@ -716,6 +730,10 @@ fn debugger_trace(fixture: &Fixture, root: &str, row: &str) -> Check<Option<Stri
 }
 
 fn run_case(root: &str, variadic: bool, name: &str, required: &[&str]) {
+    run_case_inner(root, variadic, false, name, required);
+}
+
+fn run_case_inner(root: &str, variadic: bool, vector_args: bool, name: &str, required: &[&str]) {
     let leaf = root == "inspect";
     if !(if variadic {
         variadic_host(name)
@@ -729,8 +747,18 @@ fn run_case(root: &str, variadic: bool, name: &str, required: &[&str]) {
     }
     let result = (|| -> Check<bool> {
         let fixture = fixture(
-            &format!("{}-{root}", if variadic { "variadic" } else { "chain" }),
+            &format!(
+                "{}-{root}",
+                if vector_args {
+                    "variadic-float"
+                } else if variadic {
+                    "variadic"
+                } else {
+                    "chain"
+                }
+            ),
             variadic,
+            vector_args,
         )?;
         let Some(trace) = debugger_trace(&fixture, root, name)? else {
             return Ok(false);
@@ -811,6 +839,24 @@ fn debugger_variadic_chain_at_every_instruction() {
         "main-shim",
         true,
         "dwarf-frame-variadic-chain-steps",
+        &[
+            "main-shim",
+            "wolf-main",
+            "middle",
+            "variadic-call",
+            "variadic-entry",
+            "variadic-core",
+        ],
+    );
+}
+
+#[test]
+fn debugger_variadic_vector_saves_at_every_instruction() {
+    run_case_inner(
+        "main-shim",
+        true,
+        true,
+        "dwarf-frame-variadic-vector-steps",
         &[
             "main-shim",
             "wolf-main",
