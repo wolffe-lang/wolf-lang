@@ -361,7 +361,21 @@ scalar_value!(
     "-9223372036854775808"
 );
 scalar_value!(dwarf_v1_scalar_bool, "bool", "true", "true");
-scalar_value!(dwarf_v1_scalar_f32, "f32", "1.25", "1.25");
+#[test]
+fn dwarf_v1_scalar_f32() {
+    // Native f32 formatting is not implemented. Observe the exact value with
+    // a checked equality instead; both machines must take the same branch.
+    let source = "fn inspect(value: f32) -> int { if value == 1.25 { print(\"1.25\") } else { print(\"wrong value\") }\n0 }\nfn main() -> int { let n: f32 = 1.25\ninspect(n) }\n";
+    if transcript(
+        "dwarf-v1-f32-value",
+        source,
+        "print value",
+        "frame variable value",
+        &["= 1.25"],
+    ) {
+        reference_stdout("dwarf-v1-f32-value", "1.25\n");
+    }
+}
 scalar_value!(dwarf_v1_scalar_f64, "f64", "1.25", "1.25");
 scalar_value!(dwarf_v1_scalar_byte, "byte", "255 as byte", "255");
 
@@ -369,7 +383,7 @@ scalar_value!(dwarf_v1_scalar_byte, "byte", "255 as byte", "255");
 fn dwarf_v1_scalar_char() {
     if transcript(
         "dwarf-v1-char-value",
-        "fn inspect(value: char) -> int { let numeric: u32 = value as u32\nprint(\"{numeric}\")\n0 }\nfn main() -> int { let n: char = 955 as char\ninspect(n) }\n",
+        "fn inspect(value: char) -> int { let numeric: int = value as int\nprint(\"{numeric}\")\n0 }\nfn main() -> int { let n: char = 955 as char\ninspect(n) }\n",
         "print (unsigned)value",
         "expression -- (unsigned)value",
         &["= 955"],
