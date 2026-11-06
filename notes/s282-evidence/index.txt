@@ -29,6 +29,13 @@ mac-measure-447ba6d8.log  wolf at the head and at the base over every .lu file o
                           and at its trunk), at the resolve rung: W0801 and E0806 per tree;
                           then the compiler's rows on four machines with lupin built from the
                           wolf-interp s282 branch.
+mac-red-4261280f.log      the lowercase-variant rows at the capitalized-only code:
+                          four_machine_regressions 20 passed and 2 failed by name, the corpus
+                          step `1272 file(s), 2 bad` by name.
+mac-fix-83a64499.log      the case-blind code: four_machine_regressions 22 passed; the corpus
+                          step `0 bad`; every probe (b16 now warns) and its rendering; fmt
+                          (red, one line, formatted at f0d31599); clippy; the wolf_sema suite
+                          and the snapshot sets under insta's update.
 census-org.txt            a syntactic census of the same trees: every capitalized name in a
                           binder position (item-level constants listed apart).
 rig/                      the scripts as run: the Mac lock, build-at, the jobs, the probe
