@@ -1,0 +1,55 @@
+TOOK mac-build-lock 2026-11-06T00:40:04Z
+e48afd832045d2704ccf1479ea1937a026571c68
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/debug_frame_steps.rs (target/debug/deps/debug_frame_steps-ddfc3eeba3c2d8ad)
+
+running 16 tests
+test debugger_backtrace_at_every_instruction ... PASS dwarf-frame-three-frames
+PASS dwarf-frame-instruction-steps
+ok
+test debugger_main_shim_at_every_instruction ... PASS dwarf-frame-main-shim-steps
+ok
+test debugger_middle_at_every_instruction ... PASS dwarf-frame-middle-steps
+ok
+test debugger_pressure_middle_at_every_instruction ... PASS dwarf-frame-pressure-middle-steps
+ok
+test debugger_variadic_chain_at_every_instruction ... SKIP dwarf-frame-variadic-chain-steps reason=owned variadic ABI supports x86-64 Linux only, not this host
+ok
+test debugger_variadic_core_at_every_instruction ... SKIP dwarf-frame-variadic-core-steps reason=owned variadic ABI supports x86-64 Linux only, not this host
+ok
+test debugger_variadic_entry_at_every_instruction ... SKIP dwarf-frame-variadic-entry-steps reason=owned variadic ABI supports x86-64 Linux only, not this host
+ok
+test debugger_variadic_vector_saves_at_every_instruction ... SKIP dwarf-frame-variadic-vector-steps reason=owned variadic ABI supports x86-64 Linux only, not this host
+ok
+test debugger_wolf_main_at_every_instruction ... PASS dwarf-frame-wolf-main-steps
+ok
+test dwarf_frame_pressure_ranges_and_verifier ... PASS dwarf-frame-pressure-fde-ranges
+ok
+test dwarf_frame_ranges_and_verifier ... PASS dwarf-frame-wolf-fde-ranges
+ok
+test dwarf_frame_variadic_ranges_and_verifier ... SKIP dwarf-frame-variadic-fde-ranges reason=owned variadic ABI supports x86-64 Linux only, not this host
+ok
+test frame_transcript_validation_is_fail_closed ... PASS dwarf-frame-transcript-validation
+ok
+test oracle_gate::tests::a_required_tool_absence_fails_by_name ... ok
+test oracle_gate::tests::an_unrequired_absence_is_one_skip_line ... ok
+test x64_return_sequences_leave_no_cfi_gap ... FAIL dwarf-frame-x64-teardown-coverage
+
+thread 'x64_return_sequences_leave_no_cfi_gap' (165425003) panicked at crates/wolf_driver/tests/debug_frame_steps.rs:75:13:
+dwarf-frame-x64-teardown-coverage: compiler reported a CFI gap:
+
+CFI_GAP middle 228..252: unknown SP before register restore
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    x64_return_sequences_leave_no_cfi_gap
+
+test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.89s
+
+error: test failed, to rerun pass `-p wolf_driver --test debug_frame_steps`
+RELEASED mac-build-lock 2026-11-06T00:40:11Z
