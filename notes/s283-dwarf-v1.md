@@ -22,7 +22,7 @@ The change adds no runtime unwinding, personality routines, landing pads or new 
 ## Inputs, verified
 
 - **Base.** Development started at trunk `e2757a7bd702d3b21f06396291010d2d1cb6101d`, and moved to `b35e87b3d1c7efb68ffc5fa67fb18fcd8e3537eb` once the hashed Map landed. The final base is `275f99040e778a703e9fedbfcc704683ec1f4b7b`, after the nested-variant pattern change; that change touches only `pattern_shape` in `crates/wolf_wir/src/lower.rs` (when a bare name in a payload slot is a test), and this change only annotates the bindings that remain, so the rebase was clean. Shas cited from before a rebase live on the branches `s283-pre-rebase` (on `e2757a7b`), `s283-scalar-red` (the unsigned red baseline) and `s283-on-b35e87b3`.
-- **Prediction.** `notes/s283-dwarf-v1-prediction.txt` was committed before any implementation (`921a93bd`).
+- **Prediction.** `notes/s283-dwarf-v1-prediction.txt` was committed before any implementation (`5d2dfc89` here; `921a93bd` before the rebases).
 - **Oracles.** `notes/s283-dwarf-oracles.json` records lupin 0.1.59's tag, commit, spec pin, and archive and executable digests for both platforms (each checked twice). It also records the macOS SDK dwarfdump and lldb versions and digests. The interpreter rows compare against the release `crates/wolf_driver/PAIRING` names, not a second copy of its version.
   - Linux: GNU gdb 15.1 (Ubuntu 24.04 toolchain image), LLVM dwarfdump 21.1.8.
   - macOS arm64: lldb-2100.0.16.4, Apple LLVM 21.0.0 dwarfdump.
@@ -165,7 +165,7 @@ The fixtures' dwarfdump digests from the final census are in `notes/s283-evidenc
 
   The recommendation is (b), which follows the repository's existing `WOLF_*_REQUIRE_*` convention. A skip is never a measurement, and the merge records come from takes that require the tools. On macOS the frame-range row now finds the SDK's dwarfdump by itself, so it is measured without an environment variable.
 
-### Final records (pending the rebase)
+### Final records (in the PR body)
 
 - The full `cargo xtask ci` gauntlet at the final head; its `corpus`, `conformance` and `differ-self` steps are the differential and corpus records.
 - One final-head plant: one file, one hunk, the variant discriminant's member offset moved from 0 to 8, red by name at the macOS byte row `dwarf-v1-payload-enum-bytes`.
