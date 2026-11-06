@@ -33,10 +33,23 @@ fn main() -> int { middle(3) - 4 }
 const PRESSURE_SOURCE: &str = "fn inspect(a: int) -> int { a ^ 7 }\nfn middle(a: int) -> int {\n    let p = inspect(a)\n    let q = inspect(p + 1)\n    let r = inspect(q + 2)\n    p * 3 + q * 5 + r * 7 + a\n}\nfn main() -> int { middle(3) - 46 }\n";
 const LIMIT: usize = 2048;
 
+/// `middle` holds a 520-word struct, a frame no ADD immediate can release: on
+/// arm64 the return sequence rebuilds the size in a scratch register first.
+fn big_frame_source() -> String {
+    let fields = (0..520).map(|i| format!("f{i}: int")).collect::<Vec<_>>();
+    let values = (0..520).map(|i| format!("f{i}: a")).collect::<Vec<_>>();
+    format!(
+        "struct Big {{ {} }}\nfn inspect(a: int) -> int {{ a ^ 7 }}\nfn middle(a: int) -> int {{\n    let big = Big {{ {} }}\n    inspect(big.f0) + big.f519 - a\n}}\nfn main() -> int {{ middle(3) - 4 }}\n",
+        fields.join(", "),
+        values.join(", ")
+    )
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Shape {
     Chain,
     Pressure,
+    BigFrame,
     Variadic,
     VariadicFloat,
 }
@@ -49,6 +62,7 @@ impl Shape {
         match self {
             Self::Chain => "chain",
             Self::Pressure => "pressure",
+            Self::BigFrame => "big-frame",
             Self::Variadic => "variadic",
             Self::VariadicFloat => "variadic-float",
         }
@@ -210,6 +224,7 @@ fn fixture(name: &str, shape: Shape) -> Check<Fixture> {
         ),
         Shape::Variadic => VARIADIC_SOURCE.to_owned(),
         Shape::Pressure => PRESSURE_SOURCE.to_owned(),
+        Shape::BigFrame => big_frame_source(),
         Shape::Chain => SOURCE.to_owned(),
     };
     fs::write(&source, body).map_err(|e| e.to_string())?;
@@ -869,6 +884,25 @@ fn dwarf_frame_pressure_ranges_and_verifier() {
         report(
             ROW,
             fixture("pressure-ledger", Shape::Pressure).and_then(|f| ledger(&f, ROW)),
+        );
+    }
+}
+#[test]
+fn debugger_big_frame_middle_at_every_instruction() {
+    run_case(
+        "middle",
+        Shape::BigFrame,
+        "dwarf-frame-big-frame-middle-steps",
+        &["middle", "inspect"],
+    );
+}
+#[test]
+fn dwarf_frame_big_frame_ranges_and_verifier() {
+    const ROW: &str = "dwarf-frame-big-frame-fde-ranges";
+    if supported(ROW) {
+        report(
+            ROW,
+            fixture("big-frame-ledger", Shape::BigFrame).and_then(|f| ledger(&f, ROW)),
         );
     }
 }
