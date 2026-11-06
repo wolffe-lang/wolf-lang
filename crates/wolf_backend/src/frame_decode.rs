@@ -514,6 +514,36 @@ mod tests {
         );
         assert_eq!(steps[2].signed_ra, Some(false));
     }
+    /// A frame larger than an ADD immediate reaches: the return sequence
+    /// rebuilds the size in a scratch register and releases it from SP, then
+    /// pops the saved pairs (an arm64 `main` of 24,896 frame bytes).
+    #[test]
+    fn arm64_large_frame_release_through_a_scratch_register() {
+        let bytes: Vec<_> = [
+            0xd28c2810u32, // mov x16, #0x6140
+            0x8b3063ff,    // add sp, sp, x16
+            0xa8c153f3,    // ldp x19, x20, [sp], #16
+            0xa8c15bf5,
+            0xa8c163f7,
+            0xa8c16bf9,
+            0xa8c173fb,
+            0xa8c17bfd, // ldp x29, x30, [sp], #16
+            0xd65f03c0, // ret
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+        let steps = teardown(Arch::Arm64, &bytes).unwrap();
+        assert_eq!(steps.len(), 9);
+        assert_eq!(steps[0].sp, SpChange::None);
+        assert_eq!(steps[1].sp, SpChange::Add(0x6140));
+        assert!(steps[2..8].iter().all(|s| s.sp == SpChange::Add(16)));
+        assert_eq!(
+            steps[2].loads.iter().map(|a| a.reg).collect::<Vec<_>>(),
+            [19, 20]
+        );
+        assert!(steps[8].ret);
+    }
     #[test]
     fn unknown_or_truncated_forms_never_claim_coverage() {
         for bytes in [
