@@ -61,6 +61,8 @@ Size was predicted as under 10% growth on scalar-only inputs, hundreds to a few 
 | `c7e8710f` | the per-instruction witness red at `inspect`'s return (a prologue-only FDE dropped its caller), plus the FDE ranges | `notes/s283-evidence/linux/red-c7e8710f-frame-steps.excerpt.log` |
 | `e48afd83` | `dwarf-frame-x64-teardown-coverage` red: `CFI_GAP middle 228..252: unknown SP before register restore` | `notes/s283-evidence/macos/red-e48afd83-x64-teardown.log` |
 | `c78972fd` | the corpus census before the teardown fix: 2145 uncovered return ranges in 756 measured programs, and 22 across the 31 type fixtures | `notes/s283-evidence/linux/census-c78972fd-before-teardown-fix.json` |
+| `16f3778b` | the first full arm64 corpus census: one uncovered range, `memory/read_lend_frame.lu`'s `main` (`CFI_GAP main 45896..45932: unknown return-sequence instruction`) | `notes/s283-evidence/macos/census-16f3778b-corpus.json` |
+| `a2f6dbd7` | `arm64_large_frame_release_through_a_scratch_register` red, and both arm64 big-frame chain rows red by name: `CFI_GAP middle 64..84: unknown return-sequence instruction` | `notes/s283-evidence/macos/red-a2f6dbd7-arm64-scratch-release.log` |
 
 These are development controls. The final plant is separate (below).
 
@@ -78,7 +80,18 @@ Deriving SP backwards from `ret` stops at `mov rsp, rbp`, so the SP-relative res
 - the frame base sits where the CFA rule puts it;
 - every decoded save of a register the facts place in memory addresses that same slot.
 
-A fixed frame keeps SP there until the return sequence. Each restore is then checked against its save fact; a wrong distance fails that check and leaves the range uncovered, never a wrong rule. A return sequence the backward derivation already covers never consults the prologue, so arm64, whose return sequences restore by post-index loads, is unchanged.
+A fixed frame keeps SP there until the return sequence. Each restore is then checked against its save fact; a wrong distance fails that check and leaves the range uncovered, never a wrong rule. A return sequence the backward derivation already covers never consults the prologue, so arm64, whose return sequences restore by post-index loads, is unchanged by this part.
+
+### The arm64 large-frame release
+
+The first full arm64 corpus census found one more uncovered range, in `memory/read_lend_frame.lu`'s `main`, whose frame is 24,896 bytes. No ADD immediate reaches that size, so the return sequence rebuilds it in a scratch register first:
+
+```
+mov x16, #0x6140; add sp, sp, x16
+ldp x19, x20, [sp], #16; ...; ldp x29, x30, [sp], #16; ret
+```
+
+The decoder now keeps the values that MOV wide immediates (MOVZ, MOVN, MOVK) give scratch registers within the range it decodes. It accepts ADD or SUB (extended register, UXTX, no shift) only from SP to SP, and only when that register's value was set inside the range. Any other write to the register forgets its value, and an unknown value is still no claim. The post-index restores after it are checked against the save facts through the return-derived distances, independently of the release, and the CFA stays frame-based through the release itself. A big-frame chain, with a 520-word struct in `middle`, holds the arm64 form to lldb at every instruction.
 
 ### Census and determinism
 
@@ -93,6 +106,12 @@ These numbers are measured at `16f3778b`, after the teardown fix; the final cens
 | total | 436,428 | 566,933 (+29.9%) | 818,581 (+87.6%) |
 
 That table is Linux x86-64: 756 programs measured, 25 not measured, 0 failures, and 0 `CFI_GAP` (2145 at `c78972fd`, before the fix). The 31 type fixtures also measure 0 gaps (22 before). Every head object, with and without `-g`, was byte-and-relocation identical across its two builds (789 objects each). The 25 not measured are inputs that trunk refuses too when staged standalone; each is named in the census JSON. The largest growth was `memory/read_lend_frame.lu`, from 800 to 5,767 bytes, which is type information for its lent aggregates.
+
+macOS arm64 at `62fdc9dd`, after the large-frame release fix, measures the same 756 programs (25 not measured, 0 failures) with 0 `CFI_GAP`, and the 31 type fixtures also measure 0:
+
+| | trunk | head | head `-g` |
+|---|---|---|---|
+| total | 510,659 | 640,851 (+25.5%) | 924,675 (+81.1%) |
 
 ### Explicit presentation and fidelity gaps
 
@@ -126,7 +145,7 @@ This is what wolf emits, as observed in the census dumps. The line-table header'
 | Coverage | one function may have several FDE ranges. A range a debugger finds no FDE for needs its fallback; never extend the preceding rule over it |
 | Presentation | LLDB under this C compile unit does not present variant parts. sniff renders the active variant itself from the DWARF; it must not imitate LLDB's empty presentation |
 
-The fixtures' dwarfdump digests at `16f3778b` are in `notes/s283-evidence/linux/fixture-digests-16f3778b.txt` (the final census adds its own beside them): `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
+The fixtures' dwarfdump digests are in `notes/s283-evidence/linux/fixture-digests-16f3778b.txt` (LLVM 21.1.8, ELF) and `notes/s283-evidence/macos/fixture-digests-62fdc9dd.txt` (the SDK's Apple LLVM 21.0.0, Mach-O); the final census adds its own beside them: `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
 
 ### Rulings
 
@@ -153,7 +172,7 @@ The fixtures' dwarfdump digests at `16f3778b` are in `notes/s283-evidence/linux/
 - [x] Prediction committed before implementation; the clean-room sources are kept.
 - [x] Source types and aggregate and split debug locations implemented.
 - [x] Debug-only CFI, fail-closed return-sequence coverage, and instruction-level witnesses.
-- [x] The return-sequence count row at zero on x86-64: 0 `CFI_GAP` across the corpus and the fixtures at `16f3778b` (2145 and 22 before).
+- [x] The return-sequence count row at zero: x86-64 at `16f3778b` (2145 and 22 before) and arm64 at `62fdc9dd` (1 before), across the corpus and the fixtures.
 - [x] Named LLDB and recursive gaps kept separate from value passes.
 - [x] lupin 0.1.59 values paired; scalar encodings and runtime-layout ties checked on Linux and macOS.
 - [x] Anchor regeneration checked in both directions (724 keys; none added, removed or re-owned).

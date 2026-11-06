@@ -1,0 +1,475 @@
+{
+ "all_entries": true,
+ "candidate_count": 31,
+ "cases": [
+  {
+   "debug_bytes": {
+    "baseline": 530,
+    "head-a": 530,
+    "head-g-a": 745
+   },
+   "dwarfdump_sha256": {
+    "object.o": "7026fa8642db02b84c825ec7691e9ed9f6028d01b36e1acb90b40963151dc575"
+   },
+   "source": "debug_v1_dwarf-v1-bool-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 461,
+    "head-a": 641,
+    "head-g-a": 873
+   },
+   "dwarfdump_sha256": {
+    "object.o": "742dc977afd14821c34b7f8a3da7b56a25087c52f7db865ae4efc3526d590daf"
+   },
+   "source": "debug_v1_dwarf-v1-borrowed-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 528,
+    "head-a": 530,
+    "head-g-a": 745
+   },
+   "dwarfdump_sha256": {
+    "object.o": "5a6cd3cfff1fbb3a1ae5461c0aa6632cb7f25293cfc3557554dd29d8af58cc1a"
+   },
+   "source": "debug_v1_dwarf-v1-byte-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 553,
+    "head-a": 554,
+    "head-g-a": 769
+   },
+   "dwarfdump_sha256": {
+    "object.o": "aa37a6c89d8ba0ddb8560bfe257876ce42599adeff462e17e8a31ef3dd6ee932"
+   },
+   "source": "debug_v1_dwarf-v1-char-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 575,
+    "head-a": 575,
+    "head-g-a": 868
+   },
+   "dwarfdump_sha256": {
+    "object.o": "456a8b291a43d6b1b363162bd3e2b80c9a99592adeeb0e5508a949fdde1a6e1c"
+   },
+   "source": "debug_v1_dwarf-v1-debug-frame/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 518,
+    "head-a": 565,
+    "head-g-a": 779
+   },
+   "dwarfdump_sha256": {
+    "object.o": "6509e8879badf84a91eb92fa89388cbb911454a7bab92dd03bd6bba619b5e80b"
+   },
+   "source": "debug_v1_dwarf-v1-enum/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 474,
+    "head-a": 718,
+    "head-g-a": 933
+   },
+   "dwarfdump_sha256": {
+    "object.o": "767559a54238d23a5e14a87d95df9e2a80d1f0fe370885053c1f9cafa834d989"
+   },
+   "source": "debug_v1_dwarf-v1-error-union/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 558,
+    "head-a": 558,
+    "head-g-a": 781
+   },
+   "dwarfdump_sha256": {
+    "object.o": "a818d98e538a25185e2c3de84d491664b815f55f89ab8da738ad5399c415ab13"
+   },
+   "source": "debug_v1_dwarf-v1-f32-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 530,
+    "head-a": 530,
+    "head-g-a": 752
+   },
+   "dwarfdump_sha256": {
+    "object.o": "9d1e6683102f0fe2d2b728c11d140a1ca5f5236558c428a8d389abcf7416d4bd"
+   },
+   "source": "debug_v1_dwarf-v1-f64-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 744
+   },
+   "dwarfdump_sha256": {
+    "object.o": "aacee9f13462acbc9626e449b529fe005894da5c9e0eab453a999354b61880a1"
+   },
+   "source": "debug_v1_dwarf-v1-i16-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 744
+   },
+   "dwarfdump_sha256": {
+    "object.o": "45409a5d39128a8cbb5fa81406326a6ed05f1c0310e917d0352b9c2b886fe2e6"
+   },
+   "source": "debug_v1_dwarf-v1-i32-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 744
+   },
+   "dwarfdump_sha256": {
+    "object.o": "21cb0f3888ddf20d4ee62abf1b664a3148bdb35d32c2da2b3b56783f10173a66"
+   },
+   "source": "debug_v1_dwarf-v1-i64-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 528,
+    "head-a": 528,
+    "head-g-a": 743
+   },
+   "dwarfdump_sha256": {
+    "object.o": "9a80100a5c458cfeb96b1517d6c694b421ffbbb8e233744a0a89805c656a5706"
+   },
+   "source": "debug_v1_dwarf-v1-i8-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 744
+   },
+   "dwarfdump_sha256": {
+    "object.o": "1fba339470b8a3e3a357562a84efa6abc1cab752e46cc9adaadcd2ca0f1f6b21"
+   },
+   "source": "debug_v1_dwarf-v1-int-value/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 545,
+    "head-a": 718,
+    "head-g-a": 956
+   },
+   "dwarfdump_sha256": {
+    "object.o": "c407603f74dd50c93464a734df551be8f9303c985f889976582e88b62d3c0a6b"
+   },
+   "source": "debug_v1_dwarf-v1-list/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 533,
+    "head-a": 834,
+    "head-g-a": 1064
+   },
+   "dwarfdump_sha256": {
+    "object.o": "8e6ad40e9e819ee400de7d19d10b5dd94605c86eecc30acbd25f5e568d12c827"
+   },
+   "source": "debug_v1_dwarf-v1-map/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 475,
+    "head-a": 707,
+    "head-g-a": 922
+   },
+   "dwarfdump_sha256": {
+    "object.o": "515034f4ba6a0592e57a794e1ac9bc5638d7f8da2279c316222cd2ee82b66eba"
+   },
+   "source": "debug_v1_dwarf-v1-optional/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 549,
+    "head-a": 762,
+    "head-g-a": 1000
+   },
+   "dwarfdump_sha256": {
+    "object.o": "e8ec850b6da133635fdb53a2e924d3416c39b69874a6d1ae39392e143e0f9b64"
+   },
+   "source": "debug_v1_dwarf-v1-packed-element/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 470,
+    "head-a": 750,
+    "head-g-a": 981
+   },
+   "dwarfdump_sha256": {
+    "object.o": "aa3d3d193bc47df7fb81e34fe340e22c4aadfa4af900207581cecd5644789d63"
+   },
+   "source": "debug_v1_dwarf-v1-payload-enum/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 458,
+    "head-a": 599,
+    "head-g-a": 822
+   },
+   "dwarfdump_sha256": {
+    "object.o": "4da6e375f3a82492ba089032b543426a06a08d6d18f9d092412e8ef74466aee3"
+   },
+   "source": "debug_v1_dwarf-v1-str/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 458,
+    "head-a": 577,
+    "head-g-a": 800
+   },
+   "dwarfdump_sha256": {
+    "object.o": "d2a8a6aed168c5a416077692d353e8136a39c7af49c7623a728af735362339a2"
+   },
+   "source": "debug_v1_dwarf-v1-struct/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 458,
+    "head-a": 572,
+    "head-g-a": 795
+   },
+   "dwarfdump_sha256": {
+    "object.o": "a9ec55c61e38a2075816da1d8d0097c1001f2cc54de8e84a3e8f4171298e9cf5"
+   },
+   "source": "debug_v1_dwarf-v1-tuple/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 744
+   },
+   "dwarfdump_sha256": {
+    "object.o": "da2186860cf8f0c314ef4945e73bbc49a72823006ba753c812671b61a8b3eca0"
+   },
+   "source": "debug_v1_dwarf-v1-u16-boundary/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 744
+   },
+   "dwarfdump_sha256": {
+    "object.o": "5e23c4f290454c3ab7b1b2cbd87f174bfa104a66283d61117d5aa662b891c634"
+   },
+   "source": "debug_v1_dwarf-v1-u32-boundary/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 529,
+    "head-g-a": 752
+   },
+   "dwarfdump_sha256": {
+    "object.o": "ceab4efe390327b8ff00f5b59b4b546bb919d274aad394f48cb2a7533cf56e17"
+   },
+   "source": "debug_v1_dwarf-v1-u64-boundary/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 528,
+    "head-a": 528,
+    "head-g-a": 743
+   },
+   "dwarfdump_sha256": {
+    "object.o": "c292c6c1d7d80dc12d6378aa2ea01211bb4eba3d9960f047aec8d4a7438c4d05"
+   },
+   "source": "debug_v1_dwarf-v1-u8-boundary/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 529,
+    "head-a": 530,
+    "head-g-a": 753
+   },
+   "dwarfdump_sha256": {
+    "object.o": "591fa43a355f40ed9483b8c1d223c264533adb87fdcdf9030b3073a0512529b6"
+   },
+   "source": "debug_v1_dwarf-v1-uint-boundary/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 575,
+    "head-a": 575,
+    "head-g-a": 868
+   },
+   "dwarfdump_sha256": {
+    "object.o": "c7d908a40afc22a32992cc1482b0fb233c41542d21db0e00118b8d6d8fb652cb"
+   },
+   "source": "debug_v1_frame-off/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 515,
+    "head-a": 688,
+    "head-g-a": 904
+   },
+   "dwarfdump_sha256": {
+    "object.o": "2859c9e8595e62c178ef5d7f715e93381f1e6eaf79cde152d885f211d803227c"
+   },
+   "source": "debug_v1_list-layout/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 515,
+    "head-a": 816,
+    "head-g-a": 1033
+   },
+   "dwarfdump_sha256": {
+    "object.o": "0d5843f10c9ec5bc226d9da67775c300fa1b5139265680ec03d84407fb6fe1f5"
+   },
+   "source": "debug_v1_map-layout/probe.lu",
+   "status": "measured"
+  },
+  {
+   "debug_bytes": {
+    "baseline": 462,
+    "head-a": 911,
+    "head-g-a": 1133
+   },
+   "dwarfdump_sha256": {
+    "object.o": "d438d7367764a6a763888d3f6689d28c2d6f3021f74f8617fb681ea92b6be33d"
+   },
+   "source": "debug_v1_recursive-nominal/probe.lu",
+   "status": "measured"
+  }
+ ],
+ "cfi_gap_count": 0,
+ "compile_cwd": "/Users/mfwolffe/lanes/s283/mac-62fdc9dd/target",
+ "dwarfdump_argv": [
+  "<dwarfdump>",
+  "--verbose",
+  "--debug-info",
+  "--debug-abbrev",
+  "--debug-line",
+  "--debug-frame",
+  "object.o"
+ ],
+ "failures": 0,
+ "measured": 31,
+ "not_measured": 0,
+ "paired_baseline_bytes": 16028,
+ "paired_head_bytes": 18999,
+ "paired_head_g_bytes": 25978,
+ "schema": "wolf-dwarf-census/1",
+ "selected_count": 31,
+ "start": 0,
+ "tools": {
+  "baseline": {
+   "path": "/Users/mfwolffe/lanes/s283/mac-base-e2757a7b/target/debug/wolf",
+   "sha256": "526774b725f4aeb345389923507ac8f4c6645ab36f2aaee6f112c2185464464e"
+  },
+  "dwarfdump": {
+   "path": "/Library/Developer/CommandLineTools/usr/bin/llvm-dwarfdump",
+   "sha256": "93be00ae40dad30cd857f8335e92bbc1bfbd967ea98571ba29a13bb08569c906"
+  },
+  "inspector": {
+   "path": "/Users/mfwolffe/lanes/s283/mac-62fdc9dd/target/debug/examples/dwarf_sections",
+   "sha256": "9b7b0abd54942f592e0edb6d6a2026174eaab3e50b14af3b97ea5d7b5a291130"
+  },
+  "wolf": {
+   "path": "/Users/mfwolffe/lanes/s283/mac-62fdc9dd/target/debug/wolf",
+   "sha256": "41c97c5753e18bde4268c49bafa01ea95e37ef8366f8a899189748fc2c1b8fd3"
+  }
+ },
+ "vocabulary": [
+  "DW_AT_artificial",
+  "DW_AT_byte_size",
+  "DW_AT_comp_dir",
+  "DW_AT_const_value",
+  "DW_AT_data_member_location",
+  "DW_AT_decl_file",
+  "DW_AT_decl_line",
+  "DW_AT_declaration",
+  "DW_AT_discr",
+  "DW_AT_discr_value",
+  "DW_AT_encoding",
+  "DW_AT_frame_base",
+  "DW_AT_high_pc",
+  "DW_AT_language",
+  "DW_AT_location",
+  "DW_AT_low_pc",
+  "DW_AT_name",
+  "DW_AT_producer",
+  "DW_AT_stmt_list",
+  "DW_AT_type",
+  "DW_CFA_advance_loc",
+  "DW_CFA_advance_loc1",
+  "DW_CFA_def_cfa",
+  "DW_CFA_nop",
+  "DW_CFA_offset",
+  "DW_CFA_same_value",
+  "DW_FORM_addr",
+  "DW_FORM_exprloc",
+  "DW_FORM_flag",
+  "DW_FORM_ref4",
+  "DW_FORM_sdata",
+  "DW_FORM_sec_offset",
+  "DW_FORM_string",
+  "DW_FORM_udata",
+  "DW_LNE_end_sequence",
+  "DW_LNE_set_address",
+  "DW_LNS_advance_pc",
+  "DW_LNS_const_add_pc",
+  "DW_LNS_copy",
+  "DW_LNS_negate_stmt",
+  "DW_LNS_set_column",
+  "DW_LNS_set_prologue_end",
+  "DW_OP_fbreg",
+  "DW_OP_reg29",
+  "DW_TAG_base_type",
+  "DW_TAG_compile_unit",
+  "DW_TAG_enumeration_type",
+  "DW_TAG_enumerator",
+  "DW_TAG_formal_parameter",
+  "DW_TAG_member",
+  "DW_TAG_pointer_type",
+  "DW_TAG_reference_type",
+  "DW_TAG_structure_type",
+  "DW_TAG_subprogram",
+  "DW_TAG_variable",
+  "DW_TAG_variant",
+  "DW_TAG_variant_part"
+ ]
+}
