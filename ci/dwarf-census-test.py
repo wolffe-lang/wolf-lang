@@ -19,6 +19,23 @@ class CensusInputs(unittest.TestCase):
             (root / "alias.lu").symlink_to(root / "good.lu")
             self.assertEqual([p.name for p in census.inputs(root)], ["good.lu"])
 
+    def test_all_entries_selects_fixture_sources_without_directives(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            for row in ["dwarf-v1-enum", "dwarf-v1-struct"]:
+                (root / row).mkdir()
+                (root / row / "probe.lu").write_text("fn main() -> int { 0 }\n")
+            (root / "alias.lu").symlink_to(root / "dwarf-v1-enum" / "probe.lu")
+            self.assertEqual(census.inputs(root), [])
+            self.assertEqual([p.parent.name for p in census.inputs(root, True)],
+                             ["dwarf-v1-enum", "dwarf-v1-struct"])
+
+    def test_dump_names_the_object_without_a_host_path(self):
+        obj = Path("/some/host/case/head-g-a/object.o")
+        argv = census.dump_argv(Path("/usr/bin/llvm-dwarfdump"), obj)
+        self.assertEqual(argv[-1], "object.o")
+        self.assertNotIn("/some/host", " ".join(argv[1:]))
+
     def test_standalone_staging_does_not_copy_unrelated_corpus_directories(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
