@@ -7,7 +7,11 @@
 /// Report that `row` cannot be measured on this host because of `reason`.
 /// `Ok` means the row was skipped; `Err` means the host required it.
 pub fn absent(row: &str, reason: &str) -> Result<(), String> {
-    absent_when(std::env::var_os("WOLF_DWARF_REQUIRE").is_some(), row, reason)
+    absent_when(
+        std::env::var_os("WOLF_DWARF_REQUIRE").is_some(),
+        row,
+        reason,
+    )
 }
 
 fn absent_when(required: bool, row: &str, reason: &str) -> Result<(), String> {
