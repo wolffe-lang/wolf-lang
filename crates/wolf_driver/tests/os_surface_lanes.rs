@@ -35,8 +35,10 @@
 //! value or a disposition outside a process the test started.**
 //!
 //! **lupin 0.1.58 and 0.1.59** predate every new name: each is pinned
-//! here by version, exactly as measured ("does not resolve"); a newer lupin
-//! is held to the mirror (tracked in wolf-interp issue 315).
+//! here by version, exactly as measured ("does not resolve"). **lupin
+//! 0.1.60** resolves the five names, checks their shapes and declines each
+//! by name; it is pinned by version too, as measured. A newer lupin is held
+//! to the mirror (tracked in wolf-interp issue 315).
 
 mod lane_exit;
 mod test_cpus;
@@ -59,6 +61,22 @@ fn report(line: &str) {
 /// The pairing at this lane, which predates the mirror of the five names
 /// (wolf-interp#315): its measured answers are pinned per row (`Lupin`).
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
+
+/// r43: the releases that resolve the five names, check their argument
+/// shapes and then decline each by name (wolf-interp#315 still open),
+/// measured on the 0.1.60 candidate at its release head `17bd522`.
+const DECLINED_LUPIN: &[&str] = &["0.1.60"];
+
+/// The call a declining release names on a row where it is not the row's
+/// own s272 call: `signal_action_rows.lu` reaches `os_signal_ignored`
+/// (`[os.signal.ignored]`, which lupin admits no `unsafe` to serve) before
+/// the action query, as measured.
+fn declined_first(name: &str) -> &'static [&'static str] {
+    match name {
+        "signal_action_rows.lu" => &["os_signal_ignored"],
+        _ => &[],
+    }
+}
 
 #[derive(Debug)]
 struct Obs {
@@ -222,6 +240,7 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
         obs.version, obs.verdict, obs.reason, obs.stdout
     );
     let pre = PRE_MIRROR_LUPIN.contains(&obs.version.as_str());
+    let declined = DECLINED_LUPIN.contains(&obs.version.as_str());
     let refuses = |calls: &[&str], unresolved: bool| {
         assert_eq!(
             obs.verdict, "unsupported",
@@ -247,6 +266,15 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
         Lupin::Unresolved(calls) => {
             if pre {
                 refuses(calls, true);
+            } else if declined {
+                let first = declined_first(name);
+                refuses(if first.is_empty() { calls } else { first }, false);
+                assert!(
+                    !obs.reason.contains("does not resolve"),
+                    "lupin {} resolves the names of {name} and declines them by name: {}",
+                    obs.version,
+                    obs.reason
+                );
             } else {
                 assert_eq!(
                     (obs.verdict.as_str(), obs.stdout.as_str()),
