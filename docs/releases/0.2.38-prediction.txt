@@ -148,3 +148,36 @@ wolf 0.2.38
   tags print bare versions; GNU/Linux binaries import at most
   GLIBC_2.34; the musl libwolf_rt.a equals the release jobs' digest.
 - Tap: both formulae, wolf's std resource and the four AUR packages move.
+
+The 0.1.60 postures (added 2026-11-06 at about 21:45Z, before the change)
+------------------------------------------------------------------------
+Measured first, at 68bd207e (PAIRING already 0.1.60), with the lupin
+candidate built at its release-PR head 17bd522: a no-fail-fast run of the
+whole workspace failed 47 tests in 9 binaries, every one at a lupin
+column: attr_closed_set_lanes 1, chan_sent_arg_lanes 21,
+checked_tasks_lanes 2, descriptor_walk_lanes 6, editor_calls_lanes 1,
+editor_wait_lanes 2, map_pairs_walk_lanes 1, os_surface_lanes 6 and
+region_kept_arg_lanes 7. A sweep of all 352 test fixtures under published
+0.1.59 and the candidate found 11 moved; 8 are the mirror's (the three
+descriptor-walk fixtures, restore_rows' lf= line, nofollow_rows,
+fstat_record_rows, and two declined-by-name reasons), and 3 are the
+environment (pids, the binary's own path, a pid guard). The four
+container-only fs_gaps cells (lock, fifo, nonblock, clip) answer as
+0.1.59 did ("does not resolve"), so the release tier would hold them to the
+compiler unless they are pinned.
+
+Predicted for the change:
+- each of the 47 turns green with the candidate once 0.1.60's measured
+  answer is its posture: the #232 lists, the two checked-task partings, the
+  attribute control, the realpath, listen and refill pins (keyed by
+  0.1.60 and commit 17bd522), and a "declined by name" posture where the
+  five s272 calls and the four directory-relative calls now resolve and
+  refuse by name (signal_action_rows names os_signal_ignored, the call
+  0.1.60 reaches first);
+- fs_gaps keeps 0.1.60 pre-mirror on exactly the four container cells and
+  holds nofollow_rows and fstat_record_rows to the compiler;
+- the else handler row gains its fourth machine (0.1.60 binds the name);
+- the same edits stay green with the published 0.1.60 archive, whose
+  conform-run record carries the same impl_version and commit, provided
+  the tag is at 17bd522;
+- the predicate tests that pin each table go red when 0.1.60 is removed.
