@@ -169,8 +169,8 @@ fn a_bare_variant_as_a_struct_fields_pattern_tests_the_field() {
     );
 }
 
-// s282: a capitalized bare name that spells a variant of an enum in scope,
-// in a binder position, still binds a new name on every machine and warns
+// s282: a bare name that spells a variant of an enum in scope, in either
+// letter case, in a binder position, still binds a new name on every machine and warns
 // W0801 at the name. The compiled tiers share the front end, so each reports
 // the same `{code, span}` set; lupin answers the same verdict and output, and
 // its W0801 spans must agree whenever its record carries W0801 (the pinned
