@@ -126,10 +126,32 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   and on the head: 0 W0801 and 0 E0806 on both (`mac-measure-447ba6d8.log`). A syntactic census
   of the same trees finds no capitalized name in any binder position at all
   (`census-org.txt`); the only capitalized `let`s are item-level constants, which the rule does
-  not cover.
+  not cover. With the rule case-blind the head was measured again (`83a64499`,
+  `mac-remeasure-83a64499.log`): 0 W0801 and 0 E0806 in every tree, and every tree's verdicts
+  equal to the base's, file count for file count (3,615 files in 30 trees). The census in
+  either letter case (`census-variant.txt`) finds no binder name in any of those trees that
+  equals a variant name the tree declares; in the corpus it finds exactly this lane's rows.
 - **lupin: hit.** lupin built from the wolf-interp branch answers the compiler's binder rows
   with the same verdicts, stdout and W0801 spans, runs the handler row, and refuses the `select`
-  row with E0806 at the same span (`mac-measure-447ba6d8.log`, the last step).
+  row with E0806 at the same span (`mac-measure-447ba6d8.log`, the last step; at the case-blind
+  heads, `b0b521c` and `83a64499`, all nine rows, `mac-remeasure-83a64499.log`).
+- **The direction of the one-way ledger: lupin's W0801 is a subset of the compiler's.** The
+  compiler may report W0801 where lupin does not; lupin never reports one the compiler does
+  not. Both machines were run over every corpus file, lupin's mirror fixtures and every probe,
+  each stopping at a static rung, and their W0801 spans compared file by file
+  (`tools/w0801-diff.py`, in `mac-remeasure-83a64499.log`): 0 spans lupin-only anywhere. The
+  compiler-only spans are two, and only two:
+  - `lints/binder_capitalized.lu` (449..452), the checker's match-arm half (a capitalized arm
+    name over a scrutinee with no cases), which needs case tables lupin does not have; it is
+    the only corpus file where the two differ, and lupin keeps W0801 one way for it;
+  - probe `b34` (63..68), a binder over an enum declared as `type Kind = enum { Drink, Food }`.
+    lupin does not register that enum's variants at all (a `match` arm `Drink =>` over it does
+    not apply either, `unsupported`), so its binder half cannot see them. That is a real
+    difference in the binder half, outside the corpus, filed as an issue on wolf-interp.
+  Every other file with a W0801 (the five binder rows, the five mirror fixtures, twenty-one probes)
+  has the same span set on both. The comparison also lists one E0806 mismatch,
+  `typecheck/refutable_let.lu`: the checker's refutable-`let` E0806, which lupin answers
+  `unsupported` (honest) at its full run; the `select` E0806 agrees everywhere.
 - **A miss, of formatting:** the shorter rename message let one assertion fit a line, and the
   green take's `cargo fmt --check` failed on it (`mac-fix-83a64499.log`); `f0d31599` formats it.
 - **A miss, of the rig and of the code:** the first build of the fix failed (`Span` has no
@@ -156,6 +178,8 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   rendering, fmt (red, one line), clippy, the `wolf_sema` suite, the snapshot sets;
 - `mac-measure-447ba6d8.log`, `census-org.txt`: the corpus-wide and org-wide measurements, and
   the rows with lupin from the wolf-interp branch;
+- `mac-remeasure-83a64499.log`, `census-variant.txt`: the same at the case-blind head, the
+  census in either letter case, and the compiler-lupin W0801 comparison;
 - `rig/`: the scripts as run.
 
 The records at the final head live outside the tree, because a record cannot predate the head it
@@ -202,21 +226,30 @@ Test targets:
 - [x] fmt, clippy (`wolf_sema`, `wolf_driver`, all targets, `-D warnings`), the `wolf_sema`
       suite with the new snapshots
 - [x] `spec-extract`: no anchor removed, one added; the catalogs regenerated
-- [x] the corpus, wolf-std and the org's wolf repositories: no new W0801, no E0806
-- [x] lupin from the wolf-interp branch agrees on every row
+- [x] the corpus, wolf-std and the org's wolf repositories: no new W0801, no E0806, capitalized
+      and case-blind (`mac-measure-447ba6d8.log`, `mac-remeasure-83a64499.log`)
+- [x] lupin from the wolf-interp branch agrees on every row; lupin's W0801 is a subset of the
+      compiler's over the corpus, the mirror fixtures and the probes (`mac-remeasure-83a64499.log`)
 - [ ] the macOS `cargo xtask ci` at the head (a shakedown, not a record)
 - [ ] the Linux gauntlet record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
 
-Issues, for the orchestrator to file:
-- An item-level destructuring with an annotation gives each binder the whole annotation's type:
-  `let (Drink, N): (Kind, int) = (Kind.Food, 3)` makes `Drink` a `(Kind, int)` (probe `b29`,
-  E0401 at its first use), and lupin runs the same program and prints `drink N`.
-- lupin cannot import a function by item (`use kinds.name`: "`name` does not resolve"; probe
-  `b14`), and reports E0301 on a struct literal whose field is capitalized (`Q { Drink: 5 }`,
-  probe `b26`).
-- lupin reads an `else |Boom|` handler name that spells a capitalized tag of the operand's row
-  as a test, and refuses the program statically (E0809, "leaves `Bust` unhandled"); the compiler
-  binds every handler name and runs it (probe `b31`, `exit(0)`, prints `7`). This lane changed
-  only the variant case.
+Issues, filed once both PRs are open, each with its probe and output (linked from the PR, no
+closing keyword):
+- wolf-lang: an item-level destructuring under an annotation gives each binder the whole
+  annotation's type (`let (a, b): (int, int) = (1, 2)`, then `a + b`: E0409, "this is
+  `(int, int)`"; probe `b36`; with an enum element, `b29`, E0401).
+- wolf-interp: lupin cannot import a function by item (`use kinds.name`: "`name` does not
+  resolve"; probe `b14`).
+- wolf-interp: lupin refuses (E0301) the use of a name a struct pattern's shorthand bound when
+  an enum in scope declares a variant of that name (`let Q { Drink, n } = …`, then
+  `Drink + n`; probe `b35`); the compiler binds it and prints `8`.
+- wolf-interp: lupin reads an `else |Boom|` handler name that spells a tag of the operand's row
+  as a test and refuses statically (E0809); the compiler binds a bare handler name and runs it
+  (probe `b31`, prints `7`). This lane changed only the variant case.
+- wolf-interp: at the next pin advance, the vendored corpus gains these rows and the exact-code
+  lists in `tests/conformance.rs` should gain E0806 for the `select` rows.
+- wolf-interp: lupin does not register the variants of an enum declared as
+  `type Kind = enum { … }` (probe `b34`: no W0801 where the compiler has one; a `match` arm
+  `Drink =>` over it does not apply).
