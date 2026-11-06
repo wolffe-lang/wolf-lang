@@ -36,15 +36,27 @@ def command(argv, cwd, directory, label, timeout):
     return code, out, err
 
 
-def inputs(corpus):
+def inputs(corpus, all_entries=False):
+    # A corpus selects its positive run entries. A fixture directory (one
+    # entry per subdirectory, no directive headers) selects every entry.
     selected = []
     for path in sorted(corpus.rglob("*.lu")):
         if path.is_symlink():
             continue
         text = path.read_bytes().decode("utf-8", errors="replace")
-        if re.search(r"(?m)^//!\s*check:\s*run\(", text):
+        if all_entries or re.search(r"(?m)^//!\s*check:\s*run\(", text):
             selected.append(path)
     return selected
+
+
+DUMP_ARGS = ["--verbose", "--debug-info", "--debug-abbrev", "--debug-line", "--debug-frame"]
+
+
+def dump_argv(tool, obj):
+    # Run in the object's directory and name it relatively, so the dump's
+    # header line carries no host path. DW_AT_comp_dir and the line table's
+    # file names still record the compile's directory and entry path.
+    return [str(tool), *DUMP_ARGS, obj.name]
 
 
 def stage(path, destination):
@@ -109,6 +121,8 @@ def main():
     parser.add_argument("--count", type=int)
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--keep-objects", action="store_true")
+    parser.add_argument("--all-entries", action="store_true",
+                        help="select every .lu entry, not only check: run( ones")
     args = parser.parse_args()
     for name in ("wolf", "baseline", "inspector", "dwarfdump", "corpus", "out"):
         setattr(args, name, getattr(args, name).resolve())
@@ -120,13 +134,15 @@ def main():
         parser.error("output directory must be new; never overwrite an earlier record")
     args.out.mkdir(parents=True)
     cwd = args.corpus.parent
-    candidates = inputs(args.corpus)
+    candidates = inputs(args.corpus, args.all_entries)
     end = None if args.count is None else args.start + args.count
     chosen = candidates[args.start:end]
     if not chosen:
         raise SystemExit("FAIL dwarf-census-empty-selection")
     manifest = {
         "schema": "wolf-dwarf-census/1", "candidate_count": len(candidates),
+        "all_entries": args.all_entries, "compile_cwd": str(cwd),
+        "dwarfdump_argv": ["<dwarfdump>", *DUMP_ARGS, "object.o"],
         "start": args.start, "selected_count": len(chosen),
         "tools": {name: {"path": str(getattr(args, name)),
                          "sha256": digest(getattr(args, name))}
@@ -188,7 +204,7 @@ def main():
             row["dwarfdump"] = {}
             for name in names:
                 obj = case_dir / "head-g-a" / name
-                code, out, err = command([str(args.dwarfdump), "--verbose", "--debug-info", "--debug-abbrev", "--debug-line", "--debug-frame", str(obj)], cwd, case_dir / "head-g-a", "dwarfdump-" + name, args.timeout)
+                code, out, err = command(dump_argv(args.dwarfdump, obj), obj.parent, case_dir / "head-g-a", "dwarfdump-" + name, args.timeout)
                 if code:
                     raise ValueError(f"dwarfdump failed ({code}): {err}")
                 text = out.read_text(errors="strict")
