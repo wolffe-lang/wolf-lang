@@ -318,9 +318,13 @@ fn lupin_says(entry: &Path) -> Option<Obs> {
 fn refill_before_mirror(version: &str, commit: &str) -> bool {
     // r43: the 0.1.60 candidate at its release head keeps the forward pin
     // (`8 false true`, wolf-interp's retirement-checked witness).
-    [("0.1.58", "6240efe"), ("0.1.59", "668fb75"), ("0.1.60", "17bd522")]
-        .iter()
-        .any(|(v, c)| *v == version && commit.starts_with(c))
+    [
+        ("0.1.58", "6240efe"),
+        ("0.1.59", "668fb75"),
+        ("0.1.60", "17bd522"),
+    ]
+    .iter()
+    .any(|(v, c)| *v == version && commit.starts_with(c))
 }
 
 #[test]
