@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+s284 — the drain row's stall (#1022).
+
+- **A fork never claims the signal hub's drain thread at work** (#1022, `[os.signal.hub]`, `[os.proc.fork]`). Back from its poll, the drain thread claimed its state and, when a fork held it, looked at the state a second time. A release landing between the two looks sent it to work while the state still said "in its poll", so the next fork in a back-to-back loop forked while the thread held the hub's lock. The child was made with the lock held and waited for ever at its first use of the hub, and the parent's reap of it never ended: `fork_lanes`' drain row ended `rc=124` on CI in 3 of 5 runs. The thread now acts on its claim's own answer, and so does the reactor's thread, which had the same shape. The race needs a debug-profile runtime's slower path to turn into a stall, which is why CI's `cargo test` builds hit it and release-built runs did not. A new `fork_lanes` row runs drain.lu beside four churning neighbour containers, as CI's job does.
+
 s280 — the hashed Map (#1003, #894).
 
 - **A `Map` finds its keys through a hashed index** (#1003, #894, `[type.map]`). Each lookup and insert used to scan every entry, so N inserts cost N². The runtime now keeps a deterministic open-addressing index over the same insertion-ordered entries, behind the same seven entry points. On x86-64 Linux, 100,000 string-key inserts plus `m[k]` lookups now take 0.020 s natively, where they took 16.0 s; the same work in C takes 0.016 s. Doubling the work now costs 1.97× the time, where it cost 4.71×. `pairs()` order, every answer, the checked machine and lupin are unchanged, and neither the spec nor codegen moves. The index costs 16 bytes of header, plus 16–32 bytes per peak entry. Counting the tables that growth leaves behind, which stay charged to the map's birth region (`[mem.region.account.1]`), it is under 64 bytes per peak entry. `clear` and `remove` reuse the index and charge nothing. At the current std pin, wolf-std's `map.get` still walks `pairs()`, so lookups through `get` stay quadratic until std's `get` uses the index (wolf-std#109).
