@@ -20,3 +20,11 @@ macos/red-e48afd83-x64-teardown.log
                   macOS arm64 at e48afd83: dwarf-frame-x64-teardown-coverage red,
                   `CFI_GAP middle 228..252: unknown SP before register restore`; every
                   arm64 frame row green, the pressure chain's included
+linux/census-16f3778b-corpus.json
+                  the corpus census at 16f3778b, after the teardown fix, summarized: 781
+                  candidates, 756 measured, 25 not measured, 0 failures, cfi_gap_count 0;
+                  every head object byte-and-relocation identical across its two builds
+linux/census-16f3778b-fixtures.json, linux/fixture-digests-16f3778b.txt
+                  the 31 type fixtures at 16f3778b: 0 gaps, and each object's dump digest
+                  (llvm-dwarfdump 21.1.8 --verbose --debug-info --debug-abbrev --debug-line
+                  --debug-frame object.o, compiled from /work/target as the census stages it)
