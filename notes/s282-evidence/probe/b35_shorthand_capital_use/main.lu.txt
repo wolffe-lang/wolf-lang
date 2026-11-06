@@ -1,0 +1,9 @@
+enum Kind { Drink, Food }
+struct Q { Drink: int, n: int }
+
+fn main() -> !int {
+    let Q { Drink, n } = Q { Drink: 5, n: 3 }
+    let x = Drink + n
+    print("{x}")
+    0
+}

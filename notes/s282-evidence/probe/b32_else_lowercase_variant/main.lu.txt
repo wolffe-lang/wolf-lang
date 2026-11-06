@@ -1,0 +1,15 @@
+enum Mode { fast, slow }
+
+fn pick(n: int) -> int ! {too_short} {
+    if n > 0 { n } else { return too_short }
+}
+
+fn main() -> !int {
+    let a = pick(0) else |fast| 7
+    let m = Mode.slow
+    match m {
+        Mode.fast => print("fast {a}"),
+        Mode.slow => print("slow {a}"),
+    }
+    0
+}

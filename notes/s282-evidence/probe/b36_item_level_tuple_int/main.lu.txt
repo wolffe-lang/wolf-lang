@@ -1,0 +1,6 @@
+let (a, b): (int, int) = (1, 2)
+
+fn main() -> !int {
+    print("{a + b}")
+    0
+}

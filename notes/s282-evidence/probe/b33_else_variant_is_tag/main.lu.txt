@@ -1,0 +1,11 @@
+enum Mode { too_short, calm }
+
+fn pick(n: int) -> int ! {too_short} {
+    if n > 0 { n } else { return too_short }
+}
+
+fn main() -> !int {
+    let a = pick(0) else |too_short| 7
+    print("{a}")
+    0
+}

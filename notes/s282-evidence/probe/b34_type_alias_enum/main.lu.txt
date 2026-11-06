@@ -1,0 +1,7 @@
+type Kind = enum { Drink, Food }
+
+fn main() -> !int {
+    let (Drink, n) = (3, 4)
+    print("{Drink} {n}")
+    0
+}
