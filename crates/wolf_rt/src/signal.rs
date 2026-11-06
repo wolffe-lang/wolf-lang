@@ -465,6 +465,9 @@ mod sys {
                 Err(READER_HELD) => {
                     #[cfg(test)]
                     hook::after_failed_claim();
+                    if READER_STATE.load(Ordering::SeqCst) != READER_HELD {
+                        return;
+                    }
                     #[cfg(test)]
                     hook::PARKS.fetch_add(1, Ordering::SeqCst);
                     std::thread::park();
