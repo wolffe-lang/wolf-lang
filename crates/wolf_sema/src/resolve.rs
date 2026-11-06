@@ -1214,7 +1214,6 @@ impl Resolver<'_> {
                     }
                     self.push_scope();
                     if let Some(p) = f.pattern() {
-                        self.note_binder_variants(p, None);
                         self.bind_pattern(p);
                     }
                     if let Some(b) = f.body() {
