@@ -559,12 +559,26 @@ fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String>
     Ok(())
 }
 
+/// The lupin release PAIRING names. PAIRING alone defines the pairing (#87),
+/// so a pairing bump never leaves a second, stale version behind here.
+fn paired_lupin() -> &'static str {
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/PAIRING"))
+        .lines()
+        .find_map(|line| line.strip_prefix("lupin-version"))
+        .and_then(|rest| rest.trim_start().strip_prefix('='))
+        .map(str::trim)
+        .expect("PAIRING names a lupin-version")
+}
+
 pub fn reference(row: &str, dir: &Path, actual: &str) -> Result<bool, String> {
     let Some(lupin) = std::env::var_os("LUPIN") else {
         if std::env::var_os("WOLF_PAIRING_REQUIRE_SIBLING").is_some() {
             return Err("required pinned lupin is absent".into());
         }
-        eprintln!("SKIP {row} reason=set LUPIN to the paired 0.1.59 oracle");
+        eprintln!(
+            "SKIP {row} reason=set LUPIN to the paired lupin {}",
+            paired_lupin()
+        );
         return Ok(false);
     };
     let record = output(
@@ -576,8 +590,7 @@ pub fn reference(row: &str, dir: &Path, actual: &str) -> Result<bool, String> {
         "lupin-variant",
     )?;
     let record: serde_json::Value = serde_json::from_str(&record).map_err(|e| e.to_string())?;
-    if record["impl_version"].as_str() != pins()["lupin"]["version"].as_str()
-        || record["verdict"] != "exit(0)"
+    if record["impl_version"].as_str() != Some(paired_lupin()) || record["verdict"] != "exit(0)"
     {
         return Err(format!(
             "paired oracle did not execute this fixture: {record}"
@@ -635,6 +648,13 @@ mod tests {
                 .unwrap_err()
                 .contains("discriminator 73")
         );
+    }
+
+    #[test]
+    fn the_oracle_version_is_read_from_pairing() {
+        let version = paired_lupin();
+        assert_eq!(version.split('.').count(), 3, "{version:?}");
+        assert!(version.split('.').all(|part| part.parse::<u32>().is_ok()));
     }
 
     #[test]
