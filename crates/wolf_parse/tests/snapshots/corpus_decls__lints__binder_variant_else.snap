@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-EnumDecl 408..443 name=Kind variants=3
-FnDecl 445..513 name=pick body=Block
-FnDecl 515..632 name=main body=Block
+EnumDecl 415..450 name=Kind variants=3
+FnDecl 452..520 name=pick body=Block
+FnDecl 522..639 name=main body=Block

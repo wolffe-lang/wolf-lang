@@ -2,15 +2,15 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-EnumDecl 711..746 name=Kind variants=3
-EnumDecl 748..777 name=Opt variants=2
-StructDecl 779..814 name=Order fields=2
-FnDecl 816..940 name=name body=Block
-FnDecl 942..1023 name=tuple body=Block
-FnDecl 1025..1139 name=field body=Block
-FnDecl 1141..1211 name=whole body=Block
-FnDecl 1213..1316 name=var_tuple body=Block
-FnDecl 1318..1409 name=group body=Block
-FnDecl 1411..1513 name=nested body=Block
-FnDecl 1515..1582 name=carries body=Block
-FnDecl 1584..1751 name=main body=Block
+EnumDecl 718..753 name=Kind variants=3
+EnumDecl 755..784 name=Opt variants=2
+StructDecl 786..821 name=Order fields=2
+FnDecl 823..947 name=name body=Block
+FnDecl 949..1030 name=tuple body=Block
+FnDecl 1032..1146 name=field body=Block
+FnDecl 1148..1218 name=whole body=Block
+FnDecl 1220..1323 name=var_tuple body=Block
+FnDecl 1325..1416 name=group body=Block
+FnDecl 1418..1520 name=nested body=Block
+FnDecl 1522..1589 name=carries body=Block
+FnDecl 1591..1758 name=main body=Block
