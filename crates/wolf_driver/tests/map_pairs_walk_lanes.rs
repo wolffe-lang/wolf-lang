@@ -316,7 +316,9 @@ fn lupin_says(entry: &Path) -> Option<Obs> {
 /// charge a refilled slot twice (measured: 0.1.58 prints `8 false true`
 /// on `list_reset_reuse_ledger.lu`). An unlisted release must mirror.
 fn refill_before_mirror(version: &str, commit: &str) -> bool {
-    [("0.1.58", "6240efe"), ("0.1.59", "668fb75")]
+    // r43: the 0.1.60 candidate at its release head keeps the forward pin
+    // (`8 false true`, wolf-interp's retirement-checked witness).
+    [("0.1.58", "6240efe"), ("0.1.59", "668fb75"), ("0.1.60", "17bd522")]
         .iter()
         .any(|(v, c)| *v == version && commit.starts_with(c))
 }
@@ -329,6 +331,9 @@ fn the_refill_pin_names_only_the_measured_release_record() {
     assert!(refill_before_mirror("0.1.59", "668fb75"));
     assert!(!refill_before_mirror("0.1.59", "unknown"));
     assert!(!refill_before_mirror("0.1.58", "668fb75"));
+    assert!(refill_before_mirror("0.1.60", "17bd522"));
+    assert!(!refill_before_mirror("0.1.60", "668fb75"));
+    assert!(!refill_before_mirror("0.1.60", "unknown"));
 }
 
 fn corpus(rel: &str) -> PathBuf {
