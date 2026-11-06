@@ -1,0 +1,17 @@
+//! check: run(exit=0, stdout="tip 3")
+//! phase: run
+//! conforms: gram.pat, mod.use.pub, diag.sev.warn
+//! warns: W0801
+//!
+//! W0801 for an enum this file imports by item (`use kinds.Kind`): its
+//! variants are in scope for the warning exactly as a local enum's are, so
+//! `Drink` below is a new binding that spells `Kind.Drink`, and it warns.
+
+use kinds
+use kinds.Kind
+
+fn main() -> !int {
+    let (Drink, n) = (Kind.Gratuity, 3)
+    print("{kinds.name(Drink)} {n}")
+    0
+}

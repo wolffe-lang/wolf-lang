@@ -1,0 +1,73 @@
+//! check: run(exit=0, stdout="food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8")
+//! phase: run
+//! conforms: gram.pat, gram.pat.struct, gram.item.let, diag.sev.warn
+//! warns: W0801
+//!
+//! W0801 in `let` and `var` binders: a capitalized bare name that spells a
+//! variant of an enum in scope still binds a new name, because a binder
+//! pattern binds every value it meets and never tests. It reads as the test
+//! it is not, so it warns, naming the variant. Each name below spells one
+//! case and holds another, and the program prints what each one bound: a
+//! tuple element, a struct field, a whole `let`, a `var`, a binder of a
+//! comma group, a nested tuple, and a variant that carries a value.
+
+enum Kind { Drink, Food, Gratuity }
+
+enum Opt { Some(int), Empty }
+
+struct Order { kind: Kind, n: int }
+
+fn name(k: Kind) -> str {
+    match k {
+        Drink => "drink",
+        Food => "food",
+        Gratuity => "tip",
+    }
+}
+
+fn tuple() -> str {
+    let (Drink, n) = (Kind.Food, 3)
+    "{name(Drink)} {n}"
+}
+
+fn field() -> str {
+    let Order { kind: Food, n } = Order { kind: Kind.Gratuity, n: 4 }
+    "{name(Food)} {n}"
+}
+
+fn whole() -> str {
+    let Gratuity = Kind.Drink
+    name(Gratuity)
+}
+
+fn var_tuple() -> str {
+    var (Drink, n) = (Kind.Gratuity, 1)
+    n = n + 1
+    "{name(Drink)} {n}"
+}
+
+fn group() -> str {
+    let a = 1, (Food, b) = (Kind.Drink, 2)
+    "{name(Food)} {a} {b}"
+}
+
+fn nested() -> str {
+    let ((Gratuity, a), b) = ((Kind.Food, 5), 6)
+    "{name(Gratuity)} {a} {b}"
+}
+
+fn carries() -> str {
+    let (Some, n) = (7, 8)
+    "{Some} {n}"
+}
+
+fn main() -> !int {
+    print(tuple())
+    print(field())
+    print(whole())
+    print(var_tuple())
+    print(group())
+    print(nested())
+    print(carries())
+    0
+}

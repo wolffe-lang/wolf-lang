@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="food1tip2\ndrinktip")
+//! phase: run
+//! conforms: gram.pat, gram.expr.flow, diag.sev.warn
+//! warns: W0801
+//!
+//! W0801 in a `for` header: the header's pattern binds each element, so a
+//! capitalized bare name that spells a variant of an enum in scope is a new
+//! binding, never a filter on the elements, and it warns. `Drink` takes
+//! every first element of the tuples, and `Food` every element of the list.
+
+enum Kind { Drink, Food, Gratuity }
+
+fn name(k: Kind) -> str {
+    match k {
+        Drink => "drink",
+        Food => "food",
+        Gratuity => "tip",
+    }
+}
+
+fn main() -> !int {
+    let xs = [(Kind.Food, 1), (Kind.Gratuity, 2)]
+    var t = ""
+    for (Drink, n) in xs { t = t + name(Drink) + "{n}" }
+    print(t)
+    var u = ""
+    for Food in [Kind.Drink, Kind.Gratuity] { u = u + name(Food) }
+    print(u)
+    0
+}

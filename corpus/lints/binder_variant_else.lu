@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="7 5")
+//! phase: run
+//! conforms: gram.expr.primary, gram.pat, diag.sev.warn
+//! warns: W0801
+//!
+//! W0801 in an `else |…|` handler: the handler's name binds the error it
+//! catches, every error, so a capitalized bare name that spells a variant of
+//! an enum in scope is a binding there too, and it warns. The handler runs
+//! for `pick(0)`'s error; `pick(5)` has none.
+
+enum Kind { Drink, Food, Gratuity }
+
+fn pick(n: int) -> int ! {gone} {
+    if n > 0 { n } else { gone }
+}
+
+fn main() -> !int {
+    let a = pick(0) else |Drink| 7
+    let b = pick(5) else |Food| 9
+    print("{a} {b}")
+    0
+}
