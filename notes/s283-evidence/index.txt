@@ -28,3 +28,15 @@ linux/census-16f3778b-fixtures.json, linux/fixture-digests-16f3778b.txt
                   the 31 type fixtures at 16f3778b: 0 gaps, and each object's dump digest
                   (llvm-dwarfdump 21.1.8 --verbose --debug-info --debug-abbrev --debug-line
                   --debug-frame object.o, compiled from /work/target as the census stages it)
+macos/census-16f3778b-corpus.json
+                  the first full arm64 corpus census, at 16f3778b: 756 measured, one
+                  uncovered range (memory/read_lend_frame.lu main, a scratch-register
+                  frame release), so the census failed
+macos/red-a2f6dbd7-arm64-scratch-release.log
+                  arm64 at a2f6dbd7, a fresh target: the decoder's large-frame row red,
+                  and both big-frame chain rows red by name on the same instruction form
+macos/census-62fdc9dd-corpus.json, macos/census-62fdc9dd-fixtures.json,
+macos/fixture-digests-62fdc9dd.txt
+                  arm64 at 62fdc9dd, after the fix: the corpus and the 31 fixtures at 0
+                  gaps, 0 failures, and each fixture object's dump digest (the SDK's
+                  dwarfdump, Apple LLVM 21.0.0)
