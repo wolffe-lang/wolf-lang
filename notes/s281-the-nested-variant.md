@@ -24,8 +24,9 @@ Nothing ran under `/tmp` or `/var/folders`: TMPDIR is the lane's own. No commit 
 
 ## Inputs, verified
 
-- Base `5f1f1c94` (trunk, s278). wolf built there on nomad (`cargo build --locked -p wolf_driver
-  -p wolf_rt`, Rust 1.97.1); the published wolf 0.2.36 (`wolf --version`: pin `5adf3d9`) and
+- Base `5f1f1c94` (trunk, s278; the branch is rebased onto `b35e87b3` since, see Done-when).
+  wolf built there on nomad (`cargo build --locked -p wolf_driver -p wolf_rt`, Rust 1.97.1);
+  the published wolf 0.2.36 (`wolf --version`: pin `5adf3d9`) and
   lupin 0.1.58 (pin `a5378e3`, the `PAIRING` stamp). On hasu, lupin 0.1.58's linux archive
   (sha256 `34f52792…2193`) and wolf 0.2.35's (`4cc4045b…ad1a`, the clef and ligature builds'
   toolchain), each read twice and equal to the digest the release page reports.
@@ -147,20 +148,34 @@ record cannot predate the head it names. The PR body quotes every `END` line:
 
 ## Done-when
 
-Commits:
-- `11391f86`: the base measured (`notes/s281-evidence`).
-- `3a7bc845`: the prediction, before the first change.
-- `43185b2d`: the four rows red at the base.
-- `e3edd9f2`: the five control rows.
-- `7afb039b`: the nine rows in `four_machine_regressions` (the checked machine, native, release,
+Commits (on the branch since the rebase onto `b35e87b3`):
+- `bf8350cc`: the base measured (`notes/s281-evidence`).
+- `2735904e`: the prediction, before the first change.
+- `0397dbd9`: the four rows red at the base.
+- `724d1610`: the five control rows.
+- `426182de`: the nine rows in `four_machine_regressions` (the checked machine, native, release,
   lupin).
-- `7818bfcf`: the fix, `pattern_shape`.
-- `da68bdc6`, `c029948f`, `3972d9d3`: the lexer's and parser's snapshots of the nine rows, and the
+- `9155b55d`: the fix, `pattern_shape`.
+- `4bbc82e1`, `a86b4f83`, `87dddea3`: the lexer's and parser's snapshots of the nine rows, and the
   lowering ledger (the nine rows lower).
-- `d49fb950`, `0fa55804`: the evidence and this note (the first linux take's head).
-- `9d7cd68c`: the parse-tree snapshots of the eight grammar rows (`ambiguity_trees`), red at
-  `0fa55804` in the first linux record.
-- The evidence of the red take and the note's account of it.
+- `987b85a3`, `0418743a`: the evidence and this note.
+- `ae3883ab`: the parse-tree snapshots of the eight grammar rows (`ambiguity_trees`), red in the
+  first linux record.
+- `c2e9de9c`, `cb3ff0a5`: the evidence of the red take and the note's account of it.
+- This paragraph.
+
+**The rebase.** The branch was cut at `5f1f1c94` and every measurement above was taken there or
+on its commits before the rebase. On 2026-11-06 it was rebased once onto trunk `b35e87b3` (s280,
+after 0.2.37): no conflict, and every commit's patch is unchanged (`git patch-id --stable` equal
+for all fourteen). Trunk's 81 commits touch none of this branch's files, no corpus file and no
+snapshot of the lexer, the parser or the lowering ledger. The shas the Prediction, the Evidence
+index and the log names cite are the pre-rebase commits the logs were measured at; each maps to
+the rebased commit with the same patch: `11391f86` → `bf8350cc`, `3a7bc845` → `2735904e`,
+`43185b2d` → `0397dbd9`, `e3edd9f2` → `724d1610`, `7afb039b` → `426182de`, `7818bfcf` →
+`9155b55d`, `da68bdc6` → `4bbc82e1`, `c029948f` → `a86b4f83`, `3972d9d3` → `87dddea3`,
+`d49fb950` → `987b85a3`, `0fa55804` → `0418743a`, `9d7cd68c` → `ae3883ab`, `e94c2fb0` →
+`c2e9de9c`, `89890746` → `cb3ff0a5`. The green and plant records the PR body quotes are taken at
+the rebased head.
 
 R-list, recommendations implemented:
 - **R-s281-1, the spec: (A) no `spec/` change**, implemented. The spec is not silent:
