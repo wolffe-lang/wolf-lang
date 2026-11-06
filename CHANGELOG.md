@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+s282 — variant names in binder positions.
+
+- **A binder name that spells a variant warns W0801** (`[gram.pat.binder]`). A `let` or `var` pattern, a `for` header and an `else |…|` handler bind every value they meet, so `let (Drink, n) = pair` binds `Drink` to whatever the first element holds, even with `Kind.Drink` in scope. That still binds, and now warns at the name, naming the variant and its declaration, with two fixes: a lowercase name with every use renamed (the one `wolf fix` applies) and the qualified `Kind.Drink`. "In scope" means an enum the module declares or the file imports by item; lowercase names, parameters and item-level bindings stay silent. The warning comes from the resolver, so it is the same on the checked machine, native and release. No program that was already in the corpus warns.
+- **A `select` arm that spells a variant is refused** (E0806). `Drink from ch` bound every received value on the compiled tiers, and lupin read it as a test; a receive cannot test, so the arm is now refused at the name, with the lowercase binding as the fix.
+
 s284 — the drain row's stall (#1022).
 
 - **A fork never claims the signal hub's drain thread at work** (#1022, `[os.signal.hub]`, `[os.proc.fork]`). Back from its poll, the drain thread claimed its state and, when a fork held it, looked at the state a second time. A release landing between the two looks sent it to work while the state still said "in its poll", so the next fork in a back-to-back loop forked while the thread held the hub's lock. The child was made with the lock held and waited for ever at its first use of the hub, and the parent's reap of it never ended: `fork_lanes`' drain row ended `rc=124` on CI in 3 of 5 runs. The thread now acts on its claim's own answer, and so does the reactor's thread, which had the same shape. The race needs a debug-profile runtime's slower path to turn into a stall, which is why CI's `cargo test` builds hit it and release-built runs did not. A new `fork_lanes` row runs drain.lu beside four churning neighbour containers, as CI's job does.
