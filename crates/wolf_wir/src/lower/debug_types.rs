@@ -375,8 +375,12 @@ impl Describer<'_> {
             {
                 fields.push(member(*name, 40 + i as u64 * 8, int()));
             }
+            // The hashed index: a runtime-private slot table (dense entry
+            // index + 1, zero vacant), named opaque, and its slot count.
+            fields.push(member("index", 72, pointer(opaque("opaque map index"))));
+            fields.push(member("index_cap", 80, int()));
         }
-        Type::new(name, if map { 72 } else { 40 }, Kind::Struct(fields))
+        Type::new(name, if map { 88 } else { 40 }, Kind::Struct(fields))
     }
 
     #[allow(clippy::too_many_arguments)]
