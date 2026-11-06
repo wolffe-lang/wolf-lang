@@ -204,6 +204,7 @@
 
 pub mod attrs;
 pub mod audit;
+pub(crate) mod binder;
 pub mod check;
 pub mod coerce;
 pub mod ctfe;
