@@ -364,13 +364,26 @@ cannot.
 
 ## W0801 — a capitalized name in this pattern binds instead of matching
 
-This scrutinee has no cases for the name to test, so the bare
-identifier binds a fresh name — the arm matches every value, and any
-arms below it are dead. A capitalized name in pattern position reads
-as a variant or tag test, which is exactly why this shape has
-produced first-arm-always dispatch in correct-looking code. If a
-constant comparison was meant, use a guard (`n if n == Zed`); if a
-binding was meant, give it a lowercase name so it reads as one.
+A capitalized name in pattern position reads as a variant or tag
+test, and in two places it is a binding instead.
+
+In a `match` arm whose scrutinee has no cases for the name to test,
+the bare identifier binds a fresh name — the arm matches every value,
+and any arms below it are dead. This shape has produced
+first-arm-always dispatch in correct-looking code. If a constant
+comparison was meant, use a guard (`n if n == Zed`); if a binding was
+meant, give it a lowercase name so it reads as one.
+
+In a binder position — a `let` or `var` pattern, a `for` header, an
+`else |…|` handler — the pattern binds every value it meets, so a
+bare name there is always a new binding, even when it spells a
+variant of an enum in scope (one the module declares, or one the file
+imports by item): `let (Drink, n) = pair` binds `Drink` to whatever
+the first element holds. The warning names the variant and offers two
+fixes. A lowercase name keeps the binding the program already has,
+with every use renamed, and it is the one `wolf fix` applies. The
+qualified variant `Kind.Drink` makes the test the name looked like,
+which a binder refuses (E0806), so the test moves into a `match`.
 
 ## W1001 — this region never allocates
 
