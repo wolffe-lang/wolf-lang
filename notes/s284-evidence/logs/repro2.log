@@ -1,0 +1,458 @@
+QUEUED 2026-11-06T07:02:19Z job=repro2 on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=1 B=1
+BUILD 8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9 cpus=6-11 kernel=7.2.4 2026-11-06T07:05:03Z
+START build-dbg 2026-11-06T07:05:03Z
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_span)
+     Compiling foldhash v0.2.0
+     Compiling shlex v2.0.1
+     Compiling hashbrown v0.17.1
+     Compiling stable_deref_trait v1.2.1
+     Compiling cfg-if v1.0.4
+     Compiling find-msvc-tools v0.1.10
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling cc v1.4.2
+     Compiling crossbeam-deque v0.8.7
+     Compiling smallvec v1.15.2
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_lex)
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling cranelift-srcgen v0.134.3
+     Compiling constant_time_eq v0.4.2
+     Compiling arrayvec v0.7.8
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_parse)
+     Compiling equivalent v1.0.2
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling either v1.17.0
+     Compiling rayon v1.12.0
+     Compiling indexmap v2.14.0
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling cranelift-isle v0.134.3
+     Compiling writeable v0.6.3
+     Compiling litemap v0.8.2
+     Compiling icu_properties_data v2.2.0
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling heck v0.5.0
+     Compiling libc v0.2.189
+     Compiling serde_core v1.0.229
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling hashbrown v0.16.1
+     Compiling zerofrom v0.1.8
+     Compiling fnv v1.0.7
+     Compiling yoke v0.8.3
+     Compiling log v0.4.33
+     Compiling zerotrie v0.2.4
+     Compiling icu_normalizer_data v2.2.0
+     Compiling utf8_iter v1.0.4
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_sema)
+     Compiling gimli v0.33.0
+     Compiling zerovec v0.11.6
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling allocator-api2 v0.2.21
+     Compiling tinystr v0.8.3
+     Compiling icu_locale_core v2.2.0
+     Compiling potential_utf v0.1.5
+     Compiling icu_collections v2.2.0
+     Compiling memchr v2.8.3
+     Compiling icu_provider v2.2.0
+     Compiling target-lexicon v0.13.5
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling zmij v1.0.23
+     Compiling cranelift-codegen v0.134.3
+     Compiling rustc-hash v2.1.3
+     Compiling arbitrary v1.4.2
+     Compiling serde v1.0.229
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling icu_properties v2.2.0
+     Compiling serde_derive v1.0.229
+     Compiling anyhow v1.0.104
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_mem)
+     Compiling idna_adapter v1.2.2
+     Compiling itoa v1.0.18
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_wir)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_query)
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_cimport)
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_backend)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_pkg)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_doc)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.80s
+END build-dbg exit=0 2026-11-06T07:05:33Z
+START build-rel 2026-11-06T07:05:33Z
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling unicode-ident v1.0.24
+     Compiling crossbeam-utils v0.8.22
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_span)
+     Compiling foldhash v0.2.0
+     Compiling cfg-if v1.0.4
+     Compiling hashbrown v0.17.1
+     Compiling shlex v2.0.1
+     Compiling stable_deref_trait v1.2.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_diag)
+     Compiling cc v1.4.2
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_lex)
+     Compiling rayon-core v1.13.0
+     Compiling arrayvec v0.7.8
+     Compiling smallvec v1.15.2
+     Compiling blake3 v1.8.6
+     Compiling cranelift-srcgen v0.134.3
+     Compiling constant_time_eq v0.4.2
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling zerofrom v0.1.8
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_ast)
+     Compiling yoke v0.8.3
+     Compiling libm v0.2.16
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling equivalent v1.0.2
+     Compiling either v1.17.0
+     Compiling indexmap v2.14.0
+     Compiling zerovec v0.11.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_parse)
+     Compiling rayon v1.12.0
+     Compiling tinystr v0.8.3
+     Compiling litemap v0.8.2
+     Compiling writeable v0.6.3
+     Compiling cranelift-isle v0.134.3
+     Compiling icu_locale_core v2.2.0
+     Compiling potential_utf v0.1.5
+     Compiling zerotrie v0.2.4
+     Compiling libc v0.2.189
+     Compiling serde_core v1.0.229
+     Compiling fnv v1.0.7
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling icu_properties_data v2.2.0
+     Compiling heck v0.5.0
+     Compiling log v0.4.33
+     Compiling hashbrown v0.16.1
+     Compiling icu_normalizer_data v2.2.0
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_sema)
+     Compiling utf8_iter v1.0.4
+     Compiling icu_collections v2.2.0
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling gimli v0.33.0
+     Compiling icu_provider v2.2.0
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling memchr v2.8.3
+     Compiling target-lexicon v0.13.5
+     Compiling allocator-api2 v0.2.21
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling cranelift-codegen v0.134.3
+     Compiling arbitrary v1.4.2
+     Compiling rustc-hash v2.1.3
+     Compiling zmij v1.0.23
+     Compiling serde v1.0.229
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling icu_properties v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling crc32fast v1.5.0
+     Compiling anyhow v1.0.104
+     Compiling serde_json v1.0.151
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_mem)
+     Compiling object v0.39.1
+     Compiling itoa v1.0.18
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_fmt)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_query)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_wir)
+     Compiling url v2.5.8
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_backend)
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_cimport)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_pkg)
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_codegen_clif)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_lsp)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_doc)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/crates/wolf_driver)
+      Finished `release` profile [optimized + debuginfo] target(s) in 1m 50s
+END build-rel exit=0 2026-11-06T07:07:31Z
+START drain-dbg-native 2026-11-06T07:07:31Z
+END drain-dbg-native exit=0 2026-11-06T07:07:38Z
+START drain-dbg-release 2026-11-06T07:07:38Z
+END drain-dbg-release exit=0 2026-11-06T07:07:46Z
+START drain-rel-native 2026-11-06T07:07:46Z
+END drain-rel-native exit=0 2026-11-06T07:07:51Z
+START drain-rel-release 2026-11-06T07:07:51Z
+END drain-rel-release exit=0 2026-11-06T07:07:52Z
+START digests 2026-11-06T07:07:52Z
+  ef5dd988da149fe025b389236ab091396c638d76b908b8a1dbc70f5a99406aec  target/debug/wolf
+  43e51e1f7004dda255c6b2f26c131bf1c029afe98d4667a807fb28019f02eb5d  target/debug/libwolf_rt.a
+  b17776b812ad8937471d09312a2e1e96c841cc350ad5edef1a236cd5ac18c2f5  target/release/wolf
+  6cd170f7d90f6630b3637373f13c82303b67a6e5b68418650b3efc51d8789c04  target/release/libwolf_rt.a
+  18ce43594d9f02f479011301845cedd958dce54b287e7a5b0b4b19393ec94210  /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+  c3c003adc95aea01fadf65a066e74aa96a1f7a72af2ec68f993afe988cde5ef5  /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-release
+  12122953bb2c3058fbeeb4eb658115698ea50b809660f7baa8cc44ee33700f57  /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-rel-native
+  49a2e32457409311bcc8ee20a249cf0113f347e15133bb381979d6ecda2057c8  /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-rel-release
+END digests exit=0 2026-11-06T07:07:53Z
+START symbols 2026-11-06T07:07:53Z
+  drain-dbg-native 00000000000e8710 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-native 00000000000e9334 b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-dbg-release 00000000000e79d0 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-release 00000000000e85f4 b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-rel-native 0000000000085198 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-native 00000000000861b8 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.16768554107541070015
+  drain-rel-release 0000000000084458 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-release 0000000000085478 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.16768554107541070015
+END symbols exit=0 2026-11-06T07:07:53Z
+BUILT 8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9 2026-11-06T07:07:53Z
+LOCKS_ACQUIRED 2026-11-06T07:07:53Z block=B four=6-9 label=repro2 pairs=5 rounds=30 budget=14m kernel=7.2.4
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release sha256=35c7fa530450875b
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native sha256=b3d53ffbc620d2d5
+PAIR quiet /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native sha256=18ce43594d9f02f4
+PAIR quiet /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-rel-native sha256=12122953bb2c3058
+ROUND 1 2026-11-06T07:07:53Z load=7.41 6.01 4.97
+RUN repro2-r1-p1 quiet drain-dbg-release rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r1-p2 quiet drain-rel-native rc=0 ms=15358 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r1-p3 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r1-p4 quiet drain-rel-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r1-p0 quiet drain-dbg-native rc=0 ms=12690 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 2 2026-11-06T07:08:25Z load=6.18 5.85 4.95
+RUN repro2-r2-p2 quiet drain-rel-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r2-p3 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r2-p4 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, t
+RUN repro2-r2-p0 quiet drain-dbg-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r2-p1 quiet drain-dbg-release rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 3 2026-11-06T07:08:31Z load=6.09 5.84 4.95
+RUN repro2-r3-p3 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 WORK_IN_FORK S284 WORK_IN_FORK S284 SLIP state=POLLING S284 SLIP 
+RUN repro2-r3-p4 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r3-p0 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r3-p1 quiet drain-dbg-release rc=0 ms=4298 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r3-p2 quiet drain-rel-native rc=0 ms=1025 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 4 2026-11-06T07:08:40Z load=5.77 5.78 4.94
+RUN repro2-r4-p4 quiet drain-rel-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r4-p0 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r4-p1 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r4-p2 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r4-p3 quiet drain-dbg-native rc=0 ms=5732 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLA
+ROUND 5 2026-11-06T07:08:51Z load=6.19 5.87 4.98
+RUN repro2-r5-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r5-p1 quiet drain-dbg-release rc=0 ms=1638 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r5-p2 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r5-p3 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 WORK_IN_FORK S284
+RUN repro2-r5-p4 quiet drain-rel-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 6 2026-11-06T07:08:57Z load=5.70 5.77 4.96
+RUN repro2-r6-p1 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r6-p2 quiet drain-rel-native rc=0 ms=1025 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r6-p3 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 SLIP state=POLLING S284 SLIP state=POLLIN
+RUN repro2-r6-p4 quiet drain-rel-native rc=0 ms=1428 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, t
+RUN repro2-r6-p0 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 7 2026-11-06T07:09:04Z load=6.21 5.88 5.00
+RUN repro2-r7-p2 quiet drain-rel-native rc=0 ms=1025 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r7-p3 quiet drain-dbg-native rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 WORK_IN_FORK S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284
+RUN repro2-r7-p4 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r7-p0 quiet drain-dbg-native rc=0 ms=1436 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r7-p1 quiet drain-dbg-release rc=0 ms=1233 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 8 2026-11-06T07:09:10Z load=5.87 5.81 4.98
+RUN repro2-r8-p3 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r8-p4 quiet drain-rel-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r8-p0 quiet drain-dbg-native rc=0 ms=2254 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r8-p1 quiet drain-dbg-release rc=0 ms=2049 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r8-p2 quiet drain-rel-native rc=0 ms=1026 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 9 2026-11-06T07:09:18Z load=5.82 5.80 4.99
+RUN repro2-r9-p4 quiet drain-rel-native rc=0 ms=1436 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r9-p0 quiet drain-dbg-native rc=0 ms=1839 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r9-p1 quiet drain-dbg-release rc=0 ms=1437 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r9-p2 quiet drain-rel-native rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r9-p3 quiet drain-dbg-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1
+ROUND 10 2026-11-06T07:09:25Z load=6.08 5.86 5.01
+RUN repro2-r10-p0 quiet drain-dbg-native rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r10-p1 quiet drain-dbg-release rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r10-p2 quiet drain-rel-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r10-p3 quiet drain-dbg-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 WORK_IN_FORK S284
+RUN repro2-r10-p4 quiet drain-rel-native rc=0 ms=1025 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 11 2026-11-06T07:09:31Z load=5.99 5.84 5.01
+RUN repro2-r11-p1 quiet drain-dbg-release rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r11-p2 quiet drain-rel-native rc=0 ms=1026 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r11-p3 quiet drain-dbg-native rc=0 ms=1436 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r11-p4 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, t
+RUN repro2-r11-p0 quiet drain-dbg-native rc=0 ms=1223 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 12 2026-11-06T07:09:37Z load=5.75 5.79 5.00
+RUN repro2-r12-p2 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r12-p3 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLIN
+RUN repro2-r12-p4 quiet drain-rel-native rc=0 ms=1025 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r12-p0 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r12-p1 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 13 2026-11-06T07:09:43Z load=5.41 5.72 4.98
+RUN repro2-r13-p3 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r13-p4 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every
+RUN repro2-r13-p0 quiet drain-dbg-native rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r13-p1 quiet drain-dbg-release rc=0 ms=1674 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r13-p2 quiet drain-rel-native rc=0 ms=1259 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 14 2026-11-06T07:09:50Z load=5.46 5.72 4.99
+RUN repro2-r14-p4 quiet drain-rel-native rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r14-p0 quiet drain-dbg-native rc=0 ms=1885 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r14-p1 quiet drain-dbg-release rc=0 ms=1445 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r14-p2 quiet drain-rel-native rc=0 ms=1253 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r14-p3 quiet drain-dbg-native rc=0 ms=1462 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 OVERWRITE S284 WORK_IN_FORK S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 WORK_IN_
+ROUND 15 2026-11-06T07:09:57Z load=5.87 5.80 5.02
+RUN repro2-r15-p0 quiet drain-dbg-native rc=0 ms=1447 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r15-p1 quiet drain-dbg-release rc=0 ms=1668 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r15-p2 quiet drain-rel-native rc=0 ms=1249 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r15-p3 quiet drain-dbg-native rc=0 ms=1462 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r15-p4 quiet drain-rel-native rc=0 ms=1038 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+ROUND 16 2026-11-06T07:10:04Z load=6.12 5.85 5.04
+RUN repro2-r16-p1 quiet drain-dbg-release rc=0 ms=1449 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r16-p2 quiet drain-rel-native rc=0 ms=1462 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r16-p3 quiet drain-dbg-native rc=0 ms=1468 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r16-p4 quiet drain-rel-native rc=0 ms=1255 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r16-p0 quiet drain-dbg-native rc=0 ms=1452 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 17 2026-11-06T07:10:12Z load=6.35 5.91 5.06
+RUN repro2-r17-p2 quiet drain-rel-native rc=0 ms=1247 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r17-p3 quiet drain-dbg-native rc=0 ms=1454 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r17-p4 quiet drain-rel-native rc=0 ms=1691 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, t
+RUN repro2-r17-p0 quiet drain-dbg-native rc=0 ms=1881 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r17-p1 quiet drain-dbg-release rc=0 ms=1439 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 18 2026-11-06T07:10:20Z load=6.22 5.89 5.07
+RUN repro2-r18-p3 quiet drain-dbg-native rc=0 ms=1461 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLIN
+RUN repro2-r18-p4 quiet drain-rel-native rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, t
+RUN repro2-r18-p0 quiet drain-dbg-native rc=0 ms=1446 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r18-p1 quiet drain-dbg-release rc=0 ms=1444 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r18-p2 quiet drain-rel-native rc=0 ms=1252 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 19 2026-11-06T07:10:27Z load=6.45 5.94 5.09
+RUN repro2-r19-p4 quiet drain-rel-native rc=0 ms=1683 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r19-p0 quiet drain-dbg-native rc=0 ms=1652 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r19-p1 quiet drain-dbg-release rc=0 ms=1462 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r19-p2 quiet drain-rel-native rc=0 ms=1249 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r19-p3 quiet drain-dbg-native rc=0 ms=1452 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 OVERWRITE S284 CLAIM_AT_WORK S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLIN
+ROUND 20 2026-11-06T07:10:35Z load=6.53 5.98 5.11
+RUN repro2-r20-p0 quiet drain-dbg-native rc=0 ms=1467 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r20-p1 quiet drain-dbg-release rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r20-p2 quiet drain-rel-native rc=0 ms=1239 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r20-p3 quiet drain-dbg-native rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 WORK_IN_FORK S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLAIM_AT_WORK S284 OVERWRITE S284 SLIP state=PO
+RUN repro2-r20-p4 quiet drain-rel-native rc=0 ms=1245 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 21 2026-11-06T07:10:42Z load=6.80 6.05 5.14
+RUN repro2-r21-p1 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r21-p2 quiet drain-rel-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r21-p3 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r21-p4 quiet drain-rel-native rc=0 ms=1026 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r21-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 22 2026-11-06T07:10:48Z load=6.61 6.03 5.14
+RUN repro2-r22-p2 quiet drain-rel-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r22-p3 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 OVE
+RUN repro2-r22-p4 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r22-p0 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r22-p1 quiet drain-dbg-release rc=0 ms=7369 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 23 2026-11-06T07:11:00Z load=6.14 5.94 5.12
+RUN repro2-r23-p3 quiet drain-dbg-native rc=0 ms=1434 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r23-p4 quiet drain-rel-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r23-p0 quiet drain-dbg-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r23-p1 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r23-p2 quiet drain-rel-native rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 24 2026-11-06T07:11:06Z load=6.29 5.98 5.14
+RUN repro2-r24-p4 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r24-p0 quiet drain-dbg-native rc=0 ms=3275 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r24-p1 quiet drain-dbg-release rc=0 ms=3894 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r24-p2 quiet drain-rel-native rc=0 ms=1021 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r24-p3 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+ROUND 25 2026-11-06T07:11:17Z load=6.24 5.98 5.15
+RUN repro2-r25-p0 quiet drain-dbg-native rc=0 ms=1636 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r25-p1 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r25-p2 quiet drain-rel-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r25-p3 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 WORK_IN_FORK S284 OVERWRITE S284 WORK_IN_FORK S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 
+RUN repro2-r25-p4 quiet drain-rel-native rc=0 ms=1024 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 26 2026-11-06T07:11:23Z load=6.77 6.10 5.20
+RUN repro2-r26-p1 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r26-p2 quiet drain-rel-native rc=0 ms=1026 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r26-p3 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r26-p4 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r26-p0 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 27 2026-11-06T07:11:29Z load=6.63 6.08 5.19
+RUN repro2-r27-p2 quiet drain-rel-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r27-p3 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 CLA
+RUN repro2-r27-p4 quiet drain-rel-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r27-p0 quiet drain-dbg-native rc=0 ms=1638 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r27-p1 quiet drain-dbg-release rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 28 2026-11-06T07:11:36Z load=6.42 6.04 5.19
+RUN repro2-r28-p3 quiet drain-dbg-native rc=0 ms=1434 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r28-p4 quiet drain-rel-native rc=0 ms=1024 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r28-p0 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r28-p1 quiet drain-dbg-release rc=0 ms=9665 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r28-p2 quiet drain-rel-native rc=0 ms=1427 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 29 2026-11-06T07:11:51Z load=6.34 6.04 5.20
+RUN repro2-r29-p4 quiet drain-rel-native rc=0 ms=1019 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r29-p0 quiet drain-dbg-native rc=0 ms=1635 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r29-p1 quiet drain-dbg-release rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r29-p2 quiet drain-rel-native rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r29-p3 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+ROUND 30 2026-11-06T07:11:58Z load=6.88 6.17 5.25
+RUN repro2-r30-p0 quiet drain-dbg-native rc=0 ms=7985 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r30-p1 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r30-p2 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN repro2-r30-p3 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLIP state=POLLING S284 SLI
+RUN repro2-r30-p4 quiet drain-rel-native rc=0 ms=1021 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP state=POLLING S284 SLIP state=POLLING drain: 1000 rounds of 8 forks, the drain thread at every one true 
+SUMMARY repro2 cond=quiet bin=drain-dbg-native runs=30 green=30 stalled=0 red=0 other=0
+SUMMARY repro2 cond=quiet bin=drain-dbg-release runs=30 green=30 stalled=0 red=0 other=0
+SUMMARY repro2 cond=quiet bin=drain-rel-native runs=30 green=30 stalled=0 red=0 other=0
+SUMMARY repro2 cond=quiet bin=drain-dbg-native runs=30 green=30 stalled=0 red=0 other=0
+SUMMARY repro2 cond=quiet bin=drain-rel-native runs=30 green=30 stalled=0 red=0 other=0
+REPRO_END repro2 rounds=30 2026-11-06T07:12:10Z
+JOB_END exit=0 2026-11-06T07:12:10Z

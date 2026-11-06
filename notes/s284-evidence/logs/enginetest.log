@@ -1,0 +1,17 @@
+QUEUED 2026-11-06T07:25:47Z job=enginetest on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=1 B=1
+LOCKS_ACQUIRED 2026-11-06T07:27:26Z block=B six=6-11
+ENGINE up pid=265414 sock=/home/mfwolffe/lanes/s284/run/podman-enginetest.sock cpus=6-11
+inside: uid=1000 affinity=6-11
+1
+probe rc=0
+pid=1
+6
+Threads:	1
+Cpus_allowed_list:	6-11
+hello
+4294967296
+rc=0
+run rc=0
+ENGINETEST_END rc=0 2026-11-06T07:27:27Z
+ENGINE down pid=265414
+JOB_END exit=0 2026-11-06T07:27:27Z

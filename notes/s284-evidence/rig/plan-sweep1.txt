@@ -1,0 +1,16 @@
+# s284 sweep 1: which condition stalls trunk's drain.lu (275f9904)?
+# dbg = CI's binary shape (cargo test's debug wolf + debug libwolf_rt.a); rel = a release runtime
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native
+hog4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+hog4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native
+hog2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+forks4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+nice19hog2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+idlehog2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+cpus2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+q2000p1000 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+q1000p1000 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+cpus1 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+q2000p1000 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native
+hog4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release

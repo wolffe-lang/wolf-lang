@@ -1,0 +1,688 @@
+QUEUED 2026-11-06T08:00:16Z job=measure2 on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=0 B=0
+BUILD 0d6fb1ff93d6ca7f161d1a2a61ea476e14677921 cpus=6-11 kernel=7.2.4 2026-11-06T08:00:17Z
+START build-dbg 2026-11-06T08:00:17Z
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_span)
+     Compiling foldhash v0.2.0
+     Compiling shlex v2.0.1
+     Compiling hashbrown v0.17.1
+     Compiling cfg-if v1.0.4
+     Compiling find-msvc-tools v0.1.10
+     Compiling stable_deref_trait v1.2.1
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling cc v1.4.2
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_lex)
+     Compiling rayon-core v1.13.0
+     Compiling cpufeatures v0.3.0
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling smallvec v1.15.2
+     Compiling constant_time_eq v0.4.2
+     Compiling cranelift-srcgen v0.134.3
+     Compiling arrayvec v0.7.8
+     Compiling arrayref v0.3.9
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_parse)
+     Compiling equivalent v1.0.2
+     Compiling either v1.17.0
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling rayon v1.12.0
+     Compiling synstructure v0.13.2
+     Compiling indexmap v2.14.0
+     Compiling displaydoc v0.2.7
+     Compiling cranelift-isle v0.134.3
+     Compiling writeable v0.6.3
+     Compiling litemap v0.8.2
+     Compiling icu_properties_data v2.2.0
+     Compiling log v0.4.33
+     Compiling serde_core v1.0.229
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling heck v0.5.0
+     Compiling zerofrom v0.1.8
+     Compiling fnv v1.0.7
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling yoke v0.8.3
+     Compiling hashbrown v0.16.1
+     Compiling libc v0.2.189
+     Compiling zerotrie v0.2.4
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_sema)
+     Compiling utf8_iter v1.0.4
+     Compiling zerovec v0.11.6
+     Compiling icu_normalizer_data v2.2.0
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling gimli v0.33.0
+     Compiling allocator-api2 v0.2.21
+     Compiling tinystr v0.8.3
+     Compiling icu_locale_core v2.2.0
+     Compiling potential_utf v0.1.5
+     Compiling icu_collections v2.2.0
+     Compiling target-lexicon v0.13.5
+     Compiling icu_provider v2.2.0
+     Compiling memchr v2.8.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling zmij v1.0.23
+     Compiling cranelift-codegen v0.134.3
+     Compiling serde v1.0.229
+     Compiling arbitrary v1.4.2
+     Compiling rustc-hash v2.1.3
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling icu_properties v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling serde_json v1.0.151
+     Compiling anyhow v1.0.104
+     Compiling crc32fast v1.5.0
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_mem)
+     Compiling object v0.39.1
+     Compiling itoa v1.0.18
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_query)
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_rt)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_wir)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_cimport)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_doc)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_pkg)
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_backend)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 25.69s
+END build-dbg exit=0 2026-11-06T08:00:43Z
+START build-rel 2026-11-06T08:00:43Z
+     Compiling proc-macro2 v1.0.107
+     Compiling unicode-ident v1.0.24
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_span)
+     Compiling shlex v2.0.1
+     Compiling hashbrown v0.17.1
+     Compiling stable_deref_trait v1.2.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling cfg-if v1.0.4
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_diag)
+     Compiling cc v1.4.2
+     Compiling crossbeam-epoch v0.9.20
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_lex)
+     Compiling arrayvec v0.7.8
+     Compiling blake3 v1.8.6
+     Compiling constant_time_eq v0.4.2
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-srcgen v0.134.3
+     Compiling smallvec v1.15.2
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerofrom v0.1.8
+     Compiling zerovec-derive v0.11.3
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_parse)
+     Compiling yoke v0.8.3
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling equivalent v1.0.2
+     Compiling either v1.17.0
+     Compiling rayon v1.12.0
+     Compiling zerovec v0.11.6
+     Compiling indexmap v2.14.0
+     Compiling tinystr v0.8.3
+     Compiling writeable v0.6.3
+     Compiling cranelift-isle v0.134.3
+     Compiling litemap v0.8.2
+     Compiling potential_utf v0.1.5
+     Compiling icu_locale_core v2.2.0
+     Compiling zerotrie v0.2.4
+     Compiling heck v0.5.0
+     Compiling log v0.4.33
+     Compiling utf8_iter v1.0.4
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling hashbrown v0.16.1
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_sema)
+     Compiling icu_properties_data v2.2.0
+     Compiling serde_core v1.0.229
+     Compiling fnv v1.0.7
+     Compiling icu_normalizer_data v2.2.0
+     Compiling libc v0.2.189
+     Compiling gimli v0.33.0
+     Compiling cranelift-bitset v0.134.3
+     Compiling icu_provider v2.2.0
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling icu_collections v2.2.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling target-lexicon v0.13.5
+     Compiling allocator-api2 v0.2.21
+     Compiling memchr v2.8.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling rustc-hash v2.1.3
+     Compiling arbitrary v1.4.2
+     Compiling cranelift-codegen v0.134.3
+     Compiling serde v1.0.229
+     Compiling zmij v1.0.23
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling icu_properties v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling anyhow v1.0.104
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_mem)
+     Compiling object v0.39.1
+     Compiling itoa v1.0.18
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_fmt)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_query)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_wir)
+     Compiling url v2.5.8
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_backend)
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_cimport)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_pkg)
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_codegen_clif)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_lsp)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_doc)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/crates/wolf_driver)
+      Finished `release` profile [optimized + debuginfo] target(s) in 1m 50s
+END build-rel exit=0 2026-11-06T08:02:34Z
+START drain-dbg-native 2026-11-06T08:02:34Z
+END drain-dbg-native exit=0 2026-11-06T08:02:35Z
+START drain-dbg-release 2026-11-06T08:02:35Z
+END drain-dbg-release exit=0 2026-11-06T08:02:35Z
+START drain-rel-native 2026-11-06T08:02:35Z
+END drain-rel-native exit=0 2026-11-06T08:02:35Z
+START drain-rel-release 2026-11-06T08:02:35Z
+END drain-rel-release exit=0 2026-11-06T08:02:36Z
+START digests 2026-11-06T08:02:36Z
+  01c3b09cb7b0bb33eecd4fc56ba09b31c206b0dc2e81ee9eb92f7e00cc75dc6c  target/debug/wolf
+  b0bd3dacbd261d7544700509822e4a03bdb92c3e1531f9e3431905c861ce98aa  target/debug/libwolf_rt.a
+  31c6d3a6f5394e94c3299eabb654aea32db273c83fafa6f6f0c8810223ec15b8  target/release/wolf
+  e7a0937d083ab4445fee20d60ca53399621191f03d2e113cd3b1261e7fdc95c3  target/release/libwolf_rt.a
+  49371c4514a87010cb0458e13b9da52335779bc0c3f73d79db36ff8e72aa2d27  /home/mfwolffe/lanes/s284/bins/0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/drain-dbg-native
+  515b0a133a6d52b3c29b9ad4034b041317c334c352e9c5873daa911d516c4b82  /home/mfwolffe/lanes/s284/bins/0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/drain-dbg-release
+  eaf38348ce67f554e80b2447eb7e00de92705ac37f611f7d64448dfb1e89840a  /home/mfwolffe/lanes/s284/bins/0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/drain-rel-native
+  822d96646f0812266e84cc0c7f02f4833b4efc6dc7a4ea0a175acdc7fe80152b  /home/mfwolffe/lanes/s284/bins/0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/drain-rel-release
+END digests exit=0 2026-11-06T08:02:37Z
+START symbols 2026-11-06T08:02:37Z
+  drain-dbg-native 00000000000e8158 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-native 00000000000e9234 b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-dbg-release 00000000000e7428 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-release 00000000000e8504 b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-rel-native 0000000000085138 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-native 0000000000086158 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.6050047498905830588
+  drain-rel-release 00000000000843f8 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-release 0000000000085418 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.6050047498905830588
+END symbols exit=0 2026-11-06T08:02:37Z
+BUILT 0d6fb1ff93d6ca7f161d1a2a61ea476e14677921 2026-11-06T08:02:37Z
+PRUNED b-0d6fb1ff93d6ca7f161d1a2a61ea476e14677921
+BUILD 3062e28eb721d281b5105942e8ef14b7690bba49 cpus=6-11 kernel=7.2.4 2026-11-06T08:02:38Z
+START build-dbg 2026-11-06T08:02:38Z
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_span)
+     Compiling cfg-if v1.0.4
+     Compiling hashbrown v0.17.1
+     Compiling stable_deref_trait v1.2.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling shlex v2.0.1
+     Compiling cc v1.4.2
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_lex)
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling constant_time_eq v0.4.2
+     Compiling cpufeatures v0.3.0
+     Compiling cranelift-srcgen v0.134.3
+     Compiling rayon-core v1.13.0
+     Compiling smallvec v1.15.2
+     Compiling arrayvec v0.7.8
+     Compiling arrayref v0.3.9
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_parse)
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling either v1.17.0
+     Compiling synstructure v0.13.2
+     Compiling equivalent v1.0.2
+     Compiling indexmap v2.14.0
+     Compiling displaydoc v0.2.7
+     Compiling rayon v1.12.0
+     Compiling writeable v0.6.3
+     Compiling litemap v0.8.2
+     Compiling cranelift-isle v0.134.3
+     Compiling serde_core v1.0.229
+     Compiling fnv v1.0.7
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling icu_properties_data v2.2.0
+     Compiling heck v0.5.0
+     Compiling libc v0.2.189
+     Compiling zerofrom v0.1.8
+     Compiling yoke v0.8.3
+     Compiling icu_normalizer_data v2.2.0
+     Compiling zerotrie v0.2.4
+     Compiling hashbrown v0.16.1
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling zerovec v0.11.6
+     Compiling log v0.4.33
+     Compiling utf8_iter v1.0.4
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling memchr v2.8.3
+     Compiling tinystr v0.8.3
+     Compiling potential_utf v0.1.5
+     Compiling icu_locale_core v2.2.0
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_sema)
+     Compiling icu_collections v2.2.0
+     Compiling gimli v0.33.0
+     Compiling target-lexicon v0.13.5
+     Compiling icu_provider v2.2.0
+     Compiling allocator-api2 v0.2.21
+     Compiling cranelift-entity v0.134.3
+     Compiling bumpalo v3.20.3
+     Compiling serde v1.0.229
+     Compiling cranelift-codegen v0.134.3
+     Compiling rustc-hash v2.1.3
+     Compiling arbitrary v1.4.2
+     Compiling zmij v1.0.23
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling icu_properties v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling crc32fast v1.5.0
+     Compiling serde_json v1.0.151
+     Compiling anyhow v1.0.104
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_mem)
+     Compiling idna_adapter v1.2.2
+     Compiling itoa v1.0.18
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_query)
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_rt)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_wir)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_cimport)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_doc)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_pkg)
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_backend)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 25.91s
+END build-dbg exit=0 2026-11-06T08:03:04Z
+START build-rel 2026-11-06T08:03:04Z
+     Compiling proc-macro2 v1.0.107
+     Compiling unicode-ident v1.0.24
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_span)
+     Compiling foldhash v0.2.0
+     Compiling stable_deref_trait v1.2.1
+     Compiling hashbrown v0.17.1
+     Compiling cfg-if v1.0.4
+     Compiling shlex v2.0.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling cc v1.4.2
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_lex)
+     Compiling rayon-core v1.13.0
+     Compiling smallvec v1.15.2
+     Compiling blake3 v1.8.6
+     Compiling arrayvec v0.7.8
+     Compiling constant_time_eq v0.4.2
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling cranelift-srcgen v0.134.3
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling zerofrom v0.1.8
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_parse)
+     Compiling yoke v0.8.3
+     Compiling either v1.17.0
+     Compiling equivalent v1.0.2
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling indexmap v2.14.0
+     Compiling zerovec v0.11.6
+     Compiling rayon v1.12.0
+     Compiling tinystr v0.8.3
+     Compiling litemap v0.8.2
+     Compiling cranelift-isle v0.134.3
+     Compiling writeable v0.6.3
+     Compiling potential_utf v0.1.5
+     Compiling icu_locale_core v2.2.0
+     Compiling zerotrie v0.2.4
+     Compiling heck v0.5.0
+     Compiling log v0.4.33
+     Compiling icu_properties_data v2.2.0
+     Compiling hashbrown v0.16.1
+     Compiling libc v0.2.189
+     Compiling serde_core v1.0.229
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_sema)
+     Compiling utf8_iter v1.0.4
+     Compiling icu_normalizer_data v2.2.0
+     Compiling fnv v1.0.7
+     Compiling gimli v0.33.0
+     Compiling icu_collections v2.2.0
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-bitset v0.134.3
+     Compiling icu_provider v2.2.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling memchr v2.8.3
+     Compiling allocator-api2 v0.2.21
+     Compiling target-lexicon v0.13.5
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling serde v1.0.229
+     Compiling arbitrary v1.4.2
+     Compiling zmij v1.0.23
+     Compiling rustc-hash v2.1.3
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-codegen v0.134.3
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling icu_properties v2.2.0
+     Compiling serde_derive v1.0.229
+     Compiling anyhow v1.0.104
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_mem)
+     Compiling itoa v1.0.18
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_fmt)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_query)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_wir)
+     Compiling url v2.5.8
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_backend)
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_cimport)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_pkg)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_lsp)
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_codegen_clif)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_codegen_llvm)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_doc)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-3062e28eb721d281b5105942e8ef14b7690bba49/crates/wolf_driver)
+      Finished `release` profile [optimized + debuginfo] target(s) in 1m 50s
+END build-rel exit=0 2026-11-06T08:05:06Z
+START drain-dbg-native 2026-11-06T08:05:06Z
+END drain-dbg-native exit=0 2026-11-06T08:05:06Z
+START drain-dbg-release 2026-11-06T08:05:06Z
+END drain-dbg-release exit=0 2026-11-06T08:05:07Z
+START drain-rel-native 2026-11-06T08:05:07Z
+END drain-rel-native exit=0 2026-11-06T08:05:08Z
+START drain-rel-release 2026-11-06T08:05:08Z
+END drain-rel-release exit=0 2026-11-06T08:05:08Z
+START digests 2026-11-06T08:05:08Z
+  f06272f36ac64fe558cf58eeb1c2420fe7de6196057504ce7797dcd821b41e84  target/debug/wolf
+  0cdfcd1119fae75bddc61265bd3e21da2744d64453f7a04115c1be128a941855  target/debug/libwolf_rt.a
+  09659a8e3b079ed632219472cf665d2c3454643d32decc239216893fac38493e  target/release/wolf
+  b5345354371da6297c4b29db4391279061fb147ee089d592a699d16059dc625d  target/release/libwolf_rt.a
+  d5d6cdbb1dc8033bc6526f33485fe233427ce3e8615ffebf88c924bcc2b6a3dd  /home/mfwolffe/lanes/s284/bins/3062e28eb721d281b5105942e8ef14b7690bba49/drain-dbg-native
+  e535e22b2ccba971ca854b1716b8af8ce55f47e5596ce7ce4d7e3e0859a5e47c  /home/mfwolffe/lanes/s284/bins/3062e28eb721d281b5105942e8ef14b7690bba49/drain-dbg-release
+  ad587757502110544fa0ede976f759b332ad1307ce41da4ee1a43c206794fa96  /home/mfwolffe/lanes/s284/bins/3062e28eb721d281b5105942e8ef14b7690bba49/drain-rel-native
+  2b1205d127152c4a1a84d8833849a214d7db5d918a10f1e18075b73930f010cb  /home/mfwolffe/lanes/s284/bins/3062e28eb721d281b5105942e8ef14b7690bba49/drain-rel-release
+END digests exit=0 2026-11-06T08:05:09Z
+START symbols 2026-11-06T08:05:09Z
+  drain-dbg-native 00000000000e80e8 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-native 00000000000e911c b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-dbg-release 00000000000e73b8 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-release 00000000000e83ec b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-rel-native 00000000000850c8 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-native 00000000000860e8 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.12621912865465758238
+  drain-rel-release 0000000000084378 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-release 0000000000085398 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.12621912865465758238
+END symbols exit=0 2026-11-06T08:05:09Z
+BUILT 3062e28eb721d281b5105942e8ef14b7690bba49 2026-11-06T08:05:09Z
+PRUNED b-3062e28eb721d281b5105942e8ef14b7690bba49
+LOCKS_ACQUIRED 2026-11-06T08:05:09Z block=B four=6-9 label=measure2 pairs=2 rounds=50 budget=25m kernel=7.2.4
+PAIR quiet /home/mfwolffe/lanes/s284/bins/0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/drain-dbg-native sha256=49371c4514a87010
+PAIR quiet /home/mfwolffe/lanes/s284/bins/3062e28eb721d281b5105942e8ef14b7690bba49/drain-dbg-native sha256=d5d6cdbb1dc8033b
+ROUND 1 2026-11-06T08:05:09Z load=7.20 5.95 5.23
+RUN measure2-r1-p1 quiet drain-dbg-native rc=0 ms=1445 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r1-p0 quiet drain-dbg-native rc=0 ms=1445 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at
+ROUND 2 2026-11-06T08:05:12Z load=7.20 5.95 5.23
+RUN measure2-r2-p0 quiet drain-dbg-native rc=0 ms=1444 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP 
+RUN measure2-r2-p1 quiet drain-dbg-native rc=0 ms=1435 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 3 2026-11-06T08:05:15Z load=6.87 5.90 5.22
+RUN measure2-r3-p1 quiet drain-dbg-native rc=0 ms=1438 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r3-p0 quiet drain-dbg-native rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 LOCKED_IN_FORK S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S2
+ROUND 4 2026-11-06T08:05:18Z load=7.44 6.04 5.26
+RUN measure2-r4-p0 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 LOCKED_IN_FORK S284 CLAIM_AT_WORK S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S2
+RUN measure2-r4-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 5 2026-11-06T08:05:21Z load=7.44 6.04 5.26
+RUN measure2-r5-p1 quiet drain-dbg-native rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r5-p0 quiet drain-dbg-native rc=0 ms=1436 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 CLAIM_A
+ROUND 6 2026-11-06T08:05:24Z load=7.72 6.12 5.30
+RUN measure2-r6-p0 quiet drain-dbg-native rc=0 ms=1435 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r6-p1 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 7 2026-11-06T08:05:26Z load=7.72 6.12 5.30
+RUN measure2-r7-p1 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r7-p0 quiet drain-dbg-native rc=0 ms=7375 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 LOCKED_IN_FORK S284 SLIP drain: 1000
+ROUND 8 2026-11-06T08:05:35Z load=7.59 6.15 5.31
+RUN measure2-r8-p0 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP 
+RUN measure2-r8-p1 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 9 2026-11-06T08:05:37Z load=7.59 6.15 5.31
+RUN measure2-r9-p1 quiet drain-dbg-native rc=0 ms=1234 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r9-p0 quiet drain-dbg-native rc=0 ms=1879 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain
+ROUND 10 2026-11-06T08:05:41Z load=7.63 6.18 5.33
+RUN measure2-r10-p0 quiet drain-dbg-native rc=0 ms=3582 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S
+RUN measure2-r10-p1 quiet drain-dbg-native rc=0 ms=4421 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 11 2026-11-06T08:05:49Z load=7.31 6.16 5.33
+RUN measure2-r11-p1 quiet drain-dbg-native rc=0 ms=1443 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r11-p0 quiet drain-dbg-native rc=0 ms=9291 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks,
+ROUND 12 2026-11-06T08:06:00Z load=6.95 6.12 5.33
+RUN measure2-r12-p0 quiet drain-dbg-native rc=0 ms=2069 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r12-p1 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 13 2026-11-06T08:06:03Z load=6.79 6.10 5.32
+RUN measure2-r13-p1 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r13-p0 quiet drain-dbg-native rc=0 ms=23892 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain
+ROUND 14 2026-11-06T08:06:28Z load=6.62 6.12 5.35
+RUN measure2-r14-p0 quiet drain-dbg-native rc=0 ms=9634 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 LOCKED_IN_FORK S284 CLAIM_AT_WORK S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one 
+RUN measure2-r14-p1 quiet drain-dbg-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 15 2026-11-06T08:06:39Z load=6.21 6.05 5.34
+RUN measure2-r15-p1 quiet drain-dbg-native rc=0 ms=8174 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r15-p0 quiet drain-dbg-native rc=0 ms=1455 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain t
+ROUND 16 2026-11-06T08:06:49Z load=5.95 6.00 5.33
+RUN measure2-r16-p0 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks,
+RUN measure2-r16-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 17 2026-11-06T08:06:51Z load=5.95 6.00 5.33
+RUN measure2-r17-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r17-p0 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 18 2026-11-06T08:06:54Z load=5.87 5.98 5.33
+RUN measure2-r18-p0 quiet drain-dbg-native rc=0 ms=1224 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at
+RUN measure2-r18-p1 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 19 2026-11-06T08:06:56Z load=5.87 5.98 5.33
+RUN measure2-r19-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r19-p0 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of
+ROUND 20 2026-11-06T08:06:59Z load=5.80 5.97 5.33
+RUN measure2-r20-p0 quiet drain-dbg-native rc=0 ms=1434 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S
+RUN measure2-r20-p1 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 21 2026-11-06T08:07:01Z load=5.80 5.97 5.33
+RUN measure2-r21-p1 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r21-p0 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain
+ROUND 22 2026-11-06T08:07:04Z load=5.58 5.92 5.31
+RUN measure2-r22-p0 quiet drain-dbg-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 LOCKED_IN_FORK S284 CLAIM_AT_WORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK drain: 1000 
+RUN measure2-r22-p1 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 23 2026-11-06T08:07:07Z load=5.58 5.92 5.31
+RUN measure2-r23-p1 quiet drain-dbg-native rc=0 ms=1649 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r23-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, 
+ROUND 24 2026-11-06T08:07:10Z load=5.45 5.88 5.31
+RUN measure2-r24-p0 quiet drain-dbg-native rc=0 ms=1224 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks,
+RUN measure2-r24-p1 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 25 2026-11-06T08:07:12Z load=5.45 5.88 5.31
+RUN measure2-r25-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r25-p0 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 CLAIM_AT_WORK S28
+ROUND 26 2026-11-06T08:07:15Z load=5.58 5.90 5.32
+RUN measure2-r26-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP 
+RUN measure2-r26-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 27 2026-11-06T08:07:17Z load=5.58 5.90 5.32
+RUN measure2-r27-p1 quiet drain-dbg-native rc=0 ms=9811 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r27-p0 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one
+ROUND 28 2026-11-06T08:07:28Z load=5.60 5.89 5.32
+RUN measure2-r28-p0 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 LOCKED_IN_FORK S284 CLAIM_AT_WORK S2
+RUN measure2-r28-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 29 2026-11-06T08:07:31Z load=5.60 5.89 5.32
+RUN measure2-r29-p1 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r29-p0 quiet drain-dbg-native rc=0 ms=1869 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP 
+ROUND 30 2026-11-06T08:07:34Z load=5.64 5.89 5.33
+RUN measure2-r30-p0 quiet drain-dbg-native rc=0 ms=1652 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, 
+RUN measure2-r30-p1 quiet drain-dbg-native rc=0 ms=2066 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 31 2026-11-06T08:07:38Z load=5.64 5.89 5.33
+RUN measure2-r31-p1 quiet drain-dbg-native rc=0 ms=1661 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r31-p0 quiet drain-dbg-native rc=0 ms=2081 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, 
+ROUND 32 2026-11-06T08:07:42Z load=5.34 5.83 5.31
+RUN measure2-r32-p0 quiet drain-dbg-native rc=0 ms=1451 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain
+RUN measure2-r32-p1 quiet drain-dbg-native rc=0 ms=1649 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 33 2026-11-06T08:07:45Z load=5.16 5.78 5.29
+RUN measure2-r33-p1 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r33-p0 quiet drain-dbg-native rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 
+ROUND 34 2026-11-06T08:07:47Z load=5.16 5.78 5.29
+RUN measure2-r34-p0 quiet drain-dbg-native rc=0 ms=1247 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one
+RUN measure2-r34-p1 quiet drain-dbg-native rc=0 ms=7282 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 35 2026-11-06T08:07:56Z load=4.98 5.72 5.28
+RUN measure2-r35-p1 quiet drain-dbg-native rc=0 ms=1876 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r35-p0 quiet drain-dbg-native rc=0 ms=2049 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 100
+ROUND 36 2026-11-06T08:08:00Z load=4.82 5.68 5.27
+RUN measure2-r36-p0 quiet drain-dbg-native rc=0 ms=1636 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP d
+RUN measure2-r36-p1 quiet drain-dbg-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 37 2026-11-06T08:08:03Z load=4.75 5.65 5.26
+RUN measure2-r37-p1 quiet drain-dbg-native rc=0 ms=1448 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r37-p0 quiet drain-dbg-native rc=0 ms=3891 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 38 2026-11-06T08:08:09Z load=4.77 5.64 5.26
+RUN measure2-r38-p0 quiet drain-dbg-native rc=0 ms=3887 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks,
+RUN measure2-r38-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 39 2026-11-06T08:08:14Z load=4.71 5.61 5.25
+RUN measure2-r39-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r39-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds o
+ROUND 40 2026-11-06T08:08:16Z load=4.71 5.61 5.25
+RUN measure2-r40-p0 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 LOCKED_IN_FORK S284 CLAIM_AT_WORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S
+RUN measure2-r40-p1 quiet drain-dbg-native rc=0 ms=1243 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 41 2026-11-06T08:08:19Z load=5.05 5.67 5.27
+RUN measure2-r41-p1 quiet drain-dbg-native rc=0 ms=1241 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r41-p0 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP d
+ROUND 42 2026-11-06T08:08:21Z load=5.05 5.67 5.27
+RUN measure2-r42-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP d
+RUN measure2-r42-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 43 2026-11-06T08:08:24Z load=5.37 5.72 5.29
+RUN measure2-r43-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r43-p0 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK dr
+ROUND 44 2026-11-06T08:08:26Z load=5.37 5.72 5.29
+RUN measure2-r44-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one
+RUN measure2-r44-p1 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 45 2026-11-06T08:08:29Z load=5.58 5.76 5.31
+RUN measure2-r45-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r45-p0 quiet drain-dbg-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK S284 LOCKED_IN_FORK S284 LOCKED_IN_FORK S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, 
+ROUND 46 2026-11-06T08:08:31Z load=5.58 5.76 5.31
+RUN measure2-r46-p0 quiet drain-dbg-native rc=0 ms=1258 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one
+RUN measure2-r46-p1 quiet drain-dbg-native rc=0 ms=1463 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 47 2026-11-06T08:08:34Z load=5.70 5.78 5.32
+RUN measure2-r47-p1 quiet drain-dbg-native rc=0 ms=7944 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r47-p0 quiet drain-dbg-native rc=0 ms=2098 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP 
+ROUND 48 2026-11-06T08:08:44Z load=6.43 5.94 5.37
+RUN measure2-r48-p0 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r48-p1 quiet drain-dbg-native rc=0 ms=1840 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 49 2026-11-06T08:08:48Z load=6.43 5.94 5.37
+RUN measure2-r49-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r49-p0 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 CLAIM_AT_WORK S284 LOCKED_IN_FORK drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 50 2026-11-06T08:08:50Z load=6.72 6.00 5.40
+RUN measure2-r50-p0 quiet drain-dbg-native rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP S284 SLIP drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN measure2-r50-p1 quiet drain-dbg-native rc=0 ms=5110 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+SUMMARY measure2 cond=quiet bin=drain-dbg-native runs=50 green=50 stalled=0 red=0 other=0
+SUMMARY measure2 cond=quiet bin=drain-dbg-native runs=50 green=50 stalled=0 red=0 other=0
+REPRO_END measure2 rounds=50 2026-11-06T08:08:57Z
+JOB_END exit=0 2026-11-06T08:08:57Z

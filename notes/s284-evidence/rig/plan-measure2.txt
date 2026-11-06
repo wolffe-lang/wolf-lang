@@ -1,0 +1,4 @@
+# s284 R-s284-3: one detector (rig/measure2-patch.py) in trunk (0d6fb1ff93d6ca7f161d1a2a61ea476e14677921, on 275f9904)
+# and in the fix (3062e28eb721d281b5105942e8ef14b7690bba49, on bf843401); the row's quiet pinned shape, CI's binary.
+quiet /home/mfwolffe/lanes/s284/bins/0d6fb1ff93d6ca7f161d1a2a61ea476e14677921/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/3062e28eb721d281b5105942e8ef14b7690bba49/drain-dbg-native

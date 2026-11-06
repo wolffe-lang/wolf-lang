@@ -1,0 +1,522 @@
+QUEUED 2026-11-06T07:27:53Z job=proof1 on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=1 B=0
+LOCKS_ACQUIRED 2026-11-06T07:27:53Z block=B four=6-9 label=proof1 pairs=12 rounds=38 budget=100m kernel=7.2.4
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native sha256=7528e303b2e2f498
+PAIR quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native sha256=7528e303b2e2f498
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release sha256=35c7fa530450875b
+PAIR quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release sha256=8209de1f1d47a526
+PAIR quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release sha256=8209de1f1d47a526
+PAIR churn4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native sha256=7528e303b2e2f498
+PAIR churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native sha256=7528e303b2e2f498
+PAIR churn4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release sha256=35c7fa530450875b
+PAIR churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release sha256=8209de1f1d47a526
+PAIR churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release sha256=8209de1f1d47a526
+ROUND 1 2026-11-06T07:27:54Z load=4.93 5.74 5.60
+RUN proof1-r1-p1 quiet drain-dbg-native rc=0 ms=23374 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p2 quiet drain-dbg-native rc=0 ms=1857 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p3 quiet drain-dbg-release rc=0 ms=2540 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p4 quiet drain-dbg-release rc=0 ms=8080 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p5 quiet drain-dbg-release rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p6 churn4 drain-dbg-native rc=0 ms=3277 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p7 churn4 drain-dbg-native rc=0 ms=1841 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p8 churn4 drain-dbg-native rc=0 ms=4715 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p9 churn4 drain-dbg-release rc=0 ms=1636 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p10 churn4 drain-dbg-release rc=0 ms=5527 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p11 churn4 drain-dbg-release rc=0 ms=3074 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r1-p0 quiet drain-dbg-native rc=0 ms=2059 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 2 2026-11-06T07:28:54Z load=6.17 5.93 5.67
+RUN proof1-r2-p2 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p3 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p4 quiet drain-dbg-release rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p5 quiet drain-dbg-release rc=0 ms=1657 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p6 churn4 drain-dbg-native rc=0 ms=8482 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p7 churn4 drain-dbg-native rc=0 ms=3568 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p8 churn4 drain-dbg-native rc=0 ms=2312 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p9 churn4 drain-dbg-release rc=0 ms=3532 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p10 churn4 drain-dbg-release rc=0 ms=2963 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p11 churn4 drain-dbg-release rc=0 ms=6821 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p0 quiet drain-dbg-native rc=0 ms=1253 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r2-p1 quiet drain-dbg-native rc=0 ms=1652 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 3 2026-11-06T07:29:30Z load=4.94 5.65 5.59
+RUN proof1-r3-p3 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p4 quiet drain-dbg-release rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p5 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p6 churn4 drain-dbg-native rc=0 ms=3912 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p7 churn4 drain-dbg-native rc=0 ms=4447 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p8 churn4 drain-dbg-native rc=0 ms=2319 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p9 churn4 drain-dbg-release rc=0 ms=2965 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p10 churn4 drain-dbg-release rc=0 ms=7467 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p11 churn4 drain-dbg-release rc=0 ms=4437 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p0 quiet drain-dbg-native rc=0 ms=1683 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p1 quiet drain-dbg-native rc=0 ms=1238 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r3-p2 quiet drain-dbg-native rc=0 ms=1233 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 4 2026-11-06T07:30:04Z load=4.21 5.41 5.51
+RUN proof1-r4-p4 quiet drain-dbg-release rc=0 ms=1243 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p5 quiet drain-dbg-release rc=0 ms=1239 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p6 churn4 drain-dbg-native rc=0 ms=2735 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p7 churn4 drain-dbg-native rc=0 ms=1872 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p8 churn4 drain-dbg-native rc=0 ms=3397 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p9 churn4 drain-dbg-release rc=0 ms=2945 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p10 churn4 drain-dbg-release rc=0 ms=2508 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p11 churn4 drain-dbg-release rc=0 ms=2336 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p0 quiet drain-dbg-native rc=0 ms=8088 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p1 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p2 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r4-p3 quiet drain-dbg-release rc=0 ms=1240 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 5 2026-11-06T07:30:34Z load=4.00 5.23 5.45
+RUN proof1-r5-p5 quiet drain-dbg-release rc=0 ms=1460 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p6 churn4 drain-dbg-native rc=0 ms=1682 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p7 churn4 drain-dbg-native rc=0 ms=8341 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p8 churn4 drain-dbg-native rc=0 ms=3365 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p9 churn4 drain-dbg-release rc=0 ms=2327 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p10 churn4 drain-dbg-release rc=0 ms=3509 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p11 churn4 drain-dbg-release rc=0 ms=3067 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p0 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p1 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p2 quiet drain-dbg-native rc=0 ms=1243 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p3 quiet drain-dbg-release rc=0 ms=1247 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r5-p4 quiet drain-dbg-release rc=0 ms=1243 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 6 2026-11-06T07:31:05Z load=4.99 5.34 5.47
+RUN proof1-r6-p6 churn4 drain-dbg-native rc=0 ms=2741 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p7 churn4 drain-dbg-native rc=0 ms=12007 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p8 churn4 drain-dbg-native rc=0 ms=1636 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p9 churn4 drain-dbg-release rc=0 ms=4699 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p10 churn4 drain-dbg-release rc=0 ms=2305 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p11 churn4 drain-dbg-release rc=0 ms=16580 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p0 quiet drain-dbg-native rc=0 ms=1869 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p1 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p2 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p3 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p4 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r6-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 7 2026-11-06T07:31:54Z load=6.10 5.62 5.57
+RUN proof1-r7-p7 churn4 drain-dbg-native rc=0 ms=3094 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p8 churn4 drain-dbg-native rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p9 churn4 drain-dbg-release rc=0 ms=4243 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p10 churn4 drain-dbg-release rc=0 ms=2536 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p11 churn4 drain-dbg-release rc=0 ms=2677 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p0 quiet drain-dbg-native rc=0 ms=2064 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p1 quiet drain-dbg-native rc=0 ms=1241 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p2 quiet drain-dbg-native rc=0 ms=1248 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p3 quiet drain-dbg-release rc=0 ms=1469 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p4 quiet drain-dbg-release rc=0 ms=1456 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p5 quiet drain-dbg-release rc=0 ms=1234 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r7-p6 churn4 drain-dbg-native rc=0 ms=1848 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 8 2026-11-06T07:32:19Z load=6.19 5.68 5.59
+RUN proof1-r8-p8 churn4 drain-dbg-native rc=0 ms=5932 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p9 churn4 drain-dbg-release rc=0 ms=2714 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p10 churn4 drain-dbg-release rc=0 ms=1901 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p11 churn4 drain-dbg-release rc=0 ms=2538 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p0 quiet drain-dbg-native rc=0 ms=1455 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p1 quiet drain-dbg-native rc=0 ms=1237 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p2 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p3 quiet drain-dbg-release rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p4 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p5 quiet drain-dbg-release rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p6 churn4 drain-dbg-native rc=0 ms=2676 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r8-p7 churn4 drain-dbg-native rc=0 ms=2523 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 9 2026-11-06T07:32:46Z load=5.60 5.58 5.55
+RUN proof1-r9-p9 churn4 drain-dbg-release rc=0 ms=6454 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p10 churn4 drain-dbg-release rc=0 ms=6182 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p11 churn4 drain-dbg-release rc=0 ms=2515 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p0 quiet drain-dbg-native rc=0 ms=10271 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p1 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p2 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p3 quiet drain-dbg-release rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p4 quiet drain-dbg-release rc=0 ms=1449 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p5 quiet drain-dbg-release rc=0 ms=6587 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p6 churn4 drain-dbg-native rc=0 ms=2329 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p7 churn4 drain-dbg-native rc=0 ms=4682 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r9-p8 churn4 drain-dbg-native rc=0 ms=2103 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 10 2026-11-06T07:33:33Z load=4.53 5.29 5.46
+RUN proof1-r10-p10 churn4 drain-dbg-release rc=0 ms=1672 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p11 churn4 drain-dbg-release rc=0 ms=3822 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p0 quiet drain-dbg-native rc=0 ms=1248 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p1 quiet drain-dbg-native rc=0 ms=1460 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p2 quiet drain-dbg-native rc=0 ms=1471 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p3 quiet drain-dbg-release rc=0 ms=1254 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p4 quiet drain-dbg-release rc=0 ms=1472 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p5 quiet drain-dbg-release rc=0 ms=1247 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p6 churn4 drain-dbg-native rc=0 ms=8956 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p7 churn4 drain-dbg-native rc=0 ms=13419 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p8 churn4 drain-dbg-native rc=0 ms=2287 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r10-p9 churn4 drain-dbg-release rc=0 ms=4873 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 11 2026-11-06T07:34:16Z load=6.40 5.60 5.55
+RUN proof1-r11-p11 churn4 drain-dbg-release rc=0 ms=34245 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p0 quiet drain-dbg-native rc=0 ms=2245 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p1 quiet drain-dbg-native rc=0 ms=16291 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p2 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p3 quiet drain-dbg-release rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p4 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p6 churn4 drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p7 churn4 drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p8 churn4 drain-dbg-native rc=0 ms=3477 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p9 churn4 drain-dbg-release rc=0 ms=2866 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r11-p10 churn4 drain-dbg-release rc=0 ms=7171 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 12 2026-11-06T07:35:30Z load=6.59 5.78 5.61
+RUN proof1-r12-p0 quiet drain-dbg-native rc=0 ms=1635 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p1 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p2 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p3 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p4 quiet drain-dbg-release rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p5 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p6 churn4 drain-dbg-native rc=0 ms=4294 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p7 churn4 drain-dbg-native rc=0 ms=12568 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p8 churn4 drain-dbg-native rc=0 ms=3714 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p9 churn4 drain-dbg-release rc=0 ms=9444 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p10 churn4 drain-dbg-release rc=0 ms=4741 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r12-p11 churn4 drain-dbg-release rc=0 ms=6135 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 13 2026-11-06T07:36:20Z load=5.62 5.62 5.57
+RUN proof1-r13-p1 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p2 quiet drain-dbg-native rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p3 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p4 quiet drain-dbg-release rc=0 ms=1245 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p5 quiet drain-dbg-release rc=0 ms=1453 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p6 churn4 drain-dbg-native rc=0 ms=2046 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p7 churn4 drain-dbg-native rc=0 ms=4909 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p8 churn4 drain-dbg-native rc=0 ms=2451 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p9 churn4 drain-dbg-release rc=0 ms=4515 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p10 churn4 drain-dbg-release rc=0 ms=2304 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p11 churn4 drain-dbg-release rc=0 ms=4244 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r13-p0 quiet drain-dbg-native rc=0 ms=5570 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 14 2026-11-06T07:36:53Z load=5.22 5.51 5.53
+RUN proof1-r14-p2 quiet drain-dbg-native rc=0 ms=1459 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p3 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p4 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p5 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p6 churn4 drain-dbg-native rc=0 ms=2893 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p7 churn4 drain-dbg-native rc=0 ms=8123 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p8 churn4 drain-dbg-native rc=0 ms=2340 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p9 churn4 drain-dbg-release rc=0 ms=1680 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p10 churn4 drain-dbg-release rc=0 ms=11544 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p11 churn4 drain-dbg-release rc=0 ms=2963 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p0 quiet drain-dbg-native rc=0 ms=2316 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r14-p1 quiet drain-dbg-native rc=0 ms=1473 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 15 2026-11-06T07:37:32Z load=4.76 5.37 5.48
+RUN proof1-r15-p3 quiet drain-dbg-release rc=0 ms=1246 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p4 quiet drain-dbg-release rc=0 ms=1675 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p5 quiet drain-dbg-release rc=0 ms=1238 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p6 churn4 drain-dbg-native rc=0 ms=2939 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p7 churn4 drain-dbg-native rc=0 ms=4250 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p8 churn4 drain-dbg-native rc=0 ms=4046 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p9 churn4 drain-dbg-release rc=0 ms=2113 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p10 churn4 drain-dbg-release rc=0 ms=2109 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p11 churn4 drain-dbg-release rc=0 ms=2742 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p0 quiet drain-dbg-native rc=0 ms=1880 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p1 quiet drain-dbg-native rc=0 ms=1250 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r15-p2 quiet drain-dbg-native rc=0 ms=1447 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 16 2026-11-06T07:37:59Z load=4.26 5.19 5.42
+RUN proof1-r16-p4 quiet drain-dbg-release rc=0 ms=1686 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p5 quiet drain-dbg-release rc=0 ms=1233 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p6 churn4 drain-dbg-native rc=0 ms=2544 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p7 churn4 drain-dbg-native rc=0 ms=4233 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p8 churn4 drain-dbg-native rc=0 ms=4416 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p9 churn4 drain-dbg-release rc=0 ms=2743 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p10 churn4 drain-dbg-release rc=0 ms=2096 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p11 churn4 drain-dbg-release rc=0 ms=2967 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p0 quiet drain-dbg-native rc=0 ms=1674 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p1 quiet drain-dbg-native rc=0 ms=1463 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p2 quiet drain-dbg-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r16-p3 quiet drain-dbg-release rc=0 ms=1236 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 17 2026-11-06T07:38:27Z load=4.46 5.15 5.40
+RUN proof1-r17-p5 quiet drain-dbg-release rc=0 ms=1239 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p6 churn4 drain-dbg-native rc=0 ms=3422 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p7 churn4 drain-dbg-native rc=0 ms=6805 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p8 churn4 drain-dbg-native rc=0 ms=3612 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p9 churn4 drain-dbg-release rc=0 ms=2344 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p10 churn4 drain-dbg-release rc=0 ms=7605 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p11 churn4 drain-dbg-release rc=0 ms=1880 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p0 quiet drain-dbg-native rc=0 ms=1656 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p1 quiet drain-dbg-native rc=0 ms=1448 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p2 quiet drain-dbg-native rc=0 ms=1662 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p3 quiet drain-dbg-release rc=0 ms=1244 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r17-p4 quiet drain-dbg-release rc=0 ms=1448 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 18 2026-11-06T07:39:02Z load=4.84 5.18 5.40
+RUN proof1-r18-p6 churn4 drain-dbg-native rc=0 ms=4629 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p7 churn4 drain-dbg-native rc=0 ms=2326 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p8 churn4 drain-dbg-native rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p9 churn4 drain-dbg-release rc=0 ms=4886 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p10 churn4 drain-dbg-release rc=0 ms=10689 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p11 churn4 drain-dbg-release rc=0 ms=6071 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p0 quiet drain-dbg-native rc=124 ms=123509 dumped=1 periods=0 throttled=0 throttled_us=0 | 
+RUN proof1-r18-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p2 quiet drain-dbg-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p3 quiet drain-dbg-release rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p4 quiet drain-dbg-release rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r18-p5 quiet drain-dbg-release rc=0 ms=2086 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 19 2026-11-06T07:41:44Z load=2.86 4.24 5.02
+RUN proof1-r19-p7 churn4 drain-dbg-native rc=0 ms=8239 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p8 churn4 drain-dbg-native rc=0 ms=8025 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p9 churn4 drain-dbg-release rc=0 ms=10097 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p10 churn4 drain-dbg-release rc=0 ms=4738 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p11 churn4 drain-dbg-release rc=0 ms=10379 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p0 quiet drain-dbg-native rc=0 ms=1880 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p1 quiet drain-dbg-native rc=0 ms=1692 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p2 quiet drain-dbg-native rc=0 ms=1450 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p3 quiet drain-dbg-release rc=0 ms=1453 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p4 quiet drain-dbg-release rc=0 ms=1462 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p5 quiet drain-dbg-release rc=0 ms=1474 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r19-p6 churn4 drain-dbg-native rc=0 ms=1901 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 20 2026-11-06T07:42:37Z load=3.54 4.24 4.98
+RUN proof1-r20-p8 churn4 drain-dbg-native rc=0 ms=5117 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p9 churn4 drain-dbg-release rc=0 ms=4882 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p10 churn4 drain-dbg-release rc=0 ms=3602 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p11 churn4 drain-dbg-release rc=0 ms=8442 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p0 quiet drain-dbg-native rc=0 ms=1635 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p1 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p2 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p3 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p4 quiet drain-dbg-release rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p5 quiet drain-dbg-release rc=0 ms=3479 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p6 churn4 drain-dbg-native rc=0 ms=3983 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r20-p7 churn4 drain-dbg-native rc=0 ms=2748 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 21 2026-11-06T07:43:17Z load=3.61 4.17 4.92
+RUN proof1-r21-p9 churn4 drain-dbg-release rc=0 ms=10735 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p10 churn4 drain-dbg-release rc=0 ms=3512 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p11 churn4 drain-dbg-release rc=0 ms=4323 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p0 quiet drain-dbg-native rc=0 ms=12739 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p1 quiet drain-dbg-native rc=0 ms=1678 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p2 quiet drain-dbg-native rc=0 ms=1241 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p3 quiet drain-dbg-release rc=0 ms=1251 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p4 quiet drain-dbg-release rc=0 ms=1470 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p5 quiet drain-dbg-release rc=0 ms=1242 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p6 churn4 drain-dbg-native rc=0 ms=6569 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p7 churn4 drain-dbg-native rc=0 ms=1637 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r21-p8 churn4 drain-dbg-native rc=0 ms=3906 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 22 2026-11-06T07:44:08Z load=5.07 4.51 5.00
+RUN proof1-r22-p10 churn4 drain-dbg-release rc=0 ms=4035 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p11 churn4 drain-dbg-release rc=0 ms=13622 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p0 quiet drain-dbg-native rc=0 ms=8897 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p1 quiet drain-dbg-native rc=0 ms=1649 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p2 quiet drain-dbg-native rc=0 ms=1241 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p3 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p4 quiet drain-dbg-release rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p5 quiet drain-dbg-release rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p6 churn4 drain-dbg-native rc=0 ms=2945 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p7 churn4 drain-dbg-native rc=0 ms=2658 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p8 churn4 drain-dbg-native rc=0 ms=2043 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r22-p9 churn4 drain-dbg-release rc=0 ms=3268 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 23 2026-11-06T07:44:52Z load=6.03 4.84 5.09
+RUN proof1-r23-p11 churn4 drain-dbg-release rc=0 ms=2497 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p0 quiet drain-dbg-native rc=0 ms=1443 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p1 quiet drain-dbg-native rc=0 ms=7938 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p2 quiet drain-dbg-native rc=0 ms=1659 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p3 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p4 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p6 churn4 drain-dbg-native rc=0 ms=14862 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p7 churn4 drain-dbg-native rc=0 ms=3296 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p8 churn4 drain-dbg-native rc=0 ms=2871 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p9 churn4 drain-dbg-release rc=0 ms=1843 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r23-p10 churn4 drain-dbg-release rc=0 ms=3677 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 24 2026-11-06T07:45:37Z load=5.75 4.95 5.11
+RUN proof1-r24-p0 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p1 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p2 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p3 quiet drain-dbg-release rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p4 quiet drain-dbg-release rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p5 quiet drain-dbg-release rc=0 ms=1635 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p6 churn4 drain-dbg-native rc=0 ms=15544 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p7 churn4 drain-dbg-native rc=0 ms=4290 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p8 churn4 drain-dbg-native rc=0 ms=4496 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p9 churn4 drain-dbg-release rc=0 ms=3275 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p10 churn4 drain-dbg-release rc=0 ms=1840 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r24-p11 churn4 drain-dbg-release rc=0 ms=4292 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 25 2026-11-06T07:46:19Z load=4.96 4.85 5.07
+RUN proof1-r25-p1 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p2 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p3 quiet drain-dbg-release rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p4 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p6 churn4 drain-dbg-native rc=0 ms=1633 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p7 churn4 drain-dbg-native rc=0 ms=3471 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p8 churn4 drain-dbg-native rc=0 ms=3471 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p9 churn4 drain-dbg-release rc=0 ms=2248 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p10 churn4 drain-dbg-release rc=0 ms=1429 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p11 churn4 drain-dbg-release rc=0 ms=8607 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r25-p0 quiet drain-dbg-native rc=0 ms=2040 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 26 2026-11-06T07:46:49Z load=5.24 4.92 5.08
+RUN proof1-r26-p2 quiet drain-dbg-native rc=0 ms=1442 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p3 quiet drain-dbg-release rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p4 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p5 quiet drain-dbg-release rc=0 ms=1238 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p6 churn4 drain-dbg-native rc=0 ms=1866 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p7 churn4 drain-dbg-native rc=0 ms=4552 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p8 churn4 drain-dbg-native rc=0 ms=2453 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p9 churn4 drain-dbg-release rc=0 ms=5574 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p10 churn4 drain-dbg-release rc=0 ms=5352 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p11 churn4 drain-dbg-release rc=0 ms=58863 dumped=1 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p0 quiet drain-dbg-native rc=0 ms=2257 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r26-p1 quiet drain-dbg-native rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 27 2026-11-06T07:48:16Z load=5.99 5.35 5.23
+RUN proof1-r27-p3 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p4 quiet drain-dbg-release rc=0 ms=1441 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p5 quiet drain-dbg-release rc=0 ms=1445 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p6 churn4 drain-dbg-native rc=0 ms=1636 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p7 churn4 drain-dbg-native rc=0 ms=1433 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p8 churn4 drain-dbg-native rc=0 ms=3272 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p9 churn4 drain-dbg-release rc=0 ms=8044 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p10 churn4 drain-dbg-release rc=0 ms=8016 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p11 churn4 drain-dbg-release rc=0 ms=4621 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p0 quiet drain-dbg-native rc=0 ms=1856 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p1 quiet drain-dbg-native rc=0 ms=1464 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r27-p2 quiet drain-dbg-native rc=0 ms=1246 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 28 2026-11-06T07:48:52Z load=5.42 5.29 5.21
+RUN proof1-r28-p4 quiet drain-dbg-release rc=0 ms=1254 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p5 quiet drain-dbg-release rc=0 ms=1238 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p6 churn4 drain-dbg-native rc=0 ms=1910 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p7 churn4 drain-dbg-native rc=0 ms=2107 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p8 churn4 drain-dbg-native rc=0 ms=2301 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p9 churn4 drain-dbg-release rc=0 ms=2971 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p10 churn4 drain-dbg-release rc=0 ms=2297 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p11 churn4 drain-dbg-release rc=0 ms=2764 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p0 quiet drain-dbg-native rc=0 ms=1881 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p1 quiet drain-dbg-native rc=0 ms=1472 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p2 quiet drain-dbg-native rc=0 ms=1248 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r28-p3 quiet drain-dbg-release rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 29 2026-11-06T07:49:16Z load=4.87 5.17 5.18
+RUN proof1-r29-p5 quiet drain-dbg-release rc=0 ms=1240 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p6 churn4 drain-dbg-native rc=0 ms=1475 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p7 churn4 drain-dbg-native rc=0 ms=1892 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p8 churn4 drain-dbg-native rc=0 ms=4032 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p9 churn4 drain-dbg-release rc=0 ms=2342 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p10 churn4 drain-dbg-release rc=0 ms=2312 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p11 churn4 drain-dbg-release rc=0 ms=3375 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p0 quiet drain-dbg-native rc=0 ms=1679 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p1 quiet drain-dbg-native rc=0 ms=1249 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p2 quiet drain-dbg-native rc=0 ms=1460 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p3 quiet drain-dbg-release rc=0 ms=1247 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r29-p4 quiet drain-dbg-release rc=0 ms=1246 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 30 2026-11-06T07:49:40Z load=4.29 5.02 5.13
+RUN proof1-r30-p6 churn4 drain-dbg-native rc=0 ms=1908 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p7 churn4 drain-dbg-native rc=0 ms=3803 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p8 churn4 drain-dbg-native rc=0 ms=3584 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p9 churn4 drain-dbg-release rc=0 ms=2971 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p10 churn4 drain-dbg-release rc=0 ms=3834 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p11 churn4 drain-dbg-release rc=0 ms=8759 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p0 quiet drain-dbg-native rc=0 ms=1434 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p1 quiet drain-dbg-native rc=0 ms=1432 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p2 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p3 quiet drain-dbg-release rc=0 ms=1638 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p4 quiet drain-dbg-release rc=0 ms=1241 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r30-p5 quiet drain-dbg-release rc=0 ms=5468 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 31 2026-11-06T07:50:18Z load=4.49 4.98 5.11
+RUN proof1-r31-p7 churn4 drain-dbg-native rc=0 ms=4699 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p8 churn4 drain-dbg-native rc=0 ms=3270 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p9 churn4 drain-dbg-release rc=0 ms=2456 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p10 churn4 drain-dbg-release rc=0 ms=2544 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p11 churn4 drain-dbg-release rc=0 ms=2096 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p0 quiet drain-dbg-native rc=0 ms=2123 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p1 quiet drain-dbg-native rc=0 ms=1453 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p2 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p3 quiet drain-dbg-release rc=0 ms=5731 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p4 quiet drain-dbg-release rc=0 ms=1237 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p5 quiet drain-dbg-release rc=0 ms=16350 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r31-p6 churn4 drain-dbg-native rc=0 ms=5480 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 32 2026-11-06T07:51:07Z load=4.63 4.98 5.10
+RUN proof1-r32-p8 churn4 drain-dbg-native rc=0 ms=4520 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p9 churn4 drain-dbg-release rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p10 churn4 drain-dbg-release rc=0 ms=2921 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p11 churn4 drain-dbg-release rc=0 ms=2325 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p0 quiet drain-dbg-native rc=0 ms=1686 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p1 quiet drain-dbg-native rc=0 ms=1462 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p2 quiet drain-dbg-native rc=0 ms=1478 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p3 quiet drain-dbg-release rc=0 ms=1662 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p4 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p6 churn4 drain-dbg-native rc=0 ms=3567 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r32-p7 churn4 drain-dbg-native rc=0 ms=1882 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 33 2026-11-06T07:51:33Z load=5.40 5.13 5.15
+RUN proof1-r33-p9 churn4 drain-dbg-release rc=0 ms=1892 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p10 churn4 drain-dbg-release rc=0 ms=3893 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p11 churn4 drain-dbg-release rc=0 ms=3475 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p0 quiet drain-dbg-native rc=0 ms=1438 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p1 quiet drain-dbg-native rc=0 ms=1469 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p2 quiet drain-dbg-native rc=0 ms=1470 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p3 quiet drain-dbg-release rc=0 ms=1231 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p4 quiet drain-dbg-release rc=0 ms=1470 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p5 quiet drain-dbg-release rc=0 ms=1246 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p6 churn4 drain-dbg-native rc=0 ms=1658 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p7 churn4 drain-dbg-native rc=0 ms=2463 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r33-p8 churn4 drain-dbg-native rc=0 ms=2655 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 34 2026-11-06T07:51:58Z load=6.23 5.35 5.22
+RUN proof1-r34-p10 churn4 drain-dbg-release rc=0 ms=2862 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p11 churn4 drain-dbg-release rc=0 ms=3165 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p0 quiet drain-dbg-native rc=0 ms=2708 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p1 quiet drain-dbg-native rc=0 ms=1439 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p2 quiet drain-dbg-native rc=0 ms=2074 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p3 quiet drain-dbg-release rc=0 ms=1230 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p4 quiet drain-dbg-release rc=0 ms=1435 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p5 quiet drain-dbg-release rc=0 ms=1843 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p6 churn4 drain-dbg-native rc=0 ms=1671 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p7 churn4 drain-dbg-native rc=0 ms=11193 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p8 churn4 drain-dbg-native rc=0 ms=4574 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r34-p9 churn4 drain-dbg-release rc=0 ms=12622 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 35 2026-11-06T07:52:45Z load=6.38 5.53 5.29
+RUN proof1-r35-p11 churn4 drain-dbg-release rc=0 ms=1873 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p0 quiet drain-dbg-native rc=0 ms=10291 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p1 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p2 quiet drain-dbg-native rc=0 ms=1633 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p3 quiet drain-dbg-release rc=0 ms=1225 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p4 quiet drain-dbg-release rc=0 ms=1440 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p5 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p6 churn4 drain-dbg-native rc=0 ms=9767 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p7 churn4 drain-dbg-native rc=0 ms=2453 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p8 churn4 drain-dbg-native rc=0 ms=6772 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p9 churn4 drain-dbg-release rc=0 ms=13503 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r35-p10 churn4 drain-dbg-release rc=0 ms=3119 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 36 2026-11-06T07:53:40Z load=5.66 5.46 5.28
+RUN proof1-r36-p0 quiet drain-dbg-native rc=0 ms=3080 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p1 quiet drain-dbg-native rc=0 ms=1448 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p2 quiet drain-dbg-native rc=0 ms=7265 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p3 quiet drain-dbg-release rc=0 ms=1249 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p4 quiet drain-dbg-release rc=0 ms=1469 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p5 quiet drain-dbg-release rc=0 ms=1246 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p6 churn4 drain-dbg-native rc=0 ms=10511 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p7 churn4 drain-dbg-native rc=0 ms=5965 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p8 churn4 drain-dbg-native rc=0 ms=2750 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p9 churn4 drain-dbg-release rc=0 ms=12074 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p10 churn4 drain-dbg-release rc=0 ms=2452 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r36-p11 churn4 drain-dbg-release rc=0 ms=3349 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 37 2026-11-06T07:54:33Z load=5.08 5.32 5.24
+RUN proof1-r37-p1 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p2 quiet drain-dbg-native rc=0 ms=1229 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p3 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p4 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p6 churn4 drain-dbg-native rc=0 ms=1232 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p7 churn4 drain-dbg-native rc=0 ms=3171 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p8 churn4 drain-dbg-native rc=0 ms=6830 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p9 churn4 drain-dbg-release rc=0 ms=5524 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p10 churn4 drain-dbg-release rc=0 ms=2046 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p11 churn4 drain-dbg-release rc=0 ms=2859 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r37-p0 quiet drain-dbg-native rc=0 ms=1461 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 38 2026-11-06T07:55:03Z load=4.78 5.24 5.22
+RUN proof1-r38-p2 quiet drain-dbg-native rc=0 ms=1453 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p3 quiet drain-dbg-release rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p4 quiet drain-dbg-release rc=0 ms=1224 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p5 quiet drain-dbg-release rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p6 churn4 drain-dbg-native rc=0 ms=3266 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p7 churn4 drain-dbg-native rc=0 ms=2247 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p8 churn4 drain-dbg-native rc=0 ms=4821 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p9 churn4 drain-dbg-release rc=0 ms=1872 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p10 churn4 drain-dbg-release rc=0 ms=10729 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p11 churn4 drain-dbg-release rc=0 ms=3497 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p0 quiet drain-dbg-native rc=0 ms=1441 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN proof1-r38-p1 quiet drain-dbg-native rc=0 ms=1446 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+SUMMARY proof1 cond=quiet bin=drain-dbg-native runs=38 green=37 stalled=1 red=0 other=0
+SUMMARY proof1 cond=quiet bin=drain-dbg-native runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=quiet bin=drain-dbg-native runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=quiet bin=drain-dbg-release runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=quiet bin=drain-dbg-release runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=quiet bin=drain-dbg-release runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=churn4 bin=drain-dbg-native runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=churn4 bin=drain-dbg-native runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=churn4 bin=drain-dbg-native runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=churn4 bin=drain-dbg-release runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=churn4 bin=drain-dbg-release runs=38 green=38 stalled=0 red=0 other=0
+SUMMARY proof1 cond=churn4 bin=drain-dbg-release runs=38 green=38 stalled=0 red=0 other=0
+REPRO_END proof1 rounds=38 2026-11-06T07:55:38Z
+JOB_END exit=0 2026-11-06T07:55:38Z

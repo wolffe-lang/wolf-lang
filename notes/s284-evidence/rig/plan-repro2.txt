@@ -1,0 +1,7 @@
+# s284 repro2: the quiet pinned row (CI's own shape), trunk 275f9904's four binaries, and the
+# measurement build 8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9 (trunk + event lines on fd 2, never pushed) on CI's two
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native
+quiet /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-rel-native

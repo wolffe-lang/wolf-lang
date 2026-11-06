@@ -1,0 +1,362 @@
+QUEUED 2026-11-06T07:24:51Z job=head-bf843401-B on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=2 B=0
+LOCKS_ACQUIRED 2026-11-06T07:24:51Z block=B sha=bf843401dcf38395b2bb433ceb06330c0332cc14
+BUILD bf843401dcf38395b2bb433ceb06330c0332cc14 cpus=6-11 kernel=7.2.4 2026-11-06T07:24:52Z
+START build-dbg 2026-11-06T07:24:52Z
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_span)
+     Compiling foldhash v0.2.0
+     Compiling stable_deref_trait v1.2.1
+     Compiling hashbrown v0.17.1
+     Compiling shlex v2.0.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling cfg-if v1.0.4
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_diag)
+     Compiling cc v1.4.2
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_lex)
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling constant_time_eq v0.4.2
+     Compiling rayon-core v1.13.0
+     Compiling arrayref v0.3.9
+     Compiling cpufeatures v0.3.0
+     Compiling smallvec v1.15.2
+     Compiling cranelift-srcgen v0.134.3
+     Compiling arrayvec v0.7.8
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_parse)
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling equivalent v1.0.2
+     Compiling either v1.17.0
+     Compiling synstructure v0.13.2
+     Compiling rayon v1.12.0
+     Compiling displaydoc v0.2.7
+     Compiling indexmap v2.14.0
+     Compiling writeable v0.6.3
+     Compiling cranelift-isle v0.134.3
+     Compiling litemap v0.8.2
+     Compiling serde_core v1.0.229
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling heck v0.5.0
+     Compiling zerofrom v0.1.8
+     Compiling fnv v1.0.7
+     Compiling icu_normalizer_data v2.2.0
+     Compiling yoke v0.8.3
+     Compiling icu_properties_data v2.2.0
+     Compiling hashbrown v0.16.1
+     Compiling log v0.4.33
+     Compiling zerotrie v0.2.4
+     Compiling zerovec v0.11.6
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_sema)
+     Compiling utf8_iter v1.0.4
+     Compiling libc v0.2.189
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling gimli v0.33.0
+     Compiling tinystr v0.8.3
+     Compiling potential_utf v0.1.5
+     Compiling icu_locale_core v2.2.0
+     Compiling icu_collections v2.2.0
+     Compiling allocator-api2 v0.2.21
+     Compiling icu_provider v2.2.0
+     Compiling target-lexicon v0.13.5
+     Compiling memchr v2.8.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-codegen v0.134.3
+     Compiling cranelift-entity v0.134.3
+     Compiling zmij v1.0.23
+     Compiling serde v1.0.229
+     Compiling arbitrary v1.4.2
+     Compiling rustc-hash v2.1.3
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-bforest v0.134.3
+     Compiling cranelift-control v0.134.3
+     Compiling icu_properties v2.2.0
+     Compiling icu_normalizer v2.2.0
+     Compiling serde_derive v1.0.229
+     Compiling serde_json v1.0.151
+     Compiling anyhow v1.0.104
+     Compiling crc32fast v1.5.0
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_mem)
+     Compiling itoa v1.0.18
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_fmt)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_query)
+     Compiling url v2.5.8
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_wir)
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_backend)
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_cimport)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_codegen_llvm)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_doc)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_pkg)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 27.21s
+END build-dbg exit=0 2026-11-06T07:25:24Z
+START build-rel 2026-11-06T07:25:24Z
+     Compiling proc-macro2 v1.0.107
+     Compiling unicode-ident v1.0.24
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_span)
+     Compiling shlex v2.0.1
+     Compiling hashbrown v0.17.1
+     Compiling cfg-if v1.0.4
+     Compiling find-msvc-tools v0.1.10
+     Compiling stable_deref_trait v1.2.1
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_diag)
+     Compiling cc v1.4.2
+     Compiling crossbeam-epoch v0.9.20
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_lex)
+     Compiling blake3 v1.8.6
+     Compiling smallvec v1.15.2
+     Compiling arrayvec v0.7.8
+     Compiling arrayref v0.3.9
+     Compiling cpufeatures v0.3.0
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-srcgen v0.134.3
+     Compiling constant_time_eq v0.4.2
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_ast)
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling zerofrom v0.1.8
+     Compiling libm v0.2.16
+     Compiling yoke v0.8.3
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_parse)
+     Compiling either v1.17.0
+     Compiling zerovec v0.11.6
+     Compiling equivalent v1.0.2
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling indexmap v2.14.0
+     Compiling tinystr v0.8.3
+     Compiling rayon v1.12.0
+     Compiling litemap v0.8.2
+     Compiling writeable v0.6.3
+     Compiling cranelift-isle v0.134.3
+     Compiling icu_locale_core v2.2.0
+     Compiling potential_utf v0.1.5
+     Compiling zerotrie v0.2.4
+     Compiling icu_normalizer_data v2.2.0
+     Compiling heck v0.5.0
+     Compiling libc v0.2.189
+     Compiling utf8_iter v1.0.4
+     Compiling log v0.4.33
+     Compiling fnv v1.0.7
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_sema)
+     Compiling icu_properties_data v2.2.0
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling hashbrown v0.16.1
+     Compiling serde_core v1.0.229
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling icu_collections v2.2.0
+     Compiling gimli v0.33.0
+     Compiling cranelift-bitset v0.134.3
+     Compiling icu_provider v2.2.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling target-lexicon v0.13.5
+     Compiling allocator-api2 v0.2.21
+     Compiling memchr v2.8.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling arbitrary v1.4.2
+     Compiling serde v1.0.229
+     Compiling cranelift-codegen v0.134.3
+     Compiling zmij v1.0.23
+     Compiling rustc-hash v2.1.3
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_properties v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling serde_derive v1.0.229
+     Compiling serde_json v1.0.151
+     Compiling anyhow v1.0.104
+     Compiling crc32fast v1.5.0
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_mem)
+     Compiling percent-encoding v2.3.2
+     Compiling object v0.39.1
+     Compiling itoa v1.0.18
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_fmt)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_query)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_wir)
+     Compiling url v2.5.8
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_backend)
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_cimport)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_pkg)
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_codegen_clif)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_lsp)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_doc)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_driver)
+      Finished `release` profile [optimized + debuginfo] target(s) in 1m 49s
+END build-rel exit=0 2026-11-06T07:27:15Z
+START drain-dbg-native 2026-11-06T07:27:15Z
+END drain-dbg-native exit=0 2026-11-06T07:27:15Z
+START drain-dbg-release 2026-11-06T07:27:15Z
+END drain-dbg-release exit=0 2026-11-06T07:27:16Z
+START drain-rel-native 2026-11-06T07:27:16Z
+END drain-rel-native exit=0 2026-11-06T07:27:16Z
+START drain-rel-release 2026-11-06T07:27:16Z
+END drain-rel-release exit=0 2026-11-06T07:27:16Z
+START digests 2026-11-06T07:27:16Z
+  41936d36af129dec12bdc6275ef0cfc45d3f62a5fd924c69d007e0ea7e2054f5  target/debug/wolf
+  7864a9fb92f7601ec512faa3a7158c9ffba71d21aa3e20ddfdccd7d20acd81cc  target/debug/libwolf_rt.a
+  5fd222a24b9fdb9ad8227661bb4aa001deddbdf165e3f43d32dd4853c7cd9063  target/release/wolf
+  bdda27b365d27fa85836662b1ef47d1851f174daf97d7cff208e76fb65fc5d44  target/release/libwolf_rt.a
+  7528e303b2e2f498bb8b2d53af3fc811034f87c13202956a166c36f40382513d  /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native
+  8209de1f1d47a526ed5dbdefbf0fb88e1c0f59e2e5f67b2e094ff75f1d5e5c45  /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release
+  63e2c629281115d50c1e4f556f553d6f798945f3b91ece7263d12b39417ad3d7  /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-rel-native
+  dc3cb50b946dd84c619dedc119ba971b07a5467a4d3672d43b95dba9040c2c0f  /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-rel-release
+END digests exit=0 2026-11-06T07:27:17Z
+START symbols 2026-11-06T07:27:17Z
+  drain-dbg-native 00000000000e84f8 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-native 00000000000e8fcc b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-dbg-release 00000000000e77a8 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-release 00000000000e827c b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-rel-native 0000000000085008 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-native 0000000000086028 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.6144613953100727156
+  drain-rel-release 00000000000842c8 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-release 00000000000852e8 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.6144613953100727156
+END symbols exit=0 2026-11-06T07:27:17Z
+BUILT bf843401dcf38395b2bb433ceb06330c0332cc14 2026-11-06T07:27:17Z
+LOCKS_ACQUIRED 2026-11-06T07:27:17Z block=B six=6-11 four=6-9 sha=bf843401dcf38395b2bb433ceb06330c0332cc14 kernel=7.2.4
+START rows-build 2026-11-06T07:27:18Z
+     Compiling libc v0.2.189
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/r-bf843401dcf38395b2bb433ceb06330c0332cc14/crates/wolf_rt)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 3.87s
+    Executable unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+END rows-build exit=0 2026-11-06T07:27:22Z
+START s284-rows 2026-11-06T07:27:22Z
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 1 test
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... ok
+  
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.31s
+  
+  PASS signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 1 test
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... ok
+  
+  test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.31s
+  
+  PASS reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+END s284-rows exit=0 2026-11-06T07:27:23Z
+START signal-suite 2026-11-06T07:27:23Z
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 31 tests
+  test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+  test signal::tests::disposition_of_a_bad_set_is_io ... ok
+  test signal::tests::group_and_all_shape_rows ... ok
+  test signal::tests::host_numbers ... ok
+  test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+  test signal::tests::disposition_one_rows ... ok
+  test signal::tests::empty_set_is_io_not_a_hang ... ok
+  test signal::tests::number_rows ... ok
+  test signal::tests::ignore_survives_and_is_inherited_listen_is_not ... ok
+  test signal::tests::ignored_reads_the_disposition ... ok
+  test signal::tests::new_meanings_round_trip_by_index ... ok
+  test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+  test signal::tests::poll_right_after_raise_never_misses ... ok
+  test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+  test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+  test signal::tests::raise_unmapped_is_io ... ok
+  test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+  test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+  test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+  test signal::tests::set_pgid_shape_rows ... ok
+  test signal::tests::text_rows ... ok
+  test signal::tests::the_action_query_reads_and_refuses_by_shape ... ok
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... ok
+  test signal::tests::self_raise_delivers_the_meaning ... ok
+  test signal::tests::send_rows ... ok
+  test signal::tests::the_eleven_new_meanings_round_trip ... ok
+  test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+  test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... ok
+  test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+  test signal::tests::wait_fds_answers_write_readiness ... ok
+  test signal::tests::wait_filters_by_set ... ok
+  
+  test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 346 filtered out; finished in 1.02s
+  
+END signal-suite exit=0 2026-11-06T07:27:24Z
+START reactor-suite 2026-11-06T07:27:24Z
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 6 tests
+  test reactor::tests::cancellation_surfaces_at_parked_io_wait ... ok
+  test reactor::tests::many_waiters_one_reactor ... ok
+  test reactor::tests::deadline_fires_on_never_ready_fd ... ok
+  test reactor::tests::readiness_completes_wait_and_emits_io_arrive ... ok
+  test reactor::tests::timers_fire_in_deadline_order ... ok
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... ok
+  
+  test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 371 filtered out; finished in 0.38s
+  
+END reactor-suite exit=0 2026-11-06T07:27:25Z
+START fork-suite 2026-11-06T07:27:25Z
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 3 tests
+  test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... ok
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... ok
+  
+  test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 374 filtered out; finished in 0.32s
+  
+END fork-suite exit=0 2026-11-06T07:27:26Z
+ROWS_END bf843401dcf38395b2bb433ceb06330c0332cc14 2026-11-06T07:27:26Z
+JOB_END exit=0 2026-11-06T07:27:26Z

@@ -1,0 +1,11 @@
+# s284: event lines of the measurement-only build 8e8ce00f (trunk + one raw write(2) a slip, a claim at work, an overwrite of HELD, the hub lock taken while S284_FORKING), per job, condition and binary
+repro2 cond=quiet bin=drain-dbg-native runs=30 slip=424 claim_at_work=23 overwrite=26 work_in_fork=15 runs_with_claim=17
+repro2 cond=quiet bin=drain-rel-native runs=30 slip=162 claim_at_work=0 overwrite=0 work_in_fork=0 runs_with_claim=0
+repro3 cond=quiet bin=drain-dbg-native runs=12 slip=187 claim_at_work=13 overwrite=15 work_in_fork=8 runs_with_claim=9
+repro3 cond=hog4 bin=drain-dbg-native runs=12 slip=2 claim_at_work=0 overwrite=0 work_in_fork=0 runs_with_claim=0
+repro3 cond=hog2 bin=drain-dbg-native runs=12 slip=18 claim_at_work=0 overwrite=1 work_in_fork=1 runs_with_claim=0
+repro3 cond=forks4 bin=drain-dbg-native runs=12 slip=24 claim_at_work=8 overwrite=7 work_in_fork=2 runs_with_claim=6
+repro3 cond=churn2 bin=drain-dbg-native runs=12 slip=172 claim_at_work=7 overwrite=7 work_in_fork=2 runs_with_claim=6
+repro3 cond=churn4 bin=drain-dbg-native runs=12 slip=168 claim_at_work=6 overwrite=7 work_in_fork=1 runs_with_claim=5
+repro3 cond=q2000p1000 bin=drain-dbg-native runs=12 slip=134 claim_at_work=7 overwrite=7 work_in_fork=1 runs_with_claim=5
+repro3 cond=nice19hog2 bin=drain-dbg-native runs=12 slip=22 claim_at_work=0 overwrite=0 work_in_fork=0 runs_with_claim=0

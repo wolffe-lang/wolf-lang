@@ -1,0 +1,225 @@
+QUEUED 2026-11-06T08:10:35Z job=forklanes2-f40f2402 on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=1 B=0
+LOCKS_ACQUIRED 2026-11-06T08:10:35Z block=B six=6-11 sha=f40f24025cc91af5be64dcad707abddc5534b73f kernel=7.2.4
+ENGINE up pid=2013902 sock=/home/mfwolffe/lanes/s284/run/podman-forklanes-f40f2402.sock cpus=6-11
+START fork-lanes-build 2026-11-06T08:10:36Z
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_span)
+     Compiling foldhash v0.2.0
+     Compiling hashbrown v0.17.1
+     Compiling cfg-if v1.0.4
+     Compiling stable_deref_trait v1.2.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling shlex v2.0.1
+     Compiling cc v1.4.2
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling arrayvec v0.7.8
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_lex)
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-srcgen v0.134.3
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling constant_time_eq v0.4.2
+     Compiling smallvec v1.15.2
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_parse)
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling either v1.17.0
+     Compiling equivalent v1.0.2
+     Compiling indexmap v2.14.0
+     Compiling rayon v1.12.0
+     Compiling synstructure v0.13.2
+     Compiling writeable v0.6.3
+     Compiling cranelift-isle v0.134.3
+     Compiling displaydoc v0.2.7
+     Compiling litemap v0.8.2
+     Compiling serde_core v1.0.229
+     Compiling heck v0.5.0
+     Compiling libc v0.2.189
+     Compiling log v0.4.33
+     Compiling icu_normalizer_data v2.2.0
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling utf8_iter v1.0.4
+     Compiling hashbrown v0.16.1
+     Compiling icu_properties_data v2.2.0
+     Compiling fnv v1.0.7
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling zerofrom v0.1.8
+     Compiling yoke v0.8.3
+     Compiling zerotrie v0.2.4
+     Compiling zerovec v0.11.6
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_sema)
+     Compiling gimli v0.33.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling allocator-api2 v0.2.21
+     Compiling tinystr v0.8.3
+     Compiling potential_utf v0.1.5
+     Compiling icu_locale_core v2.2.0
+     Compiling icu_collections v2.2.0
+     Compiling target-lexicon v0.13.5
+     Compiling icu_provider v2.2.0
+     Compiling memchr v2.8.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-codegen v0.134.3
+     Compiling cranelift-entity v0.134.3
+     Compiling rustc-hash v2.1.3
+     Compiling zmij v1.0.23
+     Compiling arbitrary v1.4.2
+     Compiling serde v1.0.229
+     Compiling icu_properties v2.2.0
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling anyhow v1.0.104
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_mem)
+     Compiling idna_adapter v1.2.2
+     Compiling itoa v1.0.18
+     Compiling percent-encoding v2.3.2
+     Compiling object v0.39.1
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_query)
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_rt)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_wir)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_cimport)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_doc)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_pkg)
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_backend)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 27.54s
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f/crates/wolf_driver)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.34s
+    Executable tests/fork_lanes.rs (target/debug/deps/fork_lanes-62cfda6e5e849e21)
+END fork-lanes-build exit=0 2026-11-06T08:11:04Z
+START fork-lanes 2026-11-06T08:11:04Z
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+       Running tests/fork_lanes.rs (target/debug/deps/fork_lanes-62cfda6e5e849e21)
+  
+  running 16 tests
+  REPORT chain.lu native: child: wait on the parent's spawn: io | child: wait on a handle it never had: io | child: poll (-1, 0) | grandchild: its parent is the child true | child: grandchild handle 1, status 5, a -1 b -1 | parent: child handle 1 status 9, spawn handle 0 status 3 | rc=0 |  || 
+  REPORT chain.lu native taskset -c 6-9: child: wait on the parent's spawn: io | child: wait on a handle it never had: io | child: poll (-1, 0) | grandchild: its parent is the child true | child: grandchild handle 1, status 5, a -1 b -1 | parent: child handle 1 status 9, spawn handle 0 status 3 | rc=0 |  || 
+  REPORT chain.lu release: child: wait on the parent's spawn: io | child: wait on a handle it never had: io | child: poll (-1, 0) | grandchild: its parent is the child true | child: grandchild handle 1, status 5, a -1 b -1 | parent: child handle 1 status 9, spawn handle 0 status 3 | rc=0 |  || 
+  REPORT tty.lu native: tty: the child, group 5, inherited the parent's group true, in the foreground true, writes to the terminal | tty: child status 0, the parent took the terminal back true | rc=0 |  || 
+  REPORT chain.lu release taskset -c 6-9: child: wait on the parent's spawn: io | child: wait on a handle it never had: io | child: poll (-1, 0) | grandchild: its parent is the child true | child: grandchild handle 1, status 5, a -1 b -1 | parent: child handle 1 status 9, spawn handle 0 status 3 | rc=0 |  || 
+  test a_fork_chain_and_the_wait_tables ... ok
+  REPORT storm.lu native: storm: 64 forked of a cap of 64, 64 killed by recorded pid, 64 reaped, 64 ended by KILL | rc=0 |  || 
+  REPORT storm.lu native taskset -c 6-9: storm: 64 forked of a cap of 64, 64 killed by recorded pid, 64 reaped, 64 ended by KILL | rc=0 |  || 
+  REPORT storm.lu release: storm: 64 forked of a cap of 64, 64 killed by recorded pid, 64 reaped, 64 ended by KILL | rc=0 |  || 
+  REPORT storm.lu release taskset -c 6-9: storm: 64 forked of a cap of 64, 64 killed by recorded pid, 64 reaped, 64 ended by KILL | rc=0 |  || 
+  REPORT tty.lu native taskset -c 6-9: tty: the child, group 5, inherited the parent's group true, in the foreground true, writes to the terminal | tty: child status 0, the parent took the terminal back true | rc=0 |  || 
+  REPORT tty.lu release: tty: the child, group 5, inherited the parent's group true, in the foreground true, writes to the terminal | tty: child status 0, the parent took the terminal back true | rc=0 |  || 
+  REPORT tty.lu release taskset -c 6-9: tty: the child, group 5, inherited the parent's group true, in the foreground true, writes to the terminal | tty: child status 0, the parent took the terminal back true | rc=0 |  || 
+  test a_child_in_the_foreground_writes_to_the_terminal ... ok
+  REPORT main.lu native: child: pid is new true, ppid is the parent true, handle -1 | parent: pid > 0 true, handle 0, os_proc_pid names it true, status 7 | parent: a second wait: io | rc=0 |  || 
+  REPORT exec.lu native: exec: the new program's pid is the child's true, status 0 | rc=0 |  || 
+  REPORT storm.lu under a low RLIMIT_NPROC, native: storm: refused before the cap true: io (host code 11); every child made killed true, reaped true, ended by KILL true | rc=0 |  || 
+  REPORT storm.lu under a low RLIMIT_NPROC, native taskset -c 6-9: storm: refused before the cap true: io (host code 11); every child made killed true, reaped true, ended by KILL true | rc=0 |  || 
+  REPORT storm.lu under a low RLIMIT_NPROC, release: storm: refused before the cap true: io (host code 11); every child made killed true, reaped true, ended by KILL true | rc=0 |  || 
+  REPORT main.lu native taskset -c 6-9: child: pid is new true, ppid is the parent true, handle -1 | parent: pid > 0 true, handle 0, os_proc_pid names it true, status 7 | parent: a second wait: io | rc=0 |  || 
+  REPORT storm.lu under a low RLIMIT_NPROC, release taskset -c 6-9: storm: refused before the cap true: io (host code 11); every child made killed true, reaped true, ended by KILL true | rc=0 |  || 
+  test a_bounded_storm_and_the_hosts_refusal ... ok
+  REPORT exec.lu native taskset -c 6-9: exec: the new program's pid is the child's true, status 0 | rc=0 |  || 
+  REPORT main.lu release: child: pid is new true, ppid is the parent true, handle -1 | parent: pid > 0 true, handle 0, os_proc_pid names it true, status 7 | parent: a second wait: io | rc=0 |  || 
+  REPORT main.lu release taskset -c 6-9: child: pid is new true, ppid is the parent true, handle -1 | parent: pid > 0 true, handle 0, os_proc_pid names it true, status 7 | parent: a second wait: io | rc=0 |  || 
+  test a_fork_from_main ... ok
+  REPORT exec.lu release: exec: the new program's pid is the child's true, status 0 | rc=0 |  || 
+  REPORT fds.lu native: fds: one write offset: abc | fds: the child read 2 | fds: one read offset: 1 then the child, then 3 | fds: a pipe end inherited: via the pipe | rc=0 |  || 
+  REPORT exec.lu release taskset -c 6-9: exec: the new program's pid is the child's true, status 0 | rc=0 |  || 
+  test a_fork_then_exec_keeps_the_pid ... ok
+  REPORT checked on main.lu: exit(1) "fork: unsupported\n" 
+  SKIP: no sibling lupin on this box (set LUPIN) — the oracle leg is absent
+  test the_checked_machine_answers_unsupported_and_lupin_refuses ... ok
+  REPORT subshell.lu native: subshell: the child's own TERMINATE ended it: 143; the parent's trap held: true | subshell: a program run in the child: 3 | subshell: QUIT stays ignored in the child: 0 | rc=0 |  || 
+  REPORT fds.lu native taskset -c 6-9: fds: one write offset: abc | fds: the child read 2 | fds: one read offset: 1 then the child, then 3 | fds: a pipe end inherited: via the pipe | rc=0 |  || 
+  REPORT fds.lu release: fds: one write offset: abc | fds: the child read 2 | fds: one read offset: 1 then the child, then 3 | fds: a pipe end inherited: via the pipe | rc=0 |  || 
+  REPORT fds.lu release taskset -c 6-9: fds: one write offset: abc | fds: the child read 2 | fds: one read offset: 1 then the child, then 3 | fds: a pipe end inherited: via the pipe | rc=0 |  || 
+  test descriptors_and_offsets_are_shared ... ok
+  REPORT tasks.lu native: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+  REPORT subshell.lu native taskset -c 6-9: subshell: the child's own TERMINATE ended it: 143; the parent's trap held: true | subshell: a program run in the child: 3 | subshell: QUIT stays ignored in the child: 0 | rc=0 |  || 
+  REPORT tasks.lu native taskset -c 6-9: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+  REPORT census.lu native (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 11 | census: inside a task: 10 | census: every task ended, 200 ms later: 9 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 9, child status 0 | rc=0 |  || 
+  REPORT subshell.lu release: subshell: the child's own TERMINATE ended it: 143; the parent's trap held: true | subshell: a program run in the child: 3 | subshell: QUIT stays ignored in the child: 0 | rc=0 |  || 
+  REPORT drain.lu native: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+  REPORT subshell.lu release taskset -c 6-9: subshell: the child's own TERMINATE ended it: 143; the parent's trap held: true | subshell: a program run in the child: 3 | subshell: QUIT stays ignored in the child: 0 | rc=0 |  || 
+  test a_toy_subshell ... ok
+  REPORT census.lu native taskset -c 6-9 (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 9 | census: inside a task: 8 | census: every task ended, 200 ms later: 7 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 7, child status 0 | rc=0 |  || 
+  REPORT tasks.lu release: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+  REPORT tasks.lu release taskset -c 6-9: tasks: a fork with a task parked: busy | tasks: a fork from inside a task: busy | tasks: the child's own tasks ran, sum 6 | tasks: after the scope a fork works, child status 0 | tasks: a fork right after each of 300 one-task scopes: busy 0 times | rc=0 |  || 
+  test the_busy_rule_and_the_pool ... ok
+  REPORT census.lu release (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 11 | census: inside a task: 10 | census: every task ended, 200 ms later: 9 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 9, child status 0 | rc=0 |  || 
+  REPORT census.lu release taskset -c 6-9 (linux): census: main, the hub and the set made before main, no task: 3 | census: two tasks live, one parked in recv, one in a sleep: 9 | census: inside a task: 8 | census: every task ended, 200 ms later: 7 | census: child threads 1 | census: the child after its first listen: 2 | census: the child after its first park: 3 | census: the parent after the fork: 7, child status 0 | rc=0 |  || 
+  test the_child_is_one_thread ... ok
+  REPORT drain.lu native taskset -c 6-9: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+  REPORT the host allocator across a fork (linux): mallocfork: 300 forks while 3 threads malloc: 300 children ran their own malloc and ended 0, 0 stuck (killed at 2 s), 0 other || 
+  test the_host_allocator_across_a_fork_a_control ... ok
+  REPORT loop.lu native exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 28 ms | 
+  REPORT loop.lu native exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 68 ms | 
+  REPORT drain.lu release: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+  REPORT loop.lu native spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 41 ms | 
+  REPORT loop.lu native taskset -c 6-9 exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 79 ms | 
+  REPORT drain.lu release taskset -c 6-9: drain: 1000 rounds of 8 forks, the drain thread at every one true | rc=0 |  || 
+  test the_drain_thread_outlives_every_fork ... ok
+  REPORT loop.lu native taskset -c 6-9 exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 144 ms | 
+  REPORT loop.lu native taskset -c 6-9 spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 65 ms | 
+  REPORT hub.lu native: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+  REPORT hub.lu native taskset -c 6-9: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+  REPORT reactor.lu native: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+  REPORT loop.lu release exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 26 ms | 
+  REPORT reactor.lu native taskset -c 6-9: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+  REPORT hub.lu release: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+  REPORT loop.lu release exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 69 ms | 
+  REPORT reactor.lu release: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+  REPORT loop.lu release spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 42 ms | 
+  REPORT loop.lu release taskset -c 6-9 exit: loop: exit 200, every status 0 true | rc=0 |  || REPORT loop exit 200: 24 ms | 
+  REPORT hub.lu release taskset -c 6-9: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || SigBlk:	0000000000000000 | SigIgn:	0000000000000000 | 
+  REPORT loop.lu release taskset -c 6-9 exec: loop: exec 200, every status 0 true | rc=0 |  || REPORT loop exec 200: 57 ms | 
+  REPORT drain.lu native beside 4 churning neighbours, taskset -c 6-9: drain beside churn: 40 of 40 runs, the drain thread at every fork true |  ||  || 39.9 s, 41 neighbour containers ran, 0 refused
+  test the_drain_thread_outlives_every_fork_beside_churning_neighbours ... ok
+  REPORT loop.lu release taskset -c 6-9 spawn: loop: spawn 200, every status 0 true | rc=0 |  || REPORT loop spawn 200: 33 ms | 
+  REPORT reactor.lu release taskset -c 6-9: reactor: the child took pong | reactor: the child's second read: timeout | reactor: the parent took ping, child status 0 | rc=0 |  || 
+  test the_readiness_set_is_the_childs_own ... ok
+  REPORT dash beside it: dash x=$(true) x 200: 17 ms | dash x=$(/bin/true) x 200: 51 ms | 
+  test the_pelt_shape_loop ... ok
+  REPORT hub.lu with TERMINATE blocked from the start, native: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+  REPORT hub.lu with TERMINATE blocked from the start, native taskset -c 6-9: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+  REPORT hub.lu with TERMINATE blocked from the start, release: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+  REPORT hub.lu with TERMINATE blocked from the start, release taskset -c 6-9: hub: the child took its TERMINATE true | hub: child status 0, the parent heard the child's TERMINATE false | hub: the second child heard the parent's TERMINATE false | hub: the parent took its TERMINATE true, second child status 0 | rc=0 |  || 
+  test the_hub_is_the_childs_own ... ok
+  
+  test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 109.20s
+  
+END fork-lanes exit=0 2026-11-06T08:12:54Z
+PRUNED /home/mfwolffe/lanes/s284/f-f40f24025cc91af5be64dcad707abddc5534b73f
+FORKLANES_END f40f24025cc91af5be64dcad707abddc5534b73f rc=0 2026-11-06T08:12:54Z
+ENGINE down pid=2013902
+JOB_END exit=0 2026-11-06T08:12:54Z

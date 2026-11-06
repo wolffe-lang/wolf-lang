@@ -1,0 +1,16 @@
+# s284 proof1: the fix bf843401dcf38395b2bb433ceb06330c0332cc14 against trunk 275f99040e778a703e9fedbfcc704683ec1f4b7b, CI's two binaries (debug runtime,
+# native and release tiers), the row's own shape (timeout 120, taskset four, 1000
+# rounds, a throwaway container), quiet and beside four churning neighbours.
+# Per round: trunk once and the fix twice on each binary and condition.
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native
+quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release
+quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release
+quiet /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release
+churn4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native
+churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-native
+churn4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release
+churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release
+churn4 /home/mfwolffe/lanes/s284/bins/bf843401dcf38395b2bb433ceb06330c0332cc14/drain-dbg-release

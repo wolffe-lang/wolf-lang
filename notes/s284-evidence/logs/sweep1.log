@@ -1,0 +1,182 @@
+QUEUED 2026-11-06T06:49:29Z job=sweep1 on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=1 B=1
+LOCKS_ACQUIRED 2026-11-06T06:50:33Z block=B four=6-9 label=sweep1 pairs=14 rounds=10 budget=100m kernel=7.2.4
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR quiet /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native sha256=b3d53ffbc620d2d5
+PAIR hog4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR hog4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native sha256=b3d53ffbc620d2d5
+PAIR hog2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR forks4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR nice19hog2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR idlehog2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR cpus2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR q2000p1000 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR q1000p1000 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR cpus1 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native sha256=e54d11b32c667473
+PAIR q2000p1000 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native sha256=b3d53ffbc620d2d5
+PAIR hog4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release sha256=35c7fa530450875b
+ROUND 1 2026-11-06T06:50:33Z load=2.87 3.81 3.58
+RUN sweep1-r1-p1 quiet drain-rel-native rc=0 ms=1258 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p2 hog4 drain-dbg-native rc=0 ms=3697 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p3 hog4 drain-rel-native rc=0 ms=3266 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p4 hog2 drain-dbg-native rc=0 ms=2043 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p5 forks4 drain-dbg-native rc=0 ms=1837 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p6 nice19hog2 drain-dbg-native rc=0 ms=2049 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p7 idlehog2 drain-dbg-native rc=0 ms=2280 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p8 cpus2 drain-dbg-native rc=0 ms=1667 dumped=0 periods=13 throttled=11 throttled_us=589333 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p9 q2000p1000 drain-dbg-native rc=0 ms=1861 dumped=0 periods=1370 throttled=990 throttled_us=514543 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p10 q1000p1000 drain-dbg-native rc=0 ms=9565 dumped=0 periods=2746 throttled=2687 throttled_us=2373481 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p11 cpus1 drain-dbg-native rc=0 ms=2872 dumped=0 periods=24 throttled=24 throttled_us=2921077 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p12 q2000p1000 drain-rel-native rc=0 ms=1430 dumped=0 periods=912 throttled=667 throttled_us=282962 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p13 hog4 drain-dbg-release rc=0 ms=7148 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r1-p0 quiet drain-dbg-native rc=0 ms=1227 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 2 2026-11-06T06:51:15Z load=3.96 4.00 3.65
+RUN sweep1-r2-p2 hog4 drain-dbg-native rc=0 ms=3881 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p3 hog4 drain-rel-native rc=0 ms=3266 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p4 hog2 drain-dbg-native rc=0 ms=2041 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p5 forks4 drain-dbg-native rc=0 ms=1856 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p6 nice19hog2 drain-dbg-native rc=0 ms=8747 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p7 idlehog2 drain-dbg-native rc=0 ms=2260 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p8 cpus2 drain-dbg-native rc=0 ms=1633 dumped=0 periods=12 throttled=11 throttled_us=583567 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p9 q2000p1000 drain-dbg-native rc=0 ms=1836 dumped=0 periods=1331 throttled=919 throttled_us=465853 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p10 q1000p1000 drain-dbg-native rc=0 ms=9104 dumped=0 periods=3907 throttled=3864 throttled_us=4278836 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p11 cpus1 drain-dbg-native rc=0 ms=12969 dumped=0 periods=25 throttled=24 throttled_us=3395556 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p12 q2000p1000 drain-rel-native rc=0 ms=1468 dumped=0 periods=945 throttled=686 throttled_us=297973 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p13 hog4 drain-dbg-release rc=0 ms=11042 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p0 quiet drain-dbg-native rc=0 ms=5562 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r2-p1 quiet drain-rel-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 3 2026-11-06T06:52:23Z load=5.07 4.29 3.78
+RUN sweep1-r3-p3 hog4 drain-rel-native rc=0 ms=3269 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p4 hog2 drain-dbg-native rc=0 ms=2914 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p5 forks4 drain-dbg-native rc=0 ms=1850 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p6 nice19hog2 drain-dbg-native rc=0 ms=2042 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p7 idlehog2 drain-dbg-native rc=0 ms=2042 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p8 cpus2 drain-dbg-native rc=0 ms=1651 dumped=0 periods=12 throttled=11 throttled_us=617367 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p9 q2000p1000 drain-dbg-native rc=0 ms=10744 dumped=0 periods=1205 throttled=1065 throttled_us=469186 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p10 q1000p1000 drain-dbg-native rc=0 ms=3090 dumped=0 periods=2700 throttled=2643 throttled_us=2327919 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p11 cpus1 drain-dbg-native rc=0 ms=2652 dumped=0 periods=24 throttled=23 throttled_us=2584411 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p12 q2000p1000 drain-rel-native rc=0 ms=1228 dumped=0 periods=944 throttled=691 throttled_us=295374 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p13 hog4 drain-dbg-release rc=0 ms=3468 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p0 quiet drain-dbg-native rc=0 ms=1431 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p1 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r3-p2 hog4 drain-dbg-native rc=0 ms=5587 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 4 2026-11-06T06:53:06Z load=5.55 4.51 3.87
+RUN sweep1-r4-p4 hog2 drain-dbg-native rc=0 ms=2042 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p5 forks4 drain-dbg-native rc=0 ms=1839 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p6 nice19hog2 drain-dbg-native rc=0 ms=2454 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p7 idlehog2 drain-dbg-native rc=0 ms=2046 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p8 cpus2 drain-dbg-native rc=0 ms=1637 dumped=0 periods=13 throttled=12 throttled_us=619179 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p9 q2000p1000 drain-dbg-native rc=0 ms=1636 dumped=0 periods=1218 throttled=1079 throttled_us=490598 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p10 q1000p1000 drain-dbg-native rc=0 ms=3065 dumped=0 periods=2447 throttled=2371 throttled_us=2001160 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p11 cpus1 drain-dbg-native rc=0 ms=2865 dumped=0 periods=25 throttled=24 throttled_us=2587308 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p12 q2000p1000 drain-rel-native rc=0 ms=1443 dumped=0 periods=952 throttled=673 throttled_us=304016 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p13 hog4 drain-dbg-release rc=0 ms=3678 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p0 quiet drain-dbg-native rc=0 ms=2250 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p1 quiet drain-rel-native rc=0 ms=1434 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p2 hog4 drain-dbg-native rc=0 ms=4298 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r4-p3 hog4 drain-rel-native rc=0 ms=3483 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 5 2026-11-06T06:53:41Z load=7.33 5.07 4.08
+RUN sweep1-r5-p5 forks4 drain-dbg-native rc=0 ms=1855 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p6 nice19hog2 drain-dbg-native rc=0 ms=2274 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p7 idlehog2 drain-dbg-native rc=0 ms=2280 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p8 cpus2 drain-dbg-native rc=0 ms=1650 dumped=0 periods=13 throttled=12 throttled_us=554461 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p9 q2000p1000 drain-dbg-native rc=0 ms=1661 dumped=0 periods=1320 throttled=1019 throttled_us=501376 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p10 q1000p1000 drain-dbg-native rc=0 ms=4377 dumped=0 periods=3675 throttled=3625 throttled_us=3669816 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p11 cpus1 drain-dbg-native rc=0 ms=3962 dumped=0 periods=36 throttled=35 throttled_us=3472305 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p12 q2000p1000 drain-rel-native rc=0 ms=1231 dumped=0 periods=947 throttled=690 throttled_us=303673 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p13 hog4 drain-dbg-release rc=0 ms=3489 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p0 quiet drain-dbg-native rc=0 ms=1463 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p1 quiet drain-rel-native rc=0 ms=1041 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p2 hog4 drain-dbg-native rc=0 ms=3696 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p3 hog4 drain-rel-native rc=0 ms=3073 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r5-p4 hog2 drain-dbg-native rc=0 ms=2285 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 6 2026-11-06T06:54:16Z load=7.23 5.29 4.19
+RUN sweep1-r6-p6 nice19hog2 drain-dbg-native rc=0 ms=2493 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p7 idlehog2 drain-dbg-native rc=0 ms=2274 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p8 cpus2 drain-dbg-native rc=0 ms=2073 dumped=0 periods=14 throttled=13 throttled_us=812252 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p9 q2000p1000 drain-dbg-native rc=0 ms=1660 dumped=0 periods=1233 throttled=1105 throttled_us=499152 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p10 q1000p1000 drain-dbg-native rc=0 ms=4790 dumped=0 periods=4214 throttled=4028 throttled_us=4189849 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p11 cpus1 drain-dbg-native rc=0 ms=4398 dumped=0 periods=39 throttled=38 throttled_us=4169452 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p12 q2000p1000 drain-rel-native rc=0 ms=1468 dumped=0 periods=943 throttled=709 throttled_us=308060 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p13 hog4 drain-dbg-release rc=0 ms=3492 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p0 quiet drain-dbg-native rc=0 ms=1466 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p1 quiet drain-rel-native rc=0 ms=1252 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p2 hog4 drain-dbg-native rc=0 ms=3483 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p3 hog4 drain-rel-native rc=0 ms=3079 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p4 hog2 drain-dbg-native rc=0 ms=2069 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r6-p5 forks4 drain-dbg-native rc=0 ms=2077 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 7 2026-11-06T06:54:53Z load=6.95 5.38 4.27
+RUN sweep1-r7-p7 idlehog2 drain-dbg-native rc=0 ms=2265 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p8 cpus2 drain-dbg-native rc=0 ms=1663 dumped=0 periods=13 throttled=12 throttled_us=708268 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p9 q2000p1000 drain-dbg-native rc=0 ms=1876 dumped=0 periods=1325 throttled=1156 throttled_us=514586 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p10 q1000p1000 drain-dbg-native rc=0 ms=5421 dumped=0 periods=4669 throttled=4588 throttled_us=5590507 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p11 cpus1 drain-dbg-native rc=0 ms=4376 dumped=0 periods=40 throttled=39 throttled_us=4336576 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p12 q2000p1000 drain-rel-native rc=0 ms=1470 dumped=0 periods=930 throttled=733 throttled_us=302849 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p13 hog4 drain-dbg-release rc=0 ms=7778 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p0 quiet drain-dbg-native rc=0 ms=1652 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p1 quiet drain-rel-native rc=0 ms=1022 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p2 hog4 drain-dbg-native rc=0 ms=3467 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p3 hog4 drain-rel-native rc=0 ms=6753 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p4 hog2 drain-dbg-native rc=0 ms=4085 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p5 forks4 drain-dbg-native rc=0 ms=1841 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r7-p6 nice19hog2 drain-dbg-native rc=0 ms=2458 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 8 2026-11-06T06:55:39Z load=6.10 5.37 4.32
+RUN sweep1-r8-p8 cpus2 drain-dbg-native rc=0 ms=1635 dumped=0 periods=12 throttled=11 throttled_us=581480 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p9 q2000p1000 drain-dbg-native rc=0 ms=1632 dumped=0 periods=1253 throttled=973 throttled_us=438816 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p10 q1000p1000 drain-dbg-native rc=0 ms=2652 dumped=0 periods=2359 throttled=2329 throttled_us=2012248 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p11 cpus1 drain-dbg-native rc=0 ms=2860 dumped=0 periods=24 throttled=24 throttled_us=2574946 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p12 q2000p1000 drain-rel-native rc=0 ms=1441 dumped=0 periods=933 throttled=693 throttled_us=309183 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p13 hog4 drain-dbg-release rc=0 ms=3693 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p0 quiet drain-dbg-native rc=0 ms=1430 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p1 quiet drain-rel-native rc=0 ms=1226 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p2 hog4 drain-dbg-native rc=0 ms=3688 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p3 hog4 drain-rel-native rc=0 ms=9765 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p4 hog2 drain-dbg-native rc=0 ms=2269 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p5 forks4 drain-dbg-native rc=0 ms=6971 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p6 nice19hog2 drain-dbg-native rc=0 ms=2262 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r8-p7 idlehog2 drain-dbg-native rc=0 ms=2487 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 9 2026-11-06T06:56:24Z load=7.47 5.78 4.50
+RUN sweep1-r9-p9 q2000p1000 drain-dbg-native rc=0 ms=1864 dumped=0 periods=1293 throttled=1011 throttled_us=522094 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p10 q1000p1000 drain-dbg-native rc=0 ms=2656 dumped=0 periods=2366 throttled=2303 throttled_us=1948973 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p11 cpus1 drain-dbg-native rc=0 ms=13176 dumped=0 periods=45 throttled=42 throttled_us=4661776 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p12 q2000p1000 drain-rel-native rc=0 ms=12016 dumped=0 periods=961 throttled=699 throttled_us=308162 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p13 hog4 drain-dbg-release rc=0 ms=3700 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p0 quiet drain-dbg-native rc=0 ms=1228 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p1 quiet drain-rel-native rc=0 ms=5973 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p2 hog4 drain-dbg-native rc=0 ms=3691 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p3 hog4 drain-rel-native rc=0 ms=4294 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p4 hog2 drain-dbg-native rc=0 ms=5302 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p5 forks4 drain-dbg-native rc=0 ms=1852 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p6 nice19hog2 drain-dbg-native rc=0 ms=2244 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p7 idlehog2 drain-dbg-native rc=0 ms=2043 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r9-p8 cpus2 drain-dbg-native rc=0 ms=1635 dumped=0 periods=13 throttled=10 throttled_us=595461 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+ROUND 10 2026-11-06T06:57:26Z load=6.17 5.71 4.56
+RUN sweep1-r10-p10 q1000p1000 drain-dbg-native rc=0 ms=2651 dumped=0 periods=2322 throttled=2276 throttled_us=1917471 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p11 cpus1 drain-dbg-native rc=0 ms=2864 dumped=0 periods=25 throttled=24 throttled_us=2260860 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p12 q2000p1000 drain-rel-native rc=0 ms=1227 dumped=0 periods=919 throttled=691 throttled_us=290691 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p13 hog4 drain-dbg-release rc=0 ms=3894 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p0 quiet drain-dbg-native rc=124 ms=124807 dumped=1 periods=0 throttled=0 throttled_us=0 | 
+RUN sweep1-r10-p1 quiet drain-rel-native rc=0 ms=1023 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p2 hog4 drain-dbg-native rc=0 ms=4699 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p3 hog4 drain-rel-native rc=0 ms=3678 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p4 hog2 drain-dbg-native rc=0 ms=2045 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p5 forks4 drain-dbg-native rc=0 ms=1840 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p6 nice19hog2 drain-dbg-native rc=0 ms=2253 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p7 idlehog2 drain-dbg-native rc=0 ms=2250 dumped=0 periods=0 throttled=0 throttled_us=0 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p8 cpus2 drain-dbg-native rc=0 ms=1636 dumped=0 periods=13 throttled=12 throttled_us=568622 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+RUN sweep1-r10-p9 q2000p1000 drain-dbg-native rc=0 ms=1841 dumped=0 periods=1267 throttled=1037 throttled_us=475744 | drain: 1000 rounds of 8 forks, the drain thread at every one true 
+SUMMARY sweep1 cond=quiet bin=drain-dbg-native runs=10 green=9 stalled=1 red=0 other=0
+SUMMARY sweep1 cond=quiet bin=drain-rel-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=hog4 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=hog4 bin=drain-rel-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=hog2 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=forks4 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=nice19hog2 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=idlehog2 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=cpus2 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=q2000p1000 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=q1000p1000 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=cpus1 bin=drain-dbg-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=q2000p1000 bin=drain-rel-native runs=10 green=10 stalled=0 red=0 other=0
+SUMMARY sweep1 cond=hog4 bin=drain-dbg-release runs=10 green=10 stalled=0 red=0 other=0
+REPRO_END sweep1 rounds=10 2026-11-06T07:00:03Z
+JOB_END exit=0 2026-11-06T07:00:03Z

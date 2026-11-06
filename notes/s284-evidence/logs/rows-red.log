@@ -1,0 +1,324 @@
+QUEUED 2026-11-06T07:06:11Z job=rows-red on h1-block-A.lock, h1-A.lock, h1-A-light.lock; waiters A=2 B=1
+LOCKS_ACQUIRED 2026-11-06T07:13:32Z block=A six=0-5 four=0-3 sha=6fdd9d7e7ceda98d8d19233f0f8c82e4cc048406 kernel=7.2.4
+START rows-build 2026-11-06T07:13:32Z
+     Compiling libc v0.2.189
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-6fdd9d7e7ceda98d8d19233f0f8c82e4cc048406/crates/wolf_rt)
+  warning: constant `POLLING` is never used
+      --> crates/wolf_rt/src/signal.rs:1932:19
+       |
+  1932 |         pub const POLLING: u8 = READER_POLLING;
+       |                   ^^^^^^^
+       |
+       = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: `wolf_rt` (lib test) generated 1 warning
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 4.13s
+    Executable unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+END rows-build exit=0 2026-11-06T07:13:37Z
+START s284-rows 2026-11-06T07:13:37Z
+  warning: constant `POLLING` is never used
+      --> crates/wolf_rt/src/signal.rs:1932:19
+       |
+  1932 |         pub const POLLING: u8 = READER_POLLING;
+       |                   ^^^^^^^
+       |
+       = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: `wolf_rt` (lib test) generated 1 warning
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 1 test
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... 
+  thread 'signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread' (10) panicked at crates/wolf_rt/src/signal.rs:3735:9:
+  assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+  
+  running 1 test
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... FAILED
+  
+  failures:
+  
+  failures:
+      signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.00s
+  
+  
+  thread 'signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread' (12) panicked at crates/wolf_rt/src/signal.rs:3976:17:
+  a fork's hold claimed the drain thread at work, its state reading 3 (2 = at work, 3 = in its poll) after a release in the gap of its failed claim: the fork would copy the hub lock held (wolf-lang#1022)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+    left: Some(101)
+   right: Some(0)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  FAILED
+  
+  failures:
+  
+  failures:
+      signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.01s
+  
+  error: test failed, to rerun pass `-p wolf_rt --lib`
+FAIL signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread exit=101: assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread, in a child of the test binary (None: killed at the 30 s cap):  
+  warning: constant `POLLING` is never used
+      --> crates/wolf_rt/src/signal.rs:1932:19
+       |
+  1932 |         pub const POLLING: u8 = READER_POLLING;
+       |                   ^^^^^^^
+       |
+       = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: `wolf_rt` (lib test) generated 1 warning
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 1 test
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... 
+  thread 'reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread' (10) panicked at crates/wolf_rt/src/reactor.rs:1542:9:
+  assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread, in a child of the test binary (None: killed at the 30 s cap):
+  
+  running 1 test
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... FAILED
+  
+  failures:
+  
+  failures:
+      reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.00s
+  
+  
+  thread 'reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread' (12) panicked at crates/wolf_rt/src/reactor.rs:1500:13:
+  a fork's hold claimed the reactor thread at work, its state reading 3 (2 = at work, 3 = in its wait) after a release in the gap of its failed claim (wolf-lang#1022)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+    left: Some(101)
+   right: Some(0)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  FAILED
+  
+  failures:
+  
+  failures:
+      reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.01s
+  
+  error: test failed, to rerun pass `-p wolf_rt --lib`
+FAIL reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread exit=101: assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread, in a child of the test binary (None: killed at the 30 s cap):  
+END s284-rows exit=101 2026-11-06T07:13:38Z
+START signal-suite 2026-11-06T07:13:38Z
+  warning: constant `POLLING` is never used
+      --> crates/wolf_rt/src/signal.rs:1932:19
+       |
+  1932 |         pub const POLLING: u8 = READER_POLLING;
+       |                   ^^^^^^^
+       |
+       = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: `wolf_rt` (lib test) generated 1 warning
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 31 tests
+  test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+  test signal::tests::disposition_of_a_bad_set_is_io ... ok
+  test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+  test signal::tests::disposition_one_rows ... ok
+  test signal::tests::empty_set_is_io_not_a_hang ... ok
+  test signal::tests::group_and_all_shape_rows ... ok
+  test signal::tests::host_numbers ... ok
+  test signal::tests::number_rows ... ok
+  test signal::tests::ignore_survives_and_is_inherited_listen_is_not ... ok
+  test signal::tests::ignored_reads_the_disposition ... ok
+  test signal::tests::new_meanings_round_trip_by_index ... ok
+  test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+  test signal::tests::poll_right_after_raise_never_misses ... ok
+  test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+  test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+  test signal::tests::raise_unmapped_is_io ... ok
+  test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+  test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+  test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+  test signal::tests::set_pgid_shape_rows ... ok
+  test signal::tests::text_rows ... ok
+  test signal::tests::the_action_query_reads_and_refuses_by_shape ... ok
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... FAILED
+  test signal::tests::self_raise_delivers_the_meaning ... ok
+  test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+  test signal::tests::the_eleven_new_meanings_round_trip ... ok
+  test signal::tests::send_rows ... ok
+  test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... ok
+  test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+  test signal::tests::wait_fds_answers_write_readiness ... ok
+  test signal::tests::wait_filters_by_set ... ok
+  
+  failures:
+  
+  ---- signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread stdout ----
+  
+  thread 'signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread' (37) panicked at crates/wolf_rt/src/signal.rs:3735:9:
+  assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+  
+  running 1 test
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... FAILED
+  
+  failures:
+  
+  failures:
+      signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.00s
+  
+  
+  thread 'signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread' (56) panicked at crates/wolf_rt/src/signal.rs:3976:17:
+  a fork's hold claimed the drain thread at work, its state reading 3 (2 = at work, 3 = in its poll) after a release in the gap of its failed claim: the fork would copy the hub lock held (wolf-lang#1022)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+    left: Some(101)
+   right: Some(0)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+  
+  failures:
+      signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+  
+  test result: FAILED. 30 passed; 1 failed; 0 ignored; 0 measured; 346 filtered out; finished in 0.73s
+  
+  error: test failed, to rerun pass `-p wolf_rt --lib`
+END signal-suite exit=101 2026-11-06T07:13:40Z
+START reactor-suite 2026-11-06T07:13:40Z
+  warning: constant `POLLING` is never used
+      --> crates/wolf_rt/src/signal.rs:1932:19
+       |
+  1932 |         pub const POLLING: u8 = READER_POLLING;
+       |                   ^^^^^^^
+       |
+       = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: `wolf_rt` (lib test) generated 1 warning
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 6 tests
+  test reactor::tests::cancellation_surfaces_at_parked_io_wait ... ok
+  test reactor::tests::many_waiters_one_reactor ... ok
+  test reactor::tests::deadline_fires_on_never_ready_fd ... ok
+  test reactor::tests::readiness_completes_wait_and_emits_io_arrive ... ok
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... FAILED
+  test reactor::tests::timers_fire_in_deadline_order ... ok
+  
+  failures:
+  
+  ---- reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread stdout ----
+  
+  thread 'reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread' (28) panicked at crates/wolf_rt/src/reactor.rs:1542:9:
+  assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread, in a child of the test binary (None: killed at the 30 s cap):
+  
+  running 1 test
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... FAILED
+  
+  failures:
+  
+  failures:
+      reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.00s
+  
+  
+  thread 'reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread' (31) panicked at crates/wolf_rt/src/reactor.rs:1500:13:
+  a fork's hold claimed the reactor thread at work, its state reading 3 (2 = at work, 3 = in its wait) after a release in the gap of its failed claim (wolf-lang#1022)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+    left: Some(101)
+   right: Some(0)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+  
+  failures:
+      reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+  
+  test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 371 filtered out; finished in 0.15s
+  
+  error: test failed, to rerun pass `-p wolf_rt --lib`
+END reactor-suite exit=101 2026-11-06T07:13:40Z
+START fork-suite 2026-11-06T07:13:40Z
+  warning: constant `POLLING` is never used
+      --> crates/wolf_rt/src/signal.rs:1932:19
+       |
+  1932 |         pub const POLLING: u8 = READER_POLLING;
+       |                   ^^^^^^^
+       |
+       = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+  
+  warning: `wolf_rt` (lib test) generated 1 warning
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+       Running unittests src/lib.rs (target/debug/deps/wolf_rt-10821b16d6139556)
+  
+  running 3 tests
+  test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... FAILED
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... FAILED
+  
+  failures:
+  
+  ---- reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread stdout ----
+  
+  thread 'reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread' (10) panicked at crates/wolf_rt/src/reactor.rs:1542:9:
+  assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread, in a child of the test binary (None: killed at the 30 s cap):
+  
+  running 1 test
+  test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... FAILED
+  
+  failures:
+  
+  failures:
+      reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.00s
+  
+  
+  thread 'reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread' (16) panicked at crates/wolf_rt/src/reactor.rs:1500:13:
+  a fork's hold claimed the reactor thread at work, its state reading 3 (2 = at work, 3 = in its wait) after a release in the gap of its failed claim (wolf-lang#1022)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+    left: Some(101)
+   right: Some(0)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+  ---- signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread stdout ----
+  
+  thread 'signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread' (12) panicked at crates/wolf_rt/src/signal.rs:3735:9:
+  assertion `left == right` failed: s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread, in a child of the test binary (None: killed at the 30 s cap):
+  
+  running 1 test
+  test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... FAILED
+  
+  failures:
+  
+  failures:
+      signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+  
+  test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 376 filtered out; finished in 0.00s
+  
+  
+  thread 'signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread' (21) panicked at crates/wolf_rt/src/signal.rs:3976:17:
+  a fork's hold claimed the drain thread at work, its state reading 3 (2 = at work, 3 = in its poll) after a release in the gap of its failed claim: the fork would copy the hub lock held (wolf-lang#1022)
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  
+    left: Some(101)
+   right: Some(0)
+  
+  
+  failures:
+      reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread
+      signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread
+  
+  test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 374 filtered out; finished in 0.02s
+  
+  error: test failed, to rerun pass `-p wolf_rt --lib`
+END fork-suite exit=101 2026-11-06T07:13:41Z
+ROWS_END 6fdd9d7e7ceda98d8d19233f0f8c82e4cc048406 2026-11-06T07:13:41Z
+JOB_END exit=0 2026-11-06T07:13:41Z

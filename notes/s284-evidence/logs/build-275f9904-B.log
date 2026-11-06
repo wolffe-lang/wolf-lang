@@ -1,0 +1,364 @@
+QUEUED 2026-11-06T06:44:30Z job=build-275f9904-B on h1-block-B.lock, h1-B.lock, h1-B-light.lock; waiters A=1 B=1
+LOCKS_ACQUIRED 2026-11-06T06:45:14Z block=B cpus=6-11 host_kernel=7.2.4
+BUILD 275f99040e778a703e9fedbfcc704683ec1f4b7b cpus=6-11 kernel=7.2.4 2026-11-06T06:45:16Z
+START build-dbg 2026-11-06T06:45:16Z
+      Updating crates.io index
+   Downloading crates ...
+    Downloaded allocator-api2 v0.2.21
+    Downloaded cpufeatures v0.3.0
+    Downloaded cfg-if v1.0.4
+    Downloaded arrayref v0.3.9
+    Downloaded cranelift-control v0.134.3
+    Downloaded utf8_iter v1.0.4
+    Downloaded cranelift-entity v0.134.3
+    Downloaded cranelift-module v0.134.3
+    Downloaded cranelift-srcgen v0.134.3
+    Downloaded cranelift-bitset v0.134.3
+    Downloaded rustc-hash v2.1.3
+    Downloaded zerofrom-derive v0.1.7
+    Downloaded serde_repr v0.1.21
+    Downloaded equivalent v1.0.2
+    Downloaded stable_deref_trait v1.2.1
+    Downloaded yoke-derive v0.8.2
+    Downloaded potential_utf v0.1.5
+    Downloaded percent-encoding v2.3.2
+    Downloaded zerofrom v0.1.8
+    Downloaded constant_time_eq v0.4.2
+    Downloaded idna_adapter v1.2.2
+    Downloaded itoa v1.0.18
+    Downloaded form_urlencoded v1.2.2
+    Downloaded fnv v1.0.7
+    Downloaded heck v0.5.0
+    Downloaded cranelift-codegen-shared v0.134.3
+    Downloaded cranelift-object v0.134.3
+    Downloaded target-lexicon v0.13.5
+    Downloaded find-msvc-tools v0.1.10
+    Downloaded shlex v2.0.1
+    Downloaded zerovec-derive v0.11.3
+    Downloaded arbitrary v1.4.2
+    Downloaded icu_provider v2.2.0
+    Downloaded bitflags v1.3.2
+    Downloaded quote v1.0.47
+    Downloaded displaydoc v0.2.7
+    Downloaded either v1.17.0
+    Downloaded zmij v1.0.23
+    Downloaded lsp-server v0.10.0
+    Downloaded crossbeam-deque v0.8.7
+    Downloaded synstructure v0.13.2
+    Downloaded writeable v0.6.3
+    Downloaded arrayvec v0.7.8
+    Downloaded anyhow v1.0.104
+    Downloaded cranelift-assembler-x64-meta v0.134.3
+    Downloaded smallvec v1.15.2
+    Downloaded tinystr v0.8.3
+    Downloaded cranelift-assembler-x64 v0.134.3
+    Downloaded cranelift-bforest v0.134.3
+    Downloaded foldhash v0.2.0
+    Downloaded crossbeam-utils v0.8.22
+    Downloaded litemap v0.8.2
+    Downloaded cranelift-frontend v0.134.3
+    Downloaded crc32fast v1.5.0
+    Downloaded yoke v0.8.3
+    Downloaded proc-macro2 v1.0.107
+    Downloaded log v0.4.33
+    Downloaded serde_derive v1.0.229
+    Downloaded unicode-ident v1.0.24
+    Downloaded crossbeam-epoch v0.9.20
+    Downloaded icu_locale_core v2.2.0
+    Downloaded icu_properties v2.2.0
+    Downloaded icu_normalizer v2.2.0
+    Downloaded cranelift-codegen-meta v0.134.3
+    Downloaded cranelift-isle v0.134.3
+    Downloaded lsp-types v0.95.1
+    Downloaded rayon-core v1.13.0
+    Downloaded wasmtime-internal-core v47.0.3
+    Downloaded icu_normalizer_data v2.2.0
+    Downloaded cc v1.4.2
+    Downloaded crossbeam-channel v0.5.16
+    Downloaded serde v1.0.229
+    Downloaded serde_core v1.0.229
+    Downloaded zerotrie v0.2.4
+    Downloaded bumpalo v3.20.3
+    Downloaded icu_collections v2.2.0
+    Downloaded indexmap v2.14.0
+    Downloaded memchr v2.8.3
+    Downloaded url v2.5.8
+    Downloaded hashbrown v0.16.1
+    Downloaded zerovec v0.11.6
+    Downloaded idna v1.1.0
+    Downloaded serde_json v1.0.151
+    Downloaded libm v0.2.16
+    Downloaded regalloc2 v0.15.2
+    Downloaded icu_properties_data v2.2.0
+    Downloaded hashbrown v0.17.1
+    Downloaded rayon v1.12.0
+    Downloaded blake3 v1.8.6
+    Downloaded syn v3.0.3
+    Downloaded gimli v0.33.0
+    Downloaded syn v2.0.119
+    Downloaded object v0.39.1
+    Downloaded libc v0.2.189
+    Downloaded cranelift-codegen v0.134.3
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_span)
+     Compiling hashbrown v0.17.1
+     Compiling shlex v2.0.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling stable_deref_trait v1.2.1
+     Compiling cfg-if v1.0.4
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_diag)
+     Compiling cc v1.4.2
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_lex)
+     Compiling smallvec v1.15.2
+     Compiling arrayvec v0.7.8
+     Compiling constant_time_eq v0.4.2
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling cranelift-srcgen v0.134.3
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_parse)
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling either v1.17.0
+     Compiling equivalent v1.0.2
+     Compiling indexmap v2.14.0
+     Compiling synstructure v0.13.2
+     Compiling rayon v1.12.0
+     Compiling displaydoc v0.2.7
+     Compiling cranelift-isle v0.134.3
+     Compiling litemap v0.8.2
+     Compiling writeable v0.6.3
+     Compiling fnv v1.0.7
+     Compiling log v0.4.33
+     Compiling hashbrown v0.16.1
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling zerofrom v0.1.8
+     Compiling heck v0.5.0
+     Compiling yoke v0.8.3
+     Compiling icu_properties_data v2.2.0
+     Compiling zerotrie v0.2.4
+     Compiling serde_core v1.0.229
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling icu_normalizer_data v2.2.0
+     Compiling zerovec v0.11.6
+     Compiling utf8_iter v1.0.4
+     Compiling libc v0.2.189
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-bitset v0.134.3
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_sema)
+     Compiling gimli v0.33.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling target-lexicon v0.13.5
+     Compiling tinystr v0.8.3
+     Compiling icu_locale_core v2.2.0
+     Compiling potential_utf v0.1.5
+     Compiling icu_collections v2.2.0
+     Compiling memchr v2.8.3
+     Compiling icu_provider v2.2.0
+     Compiling allocator-api2 v0.2.21
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling zmij v1.0.23
+     Compiling cranelift-codegen v0.134.3
+     Compiling arbitrary v1.4.2
+     Compiling rustc-hash v2.1.3
+     Compiling serde v1.0.229
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling icu_properties v2.2.0
+     Compiling serde_derive v1.0.229
+     Compiling crc32fast v1.5.0
+     Compiling anyhow v1.0.104
+     Compiling serde_json v1.0.151
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_mem)
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling itoa v1.0.18
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_query)
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_rt)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_wir)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_cimport)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_doc)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_pkg)
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_backend)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 32.07s
+END build-dbg exit=0 2026-11-06T06:45:50Z
+START build-rel 2026-11-06T06:45:50Z
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling unicode-ident v1.0.24
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_span)
+     Compiling shlex v2.0.1
+     Compiling hashbrown v0.17.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling cfg-if v1.0.4
+     Compiling stable_deref_trait v1.2.1
+     Compiling cc v1.4.2
+     Compiling wolf_diag v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling wolf_lex v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_lex)
+     Compiling arrayvec v0.7.8
+     Compiling blake3 v1.8.6
+     Compiling constant_time_eq v0.4.2
+     Compiling arrayref v0.3.9
+     Compiling smallvec v1.15.2
+     Compiling cranelift-srcgen v0.134.3
+     Compiling cpufeatures v0.3.0
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling wolf_ast v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_ast)
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling libm v0.2.16
+     Compiling zerofrom v0.1.8
+     Compiling wolf_parse v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_parse)
+     Compiling yoke v0.8.3
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling zerovec v0.11.6
+     Compiling equivalent v1.0.2
+     Compiling either v1.17.0
+     Compiling indexmap v2.14.0
+     Compiling cranelift-isle v0.134.3
+     Compiling writeable v0.6.3
+     Compiling rayon v1.12.0
+     Compiling litemap v0.8.2
+     Compiling tinystr v0.8.3
+     Compiling potential_utf v0.1.5
+     Compiling zerotrie v0.2.4
+     Compiling hashbrown v0.16.1
+     Compiling icu_locale_core v2.2.0
+     Compiling icu_normalizer_data v2.2.0
+     Compiling fnv v1.0.7
+     Compiling utf8_iter v1.0.4
+     Compiling icu_properties_data v2.2.0
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling serde_core v1.0.229
+     Compiling log v0.4.33
+     Compiling heck v0.5.0
+     Compiling libc v0.2.189
+     Compiling icu_collections v2.2.0
+     Compiling gimli v0.33.0
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling wolf_sema v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_sema)
+     Compiling icu_provider v2.2.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling memchr v2.8.3
+     Compiling target-lexicon v0.13.5
+     Compiling allocator-api2 v0.2.21
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-entity v0.134.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-codegen v0.134.3
+     Compiling serde v1.0.229
+     Compiling arbitrary v1.4.2
+     Compiling rustc-hash v2.1.3
+     Compiling zmij v1.0.23
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling icu_properties v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling anyhow v1.0.104
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_mem)
+     Compiling itoa v1.0.18
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_fmt)
+     Compiling wolf_query v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_query)
+     Compiling wolf_wir v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_wir)
+     Compiling url v2.5.8
+     Compiling wolf_rt v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_rt)
+     Compiling wolf_backend v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_backend)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_cimport)
+     Compiling wolf_pkg v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_pkg)
+     Compiling wolf_lsp v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_lsp)
+     Compiling wolf_codegen_clif v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_codegen_clif)
+     Compiling wolf_codegen_llvm v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_codegen_llvm)
+     Compiling wolf_doc v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_doc)
+     Compiling wolf_driver v0.2.37 (/home/mfwolffe/lanes/s284/b-275f99040e778a703e9fedbfcc704683ec1f4b7b/crates/wolf_driver)
+      Finished `release` profile [optimized + debuginfo] target(s) in 1m 55s
+END build-rel exit=0 2026-11-06T06:47:46Z
+START drain-dbg-native 2026-11-06T06:47:46Z
+END drain-dbg-native exit=0 2026-11-06T06:47:48Z
+START drain-dbg-release 2026-11-06T06:47:48Z
+END drain-dbg-release exit=0 2026-11-06T06:47:48Z
+START drain-rel-native 2026-11-06T06:47:48Z
+END drain-rel-native exit=0 2026-11-06T06:47:49Z
+START drain-rel-release 2026-11-06T06:47:49Z
+END drain-rel-release exit=0 2026-11-06T06:47:49Z
+START digests 2026-11-06T06:47:49Z
+  ca0dd8aa52deaf9c2551b3296e665597191da5944c546c9cf3644b910a7bdfa0  target/debug/wolf
+  15816a2533f248736b8c273a23c2fe76c20dfd4e7042d1cebcb94a07a1f3b23e  target/debug/libwolf_rt.a
+  f502c060126b8113a6a8192565e901742e8567d77eac236b9b02af5d7f516d27  target/release/wolf
+  6ffaf93313e55217b8c2947383b7bdee4191d326eb7032a2181876bdc196891a  target/release/libwolf_rt.a
+  e54d11b32c667473c45053e94704434629b190a08fdb7ea70c0241cc964b2dd3  /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+  35c7fa530450875bb8d5b89ea20e612a64c565cdd60c9418e4ff177a949abe0e  /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-release
+  b3d53ffbc620d2d5f2048106839c6a68261906d83cba1b3094e21be1bf0175d2  /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-native
+  5cd8ccb1a54b6334d048f2e5aa4fc47b1f08d2af33ff11586a7a11af64ba2d3d  /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-rel-release
+END digests exit=0 2026-11-06T06:47:51Z
+START symbols 2026-11-06T06:47:51Z
+  drain-dbg-native 00000000000e84c8 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-native 00000000000e902c b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-dbg-release 00000000000e7778 d _RNvNtCshGV7MCeOJUF_7wolf_rt6signal3HUB
+  drain-dbg-release 00000000000e82dc b _RNvNtNtCshGV7MCeOJUF_7wolf_rt6signal3sys12READER_STATE
+  drain-rel-native 0000000000085008 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-native 0000000000086028 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.12416934609176083524
+  drain-rel-release 00000000000842c8 d _RNvNtCshu6NnZpLmV_7wolf_rt6signal3HUB
+  drain-rel-release 00000000000852e8 b _RNvNtNtCshu6NnZpLmV_7wolf_rt6signal3sys12READER_STATE.llvm.12416934609176083524
+END symbols exit=0 2026-11-06T06:47:52Z
+BUILT 275f99040e778a703e9fedbfcc704683ec1f4b7b 2026-11-06T06:47:52Z
+JOB_END exit=0 2026-11-06T06:47:52Z

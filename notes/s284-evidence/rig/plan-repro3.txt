@@ -1,0 +1,12 @@
+# s284 repro3: which condition turns the claim gap's slips into work in a fork?
+# The measurement build 8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9 (debug runtime) across conditions; trunk's own under churn.
+quiet /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+hog4 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+hog2 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+forks4 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+churn2 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+churn4 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+q2000p1000 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+nice19hog2 /home/mfwolffe/lanes/s284/bins/8e8ce00faa1a0b7acf96e9458aa5a62ef47ebbc9/drain-dbg-native
+churn2 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
+churn4 /home/mfwolffe/lanes/s284/bins/275f99040e778a703e9fedbfcc704683ec1f4b7b/drain-dbg-native
