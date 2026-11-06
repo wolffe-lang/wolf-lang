@@ -609,6 +609,154 @@ fn the_drain_thread_outlives_every_fork() {
     );
 }
 
+/// s284 (wolf-lang#1022, R-s284-4): how many runs the churn row makes, at
+/// most (`the_drain_thread_outlives_every_fork_beside_churning_neighbours`),
+/// sized from CI's measured rate; `WOLF_FORK_CHURN_RUNS` asks for another
+/// count.
+#[cfg(unix)]
+const DRAIN_CHURN_RUNS: usize = 40;
+/// s284: the churn row's neighbour containers, started back to back.
+#[cfg(unix)]
+const DRAIN_CHURN_NEIGHBOURS: usize = 4;
+
+/// s284 (wolf-lang#1022): the drain row's stall, reproduced. A fork's release
+/// that landed between the drain thread's failed claim and a second look at
+/// its state sent the thread to work with the state still saying "in its
+/// poll"; the next fork, microseconds behind in drain.lu's loop, claimed it
+/// there and copied the hub's state lock held, and the child waited for ever
+/// at its first use of the hub. The parent's reap then parked until the cap
+/// (`rc=124`, 3 of 5 CI runs of the drain row on 2026-11-06). The race needs
+/// the debug-profile runtime that `cargo test`'s `wolf` links (a release
+/// runtime's path back to its poll is too quick for the next hold to land
+/// in), so this row builds the native tier only: both tiers link the same
+/// runtime.
+///
+/// **The stated contention** is CI's: while drain.lu runs, pinned to four
+/// CPUs of the allocation where the place has four, four neighbour
+/// containers are started back to back through the same engine, each 100
+/// fork+execs of `/bin/true` on the same CPUs, as the other fork rows start
+/// theirs beside the drain row in CI's job (every CI stall began with them
+/// running). drain.lu runs up to `DRAIN_CHURN_RUNS` times, each under the
+/// drain row's own `timeout 120`, and the row is red at the first run that is
+/// not the 1,000-round line.
+///
+/// **How often it misses** a reintroduced race, from the measured rates of a
+/// 1,000-round run with the debug runtime:
+/// - **On CI's linux runner**, the drain row stalled 3 times in the 20 lanes
+///   of its last 5 runs before the fix (about 15% a run), so 40 runs miss
+///   about 0.15% of the time (0.85^40). This is the row's default.
+/// - **On the lane's linux host** (s284's note, H1), it was 3 stalls in 246
+///   runs (about 1.2%), so 40 runs miss about 61% of the time there and 400
+///   runs about 0.7%. A local take that must see the row red sets
+///   `WOLF_FORK_CHURN_RUNS=400`; it stops at its first stall.
+///
+/// A host with no container engine has no neighbours to start: CI's macOS
+/// runner skips the row by name, as a box with no engine skips every row here.
+#[cfg(unix)]
+#[test]
+fn the_drain_thread_outlives_every_fork_beside_churning_neighbours() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    const GREEN: &str = "drain: 1000 rounds of 8 forks, the drain thread at every one true";
+    let test = "drain-churn";
+    let Some(live) = Live::new(test) else {
+        return;
+    };
+    let Some(engine) = live.engine.clone() else {
+        eprintln!(
+            "SKIP: {test}: no container engine to start the neighbours with (CI's macOS \
+             runner) — the churn row did not run"
+        );
+        return;
+    };
+    let runs = match std::env::var("WOLF_FORK_CHURN_RUNS") {
+        Ok(v) => v
+            .parse::<usize>()
+            .ok()
+            .filter(|&n| n > 0)
+            .unwrap_or_else(|| panic!("WOLF_FORK_CHURN_RUNS={v:?} is not a run count")),
+        Err(_) => DRAIN_CHURN_RUNS,
+    };
+    let Some(exe) = build(&fixture("drain.lu"), &live.dir, "drain", false) else {
+        return;
+    };
+    let four = if live.four_cpus() {
+        test_cpus::subset(4, test)
+    } else {
+        None
+    };
+    let pin = four
+        .as_ref()
+        .map(|list| format!("taskset -c {list} "))
+        .unwrap_or_default();
+    let stop = Arc::new(AtomicBool::new(false));
+    let started = Arc::new(AtomicUsize::new(0));
+    let refused = Arc::new(AtomicUsize::new(0));
+    let neighbour =
+        format!("{pin}sh -c 'i=0; while [ $i -lt 100 ]; do /bin/true; i=$((i+1)); done'");
+    let neighbours: Vec<_> = (0..DRAIN_CHURN_NEIGHBOURS)
+        .map(|_| {
+            let (engine, neighbour) = (engine.clone(), neighbour.clone());
+            let (stop, started, refused) = (stop.clone(), started.clone(), refused.clone());
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::SeqCst) {
+                    let ran = Command::new(&engine)
+                        .args(["run", "--rm", "--network", "none"])
+                        .arg(image())
+                        .args(["sh", "-c", &neighbour])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status();
+                    match ran {
+                        Ok(st) if st.success() => started.fetch_add(1, Ordering::SeqCst),
+                        _ => refused.fetch_add(1, Ordering::SeqCst),
+                    };
+                }
+            })
+        })
+        .collect();
+    let prog = live.at(&exe.file_name().unwrap().to_string_lossy());
+    let script = format!(
+        "i=0; while [ $i -lt {runs} ]; do \
+         out=$(timeout 120 {pin}{prog} 1000); rc=$?; \
+         if [ \"$rc\" != 0 ] || [ \"$out\" != '{GREEN}' ]; then \
+         echo \"run $i of {runs}: $out rc=$rc\"; exit 0; fi; \
+         i=$((i+1)); done; \
+         echo 'drain beside churn: {runs} of {runs} runs, the drain \
+         thread at every fork true'"
+    );
+    let t0 = std::time::Instant::now();
+    let out = live.sh(&script);
+    let secs = t0.elapsed().as_secs_f64();
+    stop.store(true, Ordering::SeqCst);
+    for n in neighbours {
+        n.join().expect("a neighbour loop");
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
+    report(&format!(
+        "REPORT drain.lu native beside {DRAIN_CHURN_NEIGHBOURS} churning neighbours{}: {} || {} \
+         || {:.1} s, {} neighbour containers ran, {} refused",
+        four.as_ref()
+            .map(|l| format!(", taskset -c {l}"))
+            .unwrap_or_default(),
+        stdout.replace('\n', " | "),
+        String::from_utf8_lossy(&out.stderr).replace('\n', " | "),
+        secs,
+        started.load(Ordering::SeqCst),
+        refused.load(Ordering::SeqCst)
+    ));
+    assert_eq!(
+        stdout,
+        format!(
+            "drain beside churn: {runs} of {runs} runs, the drain thread \
+             at every fork true\n"
+        ),
+        "drain.lu beside churning neighbours (a stall is rc=124: a forked child copied the hub \
+         lock held, wolf-lang#1022)"
+    );
+}
+
 /// The readiness set across a fork: parent and child each parked in their
 /// own reactor at once, a net round trip between them, then a deadline in
 /// the child that must fire (its own timer wheel). Under the reactor plant
