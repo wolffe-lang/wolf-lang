@@ -1469,7 +1469,11 @@ mod tests {
             hook::GAP_ARMED.store(true, SeqCst);
             hook::WORK_ARMED.store(true, SeqCst);
             fork_hold();
-            assert_eq!(hook::thread_state(), hook::HELD, "the fork holds the thread");
+            assert_eq!(
+                hook::thread_state(),
+                hook::HELD,
+                "the fork holds the thread"
+            );
             r.sys.wake();
             assert!(
                 s284_until(|| hook::IN_GAP.load(SeqCst)),
