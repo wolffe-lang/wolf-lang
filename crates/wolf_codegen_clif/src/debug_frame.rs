@@ -97,25 +97,21 @@ impl State {
     }
 }
 
-/// The prologue's rule rows, and how far SP sits below the CFA at its end:
-/// the frame-register push and every stack allocation are unwind facts.
 fn prologue(
     compiled: &CompiledCode,
     isa: &dyn TargetIsa,
     arch: Arch,
-) -> Result<(Vec<(u32, State)>, i64), BackendError> {
+) -> Result<Vec<(u32, State)>, BackendError> {
     let mut state = State::entry(arch);
     let mut rows = vec![(0, state.clone())];
     let mut frame_up = 0i64;
     let mut clobber_down = 0i64;
-    let mut sp_below_cfa = arch.entry_sp_delta();
     for (offset, inst) in &compiled.buffer.unwind_info {
         match inst {
             UnwindInst::PushFrameRegs {
                 offset_upward_to_caller_sp,
             } => {
                 let delta = i64::from(*offset_upward_to_caller_sp);
-                sp_below_cfa = delta;
                 state.cfa = (arch.sp(), delta);
                 state.regs.insert(arch.fp(), Rule::Offset(-delta));
                 if arch == Arch::Arm64 {
@@ -131,7 +127,6 @@ fn prologue(
                 state.cfa = (arch.fp(), frame_up);
             }
             UnwindInst::StackAlloc { size } => {
-                sp_below_cfa += i64::from(*size);
                 if state.cfa.0 == arch.sp() {
                     state.cfa.1 += i64::from(*size);
                 }
@@ -163,22 +158,61 @@ fn prologue(
         }
         rows.push((*offset, state.clone()));
     }
-    Ok((rows, sp_below_cfa))
+    Ok(rows)
+}
+
+/// How far SP sits below the CFA at the end of the prologue's facts. Under an
+/// FP-based CFA the producer reports no stack allocation, so the prologue's
+/// own decoded bytes give the distance, and the facts must confirm it: the
+/// frame base sits where the CFA rule puts it, and every decoded save of a
+/// register the facts place in memory addresses that same slot. Anything
+/// undecodable or disagreeing is no distance at all.
+fn prologue_distance(arch: Arch, bytes: &[u8], body: &State) -> Option<i64> {
+    let mut below = arch.entry_sp_delta();
+    let mut fp_below = None;
+    for step in frame_decode::instructions(arch, bytes).ok()? {
+        if !step.loads.is_empty() {
+            return None;
+        }
+        for store in &step.stores {
+            let slot = match store.base {
+                Base::Sp => store.offset - below,
+                Base::Fp => store.offset - fp_below?,
+            };
+            if let Some(Rule::Offset(saved)) = body.regs.get(&store.reg)
+                && slot != *saved
+            {
+                return None;
+            }
+        }
+        if let Some(offset) = step.fp_from_sp {
+            fp_below = Some(below - offset);
+        }
+        below = match step.sp {
+            SpChange::None => below,
+            SpChange::Add(n) => below - n,
+            SpChange::FromFp(_) => return None,
+        };
+    }
+    if body.cfa.0 == arch.fp() && fp_below != Some(body.cfa.1) {
+        return None;
+    }
+    Some(below)
 }
 
 /// Derive SP-relative CFA distances backwards from the return's ABI state,
 /// then replay the proven instructions forward. MOV SP,FP deliberately makes
 /// the earlier SP unknown; FP-relative rules remain usable before that point.
-/// Only then is the prologue consulted: a fixed frame leaves SP `body_sp`
-/// below the CFA from the prologue's end to each return sequence, so restores
-/// addressed from SP before MOV SP,FP are still checked against the save facts
-/// (a wrong distance fails that check, never a rule). The two derivations
-/// cannot overlap: before the last SP-from-FP step only the prologue's exists,
-/// and after it the forward walk restarts from the return-derived value.
+/// Only then is the prologue's verified distance consulted: a fixed frame
+/// leaves SP `body_sp` below the CFA from the prologue's end to each return
+/// sequence, so restores addressed from SP before MOV SP,FP are still checked
+/// against the save facts (a wrong distance fails that check, never a rule).
+/// The two derivations cannot overlap: before the last SP-from-FP step only
+/// the prologue's exists, and after it the walk restarts from the return's.
 fn epilogue(
     arch: Arch,
     body: &State,
-    body_sp: i64,
+    body_sp: Option<i64>,
     steps: &[frame_decode::Step],
 ) -> Result<Vec<(usize, State)>, &'static str> {
     let mut before = vec![None; steps.len()];
@@ -194,7 +228,7 @@ fn epilogue(
         before[i] = delta;
     }
     if before.iter().any(Option::is_none) {
-        let mut sp = Some(body_sp);
+        let mut sp = body_sp;
         for (i, step) in steps.iter().enumerate() {
             before[i] = before[i].or(sp);
             sp = match step.sp {
@@ -298,8 +332,14 @@ pub(super) fn emit(
     let cie = isa
         .create_systemv_cie()
         .ok_or_else(|| BackendError::Unsupported("debug CFI for this target".into()))?;
-    let (mut events, body_sp) = prologue(compiled, isa, arch)?;
+    let mut events = prologue(compiled, isa, arch)?;
     let body = events.last().expect("entry row").1.clone();
+    let body_sp = compiled
+        .buffer
+        .unwind_info
+        .last()
+        .and_then(|(end, _)| compiled.buffer.data().get(..*end as usize))
+        .and_then(|bytes| prologue_distance(arch, bytes, &body));
     let mut markers: Vec<u32> = compiled
         .buffer
         .debug_tags()
@@ -401,7 +441,7 @@ mod tests {
             signed_ra: false,
         };
         let steps = frame_decode::teardown(Arch::X64, &[0x48, 0x83, 0xc4, 32, 0x5d, 0xc3]).unwrap();
-        let rows = epilogue(Arch::X64, &body, 16, &steps).unwrap();
+        let rows = epilogue(Arch::X64, &body, Some(16), &steps).unwrap();
         assert_eq!(rows[0].1.cfa, (6, 16));
         assert_eq!(rows[1].1.cfa, (7, 8));
         assert_eq!(rows[1].1.regs[&6], Rule::Same);
@@ -414,7 +454,7 @@ mod tests {
             signed_ra: false,
         };
         let steps = frame_decode::teardown(Arch::X64, &[0x48, 0x89, 0xec, 0x5d, 0xc3]).unwrap();
-        assert!(epilogue(Arch::X64, &body, 16, &steps).is_err());
+        assert!(epilogue(Arch::X64, &body, Some(16), &steps).is_err());
     }
 
     // The pressure chain's x86-64 return sequence: SP-relative callee-saved
@@ -448,7 +488,7 @@ mod tests {
     #[test]
     fn sp_relative_restores_before_mov_rsp_rbp_use_the_fixed_frame() {
         let steps = frame_decode::teardown(Arch::X64, PRESSURE_RETURN).unwrap();
-        let rows = epilogue(Arch::X64, &pressure_body(), 80, &steps).unwrap();
+        let rows = epilogue(Arch::X64, &pressure_body(), Some(80), &steps).unwrap();
         assert_eq!(rows.len(), 7);
         // Each restore takes effect after its own instruction.
         assert_eq!(rows[0].1.regs[&3], Rule::Same);
@@ -466,10 +506,53 @@ mod tests {
         let steps = frame_decode::teardown(Arch::X64, PRESSURE_RETURN).unwrap();
         for wrong in [72, 88] {
             assert_eq!(
-                epilogue(Arch::X64, &pressure_body(), wrong, &steps),
+                epilogue(Arch::X64, &pressure_body(), Some(wrong), &steps),
                 Err("restore address differs from the producer's save fact")
             );
         }
+    }
+
+    #[test]
+    fn without_a_verified_prologue_distance_the_return_stays_uncovered() {
+        let steps = frame_decode::teardown(Arch::X64, PRESSURE_RETURN).unwrap();
+        assert_eq!(
+            epilogue(Arch::X64, &pressure_body(), None, &steps),
+            Err("unknown SP before register restore")
+        );
+    }
+
+    // push rbp; mov rbp,rsp; sub rsp,0x40; the three saves the return restores.
+    const PRESSURE_PROLOGUE: &[u8] = &[
+        0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x40, 0x48, 0x89, 0x5c, 0x24, 0x20, 0x4c, 0x89,
+        0x64, 0x24, 0x28, 0x4c, 0x89, 0x6c, 0x24, 0x30,
+    ];
+
+    #[test]
+    fn the_prologue_bytes_give_the_distance_the_save_facts_confirm() {
+        assert_eq!(
+            prologue_distance(Arch::X64, PRESSURE_PROLOGUE, &pressure_body()),
+            Some(80)
+        );
+        // A save fact the decoded store contradicts, a frame base elsewhere,
+        // or an undecodable instruction: no distance.
+        let mut moved = pressure_body();
+        moved.regs.insert(12, Rule::Offset(-48));
+        assert_eq!(
+            prologue_distance(Arch::X64, PRESSURE_PROLOGUE, &moved),
+            None
+        );
+        let mut based = pressure_body();
+        based.cfa = (6, 24);
+        assert_eq!(
+            prologue_distance(Arch::X64, PRESSURE_PROLOGUE, &based),
+            None
+        );
+        let mut unknown = PRESSURE_PROLOGUE.to_vec();
+        unknown[4] = 0x0f;
+        assert_eq!(
+            prologue_distance(Arch::X64, &unknown, &pressure_body()),
+            None
+        );
     }
 
     #[test]
@@ -480,10 +563,10 @@ mod tests {
             signed_ra: false,
         };
         let steps = frame_decode::teardown(Arch::X64, &[0x48, 0x83, 0xc4, 32, 0x5d, 0xc3]).unwrap();
-        assert!(epilogue(Arch::X64, &body, 16, &steps).is_ok());
+        assert!(epilogue(Arch::X64, &body, Some(16), &steps).is_ok());
         assert_eq!(
-            epilogue(Arch::X64, &body, 16, &steps),
-            epilogue(Arch::X64, &body, 999, &steps)
+            epilogue(Arch::X64, &body, Some(16), &steps),
+            epilogue(Arch::X64, &body, Some(999), &steps)
         );
     }
 
@@ -495,6 +578,6 @@ mod tests {
             signed_ra: false,
         };
         let steps = frame_decode::teardown(Arch::X64, &[0x5d, 0xc3]).unwrap();
-        assert!(epilogue(Arch::X64, &body, 16, &steps).is_err());
+        assert!(epilogue(Arch::X64, &body, Some(16), &steps).is_err());
     }
 }
