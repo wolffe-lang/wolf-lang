@@ -15,6 +15,7 @@ mkdir -p "$L/records/wolf-$SHA"; cp target/debug/wolf "$L/records/wolf-$SHA/wolf
 step build-base bash -c "cd $L/build-base && git rev-parse HEAD && cargo build --locked -p wolf_driver -p wolf_rt" || exit 1
 mkdir -p "$L/records/wolf-ed19904c"; cp "$L/build-base/target/debug/wolf" "$L/records/wolf-ed19904c/wolf"
 O=$L/org
+DIRS="$O/aspen $O/boreutils $O/burrow $O/clef $O/cub $O/den $O/fenrir $O/fugue $O/jobq $O/lair $O/$PRIVATE_NAME $O/ligature $O/lobo $O/lope $O/mk $O/muzzle $O/pack $O/pax $O/pelt $O/scent $O/sniff $O/spell $O/tomlq $O/trail $O/tree-sitter-wolf $O/wolf-book $O/wolf-lsp $O/wolf-web $O/wolf-std-5b3a5994 $O/wolf-std"
 step measure-base python3 -I "$L/tools/measure-org.py" "$L/records/wolf-ed19904c/wolf" "$O/wolf-std-5b3a5994/std" "$L/records/measure-base-ed19904c.json" $DIRS
 step measure-head python3 -I "$L/tools/measure-org.py" "$L/records/wolf-$SHA/wolf" "$O/wolf-std-5b3a5994/std" "$L/records/measure-head-$SHA.json" $DIRS
 ROWS="lints/binder_variant_let lints/binder_variant_for lints/binder_variant_else lints/binder_variant_imported/main lints/binder_variant_controls conc/select_arm_bare_variant conc/select_arm_lowercase_binds"
