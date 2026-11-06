@@ -52,8 +52,6 @@ fn row(name: &str, body: impl FnOnce() -> Check<()>) {
     }
 }
 
-/// Files, rather than pipes, prevent full stdout/stderr pipes from deadlocking
-/// the watchdog. No shell or process-group signalling is involved.
 /// `LLVM_DWARFDUMP`, else the SDK's dwarfdump on macOS, else llvm-dwarfdump.
 fn dump_tool(dir: &Path) -> String {
     if let Ok(path) = std::env::var("LLVM_DWARFDUMP") {
@@ -75,6 +73,8 @@ fn dump_tool(dir: &Path) -> String {
     "llvm-dwarfdump".into()
 }
 
+/// Files, rather than pipes, prevent full stdout/stderr pipes from deadlocking
+/// the watchdog. No shell or process-group signalling is involved.
 fn run(cmd: &mut Command, dir: &Path, label: &str, seconds: u64) -> Check<(ExitStatus, String)> {
     let stdout = dir.join(format!("{label}.stdout.txt"));
     let stderr = dir.join(format!("{label}.stderr.txt"));
