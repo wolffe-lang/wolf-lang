@@ -1,0 +1,15 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }
+
+fn main() -> !int {
+    let ch = channel[Kind](1)
+    ch.send(Kind.Food)?
+    var got = ""
+    select {
+        Drink from ch => { got = name(Drink) },
+        timeout(1.s) => { got = "timeout" },
+    }
+    print(got)
+    0
+}

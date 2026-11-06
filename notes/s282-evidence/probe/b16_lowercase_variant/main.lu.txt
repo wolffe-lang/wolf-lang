@@ -1,0 +1,8 @@
+enum Mode { fast, slow }
+
+fn main() -> !int {
+    let (fast, n) = (Mode.slow, 3)
+    let s = match fast { Mode.fast => "fast", Mode.slow => "slow" }
+    print("{s} {n}")
+    0
+}

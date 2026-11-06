@@ -1,0 +1,5 @@
+/// The kinds.
+pub enum Kind { Drink, Food, Gratuity }
+
+/// A name.
+pub fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }

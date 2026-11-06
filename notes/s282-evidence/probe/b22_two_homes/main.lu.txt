@@ -1,0 +1,9 @@
+enum Kind { Drink, Food }
+enum Menu { Drink, Dessert }
+
+fn main() -> !int {
+    let (Drink, n) = (Kind.Food, 3)
+    let s = match Drink { Kind.Drink => "drink", Kind.Food => "food" }
+    print("{s} {n}")
+    0
+}

@@ -1,0 +1,10 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }
+
+fn main() -> !int {
+    var (Drink, n) = (Kind.Food, 3)
+    n = n + 1
+    print("{name(Drink)} {n}")
+    0
+}

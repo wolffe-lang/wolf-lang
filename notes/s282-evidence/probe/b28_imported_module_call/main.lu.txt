@@ -1,0 +1,8 @@
+use kinds
+use kinds.Kind
+
+fn main() -> !int {
+    let (Drink, n) = (Kind.Food, 3)
+    print("{kinds.name(Drink)} {n}")
+    0
+}

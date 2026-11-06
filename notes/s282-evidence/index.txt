@@ -1,0 +1,8 @@
+s282 evidence (wolf-lang, the binder-position W0801 and the select-arm E0806).
+Paths in the logs are relative to the lane's directory, written $LANE.
+
+base-ed19904c.log   the base: wolf built at ed19904c on the Mac (arm64 macOS); every probe
+                    on the checked machine, native, release (wolf conform-run --json) and
+                    lupin 0.1.59; then each probe's `wolf build` rendering and `wolf fix` dry run.
+probe/              the probe programs (.lu.txt; each its own directory, so each is its own
+                    module; b14 and b27 to b28 carry a `kinds` module beside the entry).

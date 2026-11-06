@@ -1,0 +1,390 @@
+s282: building at ed19904c in $LANE/build
+s282: lock taken 03:39:03, 9076 MiB free, 116 GB disk; running: bash $LANE/rig/mac-probe.sh
+== STEP head 08:39:03
+ed19904cc0e5e50eab7bdc54463951084aa2daa0
+ed19904c Cite the prediction at its rebased sha
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.59 (wolf-interp, reference interpreter at pin b16353e)
+END head exit=0
+== STEP build 08:39:04
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+END build exit=0
+== STEP probes 08:39:04
+## b01_let_tuple/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n' warns=[] 
+## b02_let_struct/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n' warns=[] 
+## b03_let_plain/main.lu
+checked  exit(0)      run       out='food\n' warns=[] 
+native   exit(0)      run       out='food\n' warns=[] 
+release  exit(0)      run       out='food\n' warns=[] 
+lupin    exit(0)      run       out='food\n' warns=[] 
+## b04_var_tuple/main.lu
+checked  exit(0)      run       out='food 4\n' warns=[] 
+native   exit(0)      run       out='food 4\n' warns=[] 
+release  exit(0)      run       out='food 4\n' warns=[] 
+lupin    exit(0)      run       out='food 4\n' warns=[] 
+## b05_let_group/main.lu
+checked  exit(0)      run       out='food 1 2\n' warns=[] 
+native   exit(0)      run       out='food 1 2\n' warns=[] 
+release  exit(0)      run       out='food 1 2\n' warns=[] 
+lupin    exit(0)      run       out='food 1 2\n' warns=[] 
+## b06_let_at/main.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — destructuring bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — destructuring bindings (this pattern shape)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — destructuring bindings (this pattern shape)
+lupin    exit(0)      run       out='food 3 tip 4\n' warns=[] 
+## b07_let_nested/main.lu
+checked  exit(0)      run       out='food 1 2\n' warns=[] 
+native   exit(0)      run       out='food 1 2\n' warns=[] 
+release  exit(0)      run       out='food 1 2\n' warns=[] 
+lupin    exit(0)      run       out='food 1 2\n' warns=[] 
+## b08_for_tuple/main.lu
+checked  exit(0)      run       out='fooddrink\n' warns=[] 
+native   exit(0)      run       out='fooddrink\n' warns=[] 
+release  exit(0)      run       out='fooddrink\n' warns=[] 
+lupin    exit(0)      run       out='fooddrink\n' warns=[] 
+## b09_for_plain/main.lu
+checked  exit(0)      run       out='foodtip\n' warns=[] 
+native   exit(0)      run       out='foodtip\n' warns=[] 
+release  exit(0)      run       out='foodtip\n' warns=[] 
+lupin    exit(0)      run       out='foodtip\n' warns=[] 
+## b10_else_handler/main.lu
+checked  exit(0)      run       out='7\n' warns=[] 
+native   exit(0)      run       out='7\n' warns=[] 
+release  exit(0)      run       out='7\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## b11_param/main.lu
+checked  exit(0)      run       out='8\n' warns=[] 
+native   exit(0)      run       out='8\n' warns=[] 
+release  exit(0)      run       out='8\n' warns=[] 
+lupin    exit(0)      run       out='8\n' warns=[] 
+## b12_closure_param/main.lu
+checked  exit(0)      run       out='5\n' warns=[] 
+native   exit(0)      run       out='5\n' warns=[] 
+release  exit(0)      run       out='5\n' warns=[] 
+lupin    exit(0)      run       out='5\n' warns=[] 
+## b13_select/main.lu
+checked  exit(0)      run       out='food\n' warns=[] 
+native   exit(0)      run       out='food\n' warns=[] 
+release  exit(0)      run       out='food\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## b14_imported/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## b15_module_path/main.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — module items in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — a member access without a recorded type
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — a member access without a recorded type
+lupin    unsupported  resolve   out=None warns=[] 
+## b16_lowercase_variant/main.lu
+checked  exit(0)      run       out='slow 3\n' warns=[] 
+native   exit(0)      run       out='slow 3\n' warns=[] 
+release  exit(0)      run       out='slow 3\n' warns=[] 
+lupin    unsupported  resolve   out=None warns=[] 
+## b17_capital_nonvariant/main.lu
+checked  exit(0)      run       out='5 3\n' warns=[] 
+native   exit(0)      run       out='5 3\n' warns=[] 
+release  exit(0)      run       out='5 3\n' warns=[] 
+lupin    exit(0)      run       out='5 3\n' warns=[] 
+## b18_lowercase_binder/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n' warns=[] 
+## b19_item_level/main.lu
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — an item without a declared type (E0407 upstream)
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — an item without a declared type (E0407 upstream)
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — an item without a declared type (E0407 upstream)
+lupin    exit(0)      run       out='drink N\n' warns=[] 
+## b20_payload_variant/main.lu
+checked  exit(0)      run       out='5 3\n' warns=[] 
+native   exit(0)      run       out='5 3\n' warns=[] 
+release  exit(0)      run       out='5 3\n' warns=[] 
+lupin    exit(0)      run       out='5 3\n' warns=[] 
+## b21_match_arm_control/main.lu
+checked  exit(0)      run       out='other\n' warns=[] 
+native   exit(0)      run       out='other\n' warns=[] 
+release  exit(0)      run       out='other\n' warns=[] 
+lupin    exit(0)      run       out='other\n' warns=[] 
+## b22_two_homes/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n' warns=[] 
+## b23_interp_use/main.lu
+checked  exit(0)      run       out='3 7\n' warns=[] 
+native   exit(0)      run       out='3 7\n' warns=[] 
+release  exit(0)      run       out='3 7\n' warns=[] 
+lupin    exit(0)      run       out='3 7\n' warns=[] 
+## b24_select_lower/main.lu
+checked  exit(0)      run       out='food\n' warns=[] 
+native   exit(0)      run       out='food\n' warns=[] 
+release  exit(0)      run       out='food\n' warns=[] 
+lupin    exit(0)      run       out='food\n' warns=[] 
+## b25_select_qualified/main.lu
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — this select-arm pattern shape
+lupin    unsupported  resolve   out=None warns=[] 
+## b26_struct_shorthand/main.lu
+checked  exit(0)      run       out='5 3\n' warns=[] 
+native   exit(0)      run       out='5 3\n' warns=[] 
+release  exit(0)      run       out='5 3\n' warns=[] 
+lupin    fail(E0301)  resolve   out=None warns=[] 
+## b27_imported_match/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n' warns=[] 
+## b28_imported_module_call/main.lu
+checked  exit(0)      run       out='food 3\n' warns=[] 
+native   exit(0)      run       out='food 3\n' warns=[] 
+release  exit(0)      run       out='food 3\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n' warns=[] 
+## b29_item_level_annotated/main.lu
+checked  fail(E0401)  typecheck out=None warns=[] error[E0401]: this is `(Kind, int)`, but `name` needs its 1st argument to be `Kind`
+native   fail(E0401)  typecheck out=None warns=[] error[E0401]: this is `(Kind, int)`, but `name` needs its 1st argument to be `Kind`
+release  fail(E0401)  typecheck out=None warns=[] error[E0401]: this is `(Kind, int)`, but `name` needs its 1st argument to be `Kind`
+lupin    exit(0)      run       out='drink N\n' warns=[] 
+## b30_item_level_single/main.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — module state of a type that is not static data ([mem.static.3])
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — module state of a type that is not static data ([mem.static.3])
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — module state of a type that is not static data ([mem.static.3])
+lupin    unsupported  resolve   out=None warns=[] 
+END probes exit=0
+== STEP render 08:39:20
+## b01_let_tuple
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b02_let_struct
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b03_let_plain
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b04_var_tuple
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b05_let_group
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b06_let_at
+wolf build: cannot compile this yet — destructuring bindings (this pattern shape) (pipeline is honest through `mem`; the conservatism ledger, not a bug in your program)
+ --> $LANE/probe/b06_let_at/main.lu:6:9
+  |
+6 |     let Drink @ (k, n) = (Kind.Food, 3)
+  |         ^^^^^^^^^^^^^^
+  |
+   (build exit 4)
+wolf fix: cannot compile this yet — destructuring bindings (this pattern shape)
+ --> $LANE/probe/b06_let_at/main.lu:6:9
+  |
+6 |     let Drink @ (k, n) = (Kind.Food, 3)
+  |         ^^^^^^^^^^^^^^
+  |
+wolf fix: the file still does not compile
+   (fix exit 1)
+## b07_let_nested
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b08_for_tuple
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b09_for_plain
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b10_else_handler
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b11_param
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b12_closure_param
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b13_select
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b14_imported
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b15_module_path
+wolf build: cannot compile this yet — a member access without a recorded type (pipeline is honest through `mem`; the conservatism ledger, not a bug in your program)
+ --> $LANE/probe/b15_module_path/main.lu:4:23
+  |
+4 |     let (Drink, n) = (kinds.Kind.Food, 3)
+  |                       ^^^^^^^^^^^^^^^
+  |
+   (build exit 4)
+wolf fix: cannot compile this yet — a member access without a recorded type
+ --> $LANE/probe/b15_module_path/main.lu:4:23
+  |
+4 |     let (Drink, n) = (kinds.Kind.Food, 3)
+  |                       ^^^^^^^^^^^^^^^
+  |
+wolf fix: the file still does not compile
+   (fix exit 1)
+## b16_lowercase_variant
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b17_capital_nonvariant
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b18_lowercase_binder
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b19_item_level
+wolf build: cannot compile this yet — an item without a declared type (E0407 upstream) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+ --> $LANE/probe/b19_item_level/main.lu:8:18
+  |
+8 |     print("{name(Drink)} {N}")
+  |                  ^^^^^
+  |
+   (build exit 4)
+unapplied $LANE/probe/b19_item_level/main.lu:5:6: E0407: annotate the declared type (has-placeholders: fill in the replacement)
+unapplied $LANE/probe/b19_item_level/main.lu:5:13: E0407: annotate the declared type (has-placeholders: fill in the replacement)
+error[E0407]: the let `Drink` is an item, so it must declare its type
+ --> $LANE/probe/b19_item_level/main.lu:5:6
+  |
+5 | let (Drink, N) = (Kind.Food, 3)
+  |      ^^^^^ no `: type` annotation
+  |
+  = note: items are the typing firewall (D27): types are inferred inside function bodies, never
+    across item boundaries.
+help: annotate the declared type
+  |
+5 | let (Drink: <type>, N) = (Kind.Food, 3)
+  |
+
+error[E0407]: the let `N` is an item, so it must declare its type
+ --> $LANE/probe/b19_item_level/main.lu:5:13
+  |
+5 | let (Drink, N) = (Kind.Food, 3)
+  |             ^ no `: type` annotation
+   (fix exit 1)
+## b20_payload_variant
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b21_match_arm_control
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b22_two_homes
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b23_interp_use
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b24_select_lower
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b25_select_qualified
+wolf build: cannot compile this yet — this select-arm pattern shape (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+  --> $LANE/probe/b25_select_qualified/main.lu:10:9
+   |
+10 |         Kind.Drink from ch => { got = "drink" },
+   |         ^^^^^^^^^^
+   |
+   (build exit 4)
+wolf fix: cannot compile this yet — this select-arm pattern shape
+  --> $LANE/probe/b25_select_qualified/main.lu:10:9
+   |
+10 |         Kind.Drink from ch => { got = "drink" },
+   |         ^^^^^^^^^^
+   |
+wolf fix: the file still does not compile
+   (fix exit 1)
+## b26_struct_shorthand
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b27_imported_match
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b28_imported_module_call
+   (build exit 0)
+wolf fix: nothing to fix
+   (fix exit 0)
+## b29_item_level_annotated
+error[E0401]: this is `(Kind, int)`, but `name` needs its 1st argument to be `Kind`
+ --> $LANE/probe/b29_item_level_annotated/main.lu:8:18
+  |
+3 | fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }
+  |         - the parameter is declared here
+...
+8 |     print("{name(Drink)} {N}")
+  |                  ^^^^^ found `(Kind, int)` here
+  |
+  = note: expected `Kind`, found `(Kind, int)`
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0401` explains this code, or any other, by name)
+   (build exit 2)
+error[E0401]: this is `(Kind, int)`, but `name` needs its 1st argument to be `Kind`
+ --> $LANE/probe/b29_item_level_annotated/main.lu:8:18
+  |
+3 | fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }
+  |         - the parameter is declared here
+...
+8 |     print("{name(Drink)} {N}")
+  |                  ^^^^^ found `(Kind, int)` here
+  |
+  = note: expected `Kind`, found `(Kind, int)`
+
+wolf fix: the file still does not compile
+   (fix exit 1)
+## b30_item_level_single
+wolf build: cannot compile this yet — module state of a type that is not static data ([mem.static.3]) (pipeline is honest through `mem`; the conservatism ledger, not a bug in your program)
+ --> $LANE/probe/b30_item_level_single/main.lu:5:1
+  |
+5 | let Drink: Kind = Kind.Food
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+   (build exit 4)
+wolf fix: cannot compile this yet — module state of a type that is not static data ([mem.static.3])
+ --> $LANE/probe/b30_item_level_single/main.lu:5:1
+  |
+5 | let Drink: Kind = Kind.Food
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+wolf fix: cannot compile this yet — module state of a type that is not static data ([mem.static.3])
+ --> $LANE/probe/b30_item_level_single/main.lu:8:16
+  |
+8 |     print(name(Drink))
+  |                ^^^^^
+  |
+wolf fix: the file still does not compile
+   (fix exit 1)
+END render exit=0
+== done 2026-11-06T08:39:23Z
+s282: END exit=0 03:39:23

@@ -1,0 +1,7 @@
+enum Opt { Some(int), None }
+
+fn main() -> !int {
+    let (Some, n) = (5, 3)
+    print("{Some} {n}")
+    0
+}

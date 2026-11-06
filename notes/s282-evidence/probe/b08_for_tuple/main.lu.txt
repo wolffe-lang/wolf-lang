@@ -1,0 +1,11 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }
+
+fn main() -> !int {
+    let xs = [(Kind.Food, 1), (Kind.Drink, 2)]
+    var t = ""
+    for (Drink, n) in xs { t = t + name(Drink) }
+    print(t)
+    0
+}

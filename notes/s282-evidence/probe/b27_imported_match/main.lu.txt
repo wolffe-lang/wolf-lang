@@ -1,0 +1,8 @@
+use kinds.Kind
+
+fn main() -> !int {
+    let (Drink, n) = (Kind.Food, 3)
+    let s = match Drink { Kind.Drink => "drink", Kind.Food => "food", Kind.Gratuity => "tip" }
+    print("{s} {n}")
+    0
+}

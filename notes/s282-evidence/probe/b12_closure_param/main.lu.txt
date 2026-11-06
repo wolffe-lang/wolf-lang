@@ -1,0 +1,9 @@
+enum Kind { Drink, Food, Gratuity }
+
+fn name(k: Kind) -> str { match k { Drink => "drink", Food => "food", Gratuity => "tip" } }
+
+fn main() -> !int {
+    let g = fn(Drink: int) Drink + 1
+    print("{g(4)}")
+    0
+}
