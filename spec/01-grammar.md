@@ -990,6 +990,9 @@ when_expr   ::= 'when' '(' expr (',' expr)+ ','? ')' block
   proc linking/monitoring are methods (`w.monitor()`, `w.link()`), not
   keywords.
 - `from` and `timeout` are contextual (only meaningful in select arms).
+- A select arm's pattern receives every value its channel delivers, so
+  it only binds; a capitalized bare name there that spells a variant
+  in scope is refused (E0806, `[gram.pat.binder]`).
 - `when` requires ≥2 operands — it acquires its whole set at once, so
   every sync object the body touches is named in one `when` list.
   (Sync types deliberately carry no methods; the one-operand "method"
@@ -1156,6 +1159,43 @@ struct pattern is irrefutable exactly when its sub-patterns are, so
 it is admitted wherever a binder pattern is (`let`/`var`, D63 comma
 groups, `for` headers) and in `match` arms, where it participates in
 exhaustiveness as the single-constructor product of its fields.
+
+Binder positions `[gram.pat.binder]` (2026-11-06): a `let` or `var`
+binder (`[gram.item.let]`, every binder of a D63 group), a `for`
+header (`[gram.expr.flow]`) and the `else |…|` handler's binding form
+(`[gram.expr.primary]`) take a pattern that binds every value it
+meets, because no other branch exists for a value to go to. Every bare
+name in such a pattern is a new binding, at every depth the binder
+admits: a tuple element, a struct field (explicit or shorthand), either
+side of `@`. A refutable sub-pattern there (a path, an or-pattern, a
+literal, a range) is E0806. A bare name that begins with an uppercase
+letter and spells a variant of an enum **in scope** still binds, and
+warns **W0801**, because it reads as the test it is not: `let (Drink,
+n) = pair` binds `Drink` to whatever the first element holds. In scope
+means an enum the binder's module declares, or one its file imports by
+item (`use m.Kind`, spelled by its alias when aliased); wolf has no
+builtin enum, so the prelude contributes none. Scope decides, not
+type: `let (Drink, n) = (3, 4)` warns too, while an enum reached only
+through a module path (`kinds.Kind`) and an error-row tag are not
+variants in scope, and a lowercase name never warns. The warning names
+the variant and its declaration and carries two fixes: a lowercase
+name for the binding, with every use renamed (machine-applicable, and
+the one `wolf fix` applies), and the qualified variant (`Kind.Drink`,
+`Kind.Some(_)` for a variant that carries a value), which is the test
+the name looked like and which the binder then refuses as E0806.
+Function and closure parameters are names, never patterns
+(`[gram.item.fn]`, `[gram.expr.closure]`), and an item-level binding
+declares a module item; neither is a binder position here. A
+`select` arm's receive (`[gram.expr.conc]`) also binds every value its
+channel delivers, so the same name there would read as a test the arm
+cannot make: it is refused, **E0806**, at the name, with the lowercase
+binding as the fix and the test moved into the arm's body. A `match`
+arm is not a binder position: there a bare name that spells a case of
+the scrutinee's type tests it (`[gram.pat.nullary]`). Files:
+`lints/binder_variant_let.lu`, `lints/binder_variant_for.lu`,
+`lints/binder_variant_else.lu`, `lints/binder_variant_imported/`,
+`lints/binder_variant_controls.lu`, `conc/select_arm_bare_variant.lu`,
+`conc/select_arm_lowercase_binds.lu`.
 
 Range patterns `[gram.pat.range]` (s147, #287): `match` in statement
 position is wolf's switch, and a range arm is the one thing a reader
@@ -1455,7 +1495,10 @@ digits, owned by the analysis that computes the code. Established
 E-families: E000x grammar reservations (above), E01xx lexer, E02xx
 parser, E03xx resolution, E04xx typing, E05xx traits, E06xx error
 rows, E07xx comptime, E08xx sema completion, E1xxx memory tiers
-(E13xx unsafe, E14xx checked execution). W-families mirror the plane:
+(E13xx unsafe, E14xx checked execution). Among the E08xx codes, E0806
+refuses a refutable pattern where matching cannot fail: in a binder
+position, and in a `select` arm whose receive spells a variant in
+scope (`[gram.pat.binder]`). W-families mirror the plane:
 
 - **W03xx** — frontend/resolution-adjacent warnings. W0301 (partial
   format, s11 — grandfathered), W0302 (`#[allow]` of an unregistered
@@ -1475,7 +1518,9 @@ rows, E07xx comptime, E08xx sema completion, E1xxx memory tiers
   (anonymous row spelled inline on a `pub` signature — the s15 lean,
   recorded there as allowed-but-linted).
 - **W08xx** — pattern/completion-adjacent warnings, mirroring E08xx.
-  W0801 (capitalized bare identifier binds in a pattern).
+  W0801 (capitalized bare identifier binds in a pattern: a `match` arm
+  over a scrutinee with no cases, or a binder position whose name
+  spells a variant in scope, `[gram.pat.binder]`).
 - **W1[0-3]xx** — memory/concurrency/abi-adjacent warnings. W1001
   (region that provably never allocates), W1101 (write to a captured
   copy inside a task — the shape short of E1101), W1102 (closure
