@@ -322,17 +322,17 @@ fn a_for_header_that_spells_a_variant_warns() {
     );
 }
 
-/// lupin 0.1.59 reads the handler's name as a variant test and refuses at
+/// lupin 0.1.59 read the handler's name as a variant test and refused at
 /// run ("the `else |pat|` pattern did not match the error value"); the
-/// compiled tiers bind it, which is the rule. The fourth machine joins this
-/// row when lupin's mirror ships.
+/// compiled tiers bind it, which is the rule. lupin 0.1.60 (the paired
+/// release, wolf-interp#339) binds it too, so the fourth machine joins.
 #[test]
 fn an_else_handler_name_that_spells_a_variant_warns() {
     binder_warns(
         "lints/binder_variant_else.lu",
         "7 5\n",
         &[(568, 573), (603, 607)],
-        false,
+        true,
     );
 }
 
