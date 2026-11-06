@@ -453,6 +453,8 @@ mod sys {
             )
             .is_err()
         {
+            #[cfg(test)]
+            hook::after_failed_claim();
             if READER_STATE.load(Ordering::SeqCst) != READER_HELD {
                 return;
             }
@@ -1351,6 +1353,8 @@ mod sys {
                 None
             };
             back_from_poll();
+            #[cfg(test)]
+            hook::at_work();
             if n < 0 {
                 match err {
                     Some(libc::EINTR) => {}
@@ -1916,11 +1920,16 @@ mod sys {
     /// may answer a chosen errno (EINTR, a transient failure, a fatal one).
     #[cfg(test)]
     pub(super) mod hook {
-        use super::{POLL_SHORT, READER_GONE, READER_HELD, READER_STATE, errno_slot};
-        use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
+        use super::{
+            POLL_SHORT, READER_GONE, READER_HELD, READER_LOOPING, READER_POLLING, READER_STATE,
+            errno_slot,
+        };
+        use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering};
 
         pub const GONE: u8 = READER_GONE;
         pub const HELD: u8 = READER_HELD;
+        pub const LOOPING: u8 = READER_LOOPING;
+        pub const POLLING: u8 = READER_POLLING;
         /// The poll failure this host's poll(2) names a moment's shortage.
         pub const SHORT: libc::c_int = POLL_SHORT;
         /// The errno every park for a fork's hold leaves (0: none).
@@ -1968,6 +1977,42 @@ mod sys {
             // records itself before its loop), a valid signal number.
             let rc = unsafe { libc::pthread_kill(t as libc::pthread_t, sig) };
             assert_eq!(rc, 0, "pthread_kill on the drain thread");
+        }
+
+        /// s284 (wolf-lang#1022): armed, the drain thread's next claim that
+        /// fails (a fork holds it as it comes back from its poll) stops
+        /// right there, says so, and waits for the row's go: the gap in
+        /// which a fork's release can land. Taken once.
+        pub static GAP_ARMED: AtomicBool = AtomicBool::new(false);
+        pub static IN_GAP: AtomicBool = AtomicBool::new(false);
+        pub static GAP_GO: AtomicBool = AtomicBool::new(false);
+        /// s284: armed, the drain thread stops on its way to work (back from
+        /// its poll, past the fork's hold), records the state the fork reads
+        /// there, says so, and waits for the row's go. Taken once.
+        pub static WORK_ARMED: AtomicBool = AtomicBool::new(false);
+        pub static AT_WORK: AtomicBool = AtomicBool::new(false);
+        pub static WORK_GO: AtomicBool = AtomicBool::new(false);
+        pub static WORK_STATE: AtomicU8 = AtomicU8::new(0);
+
+        fn until(go: &AtomicBool) {
+            while !go.load(Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+
+        pub(in super::super) fn after_failed_claim() {
+            if GAP_ARMED.swap(false, Ordering::SeqCst) {
+                IN_GAP.store(true, Ordering::SeqCst);
+                until(&GAP_GO);
+            }
+        }
+
+        pub(in super::super) fn at_work() {
+            if WORK_ARMED.swap(false, Ordering::SeqCst) {
+                WORK_STATE.store(READER_STATE.load(Ordering::SeqCst), Ordering::SeqCst);
+                AT_WORK.store(true, Ordering::SeqCst);
+                until(&WORK_GO);
+            }
         }
     }
 }
@@ -3863,6 +3908,85 @@ mod tests {
                 "the poke's byte moved too"
             );
         });
+    }
+
+    /// s284 (wolf-lang#1022), the cause: a fork's release that lands in the
+    /// gap between the drain thread's failed claim (a fork held it as it came
+    /// back from its poll) and its next step. Until s284 that step was a
+    /// second look at the state: it read the release's POLLING, and the
+    /// thread went to work with the state still saying "in its kernel wait",
+    /// so the next fork's hold claimed it there and forked while it moved
+    /// bytes under the hub lock; the child copied the lock held and waited
+    /// for ever at its first use (`fork_child_pipes`), and the parent's reap
+    /// never ended (the drain row's rc=124 on CI). The row stops the thread
+    /// in the gap (`sys::hook`), releases the hold there, and lets it go: on
+    /// its way to work its state must read LOOPING, and a second hold made
+    /// while it is there must wait until it is back in its poll. The thread
+    /// then moves the signal's byte.
+    #[cfg(unix)]
+    #[test]
+    fn s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread() {
+        s275_row(
+            "s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread",
+            || {
+                use sys::hook;
+                assert_eq!(listen(meaning::RELOAD), sig_code::OK);
+                assert!(s275_until(
+                    || hook::READER_PTHREAD.load(Ordering::SeqCst) != 0
+                ));
+                hook::GAP_ARMED.store(true, Ordering::SeqCst);
+                hook::WORK_ARMED.store(true, Ordering::SeqCst);
+                sys::fork_hold();
+                assert_eq!(
+                    hook::reader_state(),
+                    hook::HELD,
+                    "the fork holds the drain thread"
+                );
+                // The signal brings the thread back from its poll (EINTR, or
+                // its byte if it lands before the poll), into the hold.
+                hook::signal_reader(libc::SIGHUP);
+                assert!(
+                    s275_until(|| hook::IN_GAP.load(Ordering::SeqCst)),
+                    "the drain thread came back from its poll and found the hold (state {})",
+                    hook::reader_state()
+                );
+                sys::fork_release();
+                hook::GAP_GO.store(true, Ordering::SeqCst);
+                assert!(
+                    s275_until(|| hook::AT_WORK.load(Ordering::SeqCst)),
+                    "the drain thread went on after the release (state {})",
+                    hook::reader_state()
+                );
+                let seen = hook::WORK_STATE.load(Ordering::SeqCst);
+                // The next fork's hold, on another thread, while the drain
+                // thread is at work: it must not claim it there.
+                let (tx, rx) = std::sync::mpsc::channel();
+                let holder = std::thread::spawn(move || {
+                    sys::fork_hold();
+                    let _ = tx.send(hook::reader_state());
+                });
+                let claimed_at_work = rx.recv_timeout(Duration::from_millis(300));
+                hook::WORK_GO.store(true, Ordering::SeqCst);
+                let claimed_in_poll = match claimed_at_work {
+                    Ok(_) => None,
+                    Err(_) => rx.recv_timeout(Duration::from_secs(10)).ok(),
+                };
+                holder.join().expect("the holder");
+                sys::fork_release();
+                assert!(
+                    claimed_at_work.is_err() && seen == hook::LOOPING,
+                    "a fork's hold claimed the drain thread at work, its state reading {seen} \
+                     (2 = at work, 3 = in its poll) after a release in the gap of its failed \
+                     claim: the fork would copy the hub lock held (wolf-lang#1022)"
+                );
+                assert_eq!(
+                    claimed_in_poll,
+                    Some(hook::HELD),
+                    "the second hold claimed the thread once it was back in its poll"
+                );
+                assert_eq!(wait(meaning::RELOAD), meaning::RELOAD);
+            },
+        );
     }
 
     /// s272 (#975): the action query's shape rows (0, two bits, past the
