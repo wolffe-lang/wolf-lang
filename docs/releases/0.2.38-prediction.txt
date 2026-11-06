@@ -1,0 +1,150 @@
+wolf 0.2.38 and lupin 0.1.60: the prediction, written before the first change
+==========================================================================
+
+Written 2026-11-06 at about 19:55Z, before any version, pin, note or test
+change in either repository. Later paragraphs are added only before the
+change they predict; nothing here is edited after a measurement.
+
+Inputs, re-derived
+------------------
+- wolf-lang trunk a4d2a9c932cdd42492cd56954dab41c51d4406f8, 167 commits past
+  v0.2.37 (tag object b13ac723318ca574c4b1f14910299eab553a3b6e, peeling to
+  e2757a7bd702d3b21f06396291010d2d1cb6101d). Cargo.toml says 0.2.37, so a
+  trunk build prints 0.2.37+dev.<commit>.
+- The round since v0.2.37, each merged by fast-forward:
+  s280 (#1045, the hashed Map) at b35e87b3; s281 (#1046, a bare variant
+  nested in a payload pattern tests its variant, #1043) at 275f9904; s283
+  (#1052, DWARF v1: source types and debug-only call frames) at ed19904c;
+  s284 (#1053, the drain thread's claim gap, #1022) at 03c0f04e; s282
+  (#1054, W0801 at binders, E0806 at a select arm) at a4d2a9c9.
+- CHANGELOG.md's "## Unreleased" names s282, s284 and s280 only. s281 and
+  s283 changed no CHANGELOG line, so their entries are derived here from
+  their notes (notes/s281-the-nested-variant.md, notes/s283-dwarf-v1.md)
+  and their PRs, never invented.
+- wolf-interp trunk 4aa98be84f0337eab3a143dae32b73ea46623509, 66 commits
+  past v0.1.59 (668fb752c690f33cf124c052cc9bae2e9696eeef); spec pin
+  5f1f1c949582f53121e4047bc83c86f23ff72240 (724 anchors), advanced from
+  v0.1.59's b16353e8ae616ff3a35bd27adc56b727c50df345. Its "## Unreleased"
+  carries user-visible changes: program arguments after FILE (breaking for
+  options written after FILE), the OS-surface mirror's names and shapes
+  (#315, #321), directory-open bit 32 and fs_set_mode_fd served, two older
+  filesystem gaps closed, RAW_LF accepted, and the s282 mirror (W0801's
+  binder half, E0806). So lupin moves: R-r43-2 is (A), cut 0.1.60.
+- wolf-std trunk d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61 (sc79's
+  public-PKI TLS client), 69 commits past the current pin
+  5b3a59942b2ee69b99682544341ce8a12c984e9e: sc77 (verify_strict), sc78
+  (map.get through the index read, a returned List no longer aliases the
+  stored one, wolf-std#109) and sc79 (RSA and P-384 verification, path
+  building to a root set). Its push run 42113771942 (gates and rig on
+  three hosts, tier full) and its nightly 42232757261 are green at that
+  head. R-r43-1 is (A), re-pin to d4a4d4c. wolf-std#133 (a TLS read
+  reports a clean close, an alert and an EOF alike) stays open and is
+  named as a known limit. wolf-std#125 (the lupin ledger rows and the
+  std.os mirror-lag entries for 0.1.59) is still open at d4a4d4c.
+- homebrew-wolf trunk 8135fdeddcdd7ae90e221fd2b90849e8b16857a3 (0.2.37 /
+  0.1.59). The AUR is read at STOP 3, never assumed.
+- Published controls, release metadata read 2026-11-06 and equal to the
+  previous release lane's two-read table:
+  wolf v0.2.37 (release 435500500):
+    aarch64-apple-darwin      c2ebfba6f80b96710b818d3d72f3a201144698abdfc6d065594acaa8c10f5e15
+    aarch64-unknown-linux-gnu 24c0975dfbc804dbb76c26449a9795a6897f186089fa39e2de1a84ab78d431f8
+    x86_64-pc-windows-msvc    f73856e15639cd7ca8b560361a1b194e6dac4763fefa43be2ebff94ffbbb75cf
+    x86_64-unknown-linux-gnu  9811d32e1dddcb743b96a14ea685faee06ba453242c1ae3deb90063f5bb9bcaa
+    musl runtime              c99ec9f56577dc572157a59bc6c8642f2357afa6d67334d9b454bce414e42640
+  lupin v0.1.59 (release 433110898):
+    x86_64-unknown-linux-gnu  12121909c289ac8ff4a138de8faabdb86b72df97988832b39047d5f312ec3a18
+    aarch64-apple-darwin      9f091af873768677593659bf2fda97243db01c489e6836b15c17ed50aabbf5f5
+  Each control archive is downloaded into its own empty directory and
+  hashed twice on a Linux gauntlet host before any differ uses it.
+
+lupin 0.1.60
+------------
+- The diff is the version (Cargo.toml, Cargo.lock), the changelog entry
+  (derived from the 66 commits, opening with what users see: the argument
+  boundary and its migration, the OS mirror and what stays unsupported,
+  the W0801/E0806 mirror and its named compiler-only spans), the README
+  and manual version transcripts, and a release-posture check committed
+  red before the bump. No runtime, spec pin or dependency change.
+- The 0.1.59 entry gains the one line wolf-interp#334 asks for
+  (5289391's E0411 change).
+- Debug and release gauntlets at the exact head are green; the release
+  binary's two digest reads agree; the live-container rows skip locally
+  (no nested engine) and are owed to the release tier.
+- Assets at the tag: six, the 0.1.59 shape.
+
+wolf 0.2.38
+-----------
+- Version 0.2.38 in Cargo.toml, Cargo.lock and fuzz/Cargo.lock; the
+  two-module interface snapshot's toolchain stamp; PAIRING to lupin
+  0.1.60 with pin 5f1f1c94; STD-PIN to d4a4d4c. The metadata check is
+  committed red first.
+- Lupin-keyed test postures. The tests that key lupin's column by
+  published (version, commit) hold an unlisted release to the compiler's
+  answer. 0.1.60 changes these columns, so some files need 0.1.60 entries
+  and some lose a pin: os_surface_lanes (the five names now resolve and
+  are declined by name after their shapes), descriptor_walk_lanes (the
+  nine directory-relative calls declined by name; bit 32 and
+  fs_set_mode_fd served), editor_calls_lanes (RAW_LF accepted; the
+  realpath boundary keyed by commit), editor_wait_lanes (the listen
+  refusal keyed by commit), map_pairs_walk_lanes (the refill forward pin
+  0.1.60 keeps), fs_gaps_lanes (nofollow and the full fstat record
+  mirrored; fs_lock, fs_mkfifo and fs_set_nonblock still unresolved), and
+  four_machine_regressions (the else handler binds on 0.1.60, so the
+  fourth machine can join that row). Each move is measured with the
+  candidate lupin at its release-PR head, whose conform-run record
+  already carries impl_version 0.1.60 and the head's commit, and is then
+  re-measured with the published archive before the final takes.
+- Compiler differ, candidate against published 0.2.37, on 1271 files
+  (1253 at 0.2.37 plus 18 new rows):
+  - all three tiers: conc/select_arm_bare_variant and
+    conc/select_arm_lowercase_variant (fail(E0806) against 0.2.37's run,
+    s282); lints/binder_variant_let, binder_variant_for,
+    binder_variant_else, binder_variant_lowercase and
+    binder_variant_imported/main (W0801 against an empty warnings set,
+    s282). Seven hard rows on checked.
+  - native and release only: grammar/match_nested_bare_variant,
+    grammar/match_nested_bare_variant_fields,
+    grammar/match_nested_bare_variant_guard and
+    rows/match_row_nested_bare_variant (stdout: 0.2.37's compiled tiers
+    bound the nested name, s281); the checked machine was already right.
+  - native and release, by chance: memory/unsafe_ub_uaf,
+    memory/volatile_ub_uaf and conc/atomic_ub_uaf (use-after-free
+    witnesses whose native exit is undefined), as in the previous round.
+  - so 7 hard on checked and 11 to 14 on native and on release; 0
+    soundness findings on any tier. The controls (match_nested_name_binds,
+    _deep, _or, _qualified_variant, _struct_field_variant,
+    select_arm_lowercase_binds, binder_variant_controls) agree.
+  - s280, s283 and s284 move no row: the Map's answers and pairs() order
+    are unchanged, DWARF is written only under -g, and the drain fix has
+    no corpus row. The one risk named: a row whose stdout prints a
+    region charge that counts a Map header (72 bytes at 0.2.37, 88 now).
+- Interpreter differ, candidate against lupin 0.1.60 with 0.1.59 as the
+  control: the s281 rows agree (lupin always read the nested name as a
+  test); the select rows are fail-pinned, so completeness notes; the
+  five new binder rows agree with 0.1.60 (W0801 at the compiler's spans)
+  and are hard against the 0.1.59 control; lints/binder_capitalized
+  (W0801's match-arm half) and the other standing warning rows stay hard,
+  since lupin's match-arm half stays absent. Control moves between 1 and
+  10 ledger counts, each owned by a named wolf-interp commit (the binder
+  mirror, the OS mirror's served calls); fs/open_directory moves below
+  the ledger (bit 32 served). Native keeps its UB-licensed soundness rows.
+- Fixed std at d4a4d4c: 624 tests and 565 doc examples. Against wolf
+  0.2.37 with lupin 0.1.59 both are green. Against the candidate with
+  lupin 0.1.60, every compiler cell is green and only lupin cells move:
+  the four rows and two std/os/os.lu doc lines of wolf-std#125 lag again,
+  and no further row moves, since std calls none of the OS mirror's new
+  names. If that holds, it is R-r43-3 with (A) tag with the lag noted,
+  as 0.2.37 was tagged.
+- Start-up row on the gauntlet host's Ubuntu 24.04.5 container: 12 (the
+  runtime's own syscalls: wolf 47, C 35), unchanged by the hashed Map and
+  the drain fix.
+- Gauntlets at the final head: prep, debug, release, constrained and
+  startup green in CI's environment (no std root, the published 0.1.60
+  as LUPIN), each lock take at most two hours; the plant red by name.
+- Release workflow dry run green with its readback; tier release green at
+  the head through the release-matrix label.
+- Readback after the tags: 11 assets (five wolf, six lupin), each read
+  twice on a Linux gauntlet host (the darwin pair also on the Mac); both
+  tags print bare versions; GNU/Linux binaries import at most
+  GLIBC_2.34; the musl libwolf_rt.a equals the release jobs' digest.
+- Tap: both formulae, wolf's std resource and the four AUR packages move.
