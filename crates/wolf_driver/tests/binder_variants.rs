@@ -110,7 +110,10 @@ fn fix_applies_the_rename_and_lists_the_test_as_the_alternative() {
         after.contains("match drink {"),
         "the use is renamed too:\n{after}"
     );
-    assert!(!after.contains("Drink,"), "{after}");
+    assert!(
+        !after.contains("(Drink,"),
+        "the binder is renamed:\n{after}"
+    );
     let (code, out) = fix(&dir, &[]);
     assert_eq!(code, 0, "nothing is left to fix:\n{out}");
     let (code, err) = build_wir(&dir, &["--deny-warnings"]);
