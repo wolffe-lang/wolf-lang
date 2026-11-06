@@ -52,6 +52,14 @@ def inputs(corpus, all_entries=False):
 DUMP_ARGS = ["--verbose", "--debug-info", "--debug-abbrev", "--debug-line", "--debug-frame"]
 
 
+def vocabulary(text):
+    # The DWARF names the producer emitted. The line-table header's
+    # standard_opcode_lengths legend names every standard opcode, used or not.
+    return sorted(set(re.findall(r"\bDW_(?:TAG|AT|FORM|CFA|OP|LNS|LNE)_[A-Za-z0-9_]+",
+                                 "\n".join(line for line in text.splitlines()
+                                           if not line.startswith("standard_opcode_lengths[")))))
+
+
 def dump_argv(tool, obj):
     # Run in the object's directory and name it relatively, so the dump's
     # header line carries no host path. DW_AT_comp_dir and the line table's
@@ -208,7 +216,7 @@ def main():
                 if code:
                     raise ValueError(f"dwarfdump failed ({code}): {err}")
                 text = out.read_text(errors="strict")
-                row["dwarfdump"][name] = {"sha256": digest(out), "vocabulary": sorted(set(re.findall(r"\bDW_(?:TAG|AT|FORM|CFA|OP|LNS|LNE)_[A-Za-z0-9_]+", text)))}
+                row["dwarfdump"][name] = {"sha256": digest(out), "vocabulary": vocabulary(text)}
             totals = {label: sum(obj["debug_bytes"] for obj in values.values()) for label, values in summaries.items()}
             row["debug_bytes"] = totals
             row["status"] = "measured"
