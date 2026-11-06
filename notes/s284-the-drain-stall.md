@@ -57,7 +57,11 @@ answer: a claim that finds the hold parks and claims again, and nothing else is 
 - **The reproduction row** (R-s284-1, R-s284-4) stays in `fork_lanes`. It runs drain.lu 40 times
   beside four churning neighbour containers, and it misses a reintroduced race about 0.15% of the
   time on CI and about 61% on H1. Local takes set `WOLF_FORK_CHURN_RUNS=400`, which misses about
-  0.7% on H1.
+  2% of the time on H1. That figure comes from the churn condition alone: 1 stall in 100 runs
+  beside churning neighbours on H1. An earlier figure of 0.7% came from the pooled rate, 3 stalls
+  in 246 quiet and churning runs together (below), which understates the churn row. The plant's
+  400-run take missed: 400 of 400 green beside 1,078 neighbour containers, 361 s (#1053's body).
+  CI's default of 40 runs is sized from CI's own rate and is unaffected.
 
 ## Forbidden
 
