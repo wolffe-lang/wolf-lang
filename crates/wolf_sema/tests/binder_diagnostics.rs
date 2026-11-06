@@ -203,7 +203,7 @@ fn a_taken_lowercase_name_gets_an_underscore() {
     let (d, src) = only(&src);
     assert_eq!(
         d.suggestions[0].message,
-        "bind it under a lowercase name: `drink_`"
+        "bind it under another name: `drink_`"
     );
     assert!(edits(&d, &src, 0).iter().all(|(_, new)| new == "drink_"));
 }
@@ -215,7 +215,7 @@ fn a_keyword_spelling_gets_an_underscore() {
     let (d, _) = only(src);
     assert_eq!(
         d.suggestions[0].message,
-        "bind it under a lowercase name: `type_`"
+        "bind it under another name: `type_`"
     );
 }
 
@@ -302,6 +302,66 @@ fn the_select_refusal_renames_the_receive() {
     );
 }
 
+/// Either letter case, as a `match` reads a case: `fast` of `enum Mode {
+/// fast, slow }` warns as `Drink` does. Its own spelling is taken (the
+/// variant's declaration spells it), so the rename appends `_`.
+#[test]
+fn a_lowercase_variant_binder_warns_and_renames_past_it() {
+    let src = "enum Mode { fast, slow }\n\nfn main() -> !int {\n    let (fast, n) = (1, 2)\n    fast + n - 3\n}\n";
+    let (d, src) = only(src);
+    assert_eq!(d.code.as_str(), "W0801");
+    assert_eq!(
+        d.suggestions[0].message,
+        "bind it under another name: `fast_`"
+    );
+    assert!(
+        edits(&d, &src, 0)
+            .iter()
+            .all(|(old, new)| old == "fast" && new == "fast_")
+    );
+    assert_eq!(
+        edits(&d, &src, 1),
+        vec![("fast".to_string(), "Mode.fast".to_string())]
+    );
+}
+
+/// The rename never lands on a variant in scope, even one this file does
+/// not spell: `drink` is a variant of the imported `Kind`, so `Drink` takes
+/// `drink_` and the renamed binder does not warn again.
+#[test]
+fn the_rename_never_lands_on_a_variant_in_scope() {
+    let (diags, _) = resolve(&[
+        (
+            &[],
+            "main.lu",
+            "use kinds.Kind\n\nfn main() -> !int {\n    let (Drink, n) = (Kind.Food, 3)\n    n - 3\n}\n",
+        ),
+        (
+            &["kinds"],
+            "kinds.lu",
+            "/// The kinds.\npub enum Kind { Drink, drink, Food }\n\n/// One more export.\n\
+             pub fn none() -> int {\n    0\n}\n",
+        ),
+    ]);
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert_eq!(
+        diags[0].suggestions[0].message,
+        "bind it under another name: `drink_`"
+    );
+}
+
+#[test]
+fn a_select_arm_that_spells_a_lowercase_variant_is_refused() {
+    let src = "enum Mode { fast, slow }\n\nfn main() -> !int {\n    let ch = channel[int](1)\n    \
+               ch.send(3)?\n    select {\n        fast from ch => {},\n        timeout(1.s) => {},\n    }\n    0\n}\n";
+    let (d, _) = only(src);
+    assert_eq!(d.code.as_str(), "E0806");
+    assert_eq!(
+        d.suggestions[0].message,
+        "bind it under another name: `fast_`"
+    );
+}
+
 // ---------------------------------------------------- the boundary ----
 
 #[test]
@@ -320,9 +380,6 @@ fn names_that_read_as_no_test_stay_silent() {
         format!(
             "{KIND}fn main() -> !int {{\n    match Kind.Food {{\n        Drink => 1,\n        _ => 0,\n    }}\n}}\n"
         ),
-        // a lowercase variant
-        "enum Mode { fast, slow }\n\nfn main() -> !int {\n    let (fast, n) = (1, 2)\n    fast + n - 3\n}\n"
-            .to_string(),
         // a lowercase select receive
         format!(
             "{KIND}fn main() -> !int {{\n    let ch = channel[Kind](1)\n    ch.send(Kind.Food)?\n    \

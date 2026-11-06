@@ -83,7 +83,7 @@ fn the_warning_renders_with_both_fixes_and_the_build_succeeds() {
     );
     assert!(err.contains("`Drink` is declared here, in `Kind`"), "{err}");
     assert!(
-        err.contains("bind it under a lowercase name: `drink`"),
+        err.contains("bind it under another name: `drink`"),
         "{err}"
     );
     assert!(
