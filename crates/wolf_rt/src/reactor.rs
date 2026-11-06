@@ -755,18 +755,26 @@ fn enter_kernel_wait() {
 
 /// s247: back from the kernel's wait — on, unless a fork claimed the
 /// thread there; then parked, holding nothing, until the fork releases it.
+/// s284 (wolf-lang#1022): the claim's own answer decides, never a second
+/// look — the hub's drain thread's rule (`signal.rs`, `back_from_poll`).
+/// Until s284 a release landing between a failed claim and the second look
+/// sent the thread to work with the state still saying "in its wait", and
+/// the next fork's hold would claim it there.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn leave_kernel_wait() {
-    while THREAD_STATE
-        .compare_exchange(THREAD_WAITING, THREAD_LOOPING, SeqCst, SeqCst)
-        .is_err()
-    {
-        #[cfg(test)]
-        hook::after_failed_claim();
-        if THREAD_STATE.load(SeqCst) != THREAD_HELD {
-            return;
+    loop {
+        match THREAD_STATE.compare_exchange(THREAD_WAITING, THREAD_LOOPING, SeqCst, SeqCst) {
+            Ok(_) => return,
+            // A fork holds the thread: park, then claim again (a release
+            // before the park leaves its unpark, so the park returns at once).
+            Err(THREAD_HELD) => {
+                #[cfg(test)]
+                hook::after_failed_claim();
+                std::thread::park();
+            }
+            // No fork's state: only this thread moves it otherwise.
+            Err(_) => return,
         }
-        std::thread::park();
     }
 }
 
