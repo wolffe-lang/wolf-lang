@@ -82,8 +82,14 @@ fn the_warning_renders_with_both_fixes_and_the_build_succeeds() {
         "{err}"
     );
     assert!(err.contains("`Drink` is declared here, in `Kind`"), "{err}");
-    assert!(err.contains("bind it under a lowercase name: `drink`"), "{err}");
-    assert!(err.contains("test the variant instead: `Kind.Drink`"), "{err}");
+    assert!(
+        err.contains("bind it under a lowercase name: `drink`"),
+        "{err}"
+    );
+    assert!(
+        err.contains("test the variant instead: `Kind.Drink`"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -100,7 +106,10 @@ fn fix_applies_the_rename_and_lists_the_test_as_the_alternative() {
     assert_eq!(code, 0, "apply succeeds:\n{out}");
     let after = std::fs::read_to_string(dir.join("main.lu")).expect("read");
     assert!(after.contains("let (drink, n) = (Kind.Food, 3)"), "{after}");
-    assert!(after.contains("match drink {"), "the use is renamed too:\n{after}");
+    assert!(
+        after.contains("match drink {"),
+        "the use is renamed too:\n{after}"
+    );
     assert!(!after.contains("Drink,"), "{after}");
     let (code, out) = fix(&dir, &[]);
     assert_eq!(code, 0, "nothing is left to fix:\n{out}");
