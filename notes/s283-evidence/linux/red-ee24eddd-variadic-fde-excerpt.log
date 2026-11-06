@@ -1,0 +1,221 @@
+WAIT map-ee24eddd head=ee24eddda7a1d66320a56703bb9d45df37825e69 base=b35e87b3d1c7efb68ffc5fa67fb18fcd8e3537eb A=1 B=3 chosen=A 2026-11-06T02:28:41Z
+SOURCE_HEAD /work ee24eddda7a1d66320a56703bb9d45df37825e69
+FRESH_TARGET /work/target
+SOURCE_HEAD /base b35e87b3d1c7efb68ffc5fa67fb18fcd8e3537eb
+FRESH_TARGET /base/target
+START fmt 2026-11-06T02:30:57Z
+END fmt exit=0 2026-11-06T02:30:59Z
+START clippy 2026-11-06T02:30:59Z
+END clippy exit=0 2026-11-06T02:31:30Z
+START rt-none 2026-11-06T02:31:30Z
+END rt-none exit=0 2026-11-06T02:31:33Z
+START spec-regenerate 2026-11-06T02:31:33Z
+END spec-regenerate exit=0 2026-11-06T02:31:34Z
+START anchor-key-sets 2026-11-06T02:31:34Z
+PASS anchor-key-sets-both-directions
+END anchor-key-sets exit=0 2026-11-06T02:31:34Z
+START generated-spec-clean 2026-11-06T02:31:34Z
+END generated-spec-clean exit=0 2026-11-06T02:31:34Z
+START spec-extract 2026-11-06T02:31:34Z
+END spec-extract exit=0 2026-11-06T02:31:34Z
+START build 2026-11-06T02:31:34Z
+END build exit=0 2026-11-06T02:32:08Z
+START base-build 2026-11-06T02:32:08Z
+END base-build exit=0 2026-11-06T02:32:39Z
+START census-inspector 2026-11-06T02:32:39Z
+END census-inspector exit=0 2026-11-06T02:32:48Z
+START census-inspector-test 2026-11-06T02:32:48Z
+test tests::relocation_changes_are_not_byte_identity ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+END census-inspector-test exit=0 2026-11-06T02:32:48Z
+START census-staging 2026-11-06T02:32:48Z
+END census-staging exit=0 2026-11-06T02:32:48Z
+START runtime-layout 2026-11-06T02:32:48Z
+test list::tests::debug_layout_tracks_the_runtime_header ... ok
+test map::tests::debug_layout_tracks_the_runtime_header ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 375 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+END runtime-layout exit=0 2026-11-06T02:32:54Z
+START backend-unit 2026-11-06T02:32:54Z
+test abi::tests::a_module_named_c_is_not_the_membrane ... ok
+test abi::tests::apple_arm64_sret_consumes_no_argument_register ... ok
+test abi::tests::apple_arm64_hfa_and_gp_classification ... ok
+test abi::tests::apple_arm64_register_exhaustion_refuses_by_shape ... ok
+test abi::tests::c_aggregates_revert_wholesale_when_registers_exhaust ... ok
+test abi::tests::convention_version_participates_in_mangling ... ok
+test abi::tests::eu_returns_put_the_discriminant_in_the_first_int_register ... ok
+test abi::tests::exhausted_scalar_bank_does_not_demote_other_class_aggregate ... ok
+test abi::tests::scalars_pass_direct_and_tokens_erase ... ok
+test abi::tests::the_c_namespace_is_the_membrane ... ok
+test abi::tests::small_aggregates_scalarize_with_sysv_classes ... ok
+test abi::tests::three_eightbytes_are_memory_class ... ok
+test abi::tests::win64_scalars_direct_and_aggregates_refused_by_shape ... ok
+test abi::variadic::tests::hidden_sret_precedes_named_arguments_and_tokens_erase ... ok
+test abi::variadic::tests::independent_banks_overflow_and_named_vector_count ... ok
+test abi::variadic::tests::named_overflow_is_not_the_whole_stack_area ... ok
+test abi::variadic::tests::mixed_aggregate_rollback_preserves_the_other_bank ... ok
+test abi::variadic::tests::offsets_match_the_psabi_record_and_full_save_area ... ok
+test abi::variadic::x64::tests::tail_shims_set_the_entire_eax_and_preserve_the_stack ... ok
+test abi::variadic::x64::tests::save_area_is_complete_before_scratch_or_named_stack_copy ... ok
+test dwarf::tests::line_col_is_one_based ... ok
+test dwarf::tests::emits_line_and_info_sections_with_relocs ... ok
+test dwarf::tests::synthetic_debug_frame_owners_have_ranges_without_source_locations ... ok
+test dwarf::tests::deterministic_output ... ok
+test dwarf::tests::debug_frames_are_opt_in_and_relocatable ... ok
+test dwarf::tests::synthetic_functions_are_skipped ... ok
+test frame_decode::tests::a_whole_prologue_decodes_to_its_frame_steps ... ok
+test frame_decode::tests::arm64_restore_pair_and_authenticate ... ok
+test frame_decode::tests::arm64_large_frame_release_through_a_scratch_register ... ok
+test frame_decode::tests::arm64_scratch_values_come_only_from_the_range_itself ... ok
+test frame_decode::tests::unknown_or_truncated_forms_never_claim_coverage ... ok
+test abi::variadic::tests::trampoline_frame_keeps_context_save_area_and_return_address_disjoint ... ok
+test frame_decode::tests::x64_immediate_ret_byte_is_not_a_return ... ok
+test frame_decode::tests::x64_stack_and_extended_register_restores ... ok
+test layout::tests::eu_layout_tag_first ... ok
+test layout::tests::scalar_and_agg_layout ... ok
+test layout::tests::tokens_have_no_layout ... ok
+test layout::tests::union_is_the_widest_member_at_the_strictest_alignment ... ok
+test read_lend::tests::keeps_a_snapshot_used_again_after_the_call ... ok
+test read_lend::tests::does_not_lend_into_a_call_with_a_mut_argument ... ok
+test read_lend::tests::keeps_a_snapshot_across_an_opaque_call ... ok
+test read_lend::tests::counts_uses_on_branch_edges ... ok
+test read_lend::tests::keeps_a_snapshot_across_an_intervening_write ... ok
+test read_lend::tests::does_not_change_take_or_external_calls ... ok
+test read_lend::tests::keeps_reordered_fields ... ok
+test read_lend::tests::keeps_small_register_arguments ... ok
+test read_lend::tests::keeps_a_snapshot_when_fields_span_a_write ... ok
+test read_lend::tests::keeps_a_snapshot_without_exclusive_provenance ... ok
+test read_lend::tests::lends_nested_aggregates_with_matching_layout ... ok
+test target::tests::every_runtime_family_has_a_surface_name ... ok
+test target::tests::the_flag_names_the_freestanding_target_or_the_host ... ok
+test target::tests::the_freestanding_runtime_carries_the_allocating_families_only ... ok
+test target::tests::the_message_names_the_construct_and_the_target ... ok
+test tests::mangling_folds_the_module_path ... ok
+test tests::mangling_is_deterministic_and_distinguishes_sigs ... ok
+test tests::null_backend_implements_the_trait ... ok
+test read_lend::tests::lends_the_exclusive_address_until_the_read_call_returns ... ok
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+END backend-unit exit=0 2026-11-06T02:32:56Z
+START frame-unit 2026-11-06T02:32:56Z
+test debug_frame::tests::mismatched_save_locations_leave_the_range_uncovered ... ok
+test debug_frame::tests::complete_return_derived_distances_never_consult_the_prologue ... ok
+test debug_frame::tests::sp_relative_restores_before_mov_rsp_rbp_use_the_fixed_frame ... ok
+test debug_frame::tests::restore_rules_change_after_the_instruction_not_before ... ok
+test debug_frame::tests::a_wrong_fixed_frame_leaves_the_return_uncovered ... ok
+test debug_frame::tests::sp_from_fp_must_agree_with_the_return_derived_distance ... ok
+test debug_frame::tests::the_prologue_bytes_give_the_distance_the_save_facts_confirm ... ok
+test debug_frame::tests::without_a_verified_prologue_distance_the_return_stays_uncovered ... ok
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+END frame-unit exit=0 2026-11-06T02:33:09Z
+START source-types 2026-11-06T02:33:09Z
+test lower::debug_types::tests::equal_shaped_nominals_and_storage_views_remain_distinct ... ok
+test lower::debug_types::tests::every_scalar_retains_source_name_size_and_encoding ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 41 filtered out; finished in 0.00s
+END source-types exit=0 2026-11-06T02:33:12Z
+START debug-pieces 2026-11-06T02:33:12Z
+test midend::compact::debug_piece_tests::split_debug_locations_follow_value_renumbering ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.00s
+END debug-pieces exit=0 2026-11-06T02:33:12Z
+START debug-values 2026-11-06T02:33:12Z
+test dwarf_v1_borrowed_packed_value ... PASS dwarf-v1-borrowed-value
+test dwarf_v1_debug_frame_is_opt_in_and_nonallocated ... ok
+test dwarf_v1_enum ... PASS dwarf-v1-enum
+test dwarf_v1_error_union ... PASS dwarf-v1-error-union
+PASS dwarf-v1-error-union-lupin
+test dwarf_v1_list ... PASS dwarf-v1-list
+test dwarf_v1_list_layout_matches_runtime ... PASS dwarf-v1-list-runtime-layout
+test dwarf_v1_map ... PASS dwarf-v1-map
+test dwarf_v1_map_layout_matches_runtime ... PASS dwarf-v1-map-runtime-layout
+test dwarf_v1_optional ... PASS dwarf-v1-optional
+PASS dwarf-v1-optional-lupin
+test dwarf_v1_packed_list_element ... PASS dwarf-v1-packed-element
+test dwarf_v1_payload_enum ... PASS dwarf-v1-payload-enum
+PASS dwarf-v1-payload-enum-lupin
+test dwarf_v1_recursive_nominal_gap_is_explicit ... KNOWN-GAP dwarf-recursive-nominal type=Node cut=opaque-recursive-declaration
+test dwarf_v1_scalar_bool ... PASS dwarf-v1-bool-value
+PASS dwarf-v1-bool-value-encoding
+PASS dwarf-v1-bool-value-lupin
+test dwarf_v1_scalar_byte ... PASS dwarf-v1-byte-value
+PASS dwarf-v1-byte-value-encoding
+PASS dwarf-v1-byte-value-lupin
+test dwarf_v1_scalar_char ... PASS dwarf-v1-char-value
+PASS dwarf-v1-char-value-encoding
+PASS dwarf-v1-char-value-lupin
+test dwarf_v1_scalar_f32 ... PASS dwarf-v1-f32-value
+PASS dwarf-v1-f32-value-encoding
+PASS dwarf-v1-f32-value-lupin
+test dwarf_v1_scalar_f64 ... PASS dwarf-v1-f64-value
+PASS dwarf-v1-f64-value-encoding
+PASS dwarf-v1-f64-value-lupin
+test dwarf_v1_scalar_i16 ... PASS dwarf-v1-i16-value
+PASS dwarf-v1-i16-value-encoding
+PASS dwarf-v1-i16-value-lupin
+test dwarf_v1_scalar_i32 ... PASS dwarf-v1-i32-value
+PASS dwarf-v1-i32-value-encoding
+PASS dwarf-v1-i32-value-lupin
+test dwarf_v1_scalar_i64 ... PASS dwarf-v1-i64-value
+PASS dwarf-v1-i64-value-encoding
+PASS dwarf-v1-i64-value-lupin
+test dwarf_v1_scalar_i8 ... PASS dwarf-v1-i8-value
+PASS dwarf-v1-i8-value-encoding
+PASS dwarf-v1-i8-value-lupin
+test dwarf_v1_scalar_int ... PASS dwarf-v1-int-value
+PASS dwarf-v1-int-value-encoding
+PASS dwarf-v1-int-value-lupin
+test dwarf_v1_str ... PASS dwarf-v1-str
+test dwarf_v1_struct ... PASS dwarf-v1-struct
+test dwarf_v1_tuple ... PASS dwarf-v1-tuple
+test dwarf_v1_unsigned_u16 ... PASS dwarf-v1-u16-boundary
+PASS dwarf-v1-u16-boundary-encoding
+PASS dwarf-v1-u16-boundary-lupin
+test dwarf_v1_unsigned_u32 ... PASS dwarf-v1-u32-boundary
+PASS dwarf-v1-u32-boundary-encoding
+PASS dwarf-v1-u32-boundary-lupin
+test dwarf_v1_unsigned_u64 ... PASS dwarf-v1-u64-boundary
+PASS dwarf-v1-u64-boundary-encoding
+PASS dwarf-v1-u64-boundary-lupin
+test dwarf_v1_unsigned_u8 ... PASS dwarf-v1-u8-boundary
+PASS dwarf-v1-u8-boundary-encoding
+PASS dwarf-v1-u8-boundary-lupin
+test dwarf_v1_unsigned_uint ... PASS dwarf-v1-uint-boundary
+PASS dwarf-v1-uint-boundary-encoding
+PASS dwarf-v1-uint-boundary-lupin
+test dwarf_variant_bytes::tests::a_wrong_discriminant_offset_cannot_pass_the_byte_witness ... ok
+test dwarf_variant_bytes::tests::byte_reads_are_bounded_and_signed_by_the_dwarf_type ... ok
+test dwarf_variant_bytes::tests::the_oracle_version_is_read_from_pairing ... ok
+test dwarf_variant_bytes::tests::tree_and_reference_parse_are_not_name_or_line_echoes ... ok
+test oracle_gate::tests::a_required_tool_absence_fails_by_name ... ok
+test oracle_gate::tests::an_unrequired_absence_is_one_skip_line ... ok
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.24s
+END debug-values exit=0 2026-11-06T02:33:20Z
+START instruction-frames 2026-11-06T02:33:20Z
+test debugger_backtrace_at_every_instruction ... PASS dwarf-frame-three-frames
+PASS dwarf-frame-instruction-steps
+test debugger_big_frame_middle_at_every_instruction ... PASS dwarf-frame-big-frame-middle-steps
+test debugger_main_shim_at_every_instruction ... PASS dwarf-frame-main-shim-steps
+test debugger_middle_at_every_instruction ... PASS dwarf-frame-middle-steps
+test debugger_pressure_middle_at_every_instruction ... PASS dwarf-frame-pressure-middle-steps
+test debugger_variadic_chain_at_every_instruction ... PASS dwarf-frame-variadic-chain-steps
+test debugger_variadic_core_at_every_instruction ... PASS dwarf-frame-variadic-core-steps
+test debugger_variadic_entry_at_every_instruction ... PASS dwarf-frame-variadic-entry-steps
+test debugger_variadic_vector_saves_at_every_instruction ... PASS dwarf-frame-variadic-vector-steps
+test debugger_wolf_main_at_every_instruction ... PASS dwarf-frame-wolf-main-steps
+test dwarf_frame_big_frame_ranges_and_verifier ... PASS dwarf-frame-big-frame-fde-ranges
+test dwarf_frame_pressure_ranges_and_verifier ... PASS dwarf-frame-pressure-fde-ranges
+test dwarf_frame_ranges_and_verifier ... PASS dwarf-frame-wolf-fde-ranges
+test dwarf_frame_variadic_ranges_and_verifier ... FAIL dwarf-frame-variadic-fde-ranges
+dwarf-frame-variadic-fde-ranges: FDE has no PC range: 00000838 00000010 0000083c FDE cie=0000
+FAILED
+test frame_transcript_validation_is_fail_closed ... PASS dwarf-frame-transcript-validation
+test oracle_gate::tests::a_required_tool_absence_fails_by_name ... ok
+test oracle_gate::tests::an_unrequired_absence_is_one_skip_line ... ok
+test x64_return_sequences_leave_no_cfi_gap ... PASS dwarf-frame-x64-teardown-coverage
+test result: FAILED. 17 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.93s
+END instruction-frames exit=101 2026-11-06T02:33:24Z

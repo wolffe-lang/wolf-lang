@@ -21,14 +21,14 @@ The change adds no runtime unwinding, personality routines, landing pads or new 
 
 ## Inputs, verified
 
-- **Base.** Development started at trunk `e2757a7bd702d3b21f06396291010d2d1cb6101d`. The final base is the trunk head after the two preceding compiler changes; it is named in the records below once they exist.
+- **Base.** Development started at trunk `e2757a7bd702d3b21f06396291010d2d1cb6101d`, and moved to `b35e87b3d1c7efb68ffc5fa67fb18fcd8e3537eb` once the hashed Map landed. The final base is the trunk head after the second preceding change; it is named in the records below once they exist. Shas cited from before a rebase live on the branches `s283-pre-rebase` (on `e2757a7b`), `s283-scalar-red` (the unsigned red baseline) and `s283-on-b35e87b3`.
 - **Prediction.** `notes/s283-dwarf-v1-prediction.txt` was committed before any implementation (`921a93bd`).
 - **Oracles.** `notes/s283-dwarf-oracles.json` records lupin 0.1.59's tag, commit, spec pin, and archive and executable digests for both platforms (each checked twice). It also records the macOS SDK dwarfdump and lldb versions and digests. The interpreter rows compare against the release `crates/wolf_driver/PAIRING` names, not a second copy of its version.
   - Linux: GNU gdb 15.1 (Ubuntu 24.04 toolchain image), LLVM dwarfdump 21.1.8.
   - macOS arm64: lldb-2100.0.16.4, Apple LLVM 21.0.0 dwarfdump.
 - **Sources.** DWARF 5 sections 2, 5, 6.4 and 7; the System V AMD64 psABI (registers and frames); the AArch64 DWARF ABI; Intel SDM volume 2 (ADD, SUB, MOV, PUSH, POP, LEAVE, RET); and the Arm A64 instruction descriptions (ADD, SUB, LDP, STP, LDR, STR, RET, and the PAC hints).
 - **Layouts.** Sizes and offsets come from the compiler's native layout and the runtime's own headers. `wolf_rt`'s Rust-only `DEBUG_LAYOUT` constants derive each header's size and field offsets with `size_of` and `offset_of`, and the debug rows compare the emitted DIEs with them. They add no C ABI symbol, and the freestanding runtime compiles the same text.
-- **Map.** After the preceding change, Map's header is 88 bytes: the nine existing words, then `index` at 72 (a pointer to a named opaque map index) and `index_cap` at 80 (`int`). The allocator's rounded 96-byte charge is not the type's size.
+- **Map.** With the hashed Map, the header is 88 bytes: the nine existing words, then `index` at 72 (a pointer to a named opaque map index) and `index_cap` at 80 (`int`). The allocator's rounded 96-byte charge is not the type's size.
 
 ## Prediction
 
@@ -64,6 +64,10 @@ Size was predicted as under 10% growth on scalar-only inputs, hundreds to a few 
 | `16f3778b` | the first full arm64 corpus census: one uncovered range, `memory/read_lend_frame.lu`'s `main` (`CFI_GAP main 45896..45932: unknown return-sequence instruction`) | `notes/s283-evidence/macos/census-16f3778b-corpus.json` |
 | `a2f6dbd7` | `arm64_large_frame_release_through_a_scratch_register` red, and both arm64 big-frame chain rows red by name: `CFI_GAP middle 64..84: unknown return-sequence instruction` | `notes/s283-evidence/macos/red-a2f6dbd7-arm64-scratch-release.log` |
 
+| `c98ae671` | Map after the rebase onto the hashed Map: the runtime witness at 88 bytes and 11 words, against the 72-byte DWARF; `dwarf-v1-map-runtime-layout` red (`byte_size 72` against 88) and `dwarf-v1-map` red (`missing ["index_cap = "]`) | `notes/s283-evidence/macos/red-c98ae671-map.log` |
+
+| `ee24eddd` | after the rebase, `dwarf-frame-variadic-fde-ranges` red on Linux: `FDE has no PC range`. The FDE-range rows parsed `run`'s bounded diagnostic excerpt (the first and last 32 KiB) of a 560 KB dump, and the rebased runtime's added FDEs moved the cut into the middle of a line; the rows now parse the whole raw transcript (`bd3f3650`), as do the `CFI_GAP` and verifier searches | `notes/s283-evidence/linux/red-ee24eddd-variadic-fde-excerpt.log` |
+
 These are development controls. The final plant is separate (below).
 
 ### The teardown fix (R-s283-3's count row)
@@ -95,23 +99,23 @@ The decoder now keeps the values that MOV wide immediates (MOVZ, MOVN, MOVK) giv
 
 ### Census and determinism
 
-These numbers are measured at `16f3778b`, after the teardown fix; the final census at the rebased head is pending. `ci/dwarf-census.py` covers every positive corpus entry (781 candidates, `//! check: run(`) and the 31 type fixtures. It compiles each to objects five times: trunk once, then the head twice without `-g` and twice with it.
+These numbers are measured at `bd3f3650`, on `b35e87b3` with Map at 88 bytes; the final census at the final head is pending. `ci/dwarf-census.py` covers every positive corpus entry (781 candidates, `//! check: run(`) and the 31 type fixtures. It compiles each to objects five times: trunk once, then the head twice without `-g` and twice with it.
 
 | Section | trunk | head | head `-g` |
 |---|---|---|---|
-| `.debug_info` | 188,382 | 296,252 | 312,355 |
+| `.debug_info` | 188,382 | 299,445 | 315,548 |
 | `.debug_abbrev` | 47,555 | 69,250 | 79,078 |
 | `.debug_line` | 200,491 | 201,431 | 204,548 |
 | `.debug_frame` | — | — | 222,600 |
-| total | 436,428 | 566,933 (+29.9%) | 818,581 (+87.6%) |
+| total | 436,428 | 570,126 (+30.6%) | 821,774 (+88.3%) |
 
 That table is Linux x86-64: 756 programs measured, 25 not measured, 0 failures, and 0 `CFI_GAP` (2145 at `c78972fd`, before the fix). The 31 type fixtures also measure 0 gaps (22 before). Every head object, with and without `-g`, was byte-and-relocation identical across its two builds (789 objects each). The 25 not measured are inputs that trunk refuses too when staged standalone; each is named in the census JSON. The largest growth was `memory/read_lend_frame.lu`, from 800 to 5,767 bytes, which is type information for its lent aggregates.
 
-macOS arm64 at `62fdc9dd`, after the large-frame release fix, measures the same 756 programs (25 not measured, 0 failures) with 0 `CFI_GAP`, and the 31 type fixtures also measure 0:
+macOS arm64 at the same head measures the same 756 programs (25 not measured, 0 failures) with 0 `CFI_GAP` (1 before the large-frame release fix), and the 31 type fixtures also measure 0:
 
 | | trunk | head | head `-g` |
 |---|---|---|---|
-| total | 510,659 | 640,851 (+25.5%) | 924,675 (+81.1%) |
+| total | 510,659 | 644,044 (+26.1%) | 927,868 (+81.7%) |
 
 ### Explicit presentation and fidelity gaps
 
@@ -145,7 +149,7 @@ This is what wolf emits, as observed in the census dumps. The line-table header'
 | Coverage | one function may have several FDE ranges. A range a debugger finds no FDE for needs its fallback; never extend the preceding rule over it |
 | Presentation | LLDB under this C compile unit does not present variant parts. sniff renders the active variant itself from the DWARF; it must not imitate LLDB's empty presentation |
 
-The fixtures' dwarfdump digests are in `notes/s283-evidence/linux/fixture-digests-16f3778b.txt` (LLVM 21.1.8, ELF) and `notes/s283-evidence/macos/fixture-digests-62fdc9dd.txt` (the SDK's Apple LLVM 21.0.0, Mach-O); the final census adds its own beside them: `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
+The fixtures' dwarfdump digests at `bd3f3650` are in `notes/s283-evidence/linux/fixture-digests-bd3f3650.txt` (LLVM 21.1.8, ELF) and `notes/s283-evidence/macos/fixture-digests-bd3f3650.txt` (the SDK's Apple LLVM 21.0.0, Mach-O); the final census adds its own beside them: `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
 
 ### Rulings
 
@@ -176,7 +180,8 @@ The fixtures' dwarfdump digests are in `notes/s283-evidence/linux/fixture-digest
 - [x] Named LLDB and recursive gaps kept separate from value passes.
 - [x] lupin 0.1.59 values paired; scalar encodings and runtime-layout ties checked on Linux and macOS.
 - [x] Anchor regeneration checked in both directions (724 keys; none added, removed or re-owned).
-- [ ] Rebase once after the two preceding compiler changes; Map at its 88-byte header with its tie row.
+- [x] Map at its 88-byte header with its tie row, red first (`c98ae671`) and green (`ee24eddd`) on `b35e87b3`.
+- [ ] The final rebase after the second preceding change.
 - [ ] The final census, digests and determinism; the macOS retake; the full gauntlet.
 - [ ] The final-head discriminant-offset plant and its record.
 - [ ] Final head pushed, PR opened with this note, run id read once, one lane audit.
