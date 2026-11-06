@@ -364,7 +364,10 @@ fn binders_and_parameters_that_spell_no_test_stay_silent() {
 fn a_select_arm_that_spells_a_variant_is_refused() {
     let row = "conc/select_arm_bare_variant.lu";
     for (machine, record) in compiled_records(row) {
-        assert_eq!(record["verdict"], "fail(E0806)", "{machine} {row}: {record}");
+        assert_eq!(
+            record["verdict"], "fail(E0806)",
+            "{machine} {row}: {record}"
+        );
         assert_eq!(
             record["diagnostics"][0]["span"],
             serde_json::json!([652, 657]),
