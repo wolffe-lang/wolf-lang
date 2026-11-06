@@ -89,13 +89,8 @@ pub fn teardown(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
     let mut steps = Vec::new();
     let mut at = 0;
     while at < bytes.len() {
-        let mut step = match arch {
-            Arch::X64 => x64(&bytes[at..]),
-            Arch::Arm64 => arm64(&bytes[at..]),
-        }
-        .ok_or(at)?;
-        at += step.end;
-        step.end = at;
+        let step = next(arch, bytes, at)?;
+        at = step.end;
         let ret = step.ret;
         steps.push(step);
         if ret {
@@ -103,6 +98,33 @@ pub fn teardown(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
         }
     }
     Err(at)
+}
+
+/// Decode every instruction of a producer-bounded range that ends exactly at
+/// an instruction boundary, such as a prologue. A return inside it fails.
+pub fn instructions(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
+    let mut steps = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let step = next(arch, bytes, at)?;
+        if step.ret || step.end > bytes.len() {
+            return Err(at);
+        }
+        at = step.end;
+        steps.push(step);
+    }
+    Ok(steps)
+}
+
+/// The instruction at `at`, with `end` as an offset into `bytes`.
+fn next(arch: Arch, bytes: &[u8], at: usize) -> Result<Step, usize> {
+    let mut step = match arch {
+        Arch::X64 => x64(&bytes[at..]),
+        Arch::Arm64 => arm64(&bytes[at..]),
+    }
+    .ok_or(at)?;
+    step.end += at;
+    Ok(step)
 }
 
 fn gp(x: u8) -> u16 {
@@ -420,6 +442,29 @@ fn arm64(b: &[u8]) -> Option<Step> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_whole_prologue_decodes_to_its_frame_steps() {
+        // push rbp; mov rbp,rsp; sub rsp,0x40; mov [rsp+0x20],rbx; mov [rsp+0x28],r12
+        let bytes = [
+            0x55, 0x48, 0x89, 0xe5, 0x48, 0x83, 0xec, 0x40, 0x48, 0x89, 0x5c, 0x24, 0x20, 0x4c,
+            0x89, 0x64, 0x24, 0x28,
+        ];
+        let steps = instructions(Arch::X64, &bytes).unwrap();
+        assert_eq!(
+            steps.iter().map(|s| s.end).collect::<Vec<_>>(),
+            [1, 4, 8, 13, 18]
+        );
+        assert_eq!(steps[0].sp, SpChange::Add(-8));
+        assert_eq!(steps[1].fp_from_sp, Some(0));
+        assert_eq!(steps[2].sp, SpChange::Add(-0x40));
+        assert_eq!(
+            (steps[4].stores[0].reg, steps[4].stores[0].offset),
+            (12, 0x28)
+        );
+        // A truncated last instruction or a return inside the range fails.
+        assert_eq!(instructions(Arch::X64, &bytes[..17]), Err(13));
+        assert_eq!(instructions(Arch::X64, &[0x55, 0xc3]), Err(1));
+    }
     #[test]
     fn x64_immediate_ret_byte_is_not_a_return() {
         let steps = teardown(
