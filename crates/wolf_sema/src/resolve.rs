@@ -775,7 +775,7 @@ impl Resolver<'_> {
         }
     }
 
-    /// `[gram.pat.binder]`: hold every capitalized name of a binder
+    /// `[gram.pat.binder]`: hold every name of a binder
     /// pattern that spells a variant of an enum in scope (W0801), or of a
     /// `select` arm's receive (`channel` given: E0806).
     fn note_binder_variants(&mut self, pat: &GreenNode, channel: Option<String>) {
@@ -784,9 +784,6 @@ impl Resolver<'_> {
         crate::binder::binder_names(pat, &mut names);
         for (span, site) in names {
             let name = self.text(span);
-            if !crate::binder::capitalized(&name) {
-                continue;
-            }
             let homes = crate::binder::variant_homes(self.pkg, self.module, self.bindings, &name);
             if homes.is_empty() {
                 continue;
@@ -806,7 +803,7 @@ impl Resolver<'_> {
         }
     }
 
-    /// Report the held binder names. The lowercase fix renames the binder
+    /// Report the held binder names. The rename fix renames the binder
     /// and every use of it — the binding table's `Local` refs to it,
     /// interpolations and closure captures included — to a name nothing in
     /// the file spells, so no use can resolve elsewhere afterwards.

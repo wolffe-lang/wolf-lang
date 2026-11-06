@@ -3,12 +3,18 @@
 //!
 //! A binder pattern — a `let` or `var` binder, a `for` header, the `else
 //! |…|` handler's binding form — binds every value it meets, so every bare
-//! name in it is a new binding, at any depth. A capitalized bare name that
-//! spells a variant of an enum in scope still binds, but it reads as the test
-//! it is not: W0801, naming the variant, with two fixes (a lowercase name,
-//! the same binding; the qualified variant, a test a binder then refuses). A
-//! `select` arm's receive takes whatever its channel delivers, so the same
-//! name there is refused by name (E0806).
+//! name in it is a new binding, at any depth. A bare name that spells a
+//! variant of an enum in scope, in either letter case, still binds, but it
+//! reads as the test it is not: W0801, naming the variant, with two fixes (a
+//! name that spells no variant, the same binding; the qualified variant, a
+//! test a binder then refuses). A `select` arm's receive takes whatever its
+//! channel delivers, so the same name there is refused by name (E0806).
+//!
+//! The letter case does not enter, because it does not where a `match`
+//! decides the same question: the nested-payload rule (`names_sema_case` in
+//! `wolf_wir`'s lowering, wolf-lang#1043) and the checker's #4 rule read a
+//! bare name as a test whenever it spells a case, `fast` of `enum Mode { fast,
+//! slow }` exactly as `Drink`. A name that would test there warns here.
 //!
 //! "In scope" is the set `[gram.expr.variant]` already consults: the enums
 //! of the binder's module, then the enums its file imports by item. Wolf has
@@ -105,13 +111,6 @@ pub(crate) fn binder_names(pat: &GreenNode, out: &mut Vec<(Span, Site)>) {
     }
 }
 
-/// Does the name read as a variant test: it begins with an uppercase
-/// letter (W0801's "capitalized name"; a lowercase name is already the
-/// binding spelling the fix recommends)?
-pub(crate) fn capitalized(name: &str) -> bool {
-    name.chars().next().is_some_and(char::is_uppercase)
-}
-
 /// The variants an enum item declares, whichever form declared it
 /// (`enum K { … }` or `type K = enum { … }`); `None` for any other item.
 fn enum_variants<'p>(pkg: &'p Package, item: &Item) -> Option<Vec<EnumVariant<'p>>> {
@@ -174,7 +173,7 @@ pub(crate) fn variant_homes(
     out
 }
 
-/// The snake-case spelling of a capitalized name: `Drink` → `drink`,
+/// The snake-case spelling of a name: `Drink` → `drink`, `fast` → `fast`,
 /// `HotDrink` → `hot_drink`, `HTTPCode` → `http_code`.
 pub(crate) fn snake_case(name: &str) -> String {
     let chars: Vec<char> = name.chars().collect();
@@ -240,12 +239,14 @@ pub(crate) fn spelled_names(root: &GreenNode, src: &[u8]) -> BTreeSet<String> {
     out
 }
 
-/// The lowercase binding name the rename fix writes: the snake-case
-/// spelling, with `_` appended while it would collide — a keyword, a
-/// prelude or builtin type name, a module item, an import of this file, or
-/// any identifier the file already spells. A name nothing in the file
-/// spells can neither capture a use nor shadow a binding, so the rename
-/// keeps every use resolving to the binding it resolved to before.
+/// The binding name the rename fix writes: the snake-case spelling, with
+/// `_` appended while it would collide — a keyword, a prelude or builtin
+/// type name, a module item, an import of this file, a variant in scope
+/// (the new name must not warn again), or any identifier the file already
+/// spells. A lowercase variant's own name is spelled in the file, so it
+/// always takes the `_`: `fast` → `fast_`. A name nothing in the file spells
+/// can neither capture a use nor shadow a binding, so the rename keeps every
+/// use resolving to the binding it resolved to before.
 pub(crate) fn fresh_name(
     pkg: &Package,
     module: usize,
@@ -262,6 +263,7 @@ pub(crate) fn fresh_name(
             || prelude::in_prelude(&cand)
             || prelude::is_builtin_type(&cand)
             || cand == "self"
+            || !variant_homes(pkg, module, bindings, &cand).is_empty()
             || !parses_as_binder(file, &cand);
         if !clash {
             return cand;
@@ -284,7 +286,7 @@ fn qualified(home: &VariantHome, name: &str) -> String {
 }
 
 /// The report for one binder name: W0801 at a binder, E0806 at a `select`
-/// arm. `rename` is the lowercase fix's edits (the binder and every use).
+/// arm. `rename` is the rename fix's edits (the binder and every use).
 pub(crate) fn report(b: &BinderVariant, new: &str, rename: Vec<(Span, String)>) -> Diagnostic {
     let home = &b.homes[0];
     let name = &b.name;
@@ -315,7 +317,7 @@ pub(crate) fn report(b: &BinderVariant, new: &str, rename: Vec<(Span, String)>) 
             "a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a \
              bare name there is a new binding even when it spells a variant. To test the \
              value, `match` on it (`{en}.{name} => …`); to keep the binding, give it a \
-             lowercase name so it reads as one."
+             name that spells no variant."
         ))
     };
     if b.homes.len() > 1 {
@@ -329,7 +331,7 @@ pub(crate) fn report(b: &BinderVariant, new: &str, rename: Vec<(Span, String)>) 
         ));
     }
     d = d.with_suggestion(Suggestion::new(
-        format!("bind it under a lowercase name: `{new}`"),
+        format!("bind it under another name: `{new}`"),
         rename,
         Applicability::MachineApplicable,
     ));
