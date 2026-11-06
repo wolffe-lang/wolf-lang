@@ -1,0 +1,87 @@
+s284 prediction, before any change, base trunk 275f9904 (2026-11-06 06:45Z)
+
+wolf-lang#1022: fork_lanes::the_drain_thread_outlives_every_fork ends rc=124
+on CI (3 of its last 5 runs) and in 0 of 360 quiet pinned runs locally.
+
+The suspect (read in crates/wolf_rt/src/signal.rs, not yet measured):
+`back_from_poll` compares READER_POLLING -> READER_LOOPING, and when that
+fails it LOADS the state again and returns unless the load reads HELD:
+
+    while CAS(POLLING -> LOOPING).is_err() {
+        if load() != HELD { return; }
+        park();
+    }
+
+A failed compare means a fork holds the thread (HELD). If `fork_release`
+(HELD -> POLLING) lands between the failed compare and the load, the load
+reads POLLING and the thread returns with the state still POLLING, and goes
+to work: it reads the self-pipe and moves bytes under the hub lock. The
+next `os_fork`'s `fork_hold` reads POLLING, claims the thread "in its
+kernel wait" and forks while the thread may hold the hub's state mutex.
+The loop's top also stores POLLING unconditionally, over a HELD a fork took
+in that moment. The child inherits the mutex locked, and its first use,
+`fork_child_pipes`' `h.state.lock()`, waits for ever. The child never
+exits, the parent's reap parks in os_signal_wait for a SIGCHLD that never
+comes, and `timeout 120` ends it: rc=124. drain.lu forks back to back, so
+one fork's release and the next one's hold are microseconds apart, and the
+drain thread, unparked by one release, can come back exactly as the next
+hold's release lands.
+
+The reactor's `leave_kernel_wait` has the same shape (THREAD_WAITING,
+THREAD_HELD). drain.lu never makes the reactor, so it cannot be the stall
+here, but it is the same bug.
+
+Why CI and not a quiet box (predicted): the window is the few instructions
+between the failed compare and the load, and only a delay of the drain
+thread there (preemption, a vCPU taken by the hypervisor, a thread woken
+late) lets the release land inside it. CI's row builds drain.lu with
+`cargo test`'s debug `wolf`, so the program links the debug-profile
+`libwolf_rt.a` (no [profile.dev] override): the compare and the load are
+calls, and the window is wider than in a release-built runtime. A quiet
+pinned box wakes the thread in a tight, short latency, which never lands
+on the next release.
+
+Predicted reproduction: a stall rate above 0 within 300 runs needs a
+condition that stops the drain thread at an arbitrary instruction while
+main keeps forking on another CPU. The first candidates, in order: a CPU
+quota with a short period (`--cpus` below the thread count, `--cpu-period`
+1-10 ms), hogs on the same CPUs, the drain thread or the process under
+SCHED_IDLE or nice 19 beside a hog. I expect the debug runtime to stall
+more often than the release runtime under the same condition, and the
+quiet pinned condition to stay at 0.
+
+Predicted evidence at a held stall (read from /proc, outside):
+- the parent: Threads 2; main in a futex wait (the hub's condvar, from
+  os_signal_wait), the drain thread in poll (do_sys_poll or the like);
+- exactly one forked child alive, not a zombie, Threads 1, in a futex
+  wait (syscall 202) whose address is inside the hub's static (the HUB
+  OnceLock's state mutex), mapped through /proc/<child>/maps and the
+  binary's symbol table;
+- no SIGCHLD lost: the other children are reaped.
+If a held stall instead shows every child a zombie or reaped and no live
+child, this hypothesis is wrong and the cause is a lost wake: I re-read
+the reap path.
+
+The fix (predicted): `back_from_poll` acts on the compare's own answer,
+never a second load: Ok -> on; Err(HELD) -> park, then compare again;
+Err(POLLING) -> compare again (the release came between); anything else
+-> return (not the fork's state to change). The loop's top moves the
+state LOOPING -> POLLING by a compare too, so it can never overwrite a
+HELD. The same in the reactor's `leave_kernel_wait` and
+`enter_kernel_wait`.
+
+Rows, red first:
+1. A unit row per cause, in wolf_rt (cfg(test) hook, as s275's
+   `sys::hook`): the drain thread stopped between its failed compare and
+   its next step, the release made in that gap, then the thread let go:
+   it must end in LOOPING (and a second hold must find it working, not
+   polling). Red at trunk, green at the fix. The same for the reactor
+   thread.
+2. The reproduction as a fork_lanes row (or a gate step if it is too
+   slow): drain.lu under the reproducing contention, at the tier that
+   runs fork_lanes, its contention stated. Red at trunk at the measured
+   rate, green at the fix.
+
+Proof: 0 stalls in >= 300 runs under the reproducing condition at the
+fix, interleaved with the unfixed binary, which still stalls at its rate.
+No change to the drain row's assertion or its 120 s cap; no retries.
