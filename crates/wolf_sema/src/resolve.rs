@@ -357,7 +357,7 @@ fn resolve_module(pkg: &Package, module: usize) -> ModuleResolved {
             refs: Vec::new(),
             aliased: vec![false; bindings.len()],
             binder_variants: Vec::new(),
-            shorthand_inits: BTreeSet::new(),
+            shorthand_inits: std::collections::HashSet::new(),
         };
         r.run();
         refs.push((fi, r.refs));
@@ -407,7 +407,7 @@ struct Resolver<'a> {
     binder_variants: Vec<crate::binder::BinderVariant>,
     /// The name tokens of struct-literal shorthand fields (`P { x }`): a
     /// rename that reaches one spells the field out (`x: y`).
-    shorthand_inits: BTreeSet<Span>,
+    shorthand_inits: std::collections::HashSet<Span>,
 }
 
 impl Resolver<'_> {
