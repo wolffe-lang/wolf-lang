@@ -1,0 +1,51 @@
+s282's one rebase, onto trunk 03c0f04e: each pre-rebase commit (the one a log here is named by), its rebased commit, and the subject both carry.
+
+084ea023 72e9a067 Record the binder-position base on every machine
+dd529314 292e9b3a Predict the binder warning and the select-arm refusal
+1b778931 4ed2186a Pin the binder-position W0801 rows red first
+b4b17012 6de8af3e Pin the binder warning's silent boundary
+c0ec0709 ba81d130 Pin the select-arm E0806 row red first, with its control
+1c0a75ba 74e53ef4 Run the binder and select-arm rows on every machine
+d48a821b 347f805b Snapshot the new rows' tokens
+17c72757 e29deee0 Snapshot the new rows' declarations
+3e0b7a89 2f979924 Add the binder-variant analysis: homes, names, fixes
+eb97a800 8ec9d663 Warn W0801 at binder names that spell a variant; refuse them in select arms
+b8784e25 e824f8be Format the select-arm refusal row
+4a9c9da9 95984cc8 Hold shorthand field spans in a hash set
+5441d267 a3d83762 Snapshot the binder warning and the select refusal, and check their fixes
+3a1b98ab ad695a04 Accept the binder warning's and the select refusal's snapshots
+024502a5 389c5dec Record the new rows in the lowering ledger
+a0ce8f4f 9ba8d964 Explain W0801's binder half and E0806's select arm
+f5860197 4ed90e8d Specify binder positions and both codes
+de3f7ade f8d03f9e Cite the binder clause in the rows, and move their spans with the headers
+1183e89e e4fefadc Drive the fix, the deny level and the explanations through the binary
+0f8f8e3b c4201600 Index the binder clause's anchor
+142a6efc b60d35dc Regenerate the diagnostics catalog for W0801 and E0806
+10732182 495324eb Re-snapshot the rows' tokens under their new headers
+cc8770a9 dd4a0211 Re-snapshot the rows' declarations under their new headers
+447ba6d8 e02189ef Note the binder warning and the select refusal in the changelog
+ebb30ffc 2de16bb4 Format the binary's binder tests
+cff238d7 41b91575 Keep the binder lane's evidence: red, fix, regen, measurements, rig
+68ee25b0 f062aadf Write the binder lane's note
+e5fea6d7 049d5093 Check the renamed binder, not the enum's own variant list
+fbf99235 48d24972 Pin binders and a select arm that spell a lowercase variant, red first
+4261280f ad993530 Run the lowercase-variant rows on every machine
+1913e40e 296c96e4 Read binder names in either letter case, as a match reads a case
+83a64499 9f93d3a3 Test the lowercase-variant binder, its rename and its select refusal
+7d9221fa 928819b5 Explain W0801 and E0806 as case-blind, with the rename spelling
+a714fcf1 bfddd361 Specify binder variants in either letter case and name the two narrowings
+f0fe9cba 86525c2e Note the case-blind binder rule in the changelog
+a7920f36 03c56bb0 Say either letter case in the binder rows' comment
+f0d31599 5bfaa1da Format the shorter rename assertion
+a688a7a4 2f381d7b Snapshot the lowercase-variant rows' tokens
+6ae3ae95 6f0af4ef Snapshot the lowercase-variant rows' declarations
+2da54226 e71a0f4c Ledger the lowercase-variant rows' lowering
+4b6c5ff5 015c9357 Render the binder fixes as another name, not a lowercase one
+cdbea59f 944379d3 Keep the lowercase-variant rows' red and green takes as evidence
+72d2a96b 69832e57 Score the letter case and the two narrowings in the note
+f370c927 c1094f15 Regenerate the diagnostics catalog for the case-blind binder rule
+dc24ccdb 902a3706 Regenerate the warnings catalog for the case-blind binder rule
+52695a70 7eb76de7 Keep the measure script's tree list, the private one by placeholder
+d7cbb943 9645b5a7 Keep the edge and issue-witness probes
+2ea46197 2046ad63 Keep the case-blind measurement and the compiler-lupin comparison
+6bbcfaa5 7e50d40f State the measurement and the comparison's direction in the note
