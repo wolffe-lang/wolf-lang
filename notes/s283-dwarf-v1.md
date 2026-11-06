@@ -21,7 +21,7 @@ The change adds no runtime unwinding, personality routines, landing pads or new 
 
 ## Inputs, verified
 
-- **Base.** Development started at trunk `e2757a7bd702d3b21f06396291010d2d1cb6101d`, and moved to `b35e87b3d1c7efb68ffc5fa67fb18fcd8e3537eb` once the hashed Map landed. The final base is the trunk head after the second preceding change; it is named in the records below once they exist. Shas cited from before a rebase live on the branches `s283-pre-rebase` (on `e2757a7b`), `s283-scalar-red` (the unsigned red baseline) and `s283-on-b35e87b3`.
+- **Base.** Development started at trunk `e2757a7bd702d3b21f06396291010d2d1cb6101d`, and moved to `b35e87b3d1c7efb68ffc5fa67fb18fcd8e3537eb` once the hashed Map landed. The final base is `275f99040e778a703e9fedbfcc704683ec1f4b7b`, after the nested-variant pattern change; that change touches only `pattern_shape` in `crates/wolf_wir/src/lower.rs` (when a bare name in a payload slot is a test), and this change only annotates the bindings that remain, so the rebase was clean. Shas cited from before a rebase live on the branches `s283-pre-rebase` (on `e2757a7b`), `s283-scalar-red` (the unsigned red baseline) and `s283-on-b35e87b3`.
 - **Prediction.** `notes/s283-dwarf-v1-prediction.txt` was committed before any implementation (`921a93bd`).
 - **Oracles.** `notes/s283-dwarf-oracles.json` records lupin 0.1.59's tag, commit, spec pin, and archive and executable digests for both platforms (each checked twice). It also records the macOS SDK dwarfdump and lldb versions and digests. The interpreter rows compare against the release `crates/wolf_driver/PAIRING` names, not a second copy of its version.
   - Linux: GNU gdb 15.1 (Ubuntu 24.04 toolchain image), LLVM dwarfdump 21.1.8.
@@ -181,7 +181,7 @@ The fixtures' dwarfdump digests at `bd3f3650` are in `notes/s283-evidence/linux/
 - [x] lupin 0.1.59 values paired; scalar encodings and runtime-layout ties checked on Linux and macOS.
 - [x] Anchor regeneration checked in both directions (724 keys; none added, removed or re-owned).
 - [x] Map at its 88-byte header with its tie row, red first (`c98ae671`) and green (`ee24eddd`) on `b35e87b3`.
-- [ ] The final rebase after the second preceding change.
+- [x] The final rebase onto `275f9904`, clean.
 - [ ] The final census, digests and determinism; the macOS retake; the full gauntlet.
 - [ ] The final-head discriminant-offset plant and its record.
 - [ ] Final head pushed, PR opened with this note, run id read once, one lane audit.
