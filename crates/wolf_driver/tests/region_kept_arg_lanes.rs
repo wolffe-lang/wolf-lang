@@ -178,9 +178,10 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 // r40/r41: published 0.1.56/0.1.57 retain these seven measured answers (#232).
 // r41 resume: published .58 re-measured these exact seven rows.
 // Published .59 retains these measured issue-232 outcomes; other helpers stay unchanged.
+// r43: the 0.1.60 candidate at 17bd522 answers the same seven rows (#232 still open).
 const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &[
     "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57", "0.1.58",
-    "0.1.59",
+    "0.1.59", "0.1.60",
 ];
 
 fn base_version(v: &str) -> &str {
