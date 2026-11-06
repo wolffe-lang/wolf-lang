@@ -2,16 +2,25 @@
 //! These use the debug tier; the release tier has no source DWARF yet.
 #[path = "support/dwarf_variant_bytes.rs"]
 mod dwarf_variant_bytes;
+#[path = "support/oracle_gate.rs"]
+mod oracle_gate;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn fixture(row: &str, src: &str, debug_frame: bool) -> Option<PathBuf> {
-    if !cfg!(any(
+fn platform(row: &str) -> bool {
+    if cfg!(any(
         all(target_os = "linux", target_arch = "x86_64"),
         all(target_os = "macos", target_arch = "aarch64"),
     )) {
-        eprintln!("SKIP {row} reason=requires x86-64 Linux or arm64 macOS");
+        return true;
+    }
+    eprintln!("SKIP {row} reason=requires x86-64 Linux or arm64 macOS");
+    false
+}
+
+fn fixture(row: &str, src: &str, debug_frame: bool) -> Option<PathBuf> {
+    if !platform(row) {
         return None;
     }
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_v1_{row}"));
@@ -42,8 +51,13 @@ fn transcript(row: &str, src: &str, gdb_expr: &str, lldb_expr: &str, wants: &[&s
     } else {
         "gdb"
     };
-    if cfg!(windows) || Command::new(debugger).arg("--version").output().is_err() {
-        eprintln!("SKIP: {row}: {debugger} unavailable on this platform");
+    if !platform(row) {
+        return false;
+    }
+    if Command::new(debugger).arg("--version").output().is_err() {
+        if let Err(error) = oracle_gate::absent(row, &format!("{debugger} is not installed")) {
+            panic!("{error}");
+        }
         return false;
     }
     let Some(exe) = fixture(row, src, false) else {

@@ -242,7 +242,8 @@ pub fn check(row: &str, exe: &Path, expected_type: &str) {
 }
 
 pub fn scalar_encoding(row: &str, exe: &Path, name: &str) {
-    let result = (|| -> Result<(), String> {
+    let row = format!("{row}-encoding");
+    let result = (|| -> Result<bool, String> {
         let (size, encoding) = match name {
             "i8" => (1, "DW_ATE_signed"),
             "u8" => (1, "DW_ATE_unsigned"),
@@ -259,7 +260,11 @@ pub fn scalar_encoding(row: &str, exe: &Path, name: &str) {
             "char" => (4, "DW_ATE_UTF"),
             _ => return Err(format!("unknown scalar fixture {name}")),
         };
-        let (_, root) = parameter_schema(exe)?;
+        let dir = exe.parent().ok_or("fixture directory")?;
+        let Some(tool) = dwarf_tool(&row, dir)? else {
+            return Ok(false);
+        };
+        let (_, root) = parameter_schema(tool, exe)?;
         if root.tag != "DW_TAG_base_type"
             || root.name() != Some(name)
             || root.number("byte_size")? != size
@@ -267,18 +272,20 @@ pub fn scalar_encoding(row: &str, exe: &Path, name: &str) {
         {
             return Err(format!("wrong emitted scalar definition: {root:?}"));
         }
-        Ok(())
+        Ok(true)
     })();
-    if let Err(error) = result {
-        eprintln!("FAIL {row}-encoding");
-        panic!("{row}-encoding: {error}");
+    match result {
+        Ok(true) => println!("PASS {row}"),
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("FAIL {row}");
+            panic!("{row}: {error}");
+        }
     }
-    println!("PASS {row}-encoding");
 }
 
-fn parameter_schema(exe: &Path) -> Result<(Schema, Die), String> {
+fn parameter_schema(tool: PathBuf, exe: &Path) -> Result<(Schema, Die), String> {
     let dir = exe.parent().ok_or("fixture directory")?;
-    let tool = dwarf_tool(dir)?;
     let artifact = if cfg!(target_os = "macos") {
         exe.with_extension("dSYM")
             .join("Contents/Resources/DWARF")
@@ -322,8 +329,12 @@ fn parameter_schema(exe: &Path) -> Result<(Schema, Die), String> {
 }
 
 pub fn runtime_header(row: &str, exe: &Path, layout: wolf_rt::debug_layout::HeaderLayout) {
-    let result = (|| -> Result<(), String> {
-        let (mut schema, pointer) = parameter_schema(exe)?;
+    let result = (|| -> Result<bool, String> {
+        let dir = exe.parent().ok_or("fixture directory")?;
+        let Some(tool) = dwarf_tool(row, dir)? else {
+            return Ok(false);
+        };
+        let (mut schema, pointer) = parameter_schema(tool, exe)?;
         if pointer.tag != "DW_TAG_pointer_type" {
             return Err("runtime header value is not a pointer".into());
         }
@@ -355,19 +366,25 @@ pub fn runtime_header(row: &str, exe: &Path, layout: wolf_rt::debug_layout::Head
                 ));
             }
         }
-        Ok(())
+        Ok(true)
     })();
-    if let Err(error) = result {
-        eprintln!("FAIL {row}");
-        panic!("{row}: {error}");
+    match result {
+        Ok(true) => println!("PASS {row}"),
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("FAIL {row}");
+            panic!("{row}: {error}");
+        }
     }
-    println!("PASS {row}");
 }
 
 pub fn recursive_gap(exe: &Path) {
-    let result = (|| -> Result<(), String> {
+    let row = "dwarf-recursive-nominal-gap";
+    let result = (|| -> Result<bool, String> {
         let dir = exe.parent().ok_or("fixture directory")?;
-        let tool = dwarf_tool(dir)?;
+        let Some(tool) = dwarf_tool(row, dir)? else {
+            return Ok(false);
+        };
         let artifact = if cfg!(target_os = "macos") {
             exe.with_extension("dSYM")
                 .join("Contents/Resources/DWARF")
@@ -403,56 +420,87 @@ pub fn recursive_gap(exe: &Path) {
                 "recursive gap changed; reassess complete cycle support: {text}"
             ));
         }
-        Ok(())
+        Ok(true)
     })();
-    if let Err(error) = result {
-        eprintln!("FAIL dwarf-recursive-nominal-gap");
-        panic!("{error}");
+    match result {
+        Ok(true) => println!(
+            "KNOWN-GAP dwarf-recursive-nominal type=Node cut=opaque-recursive-declaration"
+        ),
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("FAIL {row}");
+            panic!("{error}");
+        }
     }
-    println!("KNOWN-GAP dwarf-recursive-nominal type=Node cut=opaque-recursive-declaration");
 }
 
-fn dwarf_tool(dir: &Path) -> Result<PathBuf, String> {
-    if let Some(path) = std::env::var_os("LLVM_DWARFDUMP") {
-        return Ok(PathBuf::from(path));
+/// An executable named by a path, or found on PATH. Lookup only: nothing runs.
+fn executable(name: &Path) -> Option<PathBuf> {
+    if name.components().count() > 1 {
+        return name.is_file().then(|| name.to_owned());
     }
-    if cfg!(target_os = "macos") {
-        Ok(PathBuf::from(
-            output(
-                Command::new("xcrun").args(["--find", "dwarfdump"]),
-                dir,
-                "sdk-tool",
-            )?
-            .trim(),
-        ))
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|dir| dir.join(name))
+        .find(|path| path.is_file())
+}
+
+/// The dump tool for `row`, or `None` after the oracle gate's SKIP:
+/// `LLVM_DWARFDUMP`, else the SDK's dwarfdump on macOS, else llvm-dwarfdump.
+fn dwarf_tool(row: &str, dir: &Path) -> Result<Option<PathBuf>, String> {
+    let found = if let Some(path) = std::env::var_os("LLVM_DWARFDUMP") {
+        executable(Path::new(&path))
+    } else if cfg!(target_os = "macos") {
+        output(
+            Command::new("xcrun").args(["--find", "dwarfdump"]),
+            dir,
+            "sdk-tool",
+        )
+        .ok()
+        .and_then(|path| executable(Path::new(path.trim())))
     } else {
-        Ok(PathBuf::from("llvm-dwarfdump"))
+        executable(Path::new("llvm-dwarfdump"))
+    };
+    if found.is_none() {
+        crate::oracle_gate::absent(
+            row,
+            "no DWARF dump tool; set LLVM_DWARFDUMP or install llvm-dwarfdump",
+        )?;
     }
+    Ok(found)
+}
+
+/// The KNOWN-GAP text and the dump format are those of the pinned tools.
+/// Another version is not a measurement of either: the gate decides.
+fn pinned(row: &str, dir: &Path, tool: &Path, key: &str, label: &str) -> Result<bool, String> {
+    let pin = pins();
+    let want = pin["macos_aarch64"][key].as_str().ok_or("tool version pin")?;
+    let version = output(Command::new(tool).arg("--version"), dir, label)?;
+    if version.contains(want) {
+        return Ok(true);
+    }
+    let seen = version.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    crate::oracle_gate::absent(
+        row,
+        &format!("{} is {seen:?}, not the pinned {want}", tool.display()),
+    )?;
+    Ok(false)
 }
 
 fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String> {
     let dir = exe.parent().ok_or("fixture has no directory")?;
-    let tool = dwarf_tool(dir)?;
-    let pin = pins();
-    let version = output(Command::new(&tool).arg("--version"), dir, "sdk-version")?;
-    if !version.contains(
-        pin["macos_aarch64"]["sdk_dwarfdump_version"]
-            .as_str()
-            .ok_or("SDK version pin")?,
-    ) {
-        return Err(format!(
-            "SDK dwarfdump differs from pinned oracle: {version}"
-        ));
+    let Some(tool) = dwarf_tool(row, dir)? else {
+        return Ok(());
+    };
+    if !pinned(row, dir, &tool, "sdk_dwarfdump_version", "sdk-version")? {
+        return Ok(());
     }
-    let version = output(Command::new("lldb").arg("--version"), dir, "lldb-version")?;
-    if !version.contains(
-        pin["macos_aarch64"]["lldb_version"]
-            .as_str()
-            .ok_or("LLDB version pin")?,
-    ) {
-        return Err(format!("LLDB differs from known-gap oracle: {version}"));
+    let Some(lldb) = executable(Path::new("lldb")) else {
+        return crate::oracle_gate::absent(row, "lldb is not installed");
+    };
+    if !pinned(row, dir, &lldb, "lldb_version", "lldb-version")? {
+        return Ok(());
     }
-    let (mut schema, root) = parameter_schema(exe)?;
+    let (mut schema, root) = parameter_schema(tool, exe)?;
     if root.name() != Some(expected_type) {
         return Err(format!("wrong source type: {:?}", root.name()));
     }
@@ -469,7 +517,7 @@ fn check_inner(row: &str, exe: &Path, expected_type: &str) -> Result<(), String>
         serde_json::to_string(&bytes).map_err(|e| e.to_string())?
     );
     let text = output(
-        Command::new("lldb")
+        Command::new(&lldb)
             .args([
                 "--no-lldbinit",
                 "--batch",
