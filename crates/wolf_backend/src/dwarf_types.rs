@@ -99,7 +99,7 @@ impl Types {
                 let die = dwarf.unit.get_mut(discr);
                 die.set(dw::DW_AT_name, A::String(b"__tag".to_vec()));
                 die.set(dw::DW_AT_type, A::UnitRef(scalar));
-                die.set(dw::DW_AT_data_member_location, A::Udata(0));
+                die.set(dw::DW_AT_data_member_location, A::Udata(8));
                 die.set(dw::DW_AT_artificial, A::Flag(true));
                 dwarf
                     .unit
