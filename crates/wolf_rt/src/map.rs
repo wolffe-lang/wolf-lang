@@ -91,6 +91,8 @@ pub const DEBUG_LAYOUT: crate::debug_layout::HeaderLayout = {
             field!(key_size),
             field!(val_off),
             field!(val_size),
+            field!(index),
+            field!(index_cap),
         ],
     }
 };
@@ -430,14 +432,16 @@ mod tests {
 
     #[test]
     fn debug_layout_tracks_the_runtime_header() {
-        assert_eq!(DEBUG_LAYOUT.size, 72);
+        // Nine words, then the hashed index's pointer and slot count: 88
+        // bytes, never the allocator's rounded charge.
+        assert_eq!(DEBUG_LAYOUT.size, 88);
         assert_eq!(
             DEBUG_LAYOUT
                 .fields
                 .iter()
                 .map(|f| (f.offset, f.size))
                 .collect::<Vec<_>>(),
-            (0..9).map(|i| (i * 8, 8)).collect::<Vec<_>>()
+            (0..11).map(|i| (i * 8, 8)).collect::<Vec<_>>()
         );
     }
     use crate::list::ListHdr;
