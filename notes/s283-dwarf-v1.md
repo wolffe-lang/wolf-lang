@@ -99,23 +99,23 @@ The decoder now keeps the values that MOV wide immediates (MOVZ, MOVN, MOVK) giv
 
 ### Census and determinism
 
-These numbers are measured at `bd3f3650`, on `b35e87b3` with Map at 88 bytes; the final census at the final head is pending. `ci/dwarf-census.py` covers every positive corpus entry (781 candidates, `//! check: run(`) and the 31 type fixtures. It compiles each to objects five times: trunk once, then the head twice without `-g` and twice with it.
+These numbers are the final census, measured at `79a7052a` on the final base `275f9904` (the commit after it changes only this note). `ci/dwarf-census.py` covers every positive corpus entry (790 candidates, `//! check: run(`) and the 31 type fixtures. It compiles each to objects five times: trunk once, then the head twice without `-g` and twice with it.
 
 | Section | trunk | head | head `-g` |
 |---|---|---|---|
-| `.debug_info` | 188,382 | 299,445 | 315,548 |
-| `.debug_abbrev` | 47,555 | 69,250 | 79,078 |
-| `.debug_line` | 200,491 | 201,431 | 204,548 |
-| `.debug_frame` | — | — | 222,600 |
-| total | 436,428 | 570,126 (+30.6%) | 821,774 (+88.3%) |
+| `.debug_info` | 190,050 | 302,281 | 318,528 |
+| `.debug_abbrev` | 48,047 | 70,494 | 80,439 |
+| `.debug_line` | 202,262 | 203,211 | 206,340 |
+| `.debug_frame` | — | — | 224,680 |
+| total | 440,359 | 575,986 (+30.8%) | 829,987 (+88.5%) |
 
-That table is Linux x86-64: 756 programs measured, 25 not measured, 0 failures, and 0 `CFI_GAP` (2145 at `c78972fd`, before the fix). The 31 type fixtures also measure 0 gaps (22 before). Every head object, with and without `-g`, was byte-and-relocation identical across its two builds (789 objects each). The 25 not measured are inputs that trunk refuses too when staged standalone; each is named in the census JSON. The largest growth was `memory/read_lend_frame.lu`, from 800 to 5,767 bytes, which is type information for its lent aggregates.
+That table is Linux x86-64: 765 programs measured, 25 not measured, 0 failures, and 0 `CFI_GAP` (2145 at `c78972fd`, before the fix). The 31 type fixtures also measure 0 gaps (22 before). Every head object, with and without `-g`, was byte-and-relocation identical across its two builds (798 objects each). The 25 not measured are inputs that trunk refuses too when staged standalone; each is named in the census JSON. The largest growth was `memory/read_lend_frame.lu`, from 800 to 5,767 bytes, which is type information for its lent aggregates.
 
-macOS arm64 at the same head measures the same 756 programs (25 not measured, 0 failures) with 0 `CFI_GAP` (1 before the large-frame release fix), and the 31 type fixtures also measure 0:
+macOS arm64 at the same head measures the same 765 programs (25 not measured, 0 failures) with 0 `CFI_GAP` (1 before the large-frame release fix), and the 31 type fixtures also measure 0. Every head object is byte-and-relocation identical across its two builds there too:
 
 | | trunk | head | head `-g` |
 |---|---|---|---|
-| total | 510,659 | 644,044 (+26.1%) | 927,868 (+81.7%) |
+| total | 515,502 | 650,821 (+26.2%) | 937,078 (+81.8%) |
 
 ### Explicit presentation and fidelity gaps
 
@@ -149,7 +149,7 @@ This is what wolf emits, as observed in the census dumps. The line-table header'
 | Coverage | one function may have several FDE ranges. A range a debugger finds no FDE for needs its fallback; never extend the preceding rule over it |
 | Presentation | LLDB under this C compile unit does not present variant parts. sniff renders the active variant itself from the DWARF; it must not imitate LLDB's empty presentation |
 
-The fixtures' dwarfdump digests at `bd3f3650` are in `notes/s283-evidence/linux/fixture-digests-bd3f3650.txt` (LLVM 21.1.8, ELF) and `notes/s283-evidence/macos/fixture-digests-bd3f3650.txt` (the SDK's Apple LLVM 21.0.0, Mach-O); the final census adds its own beside them: `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
+The fixtures' dwarfdump digests from the final census are in `notes/s283-evidence/linux/fixture-digests-final.txt` (LLVM 21.1.8, ELF) and `notes/s283-evidence/macos/fixture-digests-final.txt` (the SDK's Apple LLVM 21.0.0, Mach-O): `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
 
 ### Rulings
 
@@ -167,7 +167,6 @@ The fixtures' dwarfdump digests at `bd3f3650` are in `notes/s283-evidence/linux/
 
 ### Final records (pending the rebase)
 
-- The final census (Linux corpus and fixtures; macOS corpus and fixtures) with zero `CFI_GAP`, its totals, and the fixture digests.
 - The full `cargo xtask ci` gauntlet at the final head; its `corpus`, `conformance` and `differ-self` steps are the differential and corpus records.
 - One final-head plant: one file, one hunk, the variant discriminant's member offset moved from 0 to 8, red by name at the macOS byte row `dwarf-v1-payload-enum-bytes`.
 
@@ -182,6 +181,7 @@ The fixtures' dwarfdump digests at `bd3f3650` are in `notes/s283-evidence/linux/
 - [x] Anchor regeneration checked in both directions (724 keys; none added, removed or re-owned).
 - [x] Map at its 88-byte header with its tie row, red first (`c98ae671`) and green (`ee24eddd`) on `b35e87b3`.
 - [x] The final rebase onto `275f9904`, clean.
-- [ ] The final census, digests and determinism; the macOS retake; the full gauntlet.
+- [x] The final census, digests and determinism on both platforms (`79a7052a`).
+- [ ] The full gauntlet at the final head (the record is in the PR body).
 - [ ] The final-head discriminant-offset plant and its record.
 - [ ] Final head pushed, PR opened with this note, run id read once, one lane audit.
