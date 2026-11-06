@@ -4,7 +4,8 @@
 Run under the lane's Linux memory/CPU cap. Build the inspector with:
   cargo build -p wolf_driver --example dwarf_sections
 The output records every selection, refusal, digest and determinism comparison.
-A missing measurement is never a pass. A head-only compile failure is a failure.
+A missing measurement is never a pass. A head-only compile failure is a failure,
+and so is any CFI_GAP the -g compiles report.
 """
 import argparse
 import hashlib
@@ -117,6 +118,12 @@ def inspect(tool, first, directory, cwd, timeout, second=None):
     return json.loads(out.read_text())
 
 
+def failed(manifest):
+    # An uncovered return range is never a measurement to report past: the
+    # producer's CFI-gap count must be zero (R-s283-3), like its failures.
+    return bool(manifest["failures"] or manifest["cfi_gap_count"] or manifest["measured"] == 0)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wolf", type=Path, required=True)
@@ -226,7 +233,7 @@ def main():
             manifest["paired_head_g_bytes"] += totals["head-g-a"]
             manifest["cfi_gap_count"] += len(attempts["head-g-a"]["cfi_gaps"])
             for gap in attempts["head-g-a"]["cfi_gaps"]:
-                print(f"KNOWN-GAP cfi-teardown source={relative} {gap}", flush=True)
+                print(f"FAIL dwarf-census-cfi-gap source={relative} {gap}", flush=True)
             print(f"PASS dwarf-census {relative} baseline={totals['baseline']} head={totals['head-a']} head-g={totals['head-g-a']}", flush=True)
         except (OSError, ValueError, json.JSONDecodeError) as error:
             row["status"] = "failed"
@@ -239,7 +246,7 @@ def main():
                     obj.unlink(missing_ok=True)
             record_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps({k: v for k, v in manifest.items() if k not in ("cases", "tools")}, sort_keys=True), flush=True)
-    if manifest["failures"] or manifest["measured"] == 0:
+    if failed(manifest):
         raise SystemExit(1)
 
 
