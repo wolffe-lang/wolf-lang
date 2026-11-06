@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 350..360 path=kinds
+UseDecl 360..375 path=kinds.Kind
+FnDecl 376..480 name=main body=Block

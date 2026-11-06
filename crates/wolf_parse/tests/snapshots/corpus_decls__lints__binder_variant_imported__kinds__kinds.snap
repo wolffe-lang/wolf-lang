@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 127..166 name=Kind pub variants=3
+FnDecl 200..328 name=name pub body=Block
