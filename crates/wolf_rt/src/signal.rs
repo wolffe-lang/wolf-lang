@@ -1921,15 +1921,13 @@ mod sys {
     #[cfg(test)]
     pub(super) mod hook {
         use super::{
-            POLL_SHORT, READER_GONE, READER_HELD, READER_LOOPING, READER_POLLING, READER_STATE,
-            errno_slot,
+            POLL_SHORT, READER_GONE, READER_HELD, READER_LOOPING, READER_STATE, errno_slot,
         };
         use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering};
 
         pub const GONE: u8 = READER_GONE;
         pub const HELD: u8 = READER_HELD;
         pub const LOOPING: u8 = READER_LOOPING;
-        pub const POLLING: u8 = READER_POLLING;
         /// The poll failure this host's poll(2) names a moment's shortage.
         pub const SHORT: libc::c_int = POLL_SHORT;
         /// The errno every park for a fork's hold leaves (0: none).
