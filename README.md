@@ -42,11 +42,11 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-The current release is v0.2.37, under the codename wolfgang. See the
-[0.2.37 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.37.md)
-for descriptor-relative filesystem calls, OS records, signal-drain
-recovery, compiler corrections and the paired interpreter's unsupported
-cells.
+The current release is v0.2.38, under the codename wolfgang. See the
+[0.2.38 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.38.md)
+for source types and call frames in a debugger, nested variant patterns,
+the binder warning, the hashed Map, the fork-and-drain fix, the paired
+interpreter's argument change and its unsupported cells.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -117,7 +117,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.37 by campaign, and
+tells the history of v0.2.38 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 
