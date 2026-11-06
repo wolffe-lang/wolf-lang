@@ -1,0 +1,25 @@
+---
+source: crates/wolf_sema/tests/binder_diagnostics.rs
+expression: "render(&[(&[], \"main.lu\", src)])"
+---
+warning[W0801]: `Gratuity` binds a new name here — it does not test the variant `Kind.Gratuity`
+ --> mem:///main.lu:8:27
+  |
+1 | enum Kind { Drink, Food, Gratuity }
+  |                          -------- `Gratuity` is declared here, in `Kind`
+...
+8 |     let a = pick(0) else |Gratuity| 7
+  |                           ^^^^^^^^ a binding, not a test
+  |
+  = note: a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a bare name
+    there is a new binding even when it spells a variant. To test the value, `match` on it
+    (`Kind.Gratuity => …`); to keep the binding, give it a lowercase name so it reads as
+    one.
+help: bind it under a lowercase name: `gratuity`
+  |
+8 |     let a = pick(0) else |gratuity| 7
+  |
+help: test the variant instead: `Kind.Gratuity`
+  |
+8 |     let a = pick(0) else |Kind.Gratuity| 7
+  |

@@ -1,0 +1,27 @@
+---
+source: crates/wolf_sema/tests/binder_diagnostics.rs
+expression: "render(&[(&[], \"main.lu\",\n\"use kinds.Kind\\n\\nfn main() -> !int {\\n    let (Food, n) = (Kind.Drink, 3)\\n    \\\n                 match Food {\\n        Kind.Drink => n - 3,\\n        _ => 1,\\n    }\\n}\\n\",),\n(&[\"kinds\"], \"kinds.lu\",\n\"/// The kinds.\\npub enum Kind { Drink, Food }\\n\\n/// One more export.\\n\\\n                 pub fn none() -> int {\\n    0\\n}\\n\",),])"
+---
+warning[W0801]: `Food` binds a new name here — it does not test the variant `Kind.Food`
+ --> mem:///main.lu:4:10
+  |
+4 |     let (Food, n) = (Kind.Drink, 3)
+  |          ^^^^ a binding, not a test
+  |
+ ::: mem://kinds/kinds.lu:2:24
+  |
+2 | pub enum Kind { Drink, Food }
+  |                        ---- `Food` is declared here, in `Kind`
+  |
+  = note: a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a bare name
+    there is a new binding even when it spells a variant. To test the value, `match` on it
+    (`Kind.Food => …`); to keep the binding, give it a lowercase name so it reads as one.
+help: bind it under a lowercase name: `food`
+  |
+4 |     let (food, n) = (Kind.Drink, 3)
+5 |     match food {
+  |
+help: test the variant instead: `Kind.Food`
+  |
+4 |     let (Kind.Food, n) = (Kind.Drink, 3)
+  |
