@@ -29,8 +29,11 @@
 //!   moved), as s272's container rows are.
 //!
 //! **lupin 0.1.58 and 0.1.59** predate every new name: each is pinned
-//! here by version, exactly as measured; a newer lupin is held to the
-//! mirror (tracked in wolf-interp issue 321).
+//! here by version, exactly as measured. **lupin 0.1.60** serves bit 32
+//! and `fs_set_mode_fd`, and resolves the nine directory-relative calls,
+//! checks their shapes and declines each by name; those rows are pinned by
+//! version, as measured. A newer lupin is held to the mirror (tracked in
+//! wolf-interp issue 321).
 
 mod lane_exit;
 
@@ -62,6 +65,22 @@ fn fail_row(row: &str, why: &str) -> String {
 /// The pairing at this lane, which predates the mirror of the ten names:
 /// its measured answers are pinned per row.
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
+
+/// r43: the releases that resolve the directory-relative calls, check their
+/// shapes and decline each by name (wolf-interp#321 still open), measured on
+/// the 0.1.60 candidate at its release head `17bd522`.
+const DECLINED_LUPIN: &[&str] = &["0.1.60"];
+
+/// The call a declining release names first on each corpus row it declines.
+fn declined_call(name: &str) -> Option<&'static str> {
+    match name {
+        "at_rows.lu" => Some("fs_remove_at"),
+        "mkdir_at.lu" => Some("fs_create_dir_at"),
+        "symlink_at.lu" => Some("fs_symlink_at"),
+        "link_at.lu" => Some("fs_link_at"),
+        _ => None,
+    }
+}
 
 /// The pairing on the unix fixtures, measured on nomad: their first call is
 /// an open with bits 32 and 16, a mode outside 0.1.58's set, so `main`
@@ -266,7 +285,23 @@ fn lupin_leg(entry: &Path, dir: &Path, pre: Pre<'_>, want: Option<&str>) {
         ),
         _ => pre,
     };
-    if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) {
+    let declined = DECLINED_LUPIN
+        .contains(&obs.version.as_str())
+        .then(|| declined_call(&name))
+        .flatten();
+    if let Some(call) = declined {
+        assert_eq!(
+            obs.verdict, "unsupported",
+            "lupin {} declines {name} by name: {obs:?}",
+            obs.version
+        );
+        assert!(
+            obs.reason.contains(&format!("`{call}`")) && !obs.reason.contains("does not resolve"),
+            "lupin {} resolves {call} in {name} and declines it by name: {}",
+            obs.version,
+            obs.reason
+        );
+    } else if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) {
         match pre {
             Pre::Unresolved(calls) => {
                 assert_eq!(
