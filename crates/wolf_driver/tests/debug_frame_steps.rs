@@ -54,6 +54,27 @@ fn row(name: &str, body: impl FnOnce() -> Check<()>) {
 
 /// Files, rather than pipes, prevent full stdout/stderr pipes from deadlocking
 /// the watchdog. No shell or process-group signalling is involved.
+/// `LLVM_DWARFDUMP`, else the SDK's dwarfdump on macOS, else llvm-dwarfdump.
+fn dump_tool(dir: &Path) -> String {
+    if let Ok(path) = std::env::var("LLVM_DWARFDUMP") {
+        return path;
+    }
+    if cfg!(target_os = "macos")
+        && let Ok((status, _)) = run(
+            Command::new("xcrun").args(["--find", "dwarfdump"]),
+            dir,
+            "sdk-dwarfdump",
+            30,
+        )
+        && status.success()
+        && let Ok(path) = fs::read_to_string(dir.join("sdk-dwarfdump.stdout.txt"))
+        && !path.trim().is_empty()
+    {
+        return path.trim().to_owned();
+    }
+    "llvm-dwarfdump".into()
+}
+
 fn run(cmd: &mut Command, dir: &Path, label: &str, seconds: u64) -> Check<(ExitStatus, String)> {
     let stdout = dir.join(format!("{label}.stdout.txt"));
     let stderr = dir.join(format!("{label}.stderr.txt"));
@@ -314,7 +335,7 @@ fn ledger(fixture: &Fixture, row: &str) -> Check<bool> {
     {
         return Err(".debug_frame is allocated".into());
     }
-    let dump = std::env::var("LLVM_DWARFDUMP").unwrap_or_else(|_| "llvm-dwarfdump".into());
+    let dump = dump_tool(&fixture.dir);
     if !tool(&dump, &fixture.dir)? {
         oracle_gate::absent(
             row,
