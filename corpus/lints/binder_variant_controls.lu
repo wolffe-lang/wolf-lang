@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="food 3\n5 3\n8\n5")
+//! phase: run
+//! conforms: gram.pat, gram.item.fn, gram.expr.closure
+//!
+//! The boundary of the binder warning (W0801), warning-clean: a lowercase
+//! binder, a capitalized binder that spells no variant, and a function and
+//! a closure parameter named like a variant. A parameter is a name, never a
+//! pattern, so nothing there can read as a test.
+
+enum Kind { Drink, Food, Gratuity }
+
+fn name(k: Kind) -> str {
+    match k {
+        Drink => "drink",
+        Food => "food",
+        Gratuity => "tip",
+    }
+}
+
+fn twice(Drink: int) -> int {
+    Drink * 2
+}
+
+fn main() -> !int {
+    let (drink, n) = (Kind.Food, 3)
+    print("{name(drink)} {n}")
+    let (Zed, m) = (5, 3)
+    print("{Zed} {m}")
+    print("{twice(4)}")
+    let g = fn(Drink: int) Drink + 1
+    print("{g(4)}")
+    0
+}
