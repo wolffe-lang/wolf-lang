@@ -208,11 +208,15 @@ fn lupin_or_skip() -> Option<PathBuf> {
 /// outside its set (`invalid`, measured at s254's prediction commit), so it
 /// runs the program and its first row reads `invalid`.
 fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
+    let measured: &[(&str, &[&str])] = match version {
+        "0.1.59" => MEASURED_059,
+        "0.1.60" => MEASURED_060,
+        _ => &[],
+    };
     PRE_MIRROR_LUPIN.contains(&version)
-        || (version == "0.1.59"
-            && MEASURED_059
-                .iter()
-                .any(|&(row, pinned)| row == name && pinned == calls))
+        || measured
+            .iter()
+            .any(|&(row, pinned)| row == name && pinned == calls)
 }
 
 /// Published 0.1.59 mirrors only `fs_access` of s254's names
@@ -221,6 +225,19 @@ fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
 const MEASURED_059: &[(&str, &[&str])] = &[
     ("nofollow_rows.lu", &[]),
     ("fstat_record_rows.lu", &["fs_fstat_record"]),
+    ("lock_rows.lu", LOCK_CALLS),
+    ("fifo_rows.lu", FIFO_CALLS),
+    ("nonblock_rows.lu", NONBLOCK_CALLS),
+    ("clip_write.lu", CLIP_CALLS),
+];
+
+/// r43: the 0.1.60 candidate at its release head `17bd522` mirrors the
+/// no-follow composition and the full held-file record (wolf-interp#333), so
+/// those two rows are held to the compiler; the four container rows still
+/// answer "does not resolve" at `fs_lock`, `fs_mkfifo` and
+/// `fs_set_nonblock`, measured directly on their fixtures (a rig without a
+/// nested engine skips the rows themselves, and a skip measures nothing).
+const MEASURED_060: &[(&str, &[&str])] = &[
     ("lock_rows.lu", LOCK_CALLS),
     ("fifo_rows.lu", FIFO_CALLS),
     ("nonblock_rows.lu", NONBLOCK_CALLS),
@@ -255,6 +272,24 @@ fn published_059_keeps_the_six_measured_fs_gap_cells() {
     ] {
         assert!(measured_pre_mirror("0.1.59", name, calls), "{name}");
         assert!(!measured_pre_mirror("0.1.59+dev", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.61", name, calls), "{name}");
+    }
+    // r43: 0.1.60 keeps exactly the four container cells.
+    for (name, calls) in [
+        ("lock_rows.lu", LOCK_CALLS),
+        ("fifo_rows.lu", FIFO_CALLS),
+        ("nonblock_rows.lu", NONBLOCK_CALLS),
+        ("clip_write.lu", CLIP_CALLS),
+    ] {
+        assert!(measured_pre_mirror("0.1.60", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.60+dev", name, calls), "{name}");
+    }
+    for (name, calls) in [
+        ("nofollow_rows.lu", &[][..]),
+        ("fstat_record_rows.lu", &["fs_fstat_record"][..]),
+        ("access_rows.lu", &["fs_access"][..]),
+        ("lock_rows.lu", &[][..]),
+    ] {
         assert!(!measured_pre_mirror("0.1.60", name, calls), "{name}");
     }
     for (name, calls) in [
