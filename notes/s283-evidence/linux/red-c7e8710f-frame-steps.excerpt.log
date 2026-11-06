@@ -1,0 +1,12 @@
+WAIT s283 steps-red block=A head=c7e8710f 2026-11-05T20:14:08Z
+START steps-red-tools 2026-11-05T20:34:02Z
+END steps-red-tools exit=0
+END steps-red-build exit=0
+test debugger_backtrace_at_every_instruction ... FAIL dwarf-frame-three-frames
+FAIL dwarf-frame-instruction-steps
+FAILED
+test dwarf_frame_ranges_and_verifier ... FAIL dwarf-frame-wolf-fde-ranges
+FAILED
+test frame_transcript_validation_is_fail_closed ... PASS dwarf-frame-transcript-validation
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.53s
+END steps-red-debug-v1 exit=101
