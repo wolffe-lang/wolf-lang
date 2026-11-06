@@ -362,10 +362,10 @@ trains them to write, and there is nothing to handle. Give it the
 absence row if it can miss; name it after what it computes if it
 cannot.
 
-## W0801 — a capitalized name in this pattern binds instead of matching
+## W0801 — a bare name in this pattern binds instead of matching
 
-A capitalized name in pattern position reads as a variant or tag
-test, and in two places it is a binding instead.
+A bare name in pattern position can read as a variant or tag test,
+and in two places it is a binding instead.
 
 In a `match` arm whose scrutinee has no cases for the name to test,
 the bare identifier binds a fresh name — the arm matches every value,
@@ -378,12 +378,15 @@ In a binder position — a `let` or `var` pattern, a `for` header, an
 `else |…|` handler — the pattern binds every value it meets, so a
 bare name there is always a new binding, even when it spells a
 variant of an enum in scope (one the module declares, or one the file
-imports by item): `let (Drink, n) = pair` binds `Drink` to whatever
-the first element holds. The warning names the variant and offers two
-fixes. A lowercase name keeps the binding the program already has,
-with every use renamed, and it is the one `wolf fix` applies. The
-qualified variant `Kind.Drink` makes the test the name looked like,
-which a binder refuses (E0806), so the test moves into a `match`.
+imports by item), in either letter case: `let (Drink, n) = pair`
+binds `Drink` to whatever the first element holds, as `let (fast, n)`
+does over `enum Mode { fast, slow }`. The warning names the variant
+and offers two fixes. Another name keeps the binding the program
+already has, with every use renamed, and it is the one `wolf fix`
+applies: the snake-case spelling, or that spelling with a trailing
+`_` when it is taken (`fast_`). The qualified variant `Kind.Drink`
+makes the test the name looked like, which a binder refuses (E0806),
+so the test moves into a `match`.
 
 ## W1001 — this region never allocates
 
