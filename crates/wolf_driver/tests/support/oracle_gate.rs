@@ -7,36 +7,47 @@
 /// Report that `row` cannot be measured on this host because of `reason`.
 /// `Ok` means the row was skipped; `Err` means the host required it.
 pub fn absent(row: &str, reason: &str) -> Result<(), String> {
-    absent_when(
-        std::env::var_os("WOLF_DWARF_REQUIRE").is_some(),
-        row,
-        reason,
-    )
+    let required = std::env::var_os("WOLF_DWARF_REQUIRE").is_some();
+    match verdict(required, row, reason) {
+        Ok(skip) => {
+            eprintln!("{skip}");
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("FAIL {row}");
+            Err(error)
+        }
+    }
 }
 
-fn absent_when(required: bool, row: &str, reason: &str) -> Result<(), String> {
+/// The SKIP line to print, or the failure when the host requires the tool.
+fn verdict(required: bool, row: &str, reason: &str) -> Result<String, String> {
     // The recorder reads one SKIP line per row; keep the reason on one line.
     let reason = reason.split_whitespace().collect::<Vec<_>>().join(" ");
     if required {
-        eprintln!("FAIL {row}");
         return Err(format!("{row}: WOLF_DWARF_REQUIRE is set and {reason}"));
     }
-    eprintln!("SKIP {row} reason={reason}");
-    Ok(())
+    Ok(format!("SKIP {row} reason={reason}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::absent_when;
+    use super::verdict;
 
     #[test]
     fn a_required_tool_absence_fails_by_name() {
-        let error = absent_when(true, "dwarf-v1-row", "the tool is missing").unwrap_err();
-        assert!(error.starts_with("dwarf-v1-row: WOLF_DWARF_REQUIRE is set"));
+        let error = verdict(true, "a-row", "the tool is missing").unwrap_err();
+        assert_eq!(
+            error,
+            "a-row: WOLF_DWARF_REQUIRE is set and the tool is missing"
+        );
     }
 
     #[test]
-    fn an_unrequired_absence_skips() {
-        assert_eq!(absent_when(false, "dwarf-v1-row", "two\nlines"), Ok(()));
+    fn an_unrequired_absence_is_one_skip_line() {
+        assert_eq!(
+            verdict(false, "a-row", "two\nlines"),
+            Ok("SKIP a-row reason=two lines".to_owned())
+        );
     }
 }
