@@ -82,17 +82,17 @@ A fixed frame keeps SP there until the return sequence. Each restore is then che
 
 ### Census and determinism
 
-These numbers are measured at the development head; the final census is pending. `ci/dwarf-census.py` covers every positive corpus entry (781 candidates, `//! check: run(`) and the 31 type fixtures. It compiles each to objects five times: trunk once, then the head twice without `-g` and twice with it.
+These numbers are measured at `16f3778b`, after the teardown fix; the final census at the rebased head is pending. `ci/dwarf-census.py` covers every positive corpus entry (781 candidates, `//! check: run(`) and the 31 type fixtures. It compiles each to objects five times: trunk once, then the head twice without `-g` and twice with it.
 
 | Section | trunk | head | head `-g` |
 |---|---|---|---|
 | `.debug_info` | 188,382 | 296,252 | 312,355 |
 | `.debug_abbrev` | 47,555 | 69,250 | 79,078 |
 | `.debug_line` | 200,491 | 201,431 | 204,548 |
-| `.debug_frame` | — | — | 225,920 |
-| total | 436,428 | 566,933 (+29.9%) | 821,901 (+88.3%) |
+| `.debug_frame` | — | — | 222,600 |
+| total | 436,428 | 566,933 (+29.9%) | 818,581 (+87.6%) |
 
-That table is Linux x86-64 at `c78972fd`: 756 programs measured, 25 not measured, 0 failures. Every head object, with and without `-g`, was byte-and-relocation identical across its two builds (789 objects each). The 25 not measured are inputs that trunk refuses too when staged standalone; each is named in the census JSON. The largest growth was `memory/read_lend_frame.lu`, from 800 to 5,767 bytes, which is type information for its lent aggregates.
+That table is Linux x86-64: 756 programs measured, 25 not measured, 0 failures, and 0 `CFI_GAP` (2145 at `c78972fd`, before the fix). The 31 type fixtures also measure 0 gaps (22 before). Every head object, with and without `-g`, was byte-and-relocation identical across its two builds (789 objects each). The 25 not measured are inputs that trunk refuses too when staged standalone; each is named in the census JSON. The largest growth was `memory/read_lend_frame.lu`, from 800 to 5,767 bytes, which is type information for its lent aggregates.
 
 ### Explicit presentation and fidelity gaps
 
@@ -122,11 +122,11 @@ This is what wolf emits, as observed in the census dumps. The line-table header'
 | Variants | a structure owns a `variant_part` whose `discr` refers to its discriminant member. Each `variant`'s `discr_value` selects its payload members; a variant without one is the default. Interpret only the active view |
 | CFI | CIE and FDEs in `.debug_frame` only, never `.eh_frame`: CIE version 1, absolute initial addresses and CIE offsets. Observed: `DW_CFA_def_cfa`, `offset`, `same_value`, `advance_loc`, `advance_loc1`, `advance_loc2`, `nop`. The variadic entry's own encoder also writes `def_cfa_offset`, `def_cfa_register` and `restore` (the frame-step rows exercise them; no corpus program exports a variadic function). The writer can also emit `val_offset` (a register held at a CFA offset) and `negate_ra_state` (signed arm64 return addresses); no input here exercised either |
 | Registers | x86-64: RSP 7, RBP 6, return address 16. arm64: SP 31, FP 29, LR 30. These are 64-bit values even where a dump spells them WSP, W29 or W30 |
-| Line programs | observed in the type fixtures: `DW_LNS_copy`, `advance_pc`, `set_column`, `negate_stmt`, `const_add_pc`, `set_prologue_end`, `DW_LNE_set_address`, `end_sequence`, and special opcodes. A reader still needs every standard opcode the header declares |
+| Line programs | observed in the corpus: `DW_LNS_copy`, `advance_pc`, `advance_line`, `set_file`, `set_column`, `negate_stmt`, `const_add_pc`, `set_prologue_end`, `DW_LNE_set_address`, `end_sequence`, and special opcodes. A reader still needs every standard opcode the header declares |
 | Coverage | one function may have several FDE ranges. A range a debugger finds no FDE for needs its fallback; never extend the preceding rule over it |
 | Presentation | LLDB under this C compile unit does not present variant parts. sniff renders the active variant itself from the DWARF; it must not imitate LLDB's empty presentation |
 
-The fixtures' dwarfdump digests are listed in `notes/s283-evidence/fixture-digests.txt`, produced by the final census: `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
+The fixtures' dwarfdump digests at `16f3778b` are in `notes/s283-evidence/linux/fixture-digests-16f3778b.txt` (the final census adds its own beside them): `llvm-dwarfdump --verbose --debug-info --debug-abbrev --debug-line --debug-frame object.o`, run in each object's directory. Each digest also covers the compile directory and entry path the objects record.
 
 ### Rulings
 
@@ -153,7 +153,7 @@ The fixtures' dwarfdump digests are listed in `notes/s283-evidence/fixture-diges
 - [x] Prediction committed before implementation; the clean-room sources are kept.
 - [x] Source types and aggregate and split debug locations implemented.
 - [x] Debug-only CFI, fail-closed return-sequence coverage, and instruction-level witnesses.
-- [ ] The return-sequence count row at zero on x86-64 across the census (the fix-head census).
+- [x] The return-sequence count row at zero on x86-64: 0 `CFI_GAP` across the corpus and the fixtures at `16f3778b` (2145 and 22 before).
 - [x] Named LLDB and recursive gaps kept separate from value passes.
 - [x] lupin 0.1.59 values paired; scalar encodings and runtime-layout ties checked on Linux and macOS.
 - [x] Anchor regeneration checked in both directions (724 keys; none added, removed or re-owned).
