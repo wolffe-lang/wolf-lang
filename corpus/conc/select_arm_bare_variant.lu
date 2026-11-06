@@ -1,0 +1,23 @@
+//! check: fail(E0806)
+//! phase: parse
+//! conforms: conc.select.ready, gram.expr.conc, gram.pat
+//!
+//! A `select` arm's pattern receives whatever its channel delivers: a
+//! committed receive cannot fail to match, so the pattern only binds. A
+//! capitalized bare name there that spells a variant of an enum in scope
+//! reads as a test it cannot be, and it is refused by name (E0806) at the
+//! name, which is the variant `Kind.Drink`. Receive into a name and test it
+//! in the arm's body instead.
+
+enum Kind { Drink, Food, Gratuity }
+
+fn main() -> !int {
+    let ch = channel[Kind](1)
+    ch.send(Kind.Food)?
+    var got = 0
+    select {
+        Drink from ch => { got = 1 },
+        timeout(1.s) => { got = 2 },
+    }
+    if got == 1 { 0 } else { 1 }
+}

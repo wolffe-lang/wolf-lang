@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="food")
+//! phase: run
+//! conforms: conc.select.ready, gram.expr.conc
+//!
+//! The control for the `select` arm's refusal: a lowercase name receives
+//! the value and binds it, and the body tests it.
+
+enum Kind { Drink, Food, Gratuity }
+
+fn main() -> !int {
+    let ch = channel[Kind](1)
+    ch.send(Kind.Food)?
+    var got = ""
+    select {
+        drink from ch => {
+            got = match drink {
+                Kind.Drink => "drink",
+                Kind.Food => "food",
+                Kind.Gratuity => "tip",
+            }
+        },
+        timeout(1.s) => { got = "timeout" },
+    }
+    print(got)
+    0
+}
