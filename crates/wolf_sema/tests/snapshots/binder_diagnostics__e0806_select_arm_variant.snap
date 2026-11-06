@@ -14,7 +14,7 @@ error[E0806]: `Drink` is the variant `Kind.Drink`, and a `select` arm cannot tes
   = note: a committed receive takes whatever its channel delivers, so a `select` arm's pattern
     only binds. Receive into a name and test it in the arm's body: `drink from ch => match
     drink { Kind.Drink => …, _ => … }`.
-help: bind it under a lowercase name: `drink`
+help: bind it under another name: `drink`
   |
 8 |         drink from ch => { got = 1 },
   |
