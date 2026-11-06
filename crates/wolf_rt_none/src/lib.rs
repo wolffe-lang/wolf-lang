@@ -52,6 +52,12 @@
 // written against the HOSTED crate, and `clippy --all-targets` compiles
 // the lib-test target even with `test = false`. This crate's tests are
 // `tests/*.rs`, which link the ordinary build.
+// The container files publish their header layouts as data-only constants
+// (the compiler's debug rows read the hosted ones); the same text is shared.
+#[cfg(not(test))]
+#[doc(hidden)]
+#[path = "../../wolf_rt/src/debug_layout.rs"]
+pub mod debug_layout;
 #[cfg(not(test))]
 #[allow(dead_code)]
 #[path = "../../wolf_rt/src/list.rs"]
