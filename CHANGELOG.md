@@ -1,6 +1,50 @@
 # Changelog
 
-## Unreleased
+## 0.2.38 — 2026-11-06
+
+Pairs with **lupin 0.1.60**, conformance pin
+`5f1f1c949582f53121e4047bc83c86f23ff72240`, and bundles **wolf-std
+`d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61`**: the public-PKI TLS
+client (RSA, RSA-PSS and P-384 verification, path building to a root
+set), Ed25519 `verify_strict`, and a `map.get` that returns an
+independent copy. See [the release note](docs/releases/0.2.38.md).
+
+s283 — DWARF v1: source types and debug-only call frames
+([PR 1052](https://github.com/wolffe-lang/wolf-lang/pull/1052)).
+
+- **The debug tier describes wolf's source types to a debugger.**
+  Structures, tuples, `str`, `List[T]` and `Map[K, V]` (as their runtime
+  headers, sizes and offsets taken from the runtime's own layout),
+  payload-free enums, payload enums, error unions and optionals get DWARF
+  type entries, and aggregate bindings are spilled where a debugger can
+  read them. gdb on Linux x86-64 and lldb on macOS arm64 print each
+  type's value. The compile unit stays `DW_LANG_C11` for debugger
+  compatibility.
+- **An explicit `-g` also writes non-allocated `.debug_frame`**, so a
+  debugger can unwind every instruction of every wolf function, return
+  sequences included, without relying on frame pointers (which stay on).
+  `[abi.native.nounwind]` now permits this section and still forbids
+  runtime unwinding. A return sequence the compiler cannot prove is
+  reported as `CFI_GAP` and left out of the frame's coverage, never
+  described with a guessed rule.
+  The corpus census at the merge measures 765 programs with no `CFI_GAP`
+  on Linux x86-64 or macOS arm64.
+- Not in this release: runtime unwinding, location lists, inlined frames,
+  a dynamic-count array type and release-tier DWARF (`--release` still
+  refuses `-g`).
+
+s281 — a bare variant nested in a payload pattern tests its variant
+(#1043, [PR 1046](https://github.com/wolffe-lang/wolf-lang/pull/1046)).
+
+- **`K(Drink)` over `enum W { K(Kind) }` matches only a `K` that carries
+  `Kind.Drink`** (`[gram.pat]`, `[gram.pat.nullary]`). The native and
+  release tiers bound every bare name in a payload slot as a new name, so
+  the arm took every `K`, while the checker, the checked machine and lupin
+  read it as the test. The classifier now asks the slot's type, as it
+  already did inside a tuple or a struct field: a bare name that spells
+  one of its cases is a tag test, in either slot of a multi-field payload,
+  under a guard, and in a row arm over a fallible value (`Bad(Drink) =>`).
+  A bare name that spells none of the slot's cases still binds it.
 
 s282 — variant names in binder positions.
 
