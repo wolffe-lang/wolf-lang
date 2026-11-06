@@ -28,7 +28,32 @@ export fn s283_variadic(n: i32, ...) -> i64 {
 fn middle(a: int) -> int { unsafe { s283_variadic(1 as i32, a as i64) as int } }
 fn main() -> int { middle(3) - 4 }
 "#;
+// `middle` keeps values live across its calls in callee-saved registers, so
+// its return sequence restores them SP-relative before `mov rsp, rbp` on x86-64.
+const PRESSURE_SOURCE: &str = "fn inspect(a: int) -> int { a ^ 7 }\nfn middle(a: int) -> int {\n    let p = inspect(a)\n    let q = inspect(p + 1)\n    let r = inspect(q + 2)\n    p * 3 + q * 5 + r * 7 + a\n}\nfn main() -> int { middle(3) - 46 }\n";
 const LIMIT: usize = 2048;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Shape {
+    Chain,
+    Pressure,
+    Variadic,
+    VariadicFloat,
+}
+
+impl Shape {
+    fn variadic(self) -> bool {
+        matches!(self, Self::Variadic | Self::VariadicFloat)
+    }
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Chain => "chain",
+            Self::Pressure => "pressure",
+            Self::Variadic => "variadic",
+            Self::VariadicFloat => "variadic-float",
+        }
+    }
+}
 
 fn supported(row: &str) -> bool {
     if cfg!(any(
@@ -170,22 +195,22 @@ struct Fixture {
     symbols: Vec<Symbol>,
 }
 
-fn fixture(name: &str, variadic: bool, vector_args: bool) -> Check<Fixture> {
+fn fixture(name: &str, shape: Shape) -> Check<Fixture> {
+    let variadic = shape.variadic();
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("debug_frame_steps_{name}"));
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let source = dir.join("probe.lu");
     let exe = dir.join("probe");
-    let body = if vector_args {
+    let body = match shape {
         // An extra, deliberately unread double sets AL=1 and executes all
         // guarded XMM saves. The core still consumes its one declared i64.
-        VARIADIC_SOURCE.replace(
+        Shape::VariadicFloat => VARIADIC_SOURCE.replace(
             "s283_variadic(1 as i32, a as i64)",
             "s283_variadic(1 as i32, a as i64, 1.25)",
-        )
-    } else if variadic {
-        VARIADIC_SOURCE.to_owned()
-    } else {
-        SOURCE.to_owned()
+        ),
+        Shape::Variadic => VARIADIC_SOURCE.to_owned(),
+        Shape::Pressure => PRESSURE_SOURCE.to_owned(),
+        Shape::Chain => SOURCE.to_owned(),
     };
     fs::write(&source, body).map_err(|e| e.to_string())?;
     let (status, text) = run(
@@ -425,7 +450,7 @@ fn dwarf_frame_ranges_and_verifier() {
     if supported(ROW) {
         report(
             ROW,
-            fixture("ledger", false, false).and_then(|f| ledger(&f, ROW)),
+            fixture("ledger", Shape::Chain).and_then(|f| ledger(&f, ROW)),
         );
     }
 }
@@ -436,7 +461,7 @@ fn dwarf_frame_variadic_ranges_and_verifier() {
     if variadic_host(ROW) {
         report(
             ROW,
-            fixture("variadic-ledger", true, false).and_then(|f| ledger(&f, ROW)),
+            fixture("variadic-ledger", Shape::Variadic).and_then(|f| ledger(&f, ROW)),
         );
     }
 }
@@ -759,13 +784,9 @@ fn debugger_trace(fixture: &Fixture, root: &str, row: &str) -> Check<Option<Stri
     Ok(Some(records))
 }
 
-fn run_case(root: &str, variadic: bool, name: &str, required: &[&str]) {
-    run_case_inner(root, variadic, false, name, required);
-}
-
-fn run_case_inner(root: &str, variadic: bool, vector_args: bool, name: &str, required: &[&str]) {
-    let leaf = root == "inspect";
-    if !(if variadic {
+fn run_case(root: &str, shape: Shape, name: &str, required: &[&str]) {
+    let leaf = root == "inspect" && shape == Shape::Chain;
+    if !(if shape.variadic() {
         variadic_host(name)
     } else {
         supported(name)
@@ -776,20 +797,7 @@ fn run_case_inner(root: &str, variadic: bool, vector_args: bool, name: &str, req
         return;
     }
     let result = (|| -> Check<bool> {
-        let fixture = fixture(
-            &format!(
-                "{}-{root}",
-                if vector_args {
-                    "variadic-float"
-                } else if variadic {
-                    "variadic"
-                } else {
-                    "chain"
-                }
-            ),
-            variadic,
-            vector_args,
-        )?;
+        let fixture = fixture(&format!("{}-{root}", shape.prefix()), shape)?;
         let Some(trace) = debugger_trace(&fixture, root, name)? else {
             return Ok(false);
         };
@@ -813,7 +821,7 @@ fn run_case_inner(root: &str, variadic: bool, vector_args: bool, name: &str, req
 fn debugger_backtrace_at_every_instruction() {
     run_case(
         "inspect",
-        false,
+        Shape::Chain,
         "dwarf-frame-instruction-steps",
         &["inspect"],
     );
@@ -822,7 +830,7 @@ fn debugger_backtrace_at_every_instruction() {
 fn debugger_middle_at_every_instruction() {
     run_case(
         "middle",
-        false,
+        Shape::Chain,
         "dwarf-frame-middle-steps",
         &["middle", "inspect"],
     );
@@ -831,7 +839,7 @@ fn debugger_middle_at_every_instruction() {
 fn debugger_wolf_main_at_every_instruction() {
     run_case(
         "wolf-main",
-        false,
+        Shape::Chain,
         "dwarf-frame-wolf-main-steps",
         &["wolf-main", "middle", "inspect"],
     );
@@ -840,16 +848,64 @@ fn debugger_wolf_main_at_every_instruction() {
 fn debugger_main_shim_at_every_instruction() {
     run_case(
         "main-shim",
-        false,
+        Shape::Chain,
         "dwarf-frame-main-shim-steps",
         &["main-shim", "wolf-main", "middle", "inspect"],
     );
 }
 #[test]
+fn debugger_pressure_middle_at_every_instruction() {
+    run_case(
+        "middle",
+        Shape::Pressure,
+        "dwarf-frame-pressure-middle-steps",
+        &["middle", "inspect"],
+    );
+}
+#[test]
+fn dwarf_frame_pressure_ranges_and_verifier() {
+    const ROW: &str = "dwarf-frame-pressure-fde-ranges";
+    if supported(ROW) {
+        report(
+            ROW,
+            fixture("pressure-ledger", Shape::Pressure).and_then(|f| ledger(&f, ROW)),
+        );
+    }
+}
+/// Every host compiles x86-64 code for the freestanding target: the same
+/// backend and return sequences, so its coverage row needs no x86-64 host.
+#[test]
+fn x64_return_sequences_leave_no_cfi_gap() {
+    row("dwarf-frame-x64-teardown-coverage", || {
+        let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("debug_frame_steps_x64-coverage");
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let source = dir.join("probe.lu");
+        fs::write(&source, PRESSURE_SOURCE).map_err(|e| e.to_string())?;
+        let (status, text) = run(
+            Command::new(env!("CARGO_BIN_EXE_wolf"))
+                .args(["build", "-g", "--no-cache", "--emit=obj"])
+                .args(["--target", "x86_64-unknown-none"])
+                .arg(&source)
+                .arg("-o")
+                .arg(dir.join("probe.o")),
+            &dir,
+            "compile",
+            180,
+        )?;
+        if !status.success() {
+            return Err(format!("x86-64 -g object build failed: {status}\n{text}"));
+        }
+        if text.contains("CFI_GAP") {
+            return Err(format!("compiler reported a CFI gap:\n{text}"));
+        }
+        Ok(())
+    });
+}
+#[test]
 fn debugger_variadic_entry_at_every_instruction() {
     run_case(
         "variadic-entry",
-        true,
+        Shape::Variadic,
         "dwarf-frame-variadic-entry-steps",
         &["variadic-entry", "variadic-core"],
     );
@@ -858,7 +914,7 @@ fn debugger_variadic_entry_at_every_instruction() {
 fn debugger_variadic_core_at_every_instruction() {
     run_case(
         "variadic-core",
-        true,
+        Shape::Variadic,
         "dwarf-frame-variadic-core-steps",
         &["variadic-core"],
     );
@@ -867,7 +923,7 @@ fn debugger_variadic_core_at_every_instruction() {
 fn debugger_variadic_chain_at_every_instruction() {
     run_case(
         "main-shim",
-        true,
+        Shape::Variadic,
         "dwarf-frame-variadic-chain-steps",
         &[
             "main-shim",
@@ -882,10 +938,9 @@ fn debugger_variadic_chain_at_every_instruction() {
 
 #[test]
 fn debugger_variadic_vector_saves_at_every_instruction() {
-    run_case_inner(
+    run_case(
         "main-shim",
-        true,
-        true,
+        Shape::VariadicFloat,
         "dwarf-frame-variadic-vector-steps",
         &[
             "main-shim",
