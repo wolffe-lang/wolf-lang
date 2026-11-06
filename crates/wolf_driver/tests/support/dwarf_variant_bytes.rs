@@ -423,9 +423,9 @@ pub fn recursive_gap(exe: &Path) {
         Ok(true)
     })();
     match result {
-        Ok(true) => println!(
-            "KNOWN-GAP dwarf-recursive-nominal type=Node cut=opaque-recursive-declaration"
-        ),
+        Ok(true) => {
+            println!("KNOWN-GAP dwarf-recursive-nominal type=Node cut=opaque-recursive-declaration")
+        }
         Ok(false) => {}
         Err(error) => {
             eprintln!("FAIL {row}");
@@ -473,7 +473,9 @@ fn dwarf_tool(row: &str, dir: &Path) -> Result<Option<PathBuf>, String> {
 /// Another version is not a measurement of either: the gate decides.
 fn pinned(row: &str, dir: &Path, tool: &Path, key: &str, label: &str) -> Result<bool, String> {
     let pin = pins();
-    let want = pin["macos_aarch64"][key].as_str().ok_or("tool version pin")?;
+    let want = pin["macos_aarch64"][key]
+        .as_str()
+        .ok_or("tool version pin")?;
     let version = output(Command::new(tool).arg("--version"), dir, label)?;
     if version.contains(want) {
         return Ok(true);
@@ -590,8 +592,7 @@ pub fn reference(row: &str, dir: &Path, actual: &str) -> Result<bool, String> {
         "lupin-variant",
     )?;
     let record: serde_json::Value = serde_json::from_str(&record).map_err(|e| e.to_string())?;
-    if record["impl_version"].as_str() != Some(paired_lupin()) || record["verdict"] != "exit(0)"
-    {
+    if record["impl_version"].as_str() != Some(paired_lupin()) || record["verdict"] != "exit(0)" {
         return Err(format!(
             "paired oracle did not execute this fixture: {record}"
         ));
