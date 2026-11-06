@@ -20,8 +20,10 @@
 //! - [`check_typed_body`] — the **typecheck-rung** pass over a
 //!   [`TypedBody`]: W0601 discarded fallible results, W0401 literals
 //!   outside a cast target's range, W0402 `0.0 - x` negation.
-//!   (W0801, the capitalized-binder pattern lint, lives in the
-//!   checker itself, where pattern resolution decides bind-vs-test.)
+//!   (W0801, the capitalized-binder pattern lint, lives elsewhere:
+//!   its match-arm half in the checker itself, where pattern resolution
+//!   decides bind-vs-test, and its binder half in the resolver, through
+//!   [`crate::binder`].)
 //!
 //! The idiom arbiter (the second wave) adds two more layers:
 //!

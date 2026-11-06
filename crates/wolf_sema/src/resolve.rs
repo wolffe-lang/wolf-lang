@@ -356,6 +356,8 @@ fn resolve_module(pkg: &Package, module: usize) -> ModuleResolved {
             sink: &mut sink,
             refs: Vec::new(),
             aliased: vec![false; bindings.len()],
+            binder_variants: Vec::new(),
+            shorthand_inits: BTreeSet::new(),
         };
         r.run();
         refs.push((fi, r.refs));
@@ -398,6 +400,14 @@ struct Resolver<'a> {
     refs: Vec<NameRef>,
     /// Per import binding: bound through an alias (`use m.x as y`)?
     aliased: Vec<bool>,
+    /// Binder names that spell an in-scope variant (`[gram.pat.binder]`,
+    /// [`crate::binder`]): W0801, or E0806 at a `select` arm. Reported
+    /// once the file's walk is done, because the rename fix reaches every
+    /// use the binding table records.
+    binder_variants: Vec<crate::binder::BinderVariant>,
+    /// The name tokens of struct-literal shorthand fields (`P { x }`): a
+    /// rename that reaches one spells the field out (`x: y`).
+    shorthand_inits: BTreeSet<Span>,
 }
 
 impl Resolver<'_> {
@@ -418,6 +428,7 @@ impl Resolver<'_> {
         }
         self.record_row_aliases(root);
         self.report_unused_imports(root);
+        self.report_binder_variants(root);
     }
 
     /// Record one resolved occurrence in the binding table.
@@ -764,6 +775,80 @@ impl Resolver<'_> {
         }
     }
 
+    /// `[gram.pat.binder]`: hold every capitalized name of a binder
+    /// pattern that spells a variant of an enum in scope (W0801), or of a
+    /// `select` arm's receive (`channel` given: E0806).
+    fn note_binder_variants(&mut self, pat: &GreenNode, channel: Option<String>) {
+        use crate::binder::{BinderVariant, Site};
+        let mut names = Vec::new();
+        crate::binder::binder_names(pat, &mut names);
+        for (span, site) in names {
+            let name = self.text(span);
+            if !crate::binder::capitalized(&name) {
+                continue;
+            }
+            let homes = crate::binder::variant_homes(self.pkg, self.module, self.bindings, &name);
+            if homes.is_empty() {
+                continue;
+            }
+            let site = if channel.is_some() {
+                Site::SelectArm
+            } else {
+                site
+            };
+            self.binder_variants.push(BinderVariant {
+                name,
+                span,
+                site,
+                homes,
+                channel: channel.clone(),
+            });
+        }
+    }
+
+    /// Report the held binder names. The lowercase fix renames the binder
+    /// and every use of it — the binding table's `Local` refs to it,
+    /// interpolations and closure captures included — to a name nothing in
+    /// the file spells, so no use can resolve elsewhere afterwards.
+    fn report_binder_variants(&mut self, root: &GreenNode) {
+        use crate::binder::Site;
+        if self.binder_variants.is_empty() {
+            return;
+        }
+        let spelled = crate::binder::spelled_names(root, self.src());
+        for b in std::mem::take(&mut self.binder_variants) {
+            let new = crate::binder::fresh_name(
+                self.pkg,
+                self.module,
+                self.bindings,
+                &spelled,
+                b.span.file,
+                &b.name,
+            );
+            let spell_out = |span: Span| {
+                (span == b.span && b.site == Site::Shorthand)
+                    || self.shorthand_inits.contains(&span)
+            };
+            let mut rename: Vec<(Span, String)> = self
+                .refs
+                .iter()
+                .filter(|r| r.target == RefTarget::Local(b.span))
+                .map(|r| {
+                    let text = if spell_out(r.span) {
+                        format!("{}: {new}", b.name)
+                    } else {
+                        new.clone()
+                    };
+                    (r.span, text)
+                })
+                .collect();
+            rename.sort_by_key(|(s, _)| s.lo);
+            rename.dedup();
+            let d = crate::binder::report(&b, &new, rename);
+            self.sink.push(d);
+        }
+    }
+
     // ------------------------------------------------------ lookup -----
 
     fn binding_index(&self, name: &str) -> Option<usize> {
@@ -976,6 +1061,7 @@ impl Resolver<'_> {
                             self.resolve_expr(e);
                         }
                         if let Some(p) = b.pattern {
+                            self.note_binder_variants(p, None);
                             self.bind_pattern(p);
                         }
                     }
@@ -991,6 +1077,7 @@ impl Resolver<'_> {
                             self.resolve_expr(e);
                         }
                         if let Some(p) = b.pattern {
+                            self.note_binder_variants(p, None);
                             self.bind_pattern(p);
                         }
                     }
@@ -1054,6 +1141,17 @@ impl Resolver<'_> {
             SyntaxKind::StructLit => {
                 for n in node.nodes() {
                     if n.kind == SyntaxKind::FieldInit {
+                        // The shorthand `P { x }` carries only its value's
+                        // `PathExpr`; a rename of `x` spells it out.
+                        if n.child_token(SyntaxKind::Ident).is_none()
+                            && let Some(t) = n
+                                .nodes()
+                                .find(|v| v.kind == SyntaxKind::PathExpr)
+                                .and_then(PathExpr::cast)
+                                .and_then(|p| p.ident())
+                        {
+                            self.shorthand_inits.insert(t.span);
+                        }
                         self.resolve_child_exprs(n);
                     } else if is_expr_kind(n.kind) {
                         self.resolve_expr(n);
@@ -1119,6 +1217,7 @@ impl Resolver<'_> {
                     }
                     self.push_scope();
                     if let Some(p) = f.pattern() {
+                        self.note_binder_variants(p, None);
                         self.bind_pattern(p);
                     }
                     if let Some(b) = f.body() {
@@ -1134,6 +1233,9 @@ impl Resolver<'_> {
                     }
                     self.push_scope();
                     if let Some(p) = e.handler_pattern() {
+                        // `else |Tag(p)|` is the refutable handler form —
+                        // a test, not a binder; its walk stops at the path.
+                        self.note_binder_variants(p, None);
                         self.bind_pattern(p);
                     }
                     if let Some(f) = e.fallback() {
@@ -1194,6 +1296,22 @@ impl Resolver<'_> {
                 for arm in node.nodes().filter_map(SelectArm::cast) {
                     self.push_scope();
                     if let Some(p) = arm.pattern() {
+                        // A receive takes every value its channel
+                        // delivers: a bare name that spells a variant
+                        // there is refused by name (E0806).
+                        if p.kind == SyntaxKind::IdentPat {
+                            let body = arm.body();
+                            let channel = arm
+                                .syntax()
+                                .nodes()
+                                .filter(|n| is_expr_kind(n.kind))
+                                .find(|n| body.is_none_or(|b| !std::ptr::eq(*n, b)))
+                                .map(|n| self.text(n.span));
+                            self.note_binder_variants(
+                                p,
+                                Some(channel.unwrap_or_else(|| "ch".into())),
+                            );
+                        }
                         self.bind_pattern(p);
                     }
                     self.resolve_child_exprs(arm.syntax());
