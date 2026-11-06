@@ -419,6 +419,12 @@ fn the_implemented_attributes_still_compile() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            // r43: the 0.1.60 candidate at 17bd522 still refuses the comptime fn.
+            Pin {
+                version: "0.1.60",
+                verdict: "unsupported",
+                stdout: "",
+            },
         ],
     );
 }
