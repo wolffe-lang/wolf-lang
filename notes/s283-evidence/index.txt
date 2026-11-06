@@ -1,0 +1,22 @@
+s283 evidence (DWARF v1: source types and debug-only call frames)
+
+linux/red-b9e4c072-source-types.log
+                  the ten original source-type rows at b9e4c072, each red by name
+                  (`test result: FAILED. 0 passed; 10 failed`), in the Ubuntu 24.04 toolchain
+                  image with gdb 15.1
+linux/red-71474842-unsigned.log
+                  the five unsigned boundary rows at 71474842, each red by name, no
+                  compile-error skip (`0 passed; 5 failed`)
+linux/red-c7e8710f-frame-steps.excerpt.log
+                  the per-instruction witness at c7e8710f: three-frames and instruction
+                  steps red at inspect's return, the FDE-range row red, the transcript
+                  validator green (the START/END/test lines of an 85 MB transcript)
+linux/census-c78972fd-before-teardown-fix.json
+                  the corpus census at c78972fd, before the teardown fix, summarized
+                  (tools/census-summary.py of the lane): 781 candidates, 756 measured,
+                  25 not measured, 0 failures, cfi_gap_count 2145; each case's bytes,
+                  CFI_GAP lines and dump digests
+macos/red-e48afd83-x64-teardown.log
+                  macOS arm64 at e48afd83: dwarf-frame-x64-teardown-coverage red,
+                  `CFI_GAP middle 228..252: unknown SP before register restore`; every
+                  arm64 frame row green, the pressure chain's included
