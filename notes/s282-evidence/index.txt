@@ -1,8 +1,35 @@
-s282 evidence (wolf-lang, the binder-position W0801 and the select-arm E0806).
-Paths in the logs are relative to the lane's directory, written $LANE.
+s282 evidence (wolf-lang: the binder-position W0801 and the select-arm E0806).
+Paths in the logs are relative to the lane's directory, written $LANE; the Mac is arm64
+macOS. One private downstream consumer was measured beside the public checkouts; its lines
+are dropped here and its evidence stays outside the tree.
 
-base-ed19904c.log   the base: wolf built at ed19904c on the Mac (arm64 macOS); every probe
-                    on the checked machine, native, release (wolf conform-run --json) and
-                    lupin 0.1.59; then each probe's `wolf build` rendering and `wolf fix` dry run.
-probe/              the probe programs (.lu.txt; each its own directory, so each is its own
-                    module; b14 and b27 to b28 carry a `kinds` module beside the entry).
+base-ed19904c.log         the base: wolf built at ed19904c; every probe on the checked
+                          machine, native, release (wolf conform-run --json) and lupin 0.1.59;
+                          then each probe's `wolf build` rendering and `wolf fix` dry run.
+probe/                    the probe programs (.lu.txt; each its own directory, so each is its
+                          own module; b14, b27 and b28 carry a `kinds` module beside the
+                          entry). b31 is the handler reading of a capitalized row tag (an issue
+                          for lupin, outside this lane).
+mac-red-1c0a75ba.log      the rows at the base's code: the seven rows on four machines,
+                          four_machine_regressions 15 passed and 5 failed by name, the corpus
+                          step `5 bad` by name; then the lexer, parser and lowering snapshot
+                          sets generated (insta's update).
+mac-fix-eb97a800.log      the first build of the fix: a compile error (`Span` has no order),
+                          trimmed at the failed build.
+mac-fix-5441d267.log      the fix: the rows on four machines with lupin 0.1.59, exact W0801
+                          spans on the compiled tiers; four_machine_regressions 20 passed; the
+                          corpus step `0 bad`; every probe and its rendering; fmt; clippy on
+                          wolf_sema and wolf_driver (all targets, -D warnings); the wolf_sema
+                          suite with the new rendered snapshots; the snapshot sets.
+mac-regen-1183e89e.log    `cargo xtask spec-extract` (anchor keys diffed both ways: none
+                          removed, gram.pat.binder added), `cargo xtask diag-catalog`, and the
+                          snapshot sets remade under the rows' new headers.
+mac-measure-447ba6d8.log  wolf at the head and at the base over every .lu file of the org's
+                          wolf repositories (at their trunks) and of wolf-std (at the STD-PIN
+                          and at its trunk), at the resolve rung: W0801 and E0806 per tree;
+                          then the compiler's rows on four machines with lupin built from the
+                          wolf-interp s282 branch.
+census-org.txt            a syntactic census of the same trees: every capitalized name in a
+                          binder position (item-level constants listed apart).
+rig/                      the scripts as run: the Mac lock, build-at, the jobs, the probe
+                          runner, the span finder, the measurement, the census, the sanitizer.

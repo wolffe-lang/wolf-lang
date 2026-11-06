@@ -1,0 +1,43 @@
+s282: building at eb97a800 in $LANE/build
+s282: lock taken 03:53:15, 9562 MiB free, 116 GB disk; running: bash $LANE/rig/mac-rows.sh
+== STEP head 08:53:15
+eb97a800d4bc4db458e7403250760093f392d77e
+eb97a800 Warn W0801 at binder names that spell a variant; refuse them in select arms
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.59 (wolf-interp, reference interpreter at pin b16353e)
+END head exit=0
+== STEP build 08:53:15
+   Compiling wolf_sema v0.2.37 ($LANE/build/crates/wolf_sema)
+error[E0277]: the trait bound `wolf_span::Span: Ord` is not satisfied
+   --> crates/wolf_sema/src/resolve.rs:830:45
+    |
+830 |                     || self.shorthand_inits.contains(&span)
+    |                                             ^^^^^^^^ the trait `Ord` is not implemented for `wolf_span::Span`
+    |
+note: required by a bound in `BTreeSet::<T, A>::contains`
+   --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/alloc/src/collections/btree/set.rs:606:4
+
+error[E0277]: the trait bound `wolf_span::Span: Ord` is not satisfied
+   --> crates/wolf_sema/src/resolve.rs:830:54
+    |
+830 |                     || self.shorthand_inits.contains(&span)
+    |                                             -------- ^^^^^ the trait `Ord` is not implemented for `wolf_span::Span`
+    |                                             |
+    |                                             required by a bound introduced by this call
+    |
+note: required by a bound in `BTreeSet::<T, A>::contains`
+   --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/alloc/src/collections/btree/set.rs:606:4
+
+error[E0277]: the trait bound `wolf_span::Span: Ord` is not satisfied
+    --> crates/wolf_sema/src/resolve.rs:1153:50
+     |
+1153 | ...                   self.shorthand_inits.insert(t.span);
+     |                                            ^^^^^^ the trait `Ord` is not implemented for `wolf_span::Span`
+     |
+note: required by a bound in `BTreeSet::<T, A>::insert`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/alloc/src/collections/btree/set.rs:900:4
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `wolf_sema` (lib) due to 3 previous errors
+END build exit=101

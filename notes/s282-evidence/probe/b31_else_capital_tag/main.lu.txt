@@ -1,0 +1,9 @@
+fn pick(n: int) -> int ! {Boom, Bust} {
+    if n > 0 { n } else if n == 0 { Bust } else { Boom }
+}
+
+fn main() -> !int {
+    let a = pick(0) else |Boom| 7
+    print("{a}")
+    0
+}

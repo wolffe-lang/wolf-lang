@@ -1,0 +1,153 @@
+s282: building at 1183e89e in $LANE/build
+s282: lock taken 04:02:47, 9808 MiB free, 115 GB disk; running: bash $LANE/rig/mac-regen.sh
+== STEP head 09:02:47
+1183e89e91c7060e9fbe6ca7f792e35a35bd1251
+1183e89e Drive the fix, the deny level and the explanations through the binary
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+END head exit=0
+== STEP build 09:02:47
+   Compiling wolf_diag v0.2.37 ($LANE/build/crates/wolf_diag)
+   Compiling wolf_lex v0.2.37 ($LANE/build/crates/wolf_lex)
+   Compiling wolf_cimport v0.2.37 ($LANE/build/crates/wolf_cimport)
+   Compiling wolf_parse v0.2.37 ($LANE/build/crates/wolf_parse)
+   Compiling wolf_sema v0.2.37 ($LANE/build/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.37 ($LANE/build/crates/wolf_fmt)
+   Compiling wolf_pkg v0.2.37 ($LANE/build/crates/wolf_pkg)
+   Compiling wolf_mem v0.2.37 ($LANE/build/crates/wolf_mem)
+   Compiling wolf_query v0.2.37 ($LANE/build/crates/wolf_query)
+   Compiling wolf_doc v0.2.37 ($LANE/build/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.37 ($LANE/build/crates/wolf_lsp)
+   Compiling wolf_wir v0.2.37 ($LANE/build/crates/wolf_wir)
+   Compiling wolf_backend v0.2.37 ($LANE/build/crates/wolf_backend)
+   Compiling wolf_codegen_clif v0.2.37 ($LANE/build/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.37 ($LANE/build/crates/wolf_codegen_llvm)
+   Compiling wolf_driver v0.2.37 ($LANE/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 9.13s
+END build exit=0
+== STEP spec-extract 09:02:56
+spec-extract: wrote spec/anchors.json (725 anchors)
+spec-extract: wrote spec/grammar.ebnf (11380 bytes)
+END spec-extract exit=0
+-- anchors removed:
+-- anchors added:
+gram.pat.binder
+== STEP diag-catalog 09:02:57
+diag-catalog: voice: 5337 reader-facing strings carry no internal ids
+diag-catalog: wrote docs/diagnostics.md (193 codes) and docs/warnings.md (34 warnings)
+END diag-catalog exit=0
+== STEP snap-lex 09:03:04
+   Compiling wolf_lex v0.2.37 ($LANE/build/crates/wolf_lex)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests/corpus_snapshots.rs (target/debug/deps/corpus_snapshots-502d1b53e987af2f)
+
+running 1 test
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__select_arm_bare_variant.snap
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__select_arm_lowercase_binds.snap
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_controls.snap
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_else.snap
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_for.snap
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_imported__main.snap
+updated snapshot $LANE/build/crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_let.snap
+test corpus_token_streams ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.33s
+
+END snap-lex exit=0
+== STEP snap-parse 09:03:05
+   Compiling wolf_parse v0.2.37 ($LANE/build/crates/wolf_parse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running tests/corpus_decls.rs (target/debug/deps/corpus_decls-5d5efeb0ea668282)
+
+running 1 test
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__conc__select_arm_bare_variant.snap
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__conc__select_arm_lowercase_binds.snap
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_controls.snap
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_else.snap
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_for.snap
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_imported__main.snap
+updated snapshot $LANE/build/crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_let.snap
+test corpus_declaration_structure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+END snap-parse exit=0
+== STEP snap-wir 09:03:07
+   Compiling wolf_wir v0.2.37 ($LANE/build/crates/wolf_wir)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running tests/lower_corpus.rs (target/debug/deps/lower_corpus-82e1e67daa9a76b7)
+
+running 32 tests
+test golden_faults_assert_fails ... ok
+test golden_conc_select_two_timeouts ... ok
+test golden_faults_div_zero_rem ... ok
+test golden_memory_div_zero ... ok
+test golden_grammar_bang_not ... ok
+test golden_faults_overflow_add ... ok
+test golden_grammar_intdot_range ... ok
+test golden_conc_spawn_fanout_loop ... ok
+test golden_grammar_bang_errunion ... ok
+test golden_memory_checked_unsigned ... ok
+test golden_memory_region_freeze_ok ... ok
+test golden_grammar_else_chain ... ok
+test golden_memory_region_infer_request_handler ... ok
+test golden_memory_region_infer_list_builder ... ok
+test golden_memory_excl_disjoint_ok ... ok
+test golden_resolve_forward ... ok
+test golden_resolve_two_mod ... ok
+test golden_memory_exclusivity ... ok
+test golden_overflow ... ok
+test golden_traits_dyn_ok ... ok
+test variadic_declaration_corpus_lowers_on_every_target ... ok
+test golden_rows_open_row_growth ... ok
+test golden_typecheck_match_unreachable ... ok
+test golden_typecheck_cast_set ... ok
+test golden_typecheck_receiver_modes ... ok
+test golden_typecheck_match_exhaustive ... ok
+test golden_rows_qmark_defer ... ok
+test golden_memory_region_multiopen_values_ok ... ok
+test golden_memory_region_infer_tree_transform ... ok
+test golden_memory_view_set_norm ... ok
+test corpus_lowering_ledger ... ok
+test corpus_dumps_are_deterministic ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 19.07s
+
+END snap-wir exit=0
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__select_arm_bare_variant.snap
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__select_arm_lowercase_binds.snap
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_controls.snap
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_else.snap
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_for.snap
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_imported__main.snap
+ M crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_let.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__conc__select_arm_bare_variant.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__conc__select_arm_lowercase_binds.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_controls.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_else.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_for.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_imported__main.snap
+ M crates/wolf_parse/tests/snapshots/corpus_decls__lints__binder_variant_let.snap
+ M docs/diagnostics.md
+ M docs/warnings.md
+ M spec/anchors.json
+ ...s_snapshots__conc__select_arm_bare_variant.snap |  288 ++---
+ ...napshots__conc__select_arm_lowercase_binds.snap |  342 +++---
+ ..._snapshots__lints__binder_variant_controls.snap |  474 ++++-----
+ ...rpus_snapshots__lints__binder_variant_else.snap |  280 ++---
+ ...orpus_snapshots__lints__binder_variant_for.snap |  464 ++++----
+ ...hots__lints__binder_variant_imported__main.snap |  158 +--
+ ...orpus_snapshots__lints__binder_variant_let.snap | 1112 ++++++++++----------
+ ...orpus_decls__conc__select_arm_bare_variant.snap |    4 +-
+ ...us_decls__conc__select_arm_lowercase_binds.snap |    4 +-
+ ...rpus_decls__lints__binder_variant_controls.snap |    8 +-
+ .../corpus_decls__lints__binder_variant_else.snap  |    6 +-
+ .../corpus_decls__lints__binder_variant_for.snap   |    6 +-
+ ...ecls__lints__binder_variant_imported__main.snap |    6 +-
+ .../corpus_decls__lints__binder_variant_let.snap   |   24 +-
+ docs/diagnostics.md                                |   41 +-
+ docs/warnings.md                                   |   27 +-
+ spec/anchors.json                                  |    1 +
+ 17 files changed, 1640 insertions(+), 1605 deletions(-)
+clean:        0
+== done 2026-11-06T09:03:27Z
+s282: END exit=0 04:03:27
