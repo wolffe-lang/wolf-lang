@@ -234,7 +234,7 @@ Test targets:
       and case-blind (`mac-measure-447ba6d8.log`, `mac-remeasure-83a64499.log`)
 - [x] lupin from the wolf-interp branch agrees on every row; lupin's W0801 is a subset of the
       compiler's over the corpus, the mirror fixtures and the probes (`mac-remeasure-83a64499.log`)
-- [ ] the macOS `cargo xtask ci` at the head (a shakedown, not a record)
+- [ ] the macOS `cargo xtask ci` at the final head, a shakedown, not a record (in the PR body)
 - [ ] the Linux gauntlet record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
