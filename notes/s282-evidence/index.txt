@@ -53,6 +53,12 @@ census-variant.txt        the census in either letter case: every binder name in
                           that equals a variant name its tree declares.
 rebase-map.txt            the one rebase, onto trunk 03c0f04e: each log's pre-rebase commit and
                           its rebased commit.
+rig/scripts3/             the Linux gauntlet rig (s280's shape, copied by value): one block of six
+                          CPUs, four takes of at most 2 h (prep, build, gates, coverage), each its
+                          own lock take, aggregated into one record. The host's name is written
+                          H1 here, its lock and environment paths with it; the plant-* scripts
+                          are not used (both plant records are taken on the Mac).
+rig/scripts3-sha256.txt   the digests of those files as run on the host, before the H1 spelling.
 rig/                      the scripts as run (the private consumer's checkout is written
                           $PRIVATE_NAME): the Mac lock, build-at, the jobs, the probe
                           runner, the span finder, the measurement, the census, the sanitizer.
