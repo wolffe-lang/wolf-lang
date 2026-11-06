@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
+#[path = "support/oracle_gate.rs"]
+mod oracle_gate;
+
 type Check<T> = Result<T, String>;
 const SOURCE: &str = "fn inspect(a: int) -> int { a ^ 7 }\nfn middle(a: int) -> int { inspect(a) + 1 }\nfn main() -> int { middle(3) - 5 }\n";
 const VARIADIC_SOURCE: &str = r#"
@@ -313,7 +316,10 @@ fn ledger(fixture: &Fixture, row: &str) -> Check<bool> {
     }
     let dump = std::env::var("LLVM_DWARFDUMP").unwrap_or_else(|_| "llvm-dwarfdump".into());
     if !tool(&dump, &fixture.dir)? {
-        eprintln!("SKIP {row} reason={dump} not installed; set LLVM_DWARFDUMP to the executable");
+        oracle_gate::absent(
+            row,
+            &format!("{dump} not installed; set LLVM_DWARFDUMP to the executable"),
+        )?;
         return Ok(false);
     }
     let (status, text) = run(
@@ -662,7 +668,7 @@ fn debugger_trace(fixture: &Fixture, root: &str, row: &str) -> Check<Option<Stri
         "gdb"
     };
     if !tool(debugger, &fixture.dir)? {
-        eprintln!("SKIP {row} reason={debugger} not installed");
+        oracle_gate::absent(row, &format!("{debugger} not installed"))?;
         return Ok(None);
     }
     let trace = fixture.dir.join("api-trace.jsonl");
@@ -715,11 +721,14 @@ fn debugger_trace(fixture: &Fixture, root: &str, row: &str) -> Check<Option<Stri
     if lines.len() == 1 {
         let event: Value = serde_json::from_str(lines[0]).map_err(|e| e.to_string())?;
         if event["event"] == "launch-refused" {
-            eprintln!(
-                "SKIP {row} reason={} (raw transcript {})",
-                event["error"],
-                fixture.dir.display()
-            );
+            oracle_gate::absent(
+                row,
+                &format!(
+                    "{} (raw transcript {})",
+                    event["error"],
+                    fixture.dir.display()
+                ),
+            )?;
             return Ok(None);
         }
     }
