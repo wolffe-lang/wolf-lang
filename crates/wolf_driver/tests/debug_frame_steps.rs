@@ -169,6 +169,20 @@ fn diagnostic_excerpt(path: &Path) -> Check<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// The whole raw transcript a `run` label wrote, for parsing and searching.
+/// The bounded excerpt `run` returns is only for failure messages: a dump past
+/// its bound would otherwise be parsed in two halves, cut mid-line.
+fn raw(dir: &Path, label: &str) -> Check<String> {
+    let mut text = String::new();
+    for stream in ["stdout", "stderr"] {
+        let path = dir.join(format!("{label}.{stream}.txt"));
+        let bytes = fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        text.push_str(&String::from_utf8_lossy(&bytes));
+        text.push('\n');
+    }
+    Ok(text)
+}
+
 /// Missing executables are real environment skips; a broken installed tool,
 /// timeout, unknown flag, or compiler failure is never an environment skip.
 fn tool(name: &str, dir: &Path) -> Check<bool> {
@@ -241,7 +255,7 @@ fn fixture(name: &str, shape: Shape) -> Check<Fixture> {
     if !status.success() {
         return Err(format!("wolf build -g --no-cache failed: {status}\n{text}"));
     }
-    if text.contains("CFI_GAP") {
+    if raw(&dir, "compile")?.contains("CFI_GAP") {
         return Err(format!("compiler reported a CFI gap:\n{text}"));
     }
     let bytes = fs::read(&exe).map_err(|e| e.to_string())?;
@@ -392,7 +406,7 @@ fn ledger(fixture: &Fixture, row: &str) -> Check<bool> {
     if !status.success() {
         return Err(format!("--debug-frame: {status}\n{text}"));
     }
-    let ranges = fde_ranges(&text)?;
+    let ranges = fde_ranges(&raw(&fixture.dir, "debug-frame")?)?;
     for symbol in &fixture.symbols {
         let matches: Vec<_> = ranges
             .iter()
@@ -425,7 +439,7 @@ fn ledger(fixture: &Fixture, row: &str) -> Check<bool> {
         "compile-object",
         180,
     )?;
-    if !status.success() || text.contains("CFI_GAP") {
+    if !status.success() || raw(&fixture.dir, "compile-object")?.contains("CFI_GAP") {
         return Err(format!("object-only debug build: {status}\n{text}"));
     }
     let (status, text) = run(
@@ -434,7 +448,7 @@ fn ledger(fixture: &Fixture, row: &str) -> Check<bool> {
         "verify",
         60,
     )?;
-    if !status.success() || !text.contains("No errors.") {
+    if !status.success() || !raw(&fixture.dir, "verify")?.contains("No errors.") {
         return Err(format!(
             "DWARF verification did not succeed: {status}\n{text}"
         ));
@@ -929,7 +943,7 @@ fn x64_return_sequences_leave_no_cfi_gap() {
         if !status.success() {
             return Err(format!("x86-64 -g object build failed: {status}\n{text}"));
         }
-        if text.contains("CFI_GAP") {
+        if raw(&dir, "compile")?.contains("CFI_GAP") {
             return Err(format!("compiler reported a CFI gap:\n{text}"));
         }
         Ok(())
@@ -985,6 +999,30 @@ fn debugger_variadic_vector_saves_at_every_instruction() {
             "variadic-core",
         ],
     );
+}
+
+/// A dump past the excerpt's bound, with an FDE line across its cut: parsed
+/// whole it is complete, parsed from the excerpt it is not.
+#[test]
+fn frame_dumps_are_parsed_whole_not_excerpted() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("debug_frame_steps_raw-dump");
+    fs::create_dir_all(&dir).unwrap();
+    let mut dump = String::new();
+    for i in 0u64..2000 {
+        dump.push_str(&format!(
+            "{:08x} 00000010 {:08x} FDE cie=00000000 pc={:08x}...{:08x}\n  DW_CFA_nop:\n\n",
+            i * 0x14,
+            i * 0x14 + 4,
+            i * 0x40,
+            i * 0x40 + 0x20
+        ));
+    }
+    assert!(dump.len() > 65536);
+    fs::write(dir.join("dump.stdout.txt"), &dump).unwrap();
+    fs::write(dir.join("dump.stderr.txt"), "").unwrap();
+    assert_eq!(fde_ranges(&raw(&dir, "dump").unwrap()).unwrap().len(), 2000);
+    let excerpt = diagnostic_excerpt(&dir.join("dump.stdout.txt")).unwrap();
+    assert!(fde_ranges(&excerpt).map_or(true, |ranges| ranges.len() < 2000));
 }
 
 #[test]
