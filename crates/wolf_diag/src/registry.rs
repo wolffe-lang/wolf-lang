@@ -1362,6 +1362,14 @@ literal, an enum variant, an error-row tag) needs somewhere for the
 other values to go: that place is `match`. Move the test into a
 `match` (or an `if` on the value), keeping only irrefutable patterns
 — names, `_`, and tuples of those — in binding position.
+
+A `select` arm's receive binds the same way: it takes whatever its
+channel delivers, so its pattern is a binding too. A capitalized bare
+name there that spells a variant of an enum in scope (one the module
+declares, or one the file imports by item) reads as a test the arm
+cannot make, so it is refused by name rather than left to bind.
+Receive into a lowercase name and test it in the arm's body:
+`k from ch => match k { Kind.Drink => …, _ => … }`.
 "#);
 
 code!(E0807, "the method exists, but its trait is not in scope", r#"
@@ -2753,13 +2761,26 @@ cannot.
 // ------------------------------------------------------------------------
 
 code!(W0801, "a capitalized name in this pattern binds instead of matching", r#"
-This scrutinee has no cases for the name to test, so the bare
-identifier binds a fresh name — the arm matches every value, and any
-arms below it are dead. A capitalized name in pattern position reads
-as a variant or tag test, which is exactly why this shape has
-produced first-arm-always dispatch in correct-looking code. If a
-constant comparison was meant, use a guard (`n if n == Zed`); if a
-binding was meant, give it a lowercase name so it reads as one.
+A capitalized name in pattern position reads as a variant or tag
+test, and in two places it is a binding instead.
+
+In a `match` arm whose scrutinee has no cases for the name to test,
+the bare identifier binds a fresh name — the arm matches every value,
+and any arms below it are dead. This shape has produced
+first-arm-always dispatch in correct-looking code. If a constant
+comparison was meant, use a guard (`n if n == Zed`); if a binding was
+meant, give it a lowercase name so it reads as one.
+
+In a binder position — a `let` or `var` pattern, a `for` header, an
+`else |…|` handler — the pattern binds every value it meets, so a
+bare name there is always a new binding, even when it spells a
+variant of an enum in scope (one the module declares, or one the file
+imports by item): `let (Drink, n) = pair` binds `Drink` to whatever
+the first element holds. The warning names the variant and offers two
+fixes. A lowercase name keeps the binding the program already has,
+with every use renamed, and it is the one `wolf fix` applies. The
+qualified variant `Kind.Drink` makes the test the name looked like,
+which a binder refuses (E0806), so the test moves into a `match`.
 "#);
 
 // ------------------------------------------------------------------------
