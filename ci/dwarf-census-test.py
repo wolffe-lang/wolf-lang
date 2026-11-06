@@ -42,6 +42,13 @@ class CensusInputs(unittest.TestCase):
                 "  DW_CFA_def_cfa: W29 +16\n")
         self.assertEqual(census.vocabulary(text), ["DW_CFA_def_cfa", "DW_LNS_set_prologue_end"])
 
+    def test_a_cfi_gap_fails_the_census(self):
+        clean = {"failures": 0, "cfi_gap_count": 0, "measured": 3}
+        self.assertFalse(census.failed(clean))
+        self.assertTrue(census.failed({**clean, "cfi_gap_count": 1}))
+        self.assertTrue(census.failed({**clean, "failures": 1}))
+        self.assertTrue(census.failed({**clean, "measured": 0}))
+
     def test_standalone_staging_does_not_copy_unrelated_corpus_directories(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
