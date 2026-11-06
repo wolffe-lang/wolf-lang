@@ -274,6 +274,8 @@ mod sys {
                 libc::epoll_wait(self.epfd.load(SeqCst), events.as_mut_ptr(), 64, timeout_ms)
             };
             super::leave_kernel_wait();
+            #[cfg(test)]
+            super::hook::at_work();
             if n < 0 {
                 return; // EINTR: the caller loops.
             }
@@ -467,6 +469,8 @@ mod sys {
                 )
             };
             super::leave_kernel_wait();
+            #[cfg(test)]
+            super::hook::at_work();
             if n < 0 {
                 return; // EINTR: the caller loops.
             }
@@ -757,10 +761,60 @@ fn leave_kernel_wait() {
         .compare_exchange(THREAD_WAITING, THREAD_LOOPING, SeqCst, SeqCst)
         .is_err()
     {
+        #[cfg(test)]
+        hook::after_failed_claim();
         if THREAD_STATE.load(SeqCst) != THREAD_HELD {
             return;
         }
         std::thread::park();
+    }
+}
+
+/// s284 (wolf-lang#1022): the unit rows' stops in the reactor thread's
+/// hold protocol, compiled into no runtime a program links — the twin of
+/// the hub's `sys::hook`. Armed, the thread's next failed claim (a fork
+/// held it as it came back from its kernel wait) stops in the gap, and its
+/// next way to work (past the hold) stops there, recording the state a
+/// fork reads; each waits for the row's go, once.
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+pub(crate) mod hook {
+    use super::{THREAD_HELD, THREAD_LOOPING, THREAD_STATE, THREAD_WAITING};
+    use std::sync::atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
+
+    pub const HELD: u8 = THREAD_HELD;
+    pub const LOOPING: u8 = THREAD_LOOPING;
+    pub const WAITING: u8 = THREAD_WAITING;
+    pub static GAP_ARMED: AtomicBool = AtomicBool::new(false);
+    pub static IN_GAP: AtomicBool = AtomicBool::new(false);
+    pub static GAP_GO: AtomicBool = AtomicBool::new(false);
+    pub static WORK_ARMED: AtomicBool = AtomicBool::new(false);
+    pub static AT_WORK: AtomicBool = AtomicBool::new(false);
+    pub static WORK_GO: AtomicBool = AtomicBool::new(false);
+    pub static WORK_STATE: AtomicU8 = AtomicU8::new(0);
+
+    fn until(go: &AtomicBool) {
+        while !go.load(SeqCst) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+
+    pub fn thread_state() -> u8 {
+        THREAD_STATE.load(SeqCst)
+    }
+
+    pub(super) fn after_failed_claim() {
+        if GAP_ARMED.swap(false, SeqCst) {
+            IN_GAP.store(true, SeqCst);
+            until(&GAP_GO);
+        }
+    }
+
+    pub(super) fn at_work() {
+        if WORK_ARMED.swap(false, SeqCst) {
+            WORK_STATE.store(THREAD_STATE.load(SeqCst), SeqCst);
+            AT_WORK.store(true, SeqCst);
+            until(&WORK_GO);
+        }
     }
 }
 /// Serializes the making: two first waits make one set and one thread.
@@ -1372,6 +1426,125 @@ mod tests {
         assert!(
             t0.elapsed() < Duration::from_secs(10),
             "sleep ran to deadline"
+        );
+    }
+
+    /// Wait (bounded, 10 s) until `done`; false at the bound.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn s284_until(done: impl Fn() -> bool) -> bool {
+        let cap = Instant::now() + Duration::from_secs(10);
+        while !done() {
+            if Instant::now() > cap {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        true
+    }
+
+    /// s284 (wolf-lang#1022): the reactor thread's twin of the hub's
+    /// claim-gap row (`signal::tests::s284_…`). A fork holds the reactor
+    /// thread in its kernel wait, the poller's wake brings it back into the
+    /// hold, and the release lands in the gap between its failed claim and
+    /// its next step. Until s284 that step was a second look, which read
+    /// the release's WAITING, so the thread went to work (the waiter table
+    /// and the timers under the reactor's lock) with the state saying "in
+    /// its kernel wait", and the next fork's hold would claim it there. On
+    /// its way to work its state must read LOOPING, and a second hold must
+    /// wait until it is back in its wait. The reactor is process-global, so
+    /// the scenario runs alone in a child of this test binary
+    /// (`WOLF_S284_CHILD` names it), killed by its pid at a 30 s cap.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread() {
+        const NAME: &str =
+            "s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread";
+        if std::env::var("WOLF_S284_CHILD").as_deref() == Ok(NAME) {
+            let r = reactor().expect("the reactor");
+            assert!(
+                s284_until(|| hook::thread_state() == hook::WAITING),
+                "the reactor thread in its kernel wait (state {})",
+                hook::thread_state()
+            );
+            hook::GAP_ARMED.store(true, SeqCst);
+            hook::WORK_ARMED.store(true, SeqCst);
+            fork_hold();
+            assert_eq!(hook::thread_state(), hook::HELD, "the fork holds the thread");
+            r.sys.wake();
+            assert!(
+                s284_until(|| hook::IN_GAP.load(SeqCst)),
+                "the reactor thread came back from its wait and found the hold (state {})",
+                hook::thread_state()
+            );
+            fork_release();
+            hook::GAP_GO.store(true, SeqCst);
+            assert!(
+                s284_until(|| hook::AT_WORK.load(SeqCst)),
+                "the reactor thread went on after the release (state {})",
+                hook::thread_state()
+            );
+            let seen = hook::WORK_STATE.load(SeqCst);
+            let (tx, rx) = std::sync::mpsc::channel();
+            let holder = std::thread::spawn(move || {
+                fork_hold();
+                let _ = tx.send(hook::thread_state());
+            });
+            let claimed_at_work = rx.recv_timeout(Duration::from_millis(300));
+            hook::WORK_GO.store(true, SeqCst);
+            let claimed_in_wait = match claimed_at_work {
+                Ok(_) => None,
+                Err(_) => rx.recv_timeout(Duration::from_secs(10)).ok(),
+            };
+            holder.join().expect("the holder");
+            fork_release();
+            assert!(
+                claimed_at_work.is_err() && seen == hook::LOOPING,
+                "a fork's hold claimed the reactor thread at work, its state reading {seen} \
+                 (2 = at work, 3 = in its wait) after a release in the gap of its failed \
+                 claim (wolf-lang#1022)"
+            );
+            assert_eq!(
+                claimed_in_wait,
+                Some(hook::HELD),
+                "the second hold claimed the thread once it was back in its wait"
+            );
+            return;
+        }
+        let _serial = test_hook::SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut child = std::process::Command::new(std::env::current_exe().expect("exe"))
+            .args([
+                "--exact",
+                &format!("reactor::tests::{NAME}"),
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("WOLF_S284_CHILD", NAME)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("re-exec");
+        let cap = Instant::now() + Duration::from_secs(30);
+        let code = loop {
+            if let Some(st) = child.try_wait().expect("the child's status") {
+                break st.code();
+            }
+            if Instant::now() > cap {
+                // The child this row started, by its pid.
+                let _ = child.kill();
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let out = child.wait_with_output().expect("the child's output");
+        assert_eq!(
+            code,
+            Some(0),
+            "{NAME}, in a child of the test binary (None: killed at the 30 s cap):\n{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
         );
     }
 }
