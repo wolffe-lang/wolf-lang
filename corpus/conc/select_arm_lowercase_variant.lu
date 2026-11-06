@@ -1,0 +1,21 @@
+//! check: fail(E0806)
+//! phase: parse
+//! conforms: gram.pat.binder, conc.select.ready, gram.expr.conc
+//!
+//! The `select` arm's refusal in either letter case: `fast` is a variant of
+//! `Mode`, so a receive written `fast from ch` reads as a test of that case,
+//! which a committed receive cannot make. It is refused by name (E0806) at
+//! the name, exactly as `Drink from ch` is.
+
+enum Mode { fast, slow }
+
+fn main() -> !int {
+    let ch = channel[int](1)
+    ch.send(3)?
+    var got = 0
+    select {
+        fast from ch => { got = fast },
+        timeout(1.s) => { got = 2 },
+    }
+    if got == 3 { 0 } else { 1 }
+}

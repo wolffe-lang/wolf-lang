@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="3 4\n12")
+//! phase: run
+//! conforms: gram.pat.binder, gram.pat.nullary, diag.sev.warn
+//! warns: W0801
+//!
+//! W0801 in either letter case: a variant may be spelled in lowercase
+//! (`enum Mode { fast, slow }`), and a `match` reads a bare `fast` as a test
+//! of that case exactly as it reads `Drink`. So a binder named `fast` or
+//! `slow` reads as a test too, and it warns, though it binds as every binder
+//! does: `fast` holds 3, and `slow` takes each element of the list.
+
+enum Mode { fast, slow }
+
+fn main() -> !int {
+    let (fast, n) = (3, 4)
+    print("{fast} {n}")
+    var t = 0
+    for slow in [5, 7] { t = t + slow }
+    print("{t}")
+    0
+}
