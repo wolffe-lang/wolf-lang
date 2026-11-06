@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8")
 //! phase: run
-//! conforms: gram.pat, gram.pat.struct, gram.item.let, diag.sev.warn
+//! conforms: gram.pat.binder, gram.pat.struct, gram.item.let, diag.sev.warn
 //! warns: W0801
 //!
 //! W0801 in `let` and `var` binders: a capitalized bare name that spells a

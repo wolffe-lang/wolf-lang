@@ -300,13 +300,13 @@ fn let_and_var_binders_that_spell_a_variant_warn() {
         "lints/binder_variant_let.lu",
         "food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8\n",
         &[
-            (971, 976),
-            (1067, 1071),
-            (1169, 1177),
-            (1246, 1251),
-            (1354, 1358),
-            (1442, 1450),
-            (1546, 1550),
+            (978, 983),
+            (1074, 1078),
+            (1176, 1184),
+            (1253, 1258),
+            (1361, 1365),
+            (1449, 1457),
+            (1553, 1557),
         ],
         true,
     );
@@ -317,7 +317,7 @@ fn a_for_header_that_spells_a_variant_warns() {
     binder_warns(
         "lints/binder_variant_for.lu",
         "food1tip2\ndrinktip\n",
-        &[(703, 708), (787, 791)],
+        &[(710, 715), (794, 798)],
         true,
     );
 }
@@ -331,7 +331,7 @@ fn an_else_handler_name_that_spells_a_variant_warns() {
     binder_warns(
         "lints/binder_variant_else.lu",
         "7 5\n",
-        &[(561, 566), (596, 600)],
+        &[(568, 573), (603, 607)],
         false,
     );
 }
@@ -341,7 +341,7 @@ fn an_item_imported_enums_variant_warns_in_a_binder() {
     binder_warns(
         "lints/binder_variant_imported/main.lu",
         "tip 3\n",
-        &[(405, 410)],
+        &[(412, 417)],
         true,
     );
 }
@@ -370,7 +370,7 @@ fn a_select_arm_that_spells_a_variant_is_refused() {
         );
         assert_eq!(
             record["diagnostics"][0]["span"],
-            serde_json::json!([652, 657]),
+            serde_json::json!([659, 664]),
             "{machine} {row}: {record}"
         );
     }
@@ -393,7 +393,7 @@ fn a_select_arm_that_spells_a_variant_is_refused() {
     assert_eq!(record["verdict"], "fail(E0806)", "lupin {row}: {record}");
     assert_eq!(
         record["diagnostics"][0]["span"],
-        serde_json::json!([652, 657]),
+        serde_json::json!([659, 664]),
         "lupin {row}: {record}"
     );
 }

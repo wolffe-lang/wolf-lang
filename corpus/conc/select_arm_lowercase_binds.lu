@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="food")
 //! phase: run
-//! conforms: conc.select.ready, gram.expr.conc
+//! conforms: gram.pat.binder, conc.select.ready, gram.expr.conc
 //!
 //! The control for the `select` arm's refusal: a lowercase name receives
 //! the value and binds it, and the body tests it.

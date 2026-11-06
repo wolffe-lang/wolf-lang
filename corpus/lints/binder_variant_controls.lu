@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="food 3\n5 3\n8\n5")
 //! phase: run
-//! conforms: gram.pat, gram.item.fn, gram.expr.closure
+//! conforms: gram.pat.binder, gram.item.fn, gram.expr.closure
 //!
 //! The boundary of the binder warning (W0801), warning-clean: a lowercase
 //! binder, a capitalized binder that spells no variant, and a function and

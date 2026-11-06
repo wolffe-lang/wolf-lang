@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="food1tip2\ndrinktip")
 //! phase: run
-//! conforms: gram.pat, gram.expr.flow, diag.sev.warn
+//! conforms: gram.pat.binder, gram.expr.flow, diag.sev.warn
 //! warns: W0801
 //!
 //! W0801 in a `for` header: the header's pattern binds each element, so a

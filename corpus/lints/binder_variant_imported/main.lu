@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="tip 3")
 //! phase: run
-//! conforms: gram.pat, mod.use.pub, diag.sev.warn
+//! conforms: gram.pat.binder, mod.use.pub, diag.sev.warn
 //! warns: W0801
 //!
 //! W0801 for an enum this file imports by item (`use kinds.Kind`): its

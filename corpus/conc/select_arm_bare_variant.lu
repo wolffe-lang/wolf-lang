@@ -1,6 +1,6 @@
 //! check: fail(E0806)
 //! phase: parse
-//! conforms: conc.select.ready, gram.expr.conc, gram.pat
+//! conforms: gram.pat.binder, conc.select.ready, gram.expr.conc
 //!
 //! A `select` arm's pattern receives whatever its channel delivers: a
 //! committed receive cannot fail to match, so the pattern only binds. A

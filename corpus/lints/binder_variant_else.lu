@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="7 5")
 //! phase: run
-//! conforms: gram.expr.primary, gram.pat, diag.sev.warn
+//! conforms: gram.pat.binder, gram.expr.primary, diag.sev.warn
 //! warns: W0801
 //!
 //! W0801 in an `else |…|` handler: the handler's name binds the error it
