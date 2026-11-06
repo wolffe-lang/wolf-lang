@@ -3,8 +3,9 @@
 `let (Drink, n) = pair` binds `Drink` to whatever the first element holds, on every machine,
 with `Kind.Drink` in scope and nothing said. It still binds: a binder pattern binds every
 value it meets. It now warns W0801 at the name, naming the variant and its declaration, with
-two fixes: a lowercase name with every use renamed (the one `wolf fix` applies), and the
-qualified `Kind.Drink`. The same holds in a `var` binder, a comma group, a `for` header and an
+two fixes: another name with every use renamed (the one `wolf fix` applies: `drink`, or
+`fast_` for a variant spelled `fast`), and the qualified `Kind.Drink`. The letter case does not
+enter, as it does not where a `match` payload reads a bare name as a variant. The same holds in a `var` binder, a comma group, a `for` header and an
 `else |…|` handler, at every depth a binder admits. A `select` arm's `Drink from ch` bound
 every received value on the compiled tiers while lupin read a test; a receive cannot test, so
 it is now refused by name (E0806). The rule lives in the resolver (`crates/wolf_sema/src/binder.rs`,
@@ -59,19 +60,32 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   (`notes/s282-evidence/base-ed19904c.log`).
 - **Positions, names, scope: hit, as decided.** A statement `let`/`var` binder (every binder of
   a comma group), a `for` header and the `else |…|` handler's binding form, through tuples,
-  struct fields (explicit and shorthand) and both sides of `@`. A name that begins with an
-  uppercase letter and spells a variant of an enum the module declares or the file imports by
-  item; the prelude has no enum. Scope decides, not type. Parameters, closure parameters,
-  item-level bindings, lowercase names, a module-path enum (`kinds.Kind`) and row tags stay
-  silent. The decisions, each with the alternative not taken:
-  - parameters and closure parameters are names, never patterns, so no test can be meant
-    there, and the qualified fix would not parse (not taken: warn with the rename alone);
-  - item-level bindings declare module items; module state cannot hold an enum value at this
-    cut (`[mem.static.3]`), and an item-level destructuring gives each binder the whole
-    annotation's type today (probe `b29`, E0401), so the shape cannot be written there (not
-    taken: warn there too, with a module-wide rename);
-  - only capitalized names warn: a lowercase name is the binding spelling the warning
-    recommends, and W0801's title is "a capitalized name" (not taken: every letter case);
+  struct fields (explicit and shorthand) and both sides of `@`. A name that spells a variant of
+  an enum the module declares or the file imports by item; the prelude has no enum. Scope
+  decides, not type. Parameters, closure parameters, item-level bindings, a module-path enum
+  (`kinds.Kind`) and row tags stay silent. The decisions, each with the alternative not taken:
+  - **two narrowings of the lane's list.** The lane was asked to cover function and closure
+    parameters, and every binder position that can hold a bare variant name. Two places that
+    bind a name are left out, by decision, for one reason: W0801 applies where a pattern can
+    stand, so where `Kind.Drink` could have been meant as a test. A parameter takes a plain
+    name, never a pattern (`[gram.item.fn]`, `[gram.expr.closure]`), so no test can be meant
+    there. An item-level `let` or `var` cannot hold an enum (`[mem.static.3]`), so no variant
+    test can be meant there either. The spec clause says both in these words. (Not taken: warn
+    at parameters with the rename alone; warn at item level with a module-wide rename. An
+    item-level destructuring also gives each binder the whole annotation's type today, probe
+    `b29`, E0401, filed apart.)
+  - **every letter case: a miss, decided against the prediction.** The prediction had only
+    capitalized names warn. The rule is instead the one a `match` payload has used since s281
+    (wolf-lang#1043) to decide that a bare name tests a variant: `names_sema_case`
+    (`crates/wolf_wir/src/lower.rs:24304`) compares the name with the variant names as written,
+    with no letter-case test (`variants.iter().any(|v| v.name == name)`, line 24317). So a name
+    that would test in a match payload warns in a binder, and one that would bind there stays
+    silent: `let (fast, n)` over `enum Mode { fast, slow }` warns, and `for slow in …` does.
+    The rename cannot then be "the lowercase spelling": it is the snake-case spelling, with a
+    trailing `_` while that is a keyword, a name the file or its scope holds, or a variant in
+    scope, so `fast` becomes `fast_`; it stays machine-applicable and first. The set the name
+    is compared with is the scope set below, not a scrutinee's cases: a binder has no
+    scrutinee type to read.
   - scope, not type: the rule needs resolution alone, so lupin, which has no checker, answers it
     at the same rung, and it is the set E0301 already uses (not taken: the checker's
     type-directed rule, compiler-only);
@@ -84,18 +98,27 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   closure captures and interpolations, spells struct shorthands out, and appends `_` while the
   name would collide; with two enums declaring the name, each qualified alternative is `maybe`;
   the name before `@` offers the rename alone.
-- **E0806: hit.** At the arm's name, at the resolve rung, with the lowercase receive as its one
-  machine-applicable fix; the note spells the test in the arm's body.
+- **E0806: hit.** At the arm's name, at the resolve rung, in either letter case, with the
+  rename as its one machine-applicable fix; the note spells the test in the arm's body.
 - **The rows: hit.** At the rows' commit (`1c0a75ba`, the base's code) the corpus step is
   `1270 file(s), 5 bad`: the four W0801 rows by name ("warning ledger mismatch — fired [],
   header declares [W0801]") and the `select` row ("header claims phase `parse` but deepest
   passing phase is `wir`"); `four_machine_regressions` fails the five new rows by name and passes
   the two controls (`notes/s282-evidence/mac-red-1c0a75ba.log`). At the fix every row is green,
   the spans exact on all three compiled tiers, and the corpus step is `1270 file(s), 0 bad`
-  (`mac-fix-5441d267.log`).
+  (`mac-fix-5441d267.log`). The two lowercase-variant rows (`lints/binder_variant_lowercase.lu`,
+  `conc/select_arm_lowercase_variant.lu`) were added red first once the letter case was
+  decided: at their commit (`4261280f`, the capitalized-only code) the corpus step is
+  `1272 file(s), 2 bad`, those two rows by name, and `four_machine_regressions` fails exactly
+  `binders_that_spell_a_lowercase_variant_warn` (W0801 spans `[]` against
+  `[(566, 570), (630, 634)]`) and `a_select_arm_that_spells_a_lowercase_variant_is_refused`
+  (`exit(0)` against `fail(E0806)`), 20 passed (`mac-red-4261280f.log`). At the case-blind code
+  (`83a64499`) all 22 pass and the corpus step is `1272 file(s), 0 bad`
+  (`mac-fix-83a64499.log`).
 - **The lowering ledger: as predicted, one move.** `conc/select_arm_bare_variant.lu` goes from
   `lowers` at the base's code to `not mem-clean (pre-wir rungs own it)`: the resolver refuses it
-  now.
+  now. The two later rows enter the ledger as `lowers` (the binder row) and
+  `not mem-clean (pre-wir rungs own it)` (the `select` row).
 - **The corpus, wolf-std and the org's repositories: hit, none warns.** No file that was already
   in the corpus warns (the corpus step is warning-ledger exact). Every `.lu` file of 29 public
   checkouts (the org's wolf repositories at their trunks, wolf-std at the `STD-PIN` and at its
@@ -107,6 +130,8 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
 - **lupin: hit.** lupin built from the wolf-interp branch answers the compiler's binder rows
   with the same verdicts, stdout and W0801 spans, runs the handler row, and refuses the `select`
   row with E0806 at the same span (`mac-measure-447ba6d8.log`, the last step).
+- **A miss, of formatting:** the shorter rename message let one assertion fit a line, and the
+  green take's `cargo fmt --check` failed on it (`mac-fix-83a64499.log`); `f0d31599` formats it.
 - **A miss, of the rig and of the code:** the first build of the fix failed (`Span` has no
   order, so a `BTreeSet<Span>` does not compile; `mac-fix-eb97a800.log`), and that job's later
   steps ran on the previous build's binary. `4a9c9da9` holds the spans in a hash set, and the
@@ -125,6 +150,10 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   the probes, fmt, clippy, the `wolf_sema` suite, the snapshot sets;
 - `mac-regen-1183e89e.log`: `spec-extract` (anchors: none removed, `gram.pat.binder` added),
   `diag-catalog`, and the snapshot sets under the rows' new headers;
+- `mac-red-4261280f.log`: the lowercase-variant rows at the capitalized-only code, two red by
+  name;
+- `mac-fix-83a64499.log`: the case-blind code: the rows, the corpus, every probe and its
+  rendering, fmt (red, one line), clippy, the `wolf_sema` suite, the snapshot sets;
 - `mac-measure-447ba6d8.log`, `census-org.txt`: the corpus-wide and org-wide measurements, and
   the rows with lupin from the wolf-interp branch;
 - `rig/`: the scripts as run.
@@ -153,14 +182,23 @@ Commits:
   through the binary.
 - `142a6efc`: the catalogs regenerated.
 - `447ba6d8`: the changelog.
+- `fbf99235`, `4261280f`: the lowercase-variant binder and `select` rows, and their
+  four-machine tests, red first.
+- `1913e40e`: binder names read in either letter case; the rename steps past a variant in
+  scope. `83a64499`: its tests (the rename to `fast_`, the refusal).
+- `7d9221fa`, `a714fcf1`, `f0fe9cba`, `a7920f36`: the explanations, the spec clause (the letter
+  case and the two narrowings in plain words), the changelog, a test comment.
+- `f0d31599`: formatting. `a688a7a4`, `6ae3ae95`, `2da54226`, `4b6c5ff5`: the new rows'
+  snapshots, the lowering ledger, the rendered fixes.
 - This note and its evidence.
 
 Test targets:
 - [x] the prediction committed before the first change (`dd529314`)
 - [x] the rows red at the base's code, by name, in the corpus step and on every machine
-      (`mac-red-1c0a75ba.log`)
+      (`mac-red-1c0a75ba.log`); the lowercase-variant rows red at the capitalized-only code
+      (`mac-red-4261280f.log`)
 - [x] the rows green at the fix, spans exact on the checked machine, native and release; the
-      corpus `0 bad` (`mac-fix-5441d267.log`)
+      corpus `0 bad` (`mac-fix-5441d267.log`, and case-blind `mac-fix-83a64499.log`)
 - [x] fmt, clippy (`wolf_sema`, `wolf_driver`, all targets, `-D warnings`), the `wolf_sema`
       suite with the new snapshots
 - [x] `spec-extract`: no anchor removed, one added; the catalogs regenerated
