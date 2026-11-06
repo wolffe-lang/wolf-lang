@@ -53,7 +53,7 @@ in the org's other wolf repositories has one (below).
 
 ## Prediction
 
-Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scored:
+Committed before the first change (`292e9b3a`, `notes/s282-prediction.md`). Scored:
 
 - **The base: hit.** Every binder position bound a variant-spelled name silently on all four
   machines; the handler and the `select` arm refused at run on lupin, which read them as tests
@@ -100,7 +100,7 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   the name before `@` offers the rename alone.
 - **E0806: hit.** At the arm's name, at the resolve rung, in either letter case, with the
   rename as its one machine-applicable fix; the note spells the test in the arm's body.
-- **The rows: hit.** At the rows' commit (`1c0a75ba`, the base's code) the corpus step is
+- **The rows: hit.** At the rows' commit (`74e53ef4`, the base's code) the corpus step is
   `1270 file(s), 5 bad`: the four W0801 rows by name ("warning ledger mismatch — fired [],
   header declares [W0801]") and the `select` row ("header claims phase `parse` but deepest
   passing phase is `wir`"); `four_machine_regressions` fails the five new rows by name and passes
@@ -108,12 +108,12 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   the spans exact on all three compiled tiers, and the corpus step is `1270 file(s), 0 bad`
   (`mac-fix-5441d267.log`). The two lowercase-variant rows (`lints/binder_variant_lowercase.lu`,
   `conc/select_arm_lowercase_variant.lu`) were added red first once the letter case was
-  decided: at their commit (`4261280f`, the capitalized-only code) the corpus step is
+  decided: at their commit (`ad993530`, the capitalized-only code) the corpus step is
   `1272 file(s), 2 bad`, those two rows by name, and `four_machine_regressions` fails exactly
   `binders_that_spell_a_lowercase_variant_warn` (W0801 spans `[]` against
   `[(566, 570), (630, 634)]`) and `a_select_arm_that_spells_a_lowercase_variant_is_refused`
   (`exit(0)` against `fail(E0806)`), 20 passed (`mac-red-4261280f.log`). At the case-blind code
-  (`83a64499`) all 22 pass and the corpus step is `1272 file(s), 0 bad`
+  (`9f93d3a3`) all 22 pass and the corpus step is `1272 file(s), 0 bad`
   (`mac-fix-83a64499.log`).
 - **The lowering ledger: as predicted, one move.** `conc/select_arm_bare_variant.lu` goes from
   `lowers` at the base's code to `not mem-clean (pre-wir rungs own it)`: the resolver refuses it
@@ -126,7 +126,7 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   and on the head: 0 W0801 and 0 E0806 on both (`mac-measure-447ba6d8.log`). A syntactic census
   of the same trees finds no capitalized name in any binder position at all
   (`census-org.txt`); the only capitalized `let`s are item-level constants, which the rule does
-  not cover. With the rule case-blind the head was measured again (`83a64499`,
+  not cover. With the rule case-blind the head was measured again (`9f93d3a3`,
   `mac-remeasure-83a64499.log`): 0 W0801 and 0 E0806 in every tree, and every tree's verdicts
   equal to the base's, file count for file count (3,615 files in 30 trees). The census in
   either letter case (`census-variant.txt`) finds no binder name in any of those trees that
@@ -134,7 +134,7 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
 - **lupin: hit.** lupin built from the wolf-interp branch answers the compiler's binder rows
   with the same verdicts, stdout and W0801 spans, runs the handler row, and refuses the `select`
   row with E0806 at the same span (`mac-measure-447ba6d8.log`, the last step; at the case-blind
-  heads, `b0b521c` and `83a64499`, all nine rows, `mac-remeasure-83a64499.log`).
+  heads, `b0b521c` and `9f93d3a3`, all nine rows, `mac-remeasure-83a64499.log`).
 - **The direction of the one-way ledger: lupin's W0801 is a subset of the compiler's.** The
   compiler may report W0801 where lupin does not; lupin never reports one the compiler does
   not. Both machines were run over every corpus file, lupin's mirror fixtures and every probe,
@@ -153,12 +153,12 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   `typecheck/refutable_let.lu`: the checker's refutable-`let` E0806, which lupin answers
   `unsupported` (honest) at its full run; the `select` E0806 agrees everywhere.
 - **A miss, of formatting:** the shorter rename message let one assertion fit a line, and the
-  green take's `cargo fmt --check` failed on it (`mac-fix-83a64499.log`); `f0d31599` formats it.
+  green take's `cargo fmt --check` failed on it (`mac-fix-83a64499.log`); `5bfaa1da` formats it.
 - **A miss, of the rig and of the code:** the first build of the fix failed (`Span` has no
   order, so a `BTreeSet<Span>` does not compile; `mac-fix-eb97a800.log`), and that job's later
-  steps ran on the previous build's binary. `4a9c9da9` holds the spans in a hash set, and the
+  steps ran on the previous build's binary. `95984cc8` holds the spans in a hash set, and the
   rig now stops at a failed build. The row headers were rewritten once to cite the new clause
-  (`de3f7ade`), which moved every span by the header's growth; the rows and their lexer and
+  (`f8d03f9e`), which moved every span by the header's growth; the rows and their lexer and
   parser snapshots moved with them.
 
 ## Evidence index
@@ -182,42 +182,46 @@ Committed before the first change (`dd529314`, `notes/s282-prediction.md`). Scor
   census in either letter case, and the compiler-lupin W0801 comparison;
 - `rig/`: the scripts as run.
 
-The records at the final head live outside the tree, because a record cannot predate the head it
-names. The PR body quotes every `END` line of the Linux gauntlet record and of the plant record.
+The branch was rebased once, onto trunk `03c0f04e`, which changed the runtime's signal and
+reactor threads, their row, `spec/11-os.md` and notes, and none of this lane's files but the
+changelog. Every log here ran before that rebase and is named by the commit it ran at;
+`rebase-map.txt` gives each one's rebased commit, which has the same subject and the same change.
+The note names rebased commits throughout. The records at the final head live outside the tree,
+because a record cannot predate the head it names. The PR body quotes every `END` line of the Linux gauntlet record and of the plant record.
 
 ## Done-when
 
 Commits:
-- `084ea023`: the base measured; `dd529314`: the prediction, before the first change.
-- `1b778931`, `b4b17012`, `c0ec0709`: the W0801 rows, their silent controls, and the `select`
+- `72e9a067`: the base measured; `292e9b3a`: the prediction, before the first change.
+- `4ed2186a`, `6de8af3e`, `ba81d130`: the W0801 rows, their silent controls, and the `select`
   refusal row with its control, red first.
-- `1c0a75ba`: the rows on every machine (`four_machine_regressions`).
-- `d48a821b`, `17c72757`: the rows' lexer and parser snapshots.
-- `3e0b7a89`: the binder analysis (`binder.rs`): homes, names, the fresh lowercase name, the
+- `74e53ef4`: the rows on every machine (`four_machine_regressions`).
+- `347f805b`, `e29deee0`: the rows' lexer and parser snapshots.
+- `2f979924`: the binder analysis (`binder.rs`): homes, names, the fresh lowercase name, the
   reports.
-- `eb97a800`: the resolver reports W0801 at binders and E0806 at `select` arms.
-- `b8784e25`, `4a9c9da9`: formatting, and the hash set.
-- `5441d267`, `3a1b98ab`: the rendered snapshots and the structured fix tests.
-- `024502a5`: the lowering ledger.
-- `a0ce8f4f`: W0801's and E0806's explanations.
-- `f5860197`, `0f8f8e3b`: `[gram.pat.binder]` and §9.2's lines; the anchor indexed.
-- `de3f7ade`, `10732182`, `cc8770a9`: the rows cite the clause; their spans and snapshots move.
-- `1183e89e`: `wolf fix`, `--deny-warnings`, `#[allow(w0801)]`, the refusal and `--explain`
+- `8ec9d663`: the resolver reports W0801 at binders and E0806 at `select` arms.
+- `e824f8be`, `95984cc8`: formatting, and the hash set.
+- `a3d83762`, `ad695a04`: the rendered snapshots and the structured fix tests.
+- `389c5dec`: the lowering ledger.
+- `9ba8d964`: W0801's and E0806's explanations.
+- `4ed90e8d`, `c4201600`: `[gram.pat.binder]` and §9.2's lines; the anchor indexed.
+- `f8d03f9e`, `495324eb`, `dd4a0211`: the rows cite the clause; their spans and snapshots move.
+- `e4fefadc`: `wolf fix`, `--deny-warnings`, `#[allow(w0801)]`, the refusal and `--explain`
   through the binary.
-- `142a6efc`: the catalogs regenerated.
-- `447ba6d8`: the changelog.
-- `fbf99235`, `4261280f`: the lowercase-variant binder and `select` rows, and their
+- `b60d35dc`: the catalogs regenerated.
+- `e02189ef`: the changelog.
+- `48d24972`, `ad993530`: the lowercase-variant binder and `select` rows, and their
   four-machine tests, red first.
-- `1913e40e`: binder names read in either letter case; the rename steps past a variant in
-  scope. `83a64499`: its tests (the rename to `fast_`, the refusal).
-- `7d9221fa`, `a714fcf1`, `f0fe9cba`, `a7920f36`: the explanations, the spec clause (the letter
+- `296c96e4`: binder names read in either letter case; the rename steps past a variant in
+  scope. `9f93d3a3`: its tests (the rename to `fast_`, the refusal).
+- `928819b5`, `bfddd361`, `86525c2e`, `03c56bb0`: the explanations, the spec clause (the letter
   case and the two narrowings in plain words), the changelog, a test comment.
-- `f0d31599`: formatting. `a688a7a4`, `6ae3ae95`, `2da54226`, `4b6c5ff5`: the new rows'
+- `5bfaa1da`: formatting. `2f381d7b`, `6f0af4ef`, `e71a0f4c`, `015c9357`: the new rows'
   snapshots, the lowering ledger, the rendered fixes.
 - This note and its evidence.
 
 Test targets:
-- [x] the prediction committed before the first change (`dd529314`)
+- [x] the prediction committed before the first change (`292e9b3a`)
 - [x] the rows red at the base's code, by name, in the corpus step and on every machine
       (`mac-red-1c0a75ba.log`); the lowercase-variant rows red at the capitalized-only code
       (`mac-red-4261280f.log`)
@@ -253,3 +257,7 @@ closing keyword):
 - wolf-interp: lupin does not register the variants of an enum declared as
   `type Kind = enum { … }` (probe `b34`: no W0801 where the compiler has one; a `match` arm
   `Drink =>` over it does not apply).
+- wolf-interp: lupin does not resolve a qualified variant whose name is lowercase
+  (`Mode.slow` of `enum Mode { fast, slow }`: "does not resolve"; probes `b16`, `b32`).
+- wolf-interp: lupin runs an item-level destructuring with capitalized binders and prints the
+  names, not the values (`let (Drink, N): (Kind, int) = (Kind.Food, 3)`: `drink N`; probe `b29`).
