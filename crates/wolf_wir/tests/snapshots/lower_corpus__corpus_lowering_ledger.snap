@@ -95,6 +95,8 @@ conc/proc_link_root_death.lu: lowers
 conc/proc_must_join_legal.lu: lowers
 conc/proc_spawn_loop.lu: lowers
 conc/reason_interp.lu: lowers
+conc/select_arm_bare_variant.lu: not mem-clean (pre-wir rungs own it)
+conc/select_arm_lowercase_binds.lu: lowers
 conc/select_seeded.lu: lowers
 conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
@@ -345,6 +347,11 @@ lints/ancestor_import/main.lu: lowers
 lints/as_view_consuming.lu: lowers
 lints/assume_reassigned.lu: lowers
 lints/binder_capitalized.lu: lowers
+lints/binder_variant_controls.lu: lowers
+lints/binder_variant_else.lu: lowers
+lints/binder_variant_for.lu: lowers
+lints/binder_variant_imported/main.lu: lowers
+lints/binder_variant_let.lu: lowers
 lints/discarded_result.lu: lowers
 lints/else_arithmetic.lu: lowers
 lints/else_comparison.lu: lowers
