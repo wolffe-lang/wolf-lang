@@ -1,0 +1,331 @@
+s282: 10:09:01 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:10:01 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:11:01 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:12:01 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:13:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:14:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:15:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:16:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:17:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:18:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:19:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:20:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:21:02 waiting for $LANE/records/mac-fix-83a64499.exit $LANE/records/mac-interp-fix-b0b521c.exit
+s282: 10:22:02 markers present: mac-fix-83a64499.exit=0 mac-interp-fix-b0b521c.exit=0 
+s282: building at 83a64499 in $LANE/build-83a64499
+s282: last release 44s ago; waiting 16s for the turn
+s282: 05:22:18 mac build lock held by another lane; waiting
+s282: 05:22:48 mac build lock held by another lane; waiting
+s282: 05:23:18 mac build lock held by another lane; waiting
+s282: lock taken 05:23:48, 8722 MiB free, 105 GB disk; running: bash $LANE/rig/mac-remeasure.sh
+== STEP head 10:23:48
+83a64499e68745af7f2caf693e5d0bfa38663300
+83a64499 Test the lowercase-variant binder, its rename and its select refusal
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.59+dev.b0b521c (wolf-interp, reference interpreter at pin 5f1f1c9)
+fixtures $LANE/build-interp-b0b521c6/tests/binder_variant_s282
+END head exit=0
+== STEP build-head 10:23:48
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+END build-head exit=0
+== STEP measure-head 10:23:48
+$LANE/org/aspen: 34 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 11, 'pass': 23}
+$LANE/org/boreutils: 215 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 26, 'pass': 189}
+$LANE/org/burrow: 34 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 13, 'pass': 21}
+$LANE/org/clef: 41 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 17, 'pass': 24}
+$LANE/org/cub: 134 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 130, 'pass': 4}
+$LANE/org/den: 242 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 156, 'pass': 86}
+$LANE/org/fenrir: 37 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 19, 'pass': 18}
+$LANE/org/fugue: 41 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 38, 'pass': 3}
+$LANE/org/jobq: 3 file(s), 0 W0801, 0 E0806; verdicts {'pass': 3}
+$LANE/org/lair: 40 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 16, 'pass': 24}
+$LANE/org/ligature: 46 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 19, 'pass': 27}
+$LANE/org/lobo: 210 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 148, 'pass': 62}
+$LANE/org/lope: 21 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 8, 'pass': 13}
+$LANE/org/mk: 9 file(s), 0 W0801, 0 E0806; verdicts {'pass': 9}
+$LANE/org/muzzle: 38 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0201)': 1, 'fail(E0301)': 7, 'pass': 30}
+$LANE/org/pack: 23 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 18, 'pass': 5}
+$LANE/org/pax: 168 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 72, 'fail(E0302)': 10, 'pass': 86}
+$LANE/org/pelt: 60 file(s), 0 W0801, 0 E0806; verdicts {'pass': 60}
+$LANE/org/scent: 45 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 7, 'pass': 38}
+$LANE/org/sniff: 73 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 29, 'pass': 44}
+$LANE/org/spell: 11 file(s), 0 W0801, 0 E0806; verdicts {'pass': 11}
+$LANE/org/tomlq: 8 file(s), 0 W0801, 0 E0806; verdicts {'pass': 8}
+$LANE/org/trail: 8 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 8}
+$LANE/org/tree-sitter-wolf: 2 file(s), 0 W0801, 0 E0806; verdicts {'pass': 2}
+$LANE/org/wolf-book: 483 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0201)': 2, 'fail(E0202)': 1, 'fail(E0301)': 14, 'fail(E0302)': 166, 'fail(E0303)': 2, 'fail(E0304)': 2, 'fail(E0305)': 2, 'fail(E0410)': 1, 'pass': 293}
+$LANE/org/wolf-lsp: 1 file(s), 0 W0801, 0 E0806; verdicts {'pass': 1}
+$LANE/org/wolf-web: 140 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0302)': 94, 'pass': 46}
+$LANE/org/wolf-std-5b3a5994: 671 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 9, 'fail(E0302)': 35, 'pass': 627}
+$LANE/org/wolf-std: 743 file(s), 0 W0801, 0 E0806; verdicts {'fail(E0301)': 67, 'fail(E0302)': 36, 'pass': 640}
+END measure-head exit=0
+== STEP census 10:33:19
+$LANE/org/aspen: 34 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/boreutils: 215 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/burrow: 34 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/clef: 41 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/cub: 134 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/den: 242 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/fenrir: 37 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/fugue: 41 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/jobq: 3 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/lair: 40 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/ligature: 46 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/lobo: 210 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/lope: 21 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/mk: 9 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/muzzle: 38 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/pack: 23 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/pax: 168 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/pelt: 60 file(s), 2 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/scent: 45 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/sniff: 73 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/spell: 11 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/tomlq: 8 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/trail: 8 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/tree-sitter-wolf: 2 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/wolf-book: 483 file(s), 24 variant name(s) declared (2 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/wolf-lsp: 1 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/wolf-web: 140 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/wolf-std-5b3a5994: 671 file(s), 12 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/org/wolf-std: 743 file(s), 12 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+$LANE/build-83a64499/corpus: 1272 file(s), 54 variant name(s) declared (2 lowercase), 16 binder name(s) spelling one, 2 item-level
+  conc/select_arm_bare_variant.lu:19: select Drink | Drink from ch => { got = 1 },
+  conc/select_arm_lowercase_variant.lu:17: select fast | fast from ch => { got = fast },
+  lints/binder_variant_else.lu:18: else Drink | let a = pick(0) else |Drink| 7
+  lints/binder_variant_else.lu:19: else Food | let b = pick(5) else |Food| 9
+  lints/binder_variant_for.lu:24: for Drink | for (Drink, n) in xs { t = t + name(Drink) + "{n}" }
+  lints/binder_variant_for.lu:27: for Food | for Food in [Kind.Drink, Kind.Gratuity] { u = u + name(Food) }
+  lints/binder_variant_let.lu:29: let Drink | let (Drink, n) = (Kind.Food, 3)
+  lints/binder_variant_let.lu:34: let Food | let Order { kind: Food, n } = Order { kind: Kind.Gratuity, n: 4 }
+  lints/binder_variant_let.lu:39: let Gratuity | let Gratuity = Kind.Drink
+  lints/binder_variant_let.lu:44: var Drink | var (Drink, n) = (Kind.Gratuity, 1)
+  lints/binder_variant_let.lu:50: group Food | let a = 1, (Food, b) = (Kind.Drink, 2)
+  lints/binder_variant_let.lu:55: let Gratuity | let ((Gratuity, a), b) = ((Kind.Food, 5), 6)
+  lints/binder_variant_let.lu:60: let Some | let (Some, n) = (7, 8)
+  lints/binder_variant_lowercase.lu:15: let fast | let (fast, n) = (3, 4)
+  lints/binder_variant_lowercase.lu:18: for slow | for slow in [5, 7] { t = t + slow }
+  lints/binder_variant_imported/main.lu:14: let Drink | let (Drink, n) = (Kind.Gratuity, 3)
+  item-level memory/static_init_cycle.lu:9: let A | let A: int = B + 1
+  item-level memory/static_init_cycle.lu:11: let B | let B: int = A * 2
+TOTAL binder names spelling a declared variant, any case: 16
+END census exit=0
+== STEP w0801-corpus 10:33:22
+DIFF lints/binder_capitalized.lu: compiler-only [(449, 452)] lupin-only [] (compiler pass at typecheck, lupin pass at resolve)
+SAME lints/binder_variant_else.lu: [(568, 573), (603, 607)]
+SAME lints/binder_variant_for.lu: [(710, 715), (794, 798)]
+SAME lints/binder_variant_let.lu: [(978, 983), (1074, 1078), (1176, 1184), (1253, 1258), (1361, 1365), (1449, 1457), (1553, 1557)]
+SAME lints/binder_variant_lowercase.lu: [(566, 570), (630, 634)]
+SAME lints/binder_variant_imported/main.lu: [(412, 417)]
+E0806 typecheck/refutable_let.lu: compiler fail(E0806) lupin pass
+TOTAL files=1272 either=6 wolf_only=1 lupin_only=0 e0806=1 no_record=0
+END w0801-corpus exit=0
+== STEP w0801-mirror 10:34:01
+SAME else/main.lu: [(568, 573), (603, 607)]
+SAME for/main.lu: [(710, 715), (794, 798)]
+SAME imported/main.lu: [(412, 417)]
+SAME let/main.lu: [(978, 983), (1074, 1078), (1176, 1184), (1253, 1258), (1361, 1365), (1449, 1457), (1553, 1557)]
+SAME lowercase/main.lu: [(566, 570), (630, 634)]
+TOTAL files=10 either=5 wolf_only=0 lupin_only=0 e0806=0 no_record=0
+END w0801-mirror exit=0
+== STEP rows-with-s282-lupin 10:34:01
+## lints/binder_variant_let.lu
+checked  exit(0)      run       out='food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8\n' warns=[W0801@1074-1078,W0801@1176-1184,W0801@1253-1258,W0801@1361-1365,W0801@1449-1457,W0801@1553-1557,W0801@978-983] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+native   exit(0)      run       out='food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8\n' warns=[W0801@1074-1078,W0801@1176-1184,W0801@1253-1258,W0801@1361-1365,W0801@1449-1457,W0801@1553-1557,W0801@978-983] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+release  exit(0)      run       out='food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8\n' warns=[W0801@1074-1078,W0801@1176-1184,W0801@1253-1258,W0801@1361-1365,W0801@1449-1457,W0801@1553-1557,W0801@978-983] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+lupin    exit(0)      run       out='food 3\ntip 4\ndrink\ntip 2\ndrink 1 2\nfood 5 6\n7 8\n' warns=[W0801@1074-1078,W0801@1176-1184,W0801@1253-1258,W0801@1361-1365,W0801@1449-1457,W0801@1553-1557,W0801@978-983] 
+## lints/binder_variant_for.lu
+checked  exit(0)      run       out='food1tip2\ndrinktip\n' warns=[W0801@710-715,W0801@794-798] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+native   exit(0)      run       out='food1tip2\ndrinktip\n' warns=[W0801@710-715,W0801@794-798] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+release  exit(0)      run       out='food1tip2\ndrinktip\n' warns=[W0801@710-715,W0801@794-798] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+lupin    exit(0)      run       out='food1tip2\ndrinktip\n' warns=[W0801@710-715,W0801@794-798] 
+## lints/binder_variant_else.lu
+checked  exit(0)      run       out='7 5\n' warns=[W0801@568-573,W0801@603-607] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+native   exit(0)      run       out='7 5\n' warns=[W0801@568-573,W0801@603-607] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+release  exit(0)      run       out='7 5\n' warns=[W0801@568-573,W0801@603-607] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+lupin    exit(0)      run       out='7 5\n' warns=[W0801@568-573,W0801@603-607] 
+## binder_variant_imported/main.lu
+checked  exit(0)      run       out='tip 3\n' warns=[W0801@412-417] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+native   exit(0)      run       out='tip 3\n' warns=[W0801@412-417] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+release  exit(0)      run       out='tip 3\n' warns=[W0801@412-417] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+lupin    exit(0)      run       out='tip 3\n' warns=[W0801@412-417] 
+## lints/binder_variant_lowercase.lu
+checked  exit(0)      run       out='3 4\n12\n' warns=[W0801@566-570,W0801@630-634] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+native   exit(0)      run       out='3 4\n12\n' warns=[W0801@566-570,W0801@630-634] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+release  exit(0)      run       out='3 4\n12\n' warns=[W0801@566-570,W0801@630-634] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+lupin    exit(0)      run       out='3 4\n12\n' warns=[W0801@566-570,W0801@630-634] 
+## lints/binder_variant_controls.lu
+checked  exit(0)      run       out='food 3\n5 3\n8\n5\n' warns=[] 
+native   exit(0)      run       out='food 3\n5 3\n8\n5\n' warns=[] 
+release  exit(0)      run       out='food 3\n5 3\n8\n5\n' warns=[] 
+lupin    exit(0)      run       out='food 3\n5 3\n8\n5\n' warns=[] 
+## conc/select_arm_bare_variant.lu
+checked  fail(E0806)  resolve   out=None warns=[] error[E0806]: `Drink` is the variant `Kind.Drink`, and a `select` arm cannot test it
+native   fail(E0806)  resolve   out=None warns=[] error[E0806]: `Drink` is the variant `Kind.Drink`, and a `select` arm cannot test it
+release  fail(E0806)  resolve   out=None warns=[] error[E0806]: `Drink` is the variant `Kind.Drink`, and a `select` arm cannot test it
+lupin    fail(E0806)  resolve   out=None warns=[] 
+## conc/select_arm_lowercase_variant.lu
+checked  fail(E0806)  resolve   out=None warns=[] error[E0806]: `fast` is the variant `Mode.fast`, and a `select` arm cannot test it
+native   fail(E0806)  resolve   out=None warns=[] error[E0806]: `fast` is the variant `Mode.fast`, and a `select` arm cannot test it
+release  fail(E0806)  resolve   out=None warns=[] error[E0806]: `fast` is the variant `Mode.fast`, and a `select` arm cannot test it
+lupin    fail(E0806)  resolve   out=None warns=[] 
+## conc/select_arm_lowercase_binds.lu
+checked  exit(0)      run       out='food\n' warns=[] 
+native   exit(0)      run       out='food\n' warns=[] 
+release  exit(0)      run       out='food\n' warns=[] 
+lupin    exit(0)      run       out='food\n' warns=[] 
+END rows-with-s282-lupin exit=0
+== STEP w0801-probes 10:34:08
+SAME b01_let_tuple/main.lu: [(159, 164)]
+SAME b02_let_struct/main.lu: [(195, 200)]
+SAME b03_let_plain/main.lu: [(158, 163)]
+SAME b04_var_tuple/main.lu: [(159, 164)]
+SAME b05_let_group/main.lu: [(166, 171)]
+SAME b06_let_at/main.lu: [(158, 163), (203, 207)]
+SAME b07_let_nested/main.lu: [(160, 165)]
+SAME b08_for_tuple/main.lu: [(221, 226)]
+SAME b09_for_plain/main.lu: [(173, 178)]
+SAME b10_else_handler/main.lu: [(246, 251)]
+SAME b14_imported/main.lu: [(60, 65)]
+SAME b16_lowercase_variant/main.lu: [(55, 59)]
+SAME b20_payload_variant/main.lu: [(59, 63)]
+SAME b22_two_homes/main.lu: [(85, 90)]
+SAME b23_interp_use/main.lu: [(159, 164)]
+SAME b26_struct_shorthand/main.lu: [(101, 106)]
+SAME b27_imported_match/main.lu: [(45, 50)]
+SAME b28_imported_module_call/main.lu: [(55, 60)]
+SAME b32_else_lowercase_variant/main.lu: [(159, 163)]
+SAME b33_else_variant_is_tag/main.lu: [(164, 173)]
+DIFF b34_type_alias_enum/main.lu: compiler-only [(63, 68)] lupin-only [] (compiler pass at typecheck, lupin pass at resolve)
+SAME b35_shorthand_capital_use/main.lu: [(91, 96)]
+TOTAL files=40 either=22 wolf_only=1 lupin_only=0 e0806=0 no_record=0
+END w0801-probes exit=0
+== STEP edge-probes 10:34:08
+## b16_lowercase_variant/main.lu
+checked  exit(0)      run       out='slow 3\n' warns=[W0801@55-59] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+native   exit(0)      run       out='slow 3\n' warns=[W0801@55-59] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+release  exit(0)      run       out='slow 3\n' warns=[W0801@55-59] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+lupin    unsupported  resolve   out=None warns=[W0801@55-59] 
+## b32_else_lowercase_variant/main.lu
+checked  exit(0)      run       out='slow 7\n' warns=[W0801@159-163] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+native   exit(0)      run       out='slow 7\n' warns=[W0801@159-163] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+release  exit(0)      run       out='slow 7\n' warns=[W0801@159-163] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+lupin    unsupported  resolve   out=None warns=[W0801@159-163] 
+## b33_else_variant_is_tag/main.lu
+checked  exit(0)      run       out='7\n' warns=[W0801@164-173] warning[W0801]: `too_short` binds a new name here — it does not test the variant `Mode.too_short`
+native   exit(0)      run       out='7\n' warns=[W0801@164-173] warning[W0801]: `too_short` binds a new name here — it does not test the variant `Mode.too_short`
+release  exit(0)      run       out='7\n' warns=[W0801@164-173] warning[W0801]: `too_short` binds a new name here — it does not test the variant `Mode.too_short`
+lupin    exit(0)      run       out='7\n' warns=[W0801@164-173] 
+## b34_type_alias_enum/main.lu
+checked  exit(0)      run       out='3 4\n' warns=[W0801@63-68] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+native   exit(0)      run       out='3 4\n' warns=[W0801@63-68] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+release  exit(0)      run       out='3 4\n' warns=[W0801@63-68] warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+lupin    exit(0)      run       out='3 4\n' warns=[] 
+END edge-probes exit=0
+== STEP edge-render 10:34:11
+## b16_lowercase_variant
+warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+ --> $LANE/probe/b16_lowercase_variant/main.lu:4:10
+  |
+1 | enum Mode { fast, slow }
+  |             ---- `fast` is declared here, in `Mode`
+...
+4 |     let (fast, n) = (Mode.slow, 3)
+  |          ^^^^ a binding, not a test
+  |
+  = note: a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a bare name
+    there is a new binding even when it spells a variant. To test the value, `match` on it
+    (`Mode.fast => …`); to keep the binding, give it a name that spells no variant.
+help: bind it under another name: `fast_`
+  |
+4 |     let (fast_, n) = (Mode.slow, 3)
+5 |     let s = match fast_ { Mode.fast => "fast", Mode.slow => "slow" }
+  |
+help: test the variant instead: `Mode.fast`
+  |
+4 |     let (Mode.fast, n) = (Mode.slow, 3)
+  |
+
+   (build exit 0)
+/$LANE/probe/b16_lowercase_variant/main.lu: unsupported: `Mode.slow` does not resolve
+   (lupin exit 4)
+## b32_else_lowercase_variant
+warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+ --> $LANE/probe/b32_else_lowercase_variant/main.lu:8:27
+  |
+1 | enum Mode { fast, slow }
+  |             ---- `fast` is declared here, in `Mode`
+...
+8 |     let a = pick(0) else |fast| 7
+  |                           ^^^^ a binding, not a test
+  |
+  = note: a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a bare name
+    there is a new binding even when it spells a variant. To test the value, `match` on it
+    (`Mode.fast => …`); to keep the binding, give it a name that spells no variant.
+help: bind it under another name: `fast_`
+  |
+8 |     let a = pick(0) else |fast_| 7
+  |
+help: test the variant instead: `Mode.fast`
+  |
+8 |     let a = pick(0) else |Mode.fast| 7
+  |
+
+   (build exit 0)
+/$LANE/probe/b32_else_lowercase_variant/main.lu: unsupported: `Mode.slow` does not resolve
+   (lupin exit 4)
+## b33_else_variant_is_tag
+warning[W0801]: `too_short` binds a new name here — it does not test the variant `Mode.too_short`
+ --> $LANE/probe/b33_else_variant_is_tag/main.lu:8:27
+  |
+1 | enum Mode { too_short, calm }
+  |             --------- `too_short` is declared here, in `Mode`
+...
+8 |     let a = pick(0) else |too_short| 7
+  |                           ^^^^^^^^^ a binding, not a test
+  |
+  = note: a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a bare name
+    there is a new binding even when it spells a variant. To test the value, `match` on it
+    (`Mode.too_short => …`); to keep the binding, give it a name that spells no variant.
+help: bind it under another name: `too_short_`
+  |
+8 |     let a = pick(0) else |too_short_| 7
+  |
+help: test the variant instead: `Mode.too_short`
+  |
+8 |     let a = pick(0) else |Mode.too_short| 7
+  |
+
+   (build exit 0)
+7
+   (lupin exit 0)
+## b34_type_alias_enum
+warning[W0801]: `Drink` binds a new name here — it does not test the variant `Kind.Drink`
+ --> $LANE/probe/b34_type_alias_enum/main.lu:4:10
+  |
+1 | type Kind = enum { Drink, Food }
+  |                    ----- `Drink` is declared here, in `Kind`
+...
+4 |     let (Drink, n) = (3, 4)
+  |          ^^^^^ a binding, not a test
+  |
+  = note: a `let`, `var`, `for` or `else |…|` pattern binds every value it meets, so a bare name
+    there is a new binding even when it spells a variant. To test the value, `match` on it
+    (`Kind.Drink => …`); to keep the binding, give it a name that spells no variant.
+help: bind it under another name: `drink`
+  |
+4 |     let (drink, n) = (3, 4)
+5 |     print("{drink} {n}")
+  |
+help: test the variant instead: `Kind.Drink`
+  |
+4 |     let (Kind.Drink, n) = (3, 4)
+  |
+
+   (build exit 0)
+3 4
+   (lupin exit 0)
+END edge-render exit=0
+== done 2026-11-06T10:34:11Z
+s282: END exit=0 05:34:11

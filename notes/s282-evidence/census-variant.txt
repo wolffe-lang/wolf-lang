@@ -1,0 +1,51 @@
+== STEP census 10:33:19
+org/aspen: 34 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/boreutils: 215 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/burrow: 34 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/clef: 41 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/cub: 134 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/den: 242 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/fenrir: 37 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/fugue: 41 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/jobq: 3 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/lair: 40 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/ligature: 46 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/lobo: 210 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/lope: 21 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/mk: 9 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/muzzle: 38 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/pack: 23 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/pax: 168 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/pelt: 60 file(s), 2 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/scent: 45 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/sniff: 73 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/spell: 11 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/tomlq: 8 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/trail: 8 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/tree-sitter-wolf: 2 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/wolf-book: 483 file(s), 24 variant name(s) declared (2 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/wolf-lsp: 1 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/wolf-web: 140 file(s), 0 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/wolf-std-5b3a5994: 671 file(s), 12 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+org/wolf-std: 743 file(s), 12 variant name(s) declared (0 lowercase), 0 binder name(s) spelling one, 0 item-level
+build-83a64499/corpus: 1272 file(s), 54 variant name(s) declared (2 lowercase), 16 binder name(s) spelling one, 2 item-level
+  conc/select_arm_bare_variant.lu:19: select Drink | Drink from ch => { got = 1 },
+  conc/select_arm_lowercase_variant.lu:17: select fast | fast from ch => { got = fast },
+  lints/binder_variant_else.lu:18: else Drink | let a = pick(0) else |Drink| 7
+  lints/binder_variant_else.lu:19: else Food | let b = pick(5) else |Food| 9
+  lints/binder_variant_for.lu:24: for Drink | for (Drink, n) in xs { t = t + name(Drink) + "{n}" }
+  lints/binder_variant_for.lu:27: for Food | for Food in [Kind.Drink, Kind.Gratuity] { u = u + name(Food) }
+  lints/binder_variant_let.lu:29: let Drink | let (Drink, n) = (Kind.Food, 3)
+  lints/binder_variant_let.lu:34: let Food | let Order { kind: Food, n } = Order { kind: Kind.Gratuity, n: 4 }
+  lints/binder_variant_let.lu:39: let Gratuity | let Gratuity = Kind.Drink
+  lints/binder_variant_let.lu:44: var Drink | var (Drink, n) = (Kind.Gratuity, 1)
+  lints/binder_variant_let.lu:50: group Food | let a = 1, (Food, b) = (Kind.Drink, 2)
+  lints/binder_variant_let.lu:55: let Gratuity | let ((Gratuity, a), b) = ((Kind.Food, 5), 6)
+  lints/binder_variant_let.lu:60: let Some | let (Some, n) = (7, 8)
+  lints/binder_variant_lowercase.lu:15: let fast | let (fast, n) = (3, 4)
+  lints/binder_variant_lowercase.lu:18: for slow | for slow in [5, 7] { t = t + slow }
+  lints/binder_variant_imported/main.lu:14: let Drink | let (Drink, n) = (Kind.Gratuity, 3)
+  item-level memory/static_init_cycle.lu:9: let A | let A: int = B + 1
+  item-level memory/static_init_cycle.lu:11: let B | let B: int = A * 2
+TOTAL binder names spelling a declared variant, any case: 16
+END census exit=0

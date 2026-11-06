@@ -9,7 +9,11 @@ base-ed19904c.log         the base: wolf built at ed19904c; every probe on the c
 probe/                    the probe programs (.lu.txt; each its own directory, so each is its
                           own module; b14, b27 and b28 carry a `kinds` module beside the
                           entry). b31 is the handler reading of a capitalized row tag (an issue
-                          for lupin, outside this lane).
+                          for lupin, outside this lane). b32-b34: a handler named by a lowercase
+                          variant, by a name that is both a variant and a row tag, and an enum
+                          declared as `type Kind = enum {…}`; b35, b36: the witnesses of two
+                          issues (a shorthand binder's use on lupin; an item-level destructure's
+                          types).
 mac-red-1c0a75ba.log      the rows at the base's code: the seven rows on four machines,
                           four_machine_regressions 15 passed and 5 failed by name, the corpus
                           step `5 bad` by name; then the lexer, parser and lowering snapshot
@@ -38,5 +42,15 @@ mac-fix-83a64499.log      the case-blind code: four_machine_regressions 22 passe
                           and the snapshot sets under insta's update.
 census-org.txt            a syntactic census of the same trees: every capitalized name in a
                           binder position (item-level constants listed apart).
-rig/                      the scripts as run: the Mac lock, build-at, the jobs, the probe
+mac-remeasure-83a64499.log  the case-blind head over the same trees at the resolve rung (W0801 and
+                          E0806 per tree; the base's run above stands, its binary unchanged);
+                          the case-blind census; the W0801 and E0806 comparison of the compiler
+                          (--phase=typecheck, both halves) and lupin built from the wolf-interp
+                          branch (--phase resolve) over every corpus file, lupin's mirror
+                          fixtures and every probe (tools/w0801-diff.py); the compiler's rows
+                          and the edge probes b16, b32-b34 on four machines with that lupin.
+census-variant.txt        the census in either letter case: every binder name in the same trees
+                          that equals a variant name its tree declares.
+rig/                      the scripts as run (the private consumer's checkout is written
+                          $PRIVATE_NAME): the Mac lock, build-at, the jobs, the probe
                           runner, the span finder, the measurement, the census, the sanitizer.
