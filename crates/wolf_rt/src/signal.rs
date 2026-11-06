@@ -442,27 +442,38 @@ mod sys {
 
     /// s247: the drain thread back from its kernel wait — on, unless a fork
     /// claimed it there; then parked, holding nothing, until the fork
-    /// releases it.
+    /// releases it. s284 (wolf-lang#1022): the claim's own answer decides,
+    /// never a second look. Until s284 a claim that found the hold looked at
+    /// the state again and went on unless that look read the hold too, so a
+    /// release landing between the two (the next fork's hold is microseconds
+    /// behind it) read as "no fork here": the thread went to work with the
+    /// state still saying it was in its poll, the next fork claimed it there,
+    /// and the child copied the hub lock held and waited for ever at its
+    /// first use ([`fork_child_pipes`]).
     fn back_from_poll() {
-        while READER_STATE
-            .compare_exchange(
+        loop {
+            match READER_STATE.compare_exchange(
                 READER_POLLING,
                 READER_LOOPING,
                 Ordering::SeqCst,
                 Ordering::SeqCst,
-            )
-            .is_err()
-        {
-            #[cfg(test)]
-            hook::after_failed_claim();
-            if READER_STATE.load(Ordering::SeqCst) != READER_HELD {
-                return;
+            ) {
+                Ok(_) => return,
+                // A fork holds the thread: park, then claim again. A release
+                // that lands before the park leaves its unpark, so the park
+                // returns at once.
+                Err(READER_HELD) => {
+                    #[cfg(test)]
+                    hook::after_failed_claim();
+                    #[cfg(test)]
+                    hook::PARKS.fetch_add(1, Ordering::SeqCst);
+                    std::thread::park();
+                    #[cfg(test)]
+                    hook::after_park();
+                }
+                // No fork's state: only this thread moves it otherwise.
+                Err(_) => return,
             }
-            #[cfg(test)]
-            hook::PARKS.fetch_add(1, Ordering::SeqCst);
-            std::thread::park();
-            #[cfg(test)]
-            hook::after_park();
         }
     }
 
