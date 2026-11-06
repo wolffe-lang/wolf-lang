@@ -88,8 +88,9 @@ impl Step {
 pub fn teardown(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
     let mut steps = Vec::new();
     let mut at = 0;
+    let mut consts = Consts::default();
     while at < bytes.len() {
-        let step = next(arch, bytes, at)?;
+        let step = next(arch, bytes, at, &mut consts)?;
         at = step.end;
         let ret = step.ret;
         steps.push(step);
@@ -105,8 +106,9 @@ pub fn teardown(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
 pub fn instructions(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
     let mut steps = Vec::new();
     let mut at = 0;
+    let mut consts = Consts::default();
     while at < bytes.len() {
-        let step = next(arch, bytes, at)?;
+        let step = next(arch, bytes, at, &mut consts)?;
         if step.ret || step.end > bytes.len() {
             return Err(at);
         }
@@ -116,11 +118,28 @@ pub fn instructions(arch: Arch, bytes: &[u8]) -> Result<Vec<Step>, usize> {
     Ok(steps)
 }
 
+/// The values MOV wide immediates gave arm64 scratch registers within one
+/// decoded range. Nothing is assumed about a register's value on entry, and
+/// any other write to it forgets the value.
+#[derive(Default)]
+struct Consts([Option<u64>; 31]);
+
+impl Consts {
+    fn get(&self, reg: u16) -> Option<u64> {
+        self.0.get(usize::from(reg)).copied().flatten()
+    }
+    fn set(&mut self, reg: u16, value: Option<u64>) {
+        if let Some(slot) = self.0.get_mut(usize::from(reg)) {
+            *slot = value;
+        }
+    }
+}
+
 /// The instruction at `at`, with `end` as an offset into `bytes`.
-fn next(arch: Arch, bytes: &[u8], at: usize) -> Result<Step, usize> {
+fn next(arch: Arch, bytes: &[u8], at: usize, consts: &mut Consts) -> Result<Step, usize> {
     let mut step = match arch {
         Arch::X64 => x64(&bytes[at..]),
-        Arch::Arm64 => arm64(&bytes[at..]),
+        Arch::Arm64 => arm64(&bytes[at..], consts),
     }
     .ok_or(at)?;
     step.end += at;
@@ -287,7 +306,7 @@ fn x64(b: &[u8]) -> Option<Step> {
     Some(s)
 }
 
-fn arm64(b: &[u8]) -> Option<Step> {
+fn arm64(b: &[u8], consts: &mut Consts) -> Option<Step> {
     let w = u32::from_le_bytes(b.get(..4)?.try_into().ok()?);
     let mut s = Step::plain(4);
     match w {
@@ -331,7 +350,21 @@ fn arm64(b: &[u8]) -> Option<Step> {
             s.fp_from_sp = Some(imm);
         } else if rt >= 19 {
             return None;
+        } else {
+            consts.set(rt, None);
         }
+        return Some(s);
+    }
+    // ADD/SUB (extended register), 64-bit, no flags, UXTX with no shift, SP to
+    // SP: a frame too large for an immediate, released or allocated through a
+    // scratch register this range itself set. Its value must be known.
+    if w & 0xbfe0fc00 == 0x8b206000 {
+        let rm = ((w >> 16) & 31) as u16;
+        if rt != 31 || rn != 31 {
+            return None;
+        }
+        let value = i64::try_from(consts.get(rm)?).ok()?;
+        s.sp = SpChange::Add(if w & 0x40000000 != 0 { -value } else { value });
         return Some(s);
     }
     // ORR (shifted register) MOV alias: a return-register copy.
@@ -339,13 +372,28 @@ fn arm64(b: &[u8]) -> Option<Step> {
         if rt >= 19 && rt != 31 {
             return None;
         }
+        consts.set(rt, None);
         return Some(s);
     }
-    // MOVN/MOVZ/MOVK immediate materialization into a volatile return register.
+    // MOVN/MOVZ/MOVK immediate materialization into a volatile register. The
+    // value is kept: an SP adjustment above may read it.
     if w & 0x1f800000 == 0x12800000 {
-        if (w >> 29) & 3 == 1 || (rt >= 19 && rt != 31) {
+        let opc = (w >> 29) & 3;
+        let wide = w >> 31 != 0;
+        let shift = ((w >> 21) & 3) * 16;
+        if opc == 1 || (rt >= 19 && rt != 31) || (!wide && shift > 16) {
             return None;
         }
+        let imm = u64::from((w >> 5) & 0xffff) << shift;
+        let mask = if wide { u64::MAX } else { 0xffff_ffff };
+        let value = match opc {
+            0 => Some(!imm & mask),
+            2 => Some(imm),
+            _ => consts
+                .get(rt)
+                .map(|old| ((old & !(0xffff << shift)) | imm) & mask),
+        };
+        consts.set(rt, value);
         return Some(s);
     }
     let base = match rn {
@@ -389,6 +437,7 @@ fn arm64(b: &[u8]) -> Option<Step> {
                 width: width as u8,
             };
             if load {
+                consts.set(access.reg, None);
                 s.loads.push(access);
             } else {
                 s.stores.push(access);
@@ -406,6 +455,7 @@ fn arm64(b: &[u8]) -> Option<Step> {
             width: 8,
         };
         if w & (1 << 22) != 0 {
+            consts.set(access.reg, None);
             s.loads.push(access);
         } else {
             s.stores.push(access);
@@ -430,6 +480,7 @@ fn arm64(b: &[u8]) -> Option<Step> {
             width: 8,
         };
         if w & (1 << 22) != 0 {
+            consts.set(access.reg, None);
             s.loads.push(access);
         } else {
             s.stores.push(access);
@@ -543,6 +594,29 @@ mod tests {
             [19, 20]
         );
         assert!(steps[8].ret);
+    }
+    #[test]
+    fn arm64_scratch_values_come_only_from_the_range_itself() {
+        let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|w| w.to_le_bytes()).collect() };
+        // add sp, sp, x16 with x16 never set here: no claim.
+        assert_eq!(
+            teardown(Arch::Arm64, &words(&[0x8b3063ff, 0xd65f03c0])),
+            Err(0)
+        );
+        // mov x16, #0x6140; ldr x16, [sp, #8]; add sp, sp, x16: the load forgets it.
+        assert_eq!(
+            teardown(
+                Arch::Arm64,
+                &words(&[0xd28c2810, 0xf94007f0, 0x8b3063ff, 0xd65f03c0])
+            ),
+            Err(8)
+        );
+        // mov x16, #0x2345; movk x16, #1, lsl #16; sub sp, sp, x16 (a prologue).
+        let steps =
+            instructions(Arch::Arm64, &words(&[0xd28468b0, 0xf2a00030, 0xcb3063ff])).unwrap();
+        assert_eq!(steps[2].sp, SpChange::Add(-0x12345));
+        // Only SP to SP: add x0, sp, x16 is not a frame adjustment.
+        assert!(instructions(Arch::Arm64, &words(&[0xd28c2810, 0x8b3063e0])).is_err());
     }
     #[test]
     fn unknown_or_truncated_forms_never_claim_coverage() {
