@@ -195,6 +195,7 @@ fn dwarf_v1_map() {
             "key_size = 8",
             "val_off = 8",
             "val_size = 8",
+            "index_cap = ",
             "key = 3",
             "value = 47",
         ],
