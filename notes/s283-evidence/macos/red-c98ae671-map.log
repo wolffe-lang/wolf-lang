@@ -1,0 +1,86 @@
+TOOK mac-build-lock 2026-11-06T02:26:30Z
+c98ae671e78ec0a74fb6926d42602fdfa3d55ca7
+FRESH_TARGET
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 21.10s
+test list::tests::debug_layout_tracks_the_runtime_header ... ok
+test map::tests::debug_layout_tracks_the_runtime_header ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 370 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+   Compiling wolf_driver v0.2.37 (/Users/mfwolffe/lanes/s283/dev/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
+     Running tests/debug_v1.rs (target/debug/deps/debug_v1-300a7a47f2068034)
+
+running 2 tests
+test dwarf_v1_map ... FAIL dwarf-v1-map
+
+thread 'dwarf_v1_map' (166051879) panicked at crates/wolf_driver/tests/debug_v1.rs:135:9:
+dwarf-v1-map: missing ["index_cap = "], status exit status: 0
+(lldb) target create "/Users/mfwolffe/lanes/s283/dev/target/tmp/debug_v1_dwarf-v1-map/probe"
+Current executable set to '/Users/mfwolffe/lanes/s283/dev/target/tmp/debug_v1_dwarf-v1-map/probe' (arm64).
+(lldb) breakpoint set --name inspect
+Breakpoint 1: where = probe`inspect + 16 at probe.lu:1:43, address = 0x00000001000007d8
+(lldb) run
+Process 88933 launched: '/Users/mfwolffe/lanes/s283/dev/target/tmp/debug_v1_dwarf-v1-map/probe' (arm64)
+Process 88933 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+    frame #0: 0x00000001000007d8 probe`inspect(value=0x0000000a95000000) at probe.lu:1:43
+-> 1   	fn inspect(value: Map[int, int]) -> int { value.len - 1 }
+    	                                          ^
+   2   	fn main() -> int { var xs = Map[int, int]()
+   3   	xs[3] = 47
+   4   	inspect(xs) }
+Target 0: (probe) stopped.
+(lldb) script print('S283_VALUES_BEGIN')
+S283_VALUES_BEGIN
+(lldb) frame variable --show-types value
+(Map[int, int] *) value = 0x0000000a95000000
+(lldb) frame variable --ptr-depth 1 value
+(Map[int, int] *) value = 0x0000000a95000000 {
+  data = 0x0000000a95000060
+  len = 1
+  cap = 8
+  elem = 16
+  region = NULL
+  key_kind = 0
+  key_size = 8
+  val_off = 8
+  val_size = 8
+}
+(lldb) frame variable value->data[0]
+(Map[int, int] entry) value->data[0] = (key = 3, value = 47)
+(lldb) script print('S283_VALUES_END')
+S283_VALUES_END
+(lldb) bt
+* thread #1, queue = 'com.apple.main-thread', stop reason = breakpoint 1.1
+  * frame #0: 0x00000001000007d8 probe`inspect(value=0x0000000a95000000) at probe.lu:1:43
+    frame #1: 0x000000010000089c probe`main at probe.lu:4:1
+    frame #2: 0x00000001000008c4 probe`main + 24
+    frame #3: 0x000000018403bda4 dyld`start + 6992
+(lldb) continue
+Process 88933 resuming
+Process 88933 exited with status = 0 (0x00000000)
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test dwarf_v1_map_layout_matches_runtime ... FAIL dwarf-v1-map-runtime-layout
+
+thread 'dwarf_v1_map_layout_matches_runtime' (166052060) panicked at crates/wolf_driver/tests/support/dwarf_variant_bytes.rs:376:13:
+dwarf-v1-map-runtime-layout: DWARF header size differs from sizeof(runtime header): Die { offset: 77, parent: None, tag: "DW_TAG_structure_type", attrs: {"byte_size": "72", "name": "\"Map[int, int]\""} }; runtime HeaderLayout { size: 88, fields: [HeaderField { name: "data", offset: 0, size: 8 }, HeaderField { name: "len", offset: 8, size: 8 }, HeaderField { name: "cap", offset: 16, size: 8 }, HeaderField { name: "elem", offset: 24, size: 8 }, HeaderField { name: "region", offset: 32, size: 8 }, HeaderField { name: "key_kind", offset: 40, size: 8 }, HeaderField { name: "key_size", offset: 48, size: 8 }, HeaderField { name: "val_off", offset: 56, size: 8 }, HeaderField { name: "val_size", offset: 64, size: 8 }, HeaderField { name: "index", offset: 72, size: 8 }, HeaderField { name: "index_cap", offset: 80, size: 8 }] }
+FAILED
+
+failures:
+
+failures:
+    dwarf_v1_map
+    dwarf_v1_map_layout_matches_runtime
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 34 filtered out; finished in 2.37s
+
+error: test failed, to rerun pass `-p wolf_driver --test debug_v1`
+RELEASED mac-build-lock 2026-11-06T02:27:01Z

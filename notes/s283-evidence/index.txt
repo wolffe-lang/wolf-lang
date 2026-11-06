@@ -40,3 +40,18 @@ macos/fixture-digests-62fdc9dd.txt
                   arm64 at 62fdc9dd, after the fix: the corpus and the 31 fixtures at 0
                   gaps, 0 failures, and each fixture object's dump digest (the SDK's
                   dwarfdump, Apple LLVM 21.0.0)
+macos/red-c98ae671-map.log
+                  arm64 at c98ae671 (on b35e87b3), a fresh target: the runtime's Map
+                  witness at 88 bytes and 11 words; dwarf-v1-map-runtime-layout and
+                  dwarf-v1-map red by name against the 72-byte DWARF description
+linux/red-ee24eddd-variadic-fde-excerpt.log
+                  Linux at ee24eddd (on b35e87b3), a fresh target: every step green
+                  through debug-values, then instruction-frames red at
+                  dwarf-frame-variadic-fde-ranges (`FDE has no PC range`, a line cut by
+                  the bounded excerpt the row parsed); the Map rows already green
+linux/census-bd3f3650-*.json, linux/fixture-digests-bd3f3650.txt,
+macos/census-bd3f3650-*.json, macos/fixture-digests-bd3f3650.txt
+                  both platforms at bd3f3650 (on b35e87b3, Map at 88 bytes), fresh targets,
+                  the census baseline built from b35e87b3: corpus 756 measured, 25 not
+                  measured, 0 failures, 0 gaps; fixtures 31 measured, 0 gaps; every head
+                  object byte-and-relocation identical across its two builds
