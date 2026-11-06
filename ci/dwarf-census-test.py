@@ -36,6 +36,12 @@ class CensusInputs(unittest.TestCase):
         self.assertEqual(argv[-1], "object.o")
         self.assertNotIn("/some/host", " ".join(argv[1:]))
 
+    def test_vocabulary_omits_the_line_header_opcode_legend(self):
+        text = ("standard_opcode_lengths[DW_LNS_set_isa] = 1\n"
+                "0x00000099: 0a DW_LNS_set_prologue_end\n"
+                "  DW_CFA_def_cfa: W29 +16\n")
+        self.assertEqual(census.vocabulary(text), ["DW_CFA_def_cfa", "DW_LNS_set_prologue_end"])
+
     def test_standalone_staging_does_not_copy_unrelated_corpus_directories(self):
         with tempfile.TemporaryDirectory() as scratch:
             root = Path(scratch)
