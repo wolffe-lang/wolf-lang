@@ -360,9 +360,7 @@ fn binders_and_parameters_that_spell_no_test_stay_silent() {
 /// name on the compiled tiers (E0806 at the name). The pinned lupin refuses
 /// the same program at run (`unsupported`, never a divergence); its own
 /// static E0806 must agree on the span when it reports one.
-#[test]
-fn a_select_arm_that_spells_a_variant_is_refused() {
-    let row = "conc/select_arm_bare_variant.lu";
+fn select_refused(row: &str, span: [u64; 2]) {
     for (machine, record) in compiled_records(row) {
         assert_eq!(
             record["verdict"], "fail(E0806)",
@@ -370,7 +368,7 @@ fn a_select_arm_that_spells_a_variant_is_refused() {
         );
         assert_eq!(
             record["diagnostics"][0]["span"],
-            serde_json::json!([659, 664]),
+            serde_json::json!(span),
             "{machine} {row}: {record}"
         );
     }
@@ -393,8 +391,30 @@ fn a_select_arm_that_spells_a_variant_is_refused() {
     assert_eq!(record["verdict"], "fail(E0806)", "lupin {row}: {record}");
     assert_eq!(
         record["diagnostics"][0]["span"],
-        serde_json::json!([659, 664]),
+        serde_json::json!(span),
         "lupin {row}: {record}"
+    );
+}
+
+#[test]
+fn a_select_arm_that_spells_a_variant_is_refused() {
+    select_refused("conc/select_arm_bare_variant.lu", [659, 664]);
+}
+
+/// Either letter case: `fast` names a case of `enum Mode { fast, slow }`
+/// exactly as `Drink` names one of `Kind`'s, as a `match` reads it.
+#[test]
+fn a_select_arm_that_spells_a_lowercase_variant_is_refused() {
+    select_refused("conc/select_arm_lowercase_variant.lu", [514, 518]);
+}
+
+#[test]
+fn binders_that_spell_a_lowercase_variant_warn() {
+    binder_warns(
+        "lints/binder_variant_lowercase.lu",
+        "3 4\n12\n",
+        &[(566, 570), (630, 634)],
+        true,
     );
 }
 
