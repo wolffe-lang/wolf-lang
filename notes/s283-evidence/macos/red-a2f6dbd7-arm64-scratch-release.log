@@ -1,0 +1,44 @@
+TOOK mac-build-lock 2026-11-06T01:30:34Z
+a2f6dbd7f80072da33f96f612e27d2d62da96189
+FRESH_TARGET
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.04s
+test frame_decode::tests::x64_stack_and_extended_register_restores ... ok
+test frame_decode::tests::unknown_or_truncated_forms_never_claim_coverage ... ok
+test frame_decode::tests::x64_immediate_ret_byte_is_not_a_return ... ok
+test frame_decode::tests::a_whole_prologue_decodes_to_its_frame_steps ... ok
+test frame_decode::tests::arm64_restore_pair_and_authenticate ... ok
+test frame_decode::tests::arm64_large_frame_release_through_a_scratch_register ... FAILED
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 50 filtered out; finished in 0.00s
+   Compiling wolf_driver v0.2.37 (/Users/mfwolffe/lanes/s283/dev/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.39s
+     Running tests/debug_frame_steps.rs (target/debug/deps/debug_frame_steps-ddfc3eeba3c2d8ad)
+
+running 2 tests
+test debugger_big_frame_middle_at_every_instruction ... FAIL dwarf-frame-big-frame-middle-steps
+
+thread 'debugger_big_frame_middle_at_every_instruction' (165766017) panicked at crates/wolf_driver/tests/debug_frame_steps.rs:89:13:
+dwarf-frame-big-frame-middle-steps: compiler reported a CFI gap:
+
+CFI_GAP middle 64..84: unknown return-sequence instruction
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test dwarf_frame_big_frame_ranges_and_verifier ... FAIL dwarf-frame-big-frame-fde-ranges
+
+thread 'dwarf_frame_big_frame_ranges_and_verifier' (165766113) panicked at crates/wolf_driver/tests/debug_frame_steps.rs:89:13:
+dwarf-frame-big-frame-fde-ranges: compiler reported a CFI gap:
+
+CFI_GAP middle 64..84: unknown return-sequence instruction
+
+FAILED
+
+failures:
+
+failures:
+    debugger_big_frame_middle_at_every_instruction
+    dwarf_frame_big_frame_ranges_and_verifier
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 16 filtered out; finished in 2.19s
+
+error: test failed, to rerun pass `-p wolf_driver --test debug_frame_steps`
+RELEASED mac-build-lock 2026-11-06T01:31:03Z
