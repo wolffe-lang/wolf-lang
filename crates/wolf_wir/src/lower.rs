@@ -23423,7 +23423,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         None => Err(refuse("this char literal pattern shape", pat.span)),
                     };
                 }
-                match parse_int_literal(&text) {
+                match pattern_int_literal(&text) {
                     Some(n) => Ok(PatShape::Tests(vec![ScalarTest::Eq(n)], vec![])),
                     None => Err(refuse("this literal pattern shape", pat.span)),
                 }
@@ -24136,7 +24136,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 None => return Err(refuse("this char literal pattern shape", sub.span)),
             }
         } else {
-            match parse_int_literal(&text) {
+            match pattern_int_literal(&text) {
                 Some(n) => n,
                 None => {
                     return Err(refuse(
@@ -26326,6 +26326,17 @@ fn contains_control(node: &GreenNode) -> bool {
         n.nodes().any(walk)
     }
     walk(node)
+}
+
+/// An integer literal PATTERN's value as the bits its scrutinee holds
+/// (wolf-lang#1058, `[gram.pat.lit]`). The checker's E0415 refuses a
+/// pattern its scrutinee's type cannot hold, so one above `i64::MAX`
+/// stands only over a 64-bit unsigned scrutinee (`u64`, `uint`,
+/// `wrapping[u64]`), whose value is its u64 bit pattern: the decimal
+/// spelling reads as that pattern, as the prefixed ones already did
+/// (`18446744073709551615 =>` was refused as "this literal pattern shape").
+fn pattern_int_literal(text: &str) -> Option<i64> {
+    parse_int_literal(text).or_else(|| parse_uint_literal(text).map(|u| u as i64))
 }
 
 /// Integer literal: decimal with `_` separators, or `0x…` hex (bit
