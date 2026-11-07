@@ -279,6 +279,7 @@ grammar/match_nested_name_binds.lu: lowers
 grammar/match_nested_qualified_variant.lu: lowers
 grammar/match_nested_struct_field_variant.lu: lowers
 grammar/match_nullary_variant.lu: lowers
+grammar/match_pattern_signed_literal.lu: not mem-clean (pre-wir rungs own it)
 grammar/match_range.lu: lowers
 grammar/match_range_char.lu: lowers
 grammar/match_range_open.lu: not mem-clean (pre-wir rungs own it)
@@ -946,6 +947,7 @@ rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: lowers
 rows/inferred_private.lu: lowers
 rows/iter_diverging_else_bound.lu: lowers
+rows/match_literal_pattern_edges.lu: lowers
 rows/match_range_empty.lu: not mem-clean (pre-wir rungs own it)
 rows/match_row_bare_tag.lu: lowers
 rows/match_row_else_control.lu: lowers
@@ -1181,6 +1183,11 @@ typecheck/numlit_extremes.lu: lowers
 typecheck/numlit_fit.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_float_to_int_refused.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_list_element_width.lu: lowers
+typecheck/numlit_pattern_default.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_pattern_edges.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_pattern_positions.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_pattern_range.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_pattern_wraps.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_radix.lu: lowers
 typecheck/numlit_u64_edge.lu: lowers
 typecheck/numlit_value_refused.lu: not mem-clean (pre-wir rungs own it)
