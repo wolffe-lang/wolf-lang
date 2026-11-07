@@ -26422,7 +26422,9 @@ fn int_type_range(table: &TypeTable, ty: TyId) -> Option<(i128, i128)> {
 fn literal_exact_value(text: &str) -> Option<i128> {
     let t: String = text.chars().filter(|&c| c != '_').collect();
     if let Some((digits, radix)) = radix_digits(&t) {
-        return u128::from_str_radix(digits, radix).ok().and_then(|v| i128::try_from(v).ok());
+        return u128::from_str_radix(digits, radix)
+            .ok()
+            .and_then(|v| i128::try_from(v).ok());
     }
     t.parse::<i128>().ok()
 }
