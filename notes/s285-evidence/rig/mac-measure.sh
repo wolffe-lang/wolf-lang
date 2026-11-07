@@ -24,5 +24,5 @@ step measure-head python3 -I "$L/rig/measure-org.py" "$L/records/wolf-$SHA/wolf"
 step compare python3 -I "$L/rig/compare.py" "$L/records/measure-base-a4d2a9c9.json" "$L/records/measure-head-$SHA.json"
 # The gates shard as a shakedown (not a record: the record is the Linux
 # gauntlet), with lupin 0.1.59 as the paired sibling and no global WOLF_STD.
-step ci-gates env -u WOLF_STD LUPIN="$L/inputs/lupin059/unpacked/lupin-0.1.59-aarch64-apple-darwin/lupin" WOLF_PAIRING_REQUIRE_SIBLING=1 WOLF_TEST_NATIVE_REQUIRE=1 cargo xtask ci --shard gates
+step ci-gates env -u WOLF_STD LUPIN="$L/inputs/lupin060/unpacked/lupin-0.1.60-aarch64-apple-darwin/lupin" WOLF_PAIRING_REQUIRE_SIBLING=1 WOLF_TEST_NATIVE_REQUIRE=1 cargo xtask ci --shard gates
 echo "== done $(date -u +%FT%TZ)"

@@ -1,0 +1,44 @@
+s285 was rebased once, from a4d2a9c9 onto trunk 9a304544 (wolf 0.2.38 at 95ae0827, plus one notes commit).
+Each commit before the rebase, the commit it became, and its subject (git range-diff; every pair is
+'=', the same change, except the changelog entry, whose hunk moved when 0.2.38 cut the Unreleased
+section). Commits after the map are new on the rebased branch.
+
+a552fde1 = 4a64fd54  Measure literal patterns outside their type at the base
+339f55c2 = d3337284  Predict the literal-pattern rule and its rows
+e489bb51 = e423806c  Specify a literal pattern's type and its refusal ([gram.pat.lit])
+68c07b38 = ee94084a  Add wolf-lang#1058's row: a u8 arm literal outside its type
+f0b76b70 = d7a54b31  Add the max+1 literal pattern row for every integer primitive
+43cae782 = bbf5ddf7  Add the literal pattern row for every pattern position
+d89d59de = 548b8375  Add the range-end row for literal patterns outside their type
+56e2079b = 1398a66a  Add the defaulted-i32 literal pattern row
+afed438c = b0b25614  Add the signed literal pattern row
+ca85d39e = 0245e15a  Add the in-range edge row for every integer primitive
+1f057e13 = 4d51ec67  Run the literal pattern rows on four machines
+ad926cb6 = 242a7d66  Add rendered E0415 snapshots for literal patterns
+88c69b66 = 8c4e86a5  Range literal patterns against their scrutinee's type (E0415)
+aebfee14 = 39efc6fc  Refuse a signed literal pattern by name (E0207)
+43de4323 = df8ccc08  Match a u64 literal pattern above i64::MAX on the checked machine
+d52ef6cc = b4871ee7  Read a decimal u64 literal pattern above i64::MAX as its bits natively
+b360a4b9 = 5844b922  Refuse an arm constant beyond its scrutinee's type, never wrap it
+412493d7 = 893d745c  Explain E0415 for literal patterns and range ends
+62ed1d00 = dce304f1  Index the [gram.pat.lit] anchor
+c67d863d ! 86745f99  Note the literal-pattern rule in the changelog
+04099358 = 676b607a  Format the lowering backstop
+2c6a2237 = c1d3a4b7  Add the literal pattern rows' lexer snapshots
+513ca624 = 07a211e2  Add the literal pattern rows' parser snapshots
+551ae6c7 = 3d592f27  Add the rendered E0415 literal pattern snapshots
+06a6364a = ece73727  Enter the literal pattern rows in the lowering ledger
+e084e704 = 2927ac88  Range an arm constant by its exact value against its scrutinee's type
+771817c1 = 61bd988e  Add the signed literal row's expression-tree snapshot
+b62eacf5 = ef52b6e9  Regenerate the diagnostics catalog
+ad66c02d = e340bf25  Test the lowering backstop's ranging of arm constants
+4199343a = b1390f5a  Format the exact-value reader
+ceb23098 = d8f746c7  Count the signed literal row among the syntax-tier refusals
+6b4f87cc = 26afdef9  Keep the literal-pattern evidence: the takes, the sweep, the measurement, the rig
+d62a0613 = 884ab2ba  Write the s285 note
+a2205058 = 4119ebb3  Keep the probes behind the three issues to file
+
+New after the rebase:
+c765d5e7  Move the literal-pattern entry under Unreleased, after the 0.2.38 cut
+6fdd17f2  Name lupin 0.1.60, the new pin, in the literal pattern rows
+744d7a9b  Name lupin 0.1.60 in the changelog entry

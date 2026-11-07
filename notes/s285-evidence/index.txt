@@ -53,13 +53,23 @@ mac-measure-ceb23098.log  at ceb23098: fmt, clippy, the wolf_parse suite, the ba
                           directory module plus each file with its own `check:` header, and the
                           two compared run by run; then the gates shard of `cargo xtask ci` as a
                           shakedown (not a record).
+rebase-map.txt            the one rebase, onto trunk 9a304544 (wolf 0.2.38): each commit before
+                          it and the commit it became. Every log above ran before the rebase and
+                          is named by the commit it ran at.
+mac-rebased-744d7a9b.log  at the rebased head's code, with lupin 0.1.60 (the new PAIRING stamp):
+                          the anchors gate; the rows on four machines; the four-machine tests;
+                          the rendered snapshots; the corpus; conformance; every probe; fmt;
+                          clippy; the wolf_sema and wolf_parse suites; the backstop's unit test;
+                          every corpus-walking snapshot suite against the committed snapshots
+                          (no update); both catalog checks.
 rig/                      the Mac scripts as run: make-probes.py, probe-all.sh, locked.sh,
                           build-at.sh, mac-rows.sh, mac-regen.sh, mac-snaps.sh, mac-measure.sh,
                           litpat-census.py, census-scrutinee.py, measure-org.py, compare.py,
-                          pr-body.py, sanitize.sh.
+                          pr-body.py, sanitize.sh, verbatim.sh (the issue probes' answers).
 rig/linux/                the Linux gauntlet and plant scripts as run (s280's and s282's shape,
                           copied by value; the lane's paths, names and block C adapted, and
-                          plant-inner.sh written for this lane's rows), with launch.sh.
+                          plant-inner.sh written for this lane's rows), with launch.sh; moved
+                          to 0.2.38's pins (std d4a4d4ca, lupin 0.1.60) for the rebased head.
 
 The records at the final head live outside the tree, because a record cannot predate the head
 it names; the PR body quotes every END line of the Linux gauntlet record and of the plant record.

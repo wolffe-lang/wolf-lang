@@ -16,16 +16,16 @@ done
 std_pin=$(sed -n 's/^wolf-std-commit *= *//p' crates/wolf_driver/STD-PIN | tr -d '[:space:]')
 lupin_ver=$(sed -n 's/^lupin-version *= *//p' crates/wolf_driver/PAIRING | tr -d '[:space:]')
 printf 'STD-PIN %s  PAIRING lupin-version %s\n' "$std_pin" "$lupin_ver"
-test "$std_pin" = 5b3a59942b2ee69b99682544341ce8a12c984e9e
-test "$lupin_ver" = 0.1.59
+test "$std_pin" = d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61
+test "$lupin_ver" = 0.1.60
 for pass in 1 2; do
-  printf '12121909c289ac8ff4a138de8faabdb86b72df97988832b39047d5f312ec3a18  /lane/inputs/lupin059/lupin-0.1.59-x86_64-unknown-linux-gnu.tar.gz\n' | sha256sum -c -
+  printf 'e7d4c4f1534736c9262f4ccd01a631f03ff70e3b8122eefe6e9ec1e15c02637e  /lane/inputs/lupin060/lupin-0.1.60-x86_64-unknown-linux-gnu.tar.gz\n' | sha256sum -c -
   test "$(git -C "$WOLF_DIST_STD_SRC" rev-parse HEAD)" = "$std_pin"
   git -C "$WOLF_DIST_STD_SRC" rev-parse HEAD
 done
 v=$("$LUPIN" --version)
 printf '%s\n' "$v"
-case "$v" in *0.1.59*) ;; *) echo "lupin is not 0.1.59"; exit 1 ;; esac
+case "$v" in *0.1.60*) ;; *) echo "lupin is not 0.1.60"; exit 1 ;; esac
 mkdir -p target
 # The setup scripts write their paths here exactly as they write CI's GITHUB_ENV.
 export GITHUB_ENV=/work/target/s285-ci-env

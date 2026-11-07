@@ -10,7 +10,7 @@ L=$LANE
 SHA=$(git rev-parse --short=8 HEAD)
 OUT=$L/records/sweep-$SHA
 rm -rf "$OUT"; mkdir -p "$OUT"
-export LUPIN=$L/inputs/lupin059/unpacked/lupin-0.1.59-aarch64-apple-darwin/lupin
+export LUPIN=$L/inputs/lupin060/unpacked/lupin-0.1.60-aarch64-apple-darwin/lupin
 step() { local n=$1; shift; echo "== STEP $n $(date -u +%T)"; "$@"; local rc=$?; echo "END $n exit=$rc"; }
 step head bash -c 'git rev-parse HEAD && git log --oneline -1 && git status --porcelain --untracked-files=no | wc -l'
 step build cargo build --locked -p wolf_driver -p wolf_rt || exit 1

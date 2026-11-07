@@ -6,7 +6,7 @@
 # usage: probe-all.sh <wolf-binary> <file.lu>...
 set -u
 W=$1; shift
-LUPIN=${LUPIN:-$LANE/inputs/lupin059/unpacked/lupin-0.1.59-aarch64-apple-darwin/lupin}
+LUPIN=${LUPIN:-$LANE/inputs/lupin060/unpacked/lupin-0.1.60-aarch64-apple-darwin/lupin}
 summ() {
   python3 -I -c '
 import json, sys

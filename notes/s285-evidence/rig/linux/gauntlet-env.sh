@@ -9,9 +9,9 @@ export RUST_TEST_NOCAPTURE=1 RUST_TEST_THREADS=4
 # fixture has no adjacent std, so g1's export advanced corpus/strings.lu and
 # corpus/typecheck/method_home_no_std.lu from resolve to wir. CI sets none.
 unset WOLF_STD
-# The std at the head's STD-PIN (0.2.37: 5b3a5994), for dist-smoke.
-export WOLF_DIST_STD_SRC=/lane/wolf-std-5b3a5994
-export LUPIN=/lane/inputs/lupin059/unpacked/lupin-0.1.59-x86_64-unknown-linux-gnu/lupin
+# The std at the head's STD-PIN (0.2.38: d4a4d4ca), for dist-smoke.
+export WOLF_DIST_STD_SRC=/lane/wolf-std-d4a4d4ca
+export LUPIN=/lane/inputs/lupin060/unpacked/lupin-0.1.60-x86_64-unknown-linux-gnu/lupin
 export WOLF_PAIRING_REQUIRE_SIBLING=1 WOLF_SYSCALL_REQUIRE_STRACE=1 WOLF_RT_NONE_REQUIRE=1
 export WOLF_TEST_NATIVE_REQUIRE=1 WOLF_STATIC_ENTRY_REQUIRE=1
 # CI's own dist-rt step exports this path.
