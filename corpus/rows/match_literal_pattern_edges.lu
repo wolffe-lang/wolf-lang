@@ -1,0 +1,133 @@
+//! check: run(exit=0, stdout="i8 i16 i32 i64 int u8 u16 u32 u64 uint\n0 x 2p63 wrap nested\n")
+//! phase: run
+//! conforms: gram.pat.lit
+//!
+//! The in-range edge of every integer primitive (`[gram.pat.lit]`): a
+//! literal pattern that fits is the scrutinee's value with that number,
+//! compared at the type's width and signedness. Each primitive's
+//! maximum, and zero, as patterns; `u64` and `uint` above `i64::MAX`,
+//! in decimal and hex, at `2^63`, over `wrapping[u64]` and inside a
+//! tuple. The checked machine read a pattern's text as an `i64` only,
+//! so every `u64` arm above `i64::MAX` missed (exit 2 where lupin
+//! matched); native refused the decimal spellings ("unsupported").
+
+fn hit(ok: bool, name: str) -> str { if ok { name } else { "MISS" } }
+
+fn max_i8(v: i8) -> bool {
+    match v {
+        127 => true,
+        _ => false,
+    }
+}
+
+fn max_i16(v: i16) -> bool {
+    match v {
+        32767 => true,
+        _ => false,
+    }
+}
+
+fn max_i32(v: i32) -> bool {
+    match v {
+        2147483647 => true,
+        _ => false,
+    }
+}
+
+fn max_i64(v: i64) -> bool {
+    match v {
+        9223372036854775807 => true,
+        _ => false,
+    }
+}
+
+fn max_int(v: int) -> bool {
+    match v {
+        9223372036854775807 => true,
+        _ => false,
+    }
+}
+
+fn max_u8(v: u8) -> bool {
+    match v {
+        255 => true,
+        _ => false,
+    }
+}
+
+fn max_u16(v: u16) -> bool {
+    match v {
+        65535 => true,
+        _ => false,
+    }
+}
+
+fn max_u32(v: u32) -> bool {
+    match v {
+        4294967295 => true,
+        _ => false,
+    }
+}
+
+fn max_u64(v: u64) -> bool {
+    match v {
+        18446744073709551615 => true,
+        _ => false,
+    }
+}
+
+fn max_uint(v: uint) -> bool {
+    match v {
+        18446744073709551615 => true,
+        _ => false,
+    }
+}
+
+fn zero_u64(v: u64) -> bool {
+    match v {
+        0 => true,
+        18446744073709551615 => false,
+        _ => false,
+    }
+}
+
+fn hex_u64(v: u64) -> bool {
+    match v {
+        0xffff_ffff_ffff_ffff => true,
+        _ => false,
+    }
+}
+
+fn two_pow_63(v: uint) -> bool {
+    match v {
+        9223372036854775808 => true,
+        _ => false,
+    }
+}
+
+fn wrapping_u64(v: wrapping[u64]) -> bool {
+    match v {
+        18446744073709551615 => true,
+        _ => false,
+    }
+}
+
+fn nested_u64(v: u64) -> bool {
+    match (1, v) {
+        (1, 18446744073709551615) => true,
+        _ => false,
+    }
+}
+
+fn main() -> !int {
+    let top: wrapping[u64] = 18446744073709551615
+    let a = "{hit(max_i8(127), "i8")} {hit(max_i16(32767), "i16")} {hit(max_i32(2147483647), "i32")}"
+    let b = "{hit(max_i64(9223372036854775807), "i64")} {hit(max_int(9223372036854775807), "int")}"
+    let c = "{hit(max_u8(255), "u8")} {hit(max_u16(65535), "u16")} {hit(max_u32(4294967295), "u32")}"
+    let d = "{hit(max_u64(18446744073709551615), "u64")} {hit(max_uint(18446744073709551615), "uint")}"
+    print("{a} {b} {c} {d}")
+    let e = "{hit(zero_u64(0), "0")} {hit(hex_u64(18446744073709551615), "x")}"
+    let f = "{hit(two_pow_63(9223372036854775808), "2p63")} {hit(wrapping_u64(top), "wrap")}"
+    print("{e} {f} {hit(nested_u64(18446744073709551615), "nested")}")
+    0
+}
