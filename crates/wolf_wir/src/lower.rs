@@ -26377,7 +26377,10 @@ fn literal_pattern_fits(table: &TypeTable, ty: TyId, consts: &[i64], span: Span)
     if consts.iter().all(|c| (lo..=hi).contains(c)) {
         Ok(())
     } else {
-        Err(refuse("a literal pattern beyond its scrutinee's type", span))
+        Err(refuse(
+            "a literal pattern beyond its scrutinee's type",
+            span,
+        ))
     }
 }
 
