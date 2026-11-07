@@ -758,8 +758,14 @@ holds nothing near it. The value is known exactly and the type is
 final, so the program can never mean what it says; the fix is a wider
 annotation (`let a: i64 = …`). A `wrapping[…]` type wraps its
 ARITHMETIC, not its literals — an overflowing literal is this same
-error there. The one negative allowance is the direct `-<literal>`
-spelling, which is checked as the negated value — `-2147483648` fits
+error there. A literal PATTERN is a literal too, and its context is
+the scrutinee (`[gram.pat.lit]`): `match v { 300 => … }` with `v: u8`
+is this error at the `300`, as `v == 300` is, and so is a range end
+the type cannot hold (`0..256` over a `u8`; every `u8` is `0..=255`).
+Such an arm could never match, and wrapping it into the type's width
+would make it test a different number. The one negative allowance is
+the direct `-<literal>` spelling of an expression, which is checked as
+the negated value (a pattern has no sign) — `-2147483648` fits
 `i32` even though `2147483648` alone does not. Before this code, the
 unfitting constant sailed into lowering and died as a verifier ICE
 (`[const-range]`, wolf-lang#151) — an abort where a diagnostic was
