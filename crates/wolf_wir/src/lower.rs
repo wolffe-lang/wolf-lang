@@ -23424,7 +23424,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     };
                 }
                 match pattern_int_literal(&text) {
-                    Some(n) => Ok(PatShape::Tests(vec![ScalarTest::Eq(n)], vec![])),
+                    Some(n) => {
+                        literal_pattern_fits(self.table, scrut_sema, &[n], pat.span)?;
+                        Ok(PatShape::Tests(vec![ScalarTest::Eq(n)], vec![]))
+                    }
                     None => Err(refuse("this literal pattern shape", pat.span)),
                 }
             }
@@ -23432,6 +23435,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // test on the scalar discriminant — `char` by scalar.
             SyntaxKind::RangePat => {
                 let (lo, hi) = self.range_bounds(pat)?;
+                literal_pattern_fits(self.table, scrut_sema, &[lo, hi], pat.span)?;
                 Ok(PatShape::Tests(vec![ScalarTest::Range(lo, hi)], vec![]))
             }
             SyntaxKind::PathPat => {
@@ -23740,9 +23744,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     None => Ok(()),
                 }
             }
-            SyntaxKind::LiteralPat => self.product_literal_test(sub, v, conds, dead),
+            SyntaxKind::LiteralPat => {
+                let field = strip_sema_in(tbl, sema_ty);
+                self.product_literal_test(sub, v, (tbl, field), conds, dead)
+            }
             SyntaxKind::RangePat => {
-                let unsigned = sema_unsigned(tbl, strip_sema_in(tbl, sema_ty));
+                let field = strip_sema_in(tbl, sema_ty);
+                let unsigned = sema_unsigned(tbl, field);
+                let (lo, hi) = self.range_bounds(sub)?;
+                literal_pattern_fits(tbl, field, &[lo, hi], sub.span)?;
                 self.product_range_test(sub, v, unsigned, conds, dead)
             }
             SyntaxKind::TuplePat => {
@@ -24066,6 +24076,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         &mut self,
         sub: &'t GreenNode,
         v: Value,
+        (tbl, field): (&'t TypeTable, TyId),
         conds: &mut Vec<Value>,
         dead: &mut bool,
     ) -> R<()> {
@@ -24137,7 +24148,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         } else {
             match pattern_int_literal(&text) {
-                Some(n) => n,
+                Some(n) => {
+                    literal_pattern_fits(tbl, field, &[n], sub.span)?;
+                    n
+                }
                 None => {
                     return Err(refuse(
                         "this literal shape inside a product pattern",
@@ -26337,6 +26351,34 @@ fn contains_control(node: &GreenNode) -> bool {
 /// (`18446744073709551615 =>` was refused as "this literal pattern shape").
 fn pattern_int_literal(text: &str) -> Option<i64> {
     parse_int_literal(text).or_else(|| parse_uint_literal(text).map(|u| u as i64))
+}
+
+/// Backstop (wolf-lang#1058): the checker's E0415 refuses a literal
+/// pattern its scrutinee's type cannot hold (`[gram.pat.lit]`), so every
+/// integer arm constant reaching lowering fits the scrutinee's type, and
+/// the width wrap (`wrap_test`, the s74 discipline) only re-spells an
+/// unsigned one as its bit pattern. One that does not fit is refused here,
+/// never wrapped into a different number (`300` over a `u8` once tested
+/// 44); reaching this is a bug upstream, as wolf-lang#151's backstop for a
+/// literal expression is. `ty` is the scrutinee's (or the field's) sema
+/// type; the 64-bit types, `char` and every non-integer pass, since this
+/// lowering holds each of their values in an `i64` as written.
+fn literal_pattern_fits(table: &TypeTable, ty: TyId, consts: &[i64], span: Span) -> R<()> {
+    let ty = strip_sema_in(table, ty);
+    let (lo, hi): (i64, i64) = match table.kind(ty) {
+        TyKind::Prim(Prim::I8) => (i8::MIN.into(), i8::MAX.into()),
+        TyKind::Prim(Prim::I16) => (i16::MIN.into(), i16::MAX.into()),
+        TyKind::Prim(Prim::I32) => (i32::MIN.into(), i32::MAX.into()),
+        TyKind::Prim(Prim::U8) => (0, u8::MAX.into()),
+        TyKind::Prim(Prim::U16) => (0, u16::MAX.into()),
+        TyKind::Prim(Prim::U32) => (0, u32::MAX.into()),
+        _ => return Ok(()),
+    };
+    if consts.iter().all(|c| (lo..=hi).contains(c)) {
+        Ok(())
+    } else {
+        Err(refuse("a literal pattern beyond its scrutinee's type", span))
+    }
 }
 
 /// Integer literal: decimal with `_` separators, or `0x…` hex (bit
