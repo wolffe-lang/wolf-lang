@@ -5258,7 +5258,7 @@ impl<'t> Machine<'t> {
             SyntaxKind::LiteralPat => {
                 let text = self.text(pat.span);
                 let matched = match scrut {
-                    Value::Int(n) => parse_int_literal(&text) == Some(*n),
+                    Value::Int(n) => pattern_int_bits(&text) == Some(*n),
                     Value::Bool(b) => text == if *b { "true" } else { "false" },
                     // A char arm (s121): THE shared decoder, so all
                     // lanes agree on every escape spelling.
@@ -14569,6 +14569,28 @@ fn parse_int_literal(text: &str) -> Option<i64> {
         return i64::from_str_radix(oct, 8).ok();
     }
     t.parse().ok()
+}
+
+/// An integer literal PATTERN's value as the bits its scrutinee holds
+/// (wolf-lang#1058, `[gram.pat.lit]`). The checker's E0415 refuses a
+/// pattern its scrutinee's type cannot hold, so one above `i64::MAX`
+/// stands only over a 64-bit unsigned scrutinee (`u64`, `uint`,
+/// `wrapping[u64]`), whose value this machine keeps as its u64 bit
+/// pattern. Reading the text as an `i64` alone missed every such arm
+/// (`18446744073709551615 =>` never matched). Every radix the lexer
+/// admits (`[gram.lex]`'s `INT`).
+fn pattern_int_bits(text: &str) -> Option<i64> {
+    let t: String = text.chars().filter(|&c| c != '_').collect();
+    let (digits, radix) = if let Some(h) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        (h, 16)
+    } else if let Some(o) = t.strip_prefix("0o").or_else(|| t.strip_prefix("0O")) {
+        (o, 8)
+    } else if let Some(b) = t.strip_prefix("0b").or_else(|| t.strip_prefix("0B")) {
+        (b, 2)
+    } else {
+        (t.as_str(), 10)
+    };
+    u64::from_str_radix(digits, radix).ok().map(|u| u as i64)
 }
 
 /// Unsigned literal as a bit pattern: full u64 range, decimal or
