@@ -78,6 +78,10 @@ class ReleasePosture(unittest.TestCase):
         self.assertIn("wolf-std/issues/133", note)
         # The std ledger still lags the paired lupin.
         self.assertIn("wolf-std/issues/125", note)
+        # The race test's known intermittent failure, present in 0.2.37
+        # too, is named with its issue.
+        self.assertIn("a known intermittent failure of one race test on some Linux hosts", note)
+        self.assertIn("wolf-lang/issues/1051", note)
 
     def test_readme_names_the_release(self):
         readme = (ROOT / "README.md").read_text()
