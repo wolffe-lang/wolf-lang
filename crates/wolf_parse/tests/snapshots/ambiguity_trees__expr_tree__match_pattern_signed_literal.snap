@@ -1,0 +1,269 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 565..918
+  FnDecl 565..626
+    FnKw 565..567 "fn"
+    Ident 568..576 "unsigned"
+    ParamList 576..583
+      LParen 576..577 "("
+      Param 577..582
+        Ident 577..578 "v"
+        Colon 578..579 ":"
+        PathType 580..582
+          Path 580..582
+            Ident 580..582 "u8"
+      RParen 582..583 ")"
+    RetType 584..590
+      Arrow 584..586 "->"
+      PathType 587..590
+        Path 587..590
+          Ident 587..590 "int"
+    Block 591..626
+      LBrace 591..592 "{"
+      ExprStmt 597..625
+        MatchExpr 597..624
+          MatchKw 597..602 "match"
+          PathExpr 603..604
+            Ident 603..604 "v"
+          LBrace 605..606 "{"
+          MatchArm 607..615
+            ErrorNode 607..609
+              Minus 607..608 "-"
+              Int 608..609 "1"
+            FatArrow 610..612 "=>"
+            LiteralExpr 613..614
+              Int 613..614 "1"
+            Comma 614..615 ","
+          MatchArm 616..622
+            WildcardPat 616..617
+              Underscore 616..617 "_"
+            FatArrow 618..620 "=>"
+            LiteralExpr 621..622
+              Int 621..622 "0"
+          RBrace 623..624 "}"
+        Term 624..625 "\n"
+      RBrace 625..626 "}"
+  Term 626..627 "\n"
+  FnDecl 628..692
+    FnKw 628..630 "fn"
+    Ident 631..640 "below_min"
+    ParamList 640..647
+      LParen 640..641 "("
+      Param 641..646
+        Ident 641..642 "v"
+        Colon 642..643 ":"
+        PathType 644..646
+          Path 644..646
+            Ident 644..646 "i8"
+      RParen 646..647 ")"
+    RetType 648..654
+      Arrow 648..650 "->"
+      PathType 651..654
+        Path 651..654
+          Ident 651..654 "int"
+    Block 655..692
+      LBrace 655..656 "{"
+      ExprStmt 661..691
+        MatchExpr 661..690
+          MatchKw 661..666 "match"
+          PathExpr 667..668
+            Ident 667..668 "v"
+          LBrace 669..670 "{"
+          MatchArm 671..681
+            ErrorNode 671..675
+              Minus 671..672 "-"
+              Int 672..675 "129"
+            FatArrow 676..678 "=>"
+            LiteralExpr 679..680
+              Int 679..680 "1"
+            Comma 680..681 ","
+          MatchArm 682..688
+            WildcardPat 682..683
+              Underscore 682..683 "_"
+            FatArrow 684..686 "=>"
+            LiteralExpr 687..688
+              Int 687..688 "0"
+          RBrace 689..690 "}"
+        Term 690..691 "\n"
+      RBrace 691..692 "}"
+  Term 692..693 "\n"
+  FnDecl 694..765
+    FnKw 694..696 "fn"
+    Ident 697..705 "in_tuple"
+    ParamList 705..712
+      LParen 705..706 "("
+      Param 706..711
+        Ident 706..707 "v"
+        Colon 707..708 ":"
+        PathType 709..711
+          Path 709..711
+            Ident 709..711 "i8"
+      RParen 711..712 ")"
+    RetType 713..719
+      Arrow 713..715 "->"
+      PathType 716..719
+        Path 716..719
+          Ident 716..719 "int"
+    Block 720..765
+      LBrace 720..721 "{"
+      ExprStmt 726..764
+        MatchExpr 726..763
+          MatchKw 726..731 "match"
+          TupleExpr 732..738
+            LParen 732..733 "("
+            PathExpr 733..734
+              Ident 733..734 "v"
+            Comma 734..735 ","
+            LiteralExpr 736..737
+              Int 736..737 "0"
+            RParen 737..738 ")"
+          LBrace 739..740 "{"
+          MatchArm 741..754
+            TuplePat 741..748
+              LParen 741..742 "("
+              ErrorNode 742..744
+                Minus 742..743 "-"
+                Int 743..744 "1"
+              Comma 744..745 ","
+              WildcardPat 746..747
+                Underscore 746..747 "_"
+              RParen 747..748 ")"
+            FatArrow 749..751 "=>"
+            LiteralExpr 752..753
+              Int 752..753 "1"
+            Comma 753..754 ","
+          MatchArm 755..761
+            WildcardPat 755..756
+              Underscore 755..756 "_"
+            FatArrow 757..759 "=>"
+            LiteralExpr 760..761
+              Int 760..761 "0"
+          RBrace 762..763 "}"
+        Term 763..764 "\n"
+      RBrace 764..765 "}"
+  Term 765..766 "\n"
+  FnDecl 767..833
+    FnKw 767..769 "fn"
+    Ident 770..779 "range_end"
+    ParamList 779..786
+      LParen 779..780 "("
+      Param 780..785
+        Ident 780..781 "v"
+        Colon 781..782 ":"
+        PathType 783..785
+          Path 783..785
+            Ident 783..785 "i8"
+      RParen 785..786 ")"
+    RetType 787..793
+      Arrow 787..789 "->"
+      PathType 790..793
+        Path 790..793
+          Ident 790..793 "int"
+    Block 794..833
+      LBrace 794..795 "{"
+      ExprStmt 800..832
+        MatchExpr 800..831
+          MatchKw 800..805 "match"
+          PathExpr 806..807
+            Ident 806..807 "v"
+          LBrace 808..809 "{"
+          MatchArm 810..822
+            ErrorNode 810..816
+              Minus 810..811 "-"
+              Int 811..812 "5"
+              DotDotEq 812..815 "..="
+              LiteralPat 815..816
+                Int 815..816 "5"
+            FatArrow 817..819 "=>"
+            LiteralExpr 820..821
+              Int 820..821 "1"
+            Comma 821..822 ","
+          MatchArm 823..829
+            WildcardPat 823..824
+              Underscore 823..824 "_"
+            FatArrow 825..827 "=>"
+            LiteralExpr 828..829
+              Int 828..829 "0"
+          RBrace 830..831 "}"
+        Term 831..832 "\n"
+      RBrace 832..833 "}"
+  Term 833..834 "\n"
+  FnDecl 835..917
+    FnKw 835..837 "fn"
+    Ident 838..842 "main"
+    ParamList 842..844
+      LParen 842..843 "("
+      RParen 843..844 ")"
+    RetType 845..851
+      Arrow 845..847 "->"
+      PathType 848..851
+        Path 848..851
+          Ident 848..851 "int"
+    Block 852..917
+      LBrace 852..853 "{"
+      ExprStmt 854..915
+        BinExpr 854..915
+          BinExpr 854..899
+            BinExpr 854..884
+              CallExpr 854..867
+                PathExpr 854..862
+                  Ident 854..862 "unsigned"
+                ArgList 862..867
+                  LParen 862..863 "("
+                  Arg 863..866
+                    LiteralExpr 863..866
+                      Int 863..866 "255"
+                  RParen 866..867 ")"
+              Plus 868..869 "+"
+              CallExpr 870..884
+                PathExpr 870..879
+                  Ident 870..879 "below_min"
+                ArgList 879..884
+                  LParen 879..880 "("
+                  Arg 880..883
+                    LiteralExpr 880..883
+                      Int 880..883 "127"
+                  RParen 883..884 ")"
+            Plus 885..886 "+"
+            CallExpr 887..899
+              PathExpr 887..895
+                Ident 887..895 "in_tuple"
+              ArgList 895..899
+                LParen 895..896 "("
+                Arg 896..898
+                  PrefixExpr 896..898
+                    Minus 896..897 "-"
+                    LiteralExpr 897..898
+                      Int 897..898 "1"
+                RParen 898..899 ")"
+          Plus 900..901 "+"
+          CallExpr 902..915
+            PathExpr 902..911
+              Ident 902..911 "range_end"
+            ArgList 911..915
+              LParen 911..912 "("
+              Arg 912..914
+                PrefixExpr 912..914
+                  Minus 912..913 "-"
+                  LiteralExpr 913..914
+                    Int 913..914 "1"
+              RParen 914..915 ")"
+      RBrace 916..917 "}"
+  Term 917..918 "\n"
+  Eof 918..918 ""
+== diagnostics ==
+E0207 [Error] 607..609 a literal pattern has no sign
+    label a signed literal is an expression, not a pattern
+    note a literal pattern is a literal, and an integer literal carries no sign ([gram.pat.lit]); match a negative value in a guard: `n if n == -1 => …`
+E0207 [Error] 671..675 a literal pattern has no sign
+    label a signed literal is an expression, not a pattern
+    note a literal pattern is a literal, and an integer literal carries no sign ([gram.pat.lit]); match a negative value in a guard: `n if n == -1 => …`
+E0207 [Error] 742..744 a literal pattern has no sign
+    label a signed literal is an expression, not a pattern
+    note a literal pattern is a literal, and an integer literal carries no sign ([gram.pat.lit]); match a negative value in a guard: `n if n == -1 => …`
+E0207 [Error] 810..812 a literal pattern has no sign
+    label a signed literal is an expression, not a pattern
+    note a literal pattern is a literal, and an integer literal carries no sign ([gram.pat.lit]); match a negative value in a guard: `n if n == -1 => …`
