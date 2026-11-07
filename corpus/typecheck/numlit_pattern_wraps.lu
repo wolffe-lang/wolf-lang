@@ -1,0 +1,19 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: gram.pat.lit, type.numlit
+//!
+//! wolf-lang#1058: an arm's literal is written into its scrutinee's
+//! type (`[gram.pat.lit]`), and no `u8` is 300. Native and release
+//! wrapped the arm constant into eight bits, 300 mod 256 = 44, and
+//! took the arm for `f(44)` (exit 0); the checked machine and lupin
+//! never matched (exit 2); no tier said anything. It is E0415 at the
+//! literal on every tier, the refusal `v == 300` already had.
+
+fn f(v: u8) -> int {
+    match v {
+        300 => 0,
+        _ => 2,
+    }
+}
+
+fn main() -> int { f(44) }
