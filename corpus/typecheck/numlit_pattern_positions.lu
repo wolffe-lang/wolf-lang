@@ -1,0 +1,80 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: gram.pat.lit, type.numlit
+//!
+//! A literal pattern outside its type is E0415 at every depth a
+//! pattern admits and in every spelling (`[gram.pat.lit]`): a tuple
+//! element, an enum payload, a struct field, an or-pattern's
+//! alternative, the pattern after `@`, an arm of a statement `match`,
+//! a hex and an underscored literal. Every one wrapped to 44 (or 0) on
+//! native and release and matched; the checked machine and lupin never
+//! matched. Each function answers 1 from its out-of-range arm, so a
+//! tier that never matched would exit 0.
+
+enum E { A(u8), B }
+
+struct P { a: u8, b: int }
+
+fn in_tuple(v: u8) -> int {
+    match (v, 1) {
+        (300, _) => 1,
+        _ => 0,
+    }
+}
+
+fn in_payload(e: E) -> int {
+    match e {
+        A(300) => 1,
+        _ => 0,
+    }
+}
+
+fn in_field(p: P) -> int {
+    match p {
+        P { a: 300, .. } => 1,
+        _ => 0,
+    }
+}
+
+fn in_alternative(v: u8) -> int {
+    match v {
+        1 | 300 => 1,
+        _ => 0,
+    }
+}
+
+fn after_at(v: u8) -> int {
+    match v {
+        n @ 300 => n as int - 43,
+        _ => 0,
+    }
+}
+
+fn in_statement(v: u8) -> int {
+    var r = 0
+    match v {
+        300 => { r = 1 },
+        _ => {},
+    }
+    r
+}
+
+fn in_hex(v: u8) -> int {
+    match v {
+        0x12c => 1,
+        _ => 0,
+    }
+}
+
+fn underscored(v: u16) -> int {
+    match v {
+        65_536 => 1,
+        _ => 0,
+    }
+}
+
+fn main() -> int {
+    let a = in_tuple(44) + in_payload(E.A(44)) + in_field(P { a: 44, b: 1 })
+    let b = in_alternative(44) + after_at(44) + in_statement(44)
+    a + b + in_hex(44) + underscored(0)
+}
