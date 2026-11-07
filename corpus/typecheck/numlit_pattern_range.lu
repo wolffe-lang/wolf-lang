@@ -1,0 +1,45 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: gram.pat.lit, gram.pat.range
+//!
+//! Each end of a range pattern is a literal pattern of the scrutinee's
+//! type (`[gram.pat.range]`, `[gram.pat.lit]`), so an end the type
+//! cannot hold is E0415 at that end: a high end, an exclusive high end
+//! one past the maximum (every `u8` is `0..=255`), both ends of one
+//! range, and an `i8` range. Native and release wrapped the ends
+//! (`250..=300` became `250..=44` and missed 255; `256..=300` became
+//! `0..=44` and took 44); the checked machine and lupin compared the
+//! numbers. Each function answers 1 where native's answer and the
+//! numbers' disagreed, and 0 where they agreed.
+
+fn high_end(v: u8) -> int {
+    match v {
+        250..=300 => 0,
+        _ => 1,
+    }
+}
+
+fn exclusive_end(v: u8) -> int {
+    match v {
+        0..256 => 0,
+        _ => 1,
+    }
+}
+
+fn both_ends(v: u8) -> int {
+    match v {
+        256..=300 => 1,
+        _ => 0,
+    }
+}
+
+fn signed_range(v: i8) -> int {
+    match v {
+        100..=200 => 0,
+        _ => 1,
+    }
+}
+
+fn main() -> int {
+    high_end(255) + exclusive_end(255) + both_ends(44) + signed_range(127)
+}
