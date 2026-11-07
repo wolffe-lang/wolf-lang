@@ -292,6 +292,7 @@
     "gram.lex.str.raw": "01-grammar.md",
     "gram.pat": "01-grammar.md",
     "gram.pat.binder": "01-grammar.md",
+    "gram.pat.lit": "01-grammar.md",
     "gram.pat.nullary": "01-grammar.md",
     "gram.pat.range": "01-grammar.md",
     "gram.pat.struct": "01-grammar.md",
