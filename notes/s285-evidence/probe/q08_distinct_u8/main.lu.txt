@@ -1,0 +1,5 @@
+type Col = distinct u8
+fn f(v: Col) -> int {
+    match v { 300 => 0, _ => 2 }
+}
+fn main() -> int { f(44 as Col) }

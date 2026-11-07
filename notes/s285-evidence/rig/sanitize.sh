@@ -9,5 +9,5 @@
 sed -e 's#/Users/[a-z]*/lanes/s285/org#$ORG#g' -e 's#/Users/[a-z]*/lanes/s285#$LANE#g' \
     -e 's#/home/[a-z]*/lanes/s285#$LANE#g' -e 's#/home/[a-z]*/lanes/#$LANES/#g' \
     -e 's#mac build lock held by [A-Za-z0-9_-]* pid [0-9]*#mac build lock held by another lane#' \
-    -e "s#${LINUX_HOST}#H1#g" \
+    -e "s#${LINUX_HOST}#H1#g" -e "s#/Users/[a-z]*/#\$HOME/#g" -e "s#/home/[a-z]*/#\$HOME/#g" \
     -e "/${PRIVATE_NAME}/d" "$1" > "$2"
