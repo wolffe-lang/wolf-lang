@@ -23423,19 +23423,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         None => Err(refuse("this char literal pattern shape", pat.span)),
                     };
                 }
-                match pattern_int_literal(&text) {
-                    Some(n) => {
-                        literal_pattern_fits(self.table, scrut_sema, &[n], pat.span)?;
-                        Ok(PatShape::Tests(vec![ScalarTest::Eq(n)], vec![]))
-                    }
-                    None => Err(refuse("this literal pattern shape", pat.span)),
-                }
+                let n = pattern_literal(
+                    self.table,
+                    scrut_sema,
+                    &text,
+                    "this literal pattern shape",
+                    pat.span,
+                )?;
+                Ok(PatShape::Tests(vec![ScalarTest::Eq(n)], vec![]))
             }
             // `[gram.pat.range]` (s147, #287): one inclusive membership
             // test on the scalar discriminant — `char` by scalar.
             SyntaxKind::RangePat => {
+                self.range_ends_fit(pat, self.table, scrut_sema)?;
                 let (lo, hi) = self.range_bounds(pat)?;
-                literal_pattern_fits(self.table, scrut_sema, &[lo, hi], pat.span)?;
                 Ok(PatShape::Tests(vec![ScalarTest::Range(lo, hi)], vec![]))
             }
             SyntaxKind::PathPat => {
@@ -23751,8 +23752,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::RangePat => {
                 let field = strip_sema_in(tbl, sema_ty);
                 let unsigned = sema_unsigned(tbl, field);
-                let (lo, hi) = self.range_bounds(sub)?;
-                literal_pattern_fits(tbl, field, &[lo, hi], sub.span)?;
+                self.range_ends_fit(sub, tbl, field)?;
                 self.product_range_test(sub, v, unsigned, conds, dead)
             }
             SyntaxKind::TuplePat => {
@@ -24147,18 +24147,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 None => return Err(refuse("this char literal pattern shape", sub.span)),
             }
         } else {
-            match pattern_int_literal(&text) {
-                Some(n) => {
-                    literal_pattern_fits(tbl, field, &[n], sub.span)?;
-                    n
-                }
-                None => {
-                    return Err(refuse(
-                        "this literal shape inside a product pattern",
-                        sub.span,
-                    ));
-                }
-            }
+            pattern_literal(
+                tbl,
+                field,
+                &text,
+                "this literal shape inside a product pattern",
+                sub.span,
+            )?
         };
         let vty = self.b.func.value_ty(v);
         let n = match self.b.module.types.int_bits(vty) {
@@ -24219,6 +24214,30 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             None => {
                 let t = self.range_test(v, lo, hi, unsigned);
                 conds.push(t);
+            }
+        }
+        Ok(())
+    }
+
+    /// The backstop for a range pattern's ends (wolf-lang#1058,
+    /// `[gram.pat.lit]`): each integer end is a literal pattern of `ty`, so
+    /// one beyond it is refused, never wrapped (see [`pattern_literal`]).
+    /// `char` ends, and a `ty` that names no integer type, pass.
+    fn range_ends_fit(&self, pat: &'t GreenNode, table: &TypeTable, ty: TyId) -> R<()> {
+        let Some((lo, hi)) = int_type_range(table, ty) else {
+            return Ok(());
+        };
+        let d = wolf_ast::RangePat::cast(pat).expect("kind");
+        for end in [d.lo(), d.hi()].into_iter().flatten() {
+            let text = self.text(end.span);
+            if !text.starts_with('\'')
+                && let Some(v) = literal_exact_value(&text)
+                && (v < lo || v > hi)
+            {
+                return Err(refuse(
+                    "a literal pattern beyond its scrutinee's type",
+                    end.span,
+                ));
             }
         }
         Ok(())
@@ -26342,46 +26361,70 @@ fn contains_control(node: &GreenNode) -> bool {
     walk(node)
 }
 
-/// An integer literal PATTERN's value as the bits its scrutinee holds
-/// (wolf-lang#1058, `[gram.pat.lit]`). The checker's E0415 refuses a
-/// pattern its scrutinee's type cannot hold, so one above `i64::MAX`
-/// stands only over a 64-bit unsigned scrutinee (`u64`, `uint`,
-/// `wrapping[u64]`), whose value is its u64 bit pattern: the decimal
-/// spelling reads as that pattern, as the prefixed ones already did
-/// (`18446744073709551615 =>` was refused as "this literal pattern shape").
-fn pattern_int_literal(text: &str) -> Option<i64> {
-    parse_int_literal(text).or_else(|| parse_uint_literal(text).map(|u| u as i64))
-}
-
-/// Backstop (wolf-lang#1058): the checker's E0415 refuses a literal
-/// pattern its scrutinee's type cannot hold (`[gram.pat.lit]`), so every
-/// integer arm constant reaching lowering fits the scrutinee's type, and
+/// An integer literal PATTERN's value as the bits its scrutinee holds,
+/// ranged by its exact value against the scrutinee's (or the field's)
+/// sema type `ty` (wolf-lang#1058, `[gram.pat.lit]`).
+///
+/// The checker's E0415 refuses a literal pattern its scrutinee's type
+/// cannot hold, so every integer arm constant reaching lowering fits, and
 /// the width wrap (`wrap_test`, the s74 discipline) only re-spells an
-/// unsigned one as its bit pattern. One that does not fit is refused here,
-/// never wrapped into a different number (`300` over a `u8` once tested
-/// 44); reaching this is a bug upstream, as wolf-lang#151's backstop for a
-/// literal expression is. `ty` is the scrutinee's (or the field's) sema
-/// type; the 64-bit types, `char` and every non-integer pass, since this
-/// lowering holds each of their values in an `i64` as written.
-fn literal_pattern_fits(table: &TypeTable, ty: TyId, consts: &[i64], span: Span) -> R<()> {
-    let ty = strip_sema_in(table, ty);
-    let (lo, hi): (i64, i64) = match table.kind(ty) {
-        TyKind::Prim(Prim::I8) => (i8::MIN.into(), i8::MAX.into()),
-        TyKind::Prim(Prim::I16) => (i16::MIN.into(), i16::MAX.into()),
-        TyKind::Prim(Prim::I32) => (i32::MIN.into(), i32::MAX.into()),
-        TyKind::Prim(Prim::U8) => (0, u8::MAX.into()),
-        TyKind::Prim(Prim::U16) => (0, u16::MAX.into()),
-        TyKind::Prim(Prim::U32) => (0, u32::MAX.into()),
-        _ => return Ok(()),
+/// unsigned one as its bit pattern. As a backstop, one that does not fit
+/// is refused here, never wrapped into a different number (`300` over a
+/// `u8` once tested 44) — reaching it is a bug upstream, as wolf-lang#151's
+/// backstop for a literal expression is. A pattern above `i64::MAX` fits
+/// only a 64-bit unsigned type (`u64`, `uint`, `wrapping[u64]`), where it
+/// is the value's u64 bit pattern; its decimal spelling was refused before
+/// (`18446744073709551615 =>`, "this literal pattern shape"). A `ty` that
+/// names no integer type keeps the reading this lowering always had.
+fn pattern_literal(
+    table: &TypeTable,
+    ty: TyId,
+    text: &str,
+    shape: &'static str,
+    span: Span,
+) -> R<i64> {
+    let Some((lo, hi)) = int_type_range(table, ty) else {
+        return parse_int_literal(text).ok_or_else(|| refuse(shape, span));
     };
-    if consts.iter().all(|c| (lo..=hi).contains(c)) {
-        Ok(())
-    } else {
-        Err(refuse(
+    let Some(v) = literal_exact_value(text) else {
+        return Err(refuse(shape, span));
+    };
+    if v < lo || v > hi {
+        return Err(refuse(
             "a literal pattern beyond its scrutinee's type",
             span,
-        ))
+        ));
     }
+    Ok(v as u64 as i64)
+}
+
+/// The inclusive value range of the integer type `ty` names, through
+/// `wrapping[T]` and `distinct` (`[type.int]`); `None` for every other type.
+fn int_type_range(table: &TypeTable, ty: TyId) -> Option<(i128, i128)> {
+    let TyKind::Prim(p) = table.kind(strip_sema_in(table, ty)) else {
+        return None;
+    };
+    Some(match p {
+        Prim::I8 => (i8::MIN.into(), i8::MAX.into()),
+        Prim::I16 => (i16::MIN.into(), i16::MAX.into()),
+        Prim::I32 => (i32::MIN.into(), i32::MAX.into()),
+        Prim::I64 | Prim::Int => (i64::MIN.into(), i64::MAX.into()),
+        Prim::U8 => (0, u8::MAX.into()),
+        Prim::U16 => (0, u16::MAX.into()),
+        Prim::U32 => (0, u32::MAX.into()),
+        Prim::U64 | Prim::Uint => (0, u64::MAX.into()),
+        _ => return None,
+    })
+}
+
+/// An unsigned integer literal's exact value: decimal with `_`
+/// separators, or a prefixed radix ([`radix_digits`]).
+fn literal_exact_value(text: &str) -> Option<i128> {
+    let t: String = text.chars().filter(|&c| c != '_').collect();
+    if let Some((digits, radix)) = radix_digits(&t) {
+        return u128::from_str_radix(digits, radix).ok().and_then(|v| i128::try_from(v).ok());
+    }
+    t.parse::<i128>().ok()
 }
 
 /// Integer literal: decimal with `_` separators, or `0x…` hex (bit
