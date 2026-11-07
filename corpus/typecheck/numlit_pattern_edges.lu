@@ -1,0 +1,105 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: gram.pat.lit, type.numlit
+//!
+//! Every integer primitive's max+1 as a literal pattern, and two
+//! `wrapping[T]` scrutinees, which wrap their arithmetic and never
+//! their literals (`[gram.pat.lit]`): twelve E0415s, each at its
+//! literal. Each function is called with the value its pattern wraps
+//! to (the type's minimum), so a tier that wrapped would answer 1 from
+//! it; `main` adds them, and a tier that never matched would exit 0.
+//! The narrow ones wrapped on native and release; the 64-bit ones were
+//! refused there ("unsupported"); the checked machine and lupin never
+//! matched.
+
+fn at_i8(v: i8) -> int {
+    match v {
+        128 => 1,
+        _ => 0,
+    }
+}
+
+fn at_i16(v: i16) -> int {
+    match v {
+        32768 => 1,
+        _ => 0,
+    }
+}
+
+fn at_i32(v: i32) -> int {
+    match v {
+        2147483648 => 1,
+        _ => 0,
+    }
+}
+
+fn at_i64(v: i64) -> int {
+    match v {
+        9223372036854775808 => 1,
+        _ => 0,
+    }
+}
+
+fn at_int(v: int) -> int {
+    match v {
+        9223372036854775808 => 1,
+        _ => 0,
+    }
+}
+
+fn at_u8(v: u8) -> int {
+    match v {
+        256 => 1,
+        _ => 0,
+    }
+}
+
+fn at_u16(v: u16) -> int {
+    match v {
+        65536 => 1,
+        _ => 0,
+    }
+}
+
+fn at_u32(v: u32) -> int {
+    match v {
+        4294967296 => 1,
+        _ => 0,
+    }
+}
+
+fn at_u64(v: u64) -> int {
+    match v {
+        18446744073709551616 => 1,
+        _ => 0,
+    }
+}
+
+fn at_uint(v: uint) -> int {
+    match v {
+        18446744073709551616 => 1,
+        _ => 0,
+    }
+}
+
+fn at_wrapping_u8(v: wrapping[u8]) -> int {
+    match v {
+        256 => 1,
+        _ => 0,
+    }
+}
+
+fn at_wrapping_i8(v: wrapping[i8]) -> int {
+    match v {
+        128 => 1,
+        _ => 0,
+    }
+}
+
+fn main() -> int {
+    let signed = at_i8(-128) + at_i16(-32768) + at_i32(-2147483648)
+    let wide = at_i64(-9223372036854775808) + at_int(-9223372036854775808)
+    let unsigned = at_u8(0) + at_u16(0) + at_u32(0) + at_u64(0) + at_uint(0)
+    let wrapped = at_wrapping_u8(0 as wrapping[u8]) + at_wrapping_i8(-128 as wrapping[i8])
+    signed + wide + unsigned + wrapped
+}
