@@ -1,0 +1,28 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: gram.pat.lit, type.numlit.default
+//!
+//! When nothing but the match decides the type, the scrutinee and its
+//! literal pattern share one literal type, which defaults to `i32`
+//! (`[type.numlit.default]`), and the pattern must fit it
+//! (`[gram.pat.lit]`): a literal scrutinee, and an unannotated binding
+//! matched later. Both ran on every tier and never matched (3000000000
+//! is not 5 in any width). It is E0415 "does not fit `i32`" at each
+//! pattern; annotating the binding (`let v: int = 5`) is the fix.
+
+fn literal_scrutinee() -> int {
+    match 5 {
+        3000000000 => 1,
+        _ => 0,
+    }
+}
+
+fn unannotated_binding() -> int {
+    let v = 5
+    match v {
+        3000000000 => 1,
+        _ => 0,
+    }
+}
+
+fn main() -> int { literal_scrutinee() + unannotated_binding() }
