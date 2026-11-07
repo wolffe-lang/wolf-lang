@@ -2319,6 +2319,24 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
             let lit = literal_pat(p);
             Some(range_tail(p, lit))
         }
+        // `[gram.pat.lit]` (wolf-lang#1058): a literal pattern carries no
+        // sign — `literal`'s INT has none — so `-1` in pattern position is
+        // refused by NAME at the signed literal, in every position (the
+        // generic "expected a pattern" said nothing of why), and consumed
+        // with a range tail as one node, so the arm's `=>` is still found.
+        TokenKind::Punct(Punct::Minus) if at_signed_literal(p) => {
+            let m = p.start();
+            signed_literal(p);
+            if p.at_punct(Punct::DotDot) || p.at_punct(Punct::DotDotEq) {
+                p.bump();
+                if at_signed_literal(p) {
+                    signed_literal(p);
+                } else if is_literal_pat_start(p.current()) {
+                    literal_pat(p);
+                }
+            }
+            Some(m.complete(p, SyntaxKind::ErrorNode))
+        }
         TokenKind::Punct(Punct::DotDot | Punct::DotDotEq) => {
             // `[gram.pat.range]` (s147, #287): an open range in pattern
             // position — `..hi` is the slice spelling, never a pattern.
@@ -2431,6 +2449,35 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
 const RANGE_PAT_NOTE: &str = "a range pattern is `lo..hi` or `lo..=hi` with a literal at both ends \
                               (integer or `char`); the open ranges `..hi` and `lo..` are slice \
                               spellings, not patterns ([gram.pat.range])";
+
+/// The teach-note every signed-literal refusal carries (`[gram.pat.lit]`).
+const SIGNED_PAT_NOTE: &str = "a literal pattern is a literal, and an integer literal carries no \
+                               sign ([gram.pat.lit]); match a negative value in a guard: \
+                               `n if n == -1 => …`";
+
+/// Is the parser at `-` and a numeric literal: a signed literal, which a
+/// pattern cannot be (`[gram.pat.lit]`)? One token of lookahead, to tell
+/// it from a `-` that starts no pattern at all.
+fn at_signed_literal(p: &Parser<'_>) -> bool {
+    p.at_punct(Punct::Minus) && matches!(p.nth(1), TokenKind::Int | TokenKind::Float)
+}
+
+/// Refuse one signed literal in pattern position (E0207 at `-` and the
+/// literal) and consume both. The caller has checked [`at_signed_literal`].
+fn signed_literal(p: &mut Parser<'_>) {
+    let span = p.current_span().join(p.nth_span(1));
+    p.push_diag(
+        wolf_diag::Diagnostic::error(
+            codes::EXPECTED_PATTERN,
+            span,
+            "a literal pattern has no sign",
+        )
+        .with_label("a signed literal is an expression, not a pattern")
+        .with_note(SIGNED_PAT_NOTE),
+    );
+    p.bump(); // `-`
+    p.bump(); // the literal
+}
 
 /// Does `k` begin a literal pattern (`[gram.pat]`'s `literal`)?
 fn is_literal_pat_start(k: TokenKind) -> bool {
