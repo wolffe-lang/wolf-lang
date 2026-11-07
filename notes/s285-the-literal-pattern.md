@@ -21,8 +21,8 @@ The diff touches `spec/` (`01-grammar.md`, `anchors.json`) and the WIR lowering,
 the lane-audit map names cross-cutting. The rest is the checker, the parser, the checked machine,
 the registry's prose, corpus rows and their snapshots, the generated diagnostics catalog, tests,
 the changelog and notes. No runtime, CI, pin or toolchain change. Clean room: the spec, the
-compiler's own source, and black-box runs of the published lupin 0.1.59; no other compiler's
-source. No label, merge, tag, release, issue filed or closed, and no attribution trailer. The plant
+compiler's own source, and black-box runs of the published lupin 0.1.59 and 0.1.60; no other
+compiler's source. No label, merge, tag, release, issue filed or closed, and no attribution trailer. The plant
 is pushed without a PR. Nothing ran under `/tmp` or `/var/folders`. No commit was made on the Linux
 host.
 
@@ -33,13 +33,21 @@ refused. No program in the corpus, in wolf-std or in the org's other wolf reposi
 
 ## Inputs, verified
 
-- Base: wolf-lang trunk `a4d2a9c9`. The base binary is a clean debug build of that commit, copied
-  by value (sha256 `a00fd0c3…`); every later build ran in a worktree pinned to a commit
-  (`cargo build --locked -p wolf_driver -p wolf_rt`, Rust 1.97.1, arm64 macOS).
+- Base: wolf-lang trunk `a4d2a9c9`, where the lane was developed and measured. The base binary is
+  a clean debug build of that commit, copied by value (sha256 `a00fd0c3…`); every later build ran in
+  a worktree pinned to a commit (`cargo build --locked -p wolf_driver -p wolf_rt`, Rust 1.97.1,
+  arm64 macOS). The branch was then rebased once onto trunk `9a304544` (wolf 0.2.38, `95ae0827`,
+  plus one notes commit), below.
 - lupin 0.1.59, the release archives: `aarch64-apple-darwin` (sha256 `9f091af8…f5f5`) and
   `x86_64-unknown-linux-gnu` (`12121909…3a18`), each read twice and equal to the release page;
-  `lupin --version` names pin `b16353e`, the `PAIRING` stamp.
-- wolf-std at the `STD-PIN`, `5b3a5994`, and at its trunk, `d4a4d4ca`.
+  `lupin --version` names pin `b16353e`, the `PAIRING` stamp at the base.
+- lupin 0.1.60, the `PAIRING` stamp at the rebased trunk: `aarch64-apple-darwin` (sha256
+  `f3cae16f…6bb8`) and `x86_64-unknown-linux-gnu` (`e7d4c4f1…637e`), each read twice and equal to
+  the release page; `lupin --version` names pin `5f1f1c9`. It answers every row of this lane as
+  0.1.59 does: the five E0415 rows with the never-matching exit, the signed row by running it, the
+  edge row correctly.
+- wolf-std at the base's `STD-PIN`, `5b3a5994`, and at its trunk, `d4a4d4ca`, which is the rebased
+  trunk's `STD-PIN`.
 - wolf-lang#1058 whole, and #1059–#1062 (the same family, not fixed here).
 - The spec: `[type.numlit]` (its kind, adoption, default and value clauses), `[gram.pat]`,
   `[gram.pat.range]`, `[gram.lex]`'s `INT`, and E0415's explanation.
@@ -55,8 +63,8 @@ refused. No program in the corpus, in wolf-std or in the org's other wolf reposi
 
 ## Prediction
 
-Committed before the first change (`339f55c2`, `notes/s285-prediction.md`), after the base was
-measured (`a552fde1`). Scored:
+Committed before the first change (`d3337284`, `notes/s285-prediction.md`), after the base was
+measured (`4a64fd54`). Scored:
 
 - **The base: hit.** wolf-lang#1058 reproduces on all four machines, and so does every narrow
   primitive at max+1, `wrapping[T]`, every position and spelling; the 64-bit max+1 is refused
@@ -88,11 +96,11 @@ measured (`a552fde1`). Scored:
   an `i64` or `int` scrutinee, it would have passed `9223372036854775808`, read as u64 bits, and
   a hex `0xffffffffffffffff`, and wrapped them. No program reaches the backstop while the
   checker holds, so no row could show it; it was found by tracing the plant through the
-  lowering, after the takes at `62ed1d00` and `06a6364a` had run the first version and before
+  lowering, after the takes at `dce304f1` and `ece73727` had run the first version and before
   the Linux record. The backstop now ranges the literal's exact value from its text against the
-  scrutinee's whole type (`e084e704`), with a unit test of every edge
-  (`pattern_literal_tests`, `ad66c02d`).
-- **The rows: hit.** At the rows' commit (`ad926cb6`, the base's code): the anchors gate `OUT OF
+  scrutinee's whole type (`2927ac88`), with a unit test of every edge
+  (`pattern_literal_tests`, `e340bf25`).
+- **The rows: hit.** At the rows' commit (`242a7d66`, the base's code): the anchors gate `OUT OF
   SYNC`; `literal_pattern_lanes` 0 passed, 7 failed by name; the three rendered snapshots missing;
   the corpus step `1279 file(s), 7 bad`, six files by name (the signed row passes there, its code
   and phase unchanged, as predicted); conformance names the unknown anchor in all seven rows
@@ -113,7 +121,7 @@ measured (`a552fde1`). Scored:
   moved: those five, and the signed row's four E0207s, which now span the whole signed literal.
   No other file in any tree moved, and no tree outside the corpus gained an E0415 or an E0207. One
   private downstream consumer was measured the same way: 34 files in 23 runs, nothing moved.
-- **A miss, of formatting:** two `rustfmt` lines (`04099358`, `4199343a`).
+- **A miss, of formatting:** two `rustfmt` lines (`676b607a`, `b1390f5a`).
 - **A miss, of the rig:** the first org measurement ran every file at the typecheck rung. Every
   member of a directory module re-typechecks the whole module (about 40 s a file in yew), so one
   pass would have held the Mac build lock for about an hour. It was stopped by its own pids
@@ -134,7 +142,19 @@ measured (`a552fde1`). Scored:
   catalogs;
 - `mac-measure-ceb23098.log`: the org-wide measurement on both binaries, and the gates shard as
   a macOS shakedown;
+- `mac-rebased-744d7a9b.log`: the rebased head's code with lupin 0.1.60: the rows, the tests, the
+  corpus, conformance, every probe, fmt, clippy, the suites, and every corpus-walking snapshot
+  suite against the committed snapshots;
+- `rebase-map.txt`: each commit before the rebase and the commit it became;
 - `rig/`, `rig/linux/`: the scripts as run.
+
+The branch was rebased once, onto trunk `9a304544`: wolf 0.2.38 (`95ae0827`), which moved the
+`PAIRING` stamp to lupin 0.1.60 and the `STD-PIN` to `d4a4d4ca`, plus one notes commit. The rebase
+was clean, with one exception: 0.2.38 had cut the changelog's Unreleased section, so git put this
+lane's entry inside 0.2.38's section, and `c765d5e7` moves it under a new Unreleased heading.
+Every log before `mac-rebased-744d7a9b.log` ran before the rebase and is named by the commit it
+ran at; `rebase-map.txt` gives each one's rebased commit, which has the same subject and the same
+change. The note names rebased commits throughout.
 
 The records at the final head live outside the tree, because a record cannot predate the head
 it names. The PR body quotes every `END` line of the Linux gauntlet record and of the plant
@@ -143,25 +163,27 @@ record.
 ## Done-when
 
 Commits:
-- `a552fde1`: the base measured; `339f55c2`: the prediction, before the first change.
-- `e489bb51`: `[gram.pat.lit]` and the range sentence (the anchors gate red here).
-- `68c07b38`, `f0b76b70`, `43cae782`, `d89d59de`, `56e2079b`, `afed438c`, `ca85d39e`: the seven rows,
+- `4a64fd54`: the base measured; `d3337284`: the prediction, before the first change.
+- `e423806c`: `[gram.pat.lit]` and the range sentence (the anchors gate red here).
+- `ee94084a`, `d7a54b31`, `bbf5ddf7`, `548b8375`, `1398a66a`, `b0b25614`, `0245e15a`: the seven rows,
   red first.
-- `1f057e13`: the rows on four machines (`literal_pattern_lanes`); `ad926cb6`: the rendered E0415
+- `4d51ec67`: the rows on four machines (`literal_pattern_lanes`); `242a7d66`: the rendered E0415
   snapshots' tests.
-- `88c69b66`: the checker ranges literal patterns and range ends (E0415).
-- `aebfee14`: the parser refuses a signed literal pattern by name (E0207).
-- `43de4323`, `d52ef6cc`: a `u64` pattern above `i64::MAX` on the checked machine and natively.
-- `b360a4b9`, `e084e704`, `ad66c02d`: the lowering backstop, its exact-value ranging, its test.
-- `412493d7`: E0415's explanation. `62ed1d00`: the anchor indexed.
-- `c67d863d`: the changelog.
-- `04099358`, `4199343a`: formatting. `2c6a2237`, `513ca624`, `551ae6c7`, `06a6364a`, `771817c1`:
-  the snapshots and the lowering ledger. `b62eacf5`: the catalog regenerated. `ceb23098`: the
+- `8c4e86a5`: the checker ranges literal patterns and range ends (E0415).
+- `39efc6fc`: the parser refuses a signed literal pattern by name (E0207).
+- `df8ccc08`, `b4871ee7`: a `u64` pattern above `i64::MAX` on the checked machine and natively.
+- `5844b922`, `2927ac88`, `e340bf25`: the lowering backstop, its exact-value ranging, its test.
+- `893d745c`: E0415's explanation. `dce304f1`: the anchor indexed.
+- `86745f99`: the changelog.
+- `676b607a`, `b1390f5a`: formatting. `c1d3a4b7`, `07a211e2`, `3d592f27`, `ece73727`, `61bd988e`:
+  the snapshots and the lowering ledger. `ef52b6e9`: the catalog regenerated. `d8f746c7`: the
   syntax-tier count.
+- `c765d5e7`: the changelog entry under Unreleased after the rebase; `6fdd17f2`, `744d7a9b`: the
+  rows and the changelog name lupin 0.1.60, the new pin.
 - This note and its evidence.
 
 Test targets:
-- [x] the prediction committed before the first change (`339f55c2`)
+- [x] the prediction committed before the first change (`d3337284`)
 - [x] the anchors gate red at the clause alone, green at the index (`mac-red-ad926cb6.log`,
       `mac-regen-ad926cb6.log`: one anchor added, none removed)
 - [x] the rows red at the base's code, by name, in the corpus step, in conformance and on every
@@ -175,18 +197,20 @@ Test targets:
       this lane's rows move (`mac-measure-ceb23098.log`)
 - [x] the gates shard on macOS, a shakedown, not a record: every step exit 0
       (`mac-measure-ceb23098.log`)
+- [x] at the rebased head's code, with lupin 0.1.60: the rows, the tests, the corpus, conformance,
+      fmt, clippy, the suites, every corpus-walking snapshot suite with no update
+      (`mac-rebased-744d7a9b.log`)
 - [ ] the Linux gauntlet record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
 
-Issues to file once the PRs are open, each with its probe and output (linked from the PR, no
-closing keyword):
-- wolf-lang: a range pattern whose end lies above `i64::MAX` over a `u64` or `uint` is refused
-  as unsupported on the checked machine ("this range pattern's end") and natively ("this literal
-  range end"), where lupin matches (probe `q03`).
-- wolf-interp: lupin accepts a signed literal pattern, which the grammar does not admit, and
+Issues filed, each with its probe and output (linked from the PR, no closing keyword):
+- wolf-lang#1066: a range pattern whose end lies above `i64::MAX` over a `u64` or `uint` is refused
+  as unsupported on the checked machine ("this range pattern's end") and, for decimal ends,
+  natively ("this literal range end"), where lupin matches (probes `q03`, `r03`–`r05`).
+- wolf-interp#349: lupin accepts a signed literal pattern, which the grammar does not admit, and
   matches it (`match v { -1 => 0 }` over an `i8` holding -1 exits 0, probe `q01`); the mirror
   refuses it by name.
-- wolf-interp: lupin lets an integer literal adopt a `distinct` integer type
+- wolf-interp#350: lupin lets an integer literal adopt a `distinct` integer type
   (`let c: Col = 300` with `type Col = distinct u8` runs, and so does a literal pattern over a
   `Col`), where the compiler refuses both as E0401 (probes `q08`, `q09`).
