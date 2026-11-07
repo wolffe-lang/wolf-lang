@@ -1,0 +1,30 @@
+s285: building at ad926cb6 in $LANE/build
+s285: last release 43s ago; waiting 17s for the turn
+s285: 19:18:54 mac build lock held by another lane; waiting
+s285: 19:19:24 mac build lock held by another lane; waiting
+s285: 19:19:54 mac build lock held by another lane; waiting
+s285: 19:20:24 mac build lock held by another lane; waiting
+s285: 19:20:54 mac build lock held by another lane; waiting
+s285: 19:21:24 mac build lock held by another lane; waiting
+s285: lock taken 19:21:54, 13424 MiB free, 138 GB disk; running: bash $LANE/rig/mac-regen.sh
+== STEP head 00:21:54
+ad926cb64b8af989d606e73e518b6dac46514066
+ad926cb6 Add rendered E0415 snapshots for literal patterns
+       0
+END head exit=0
+== STEP spec-extract 00:21:54
+spec-extract: wrote spec/anchors.json (726 anchors)
+spec-extract: wrote spec/grammar.ebnf (11380 bytes)
+END spec-extract exit=0
+== STEP check 00:21:55
+spec-extract: spec/grammar.ebnf is in sync
+END check exit=0
+== STEP keys 00:21:56
+292a293
+> gram.pat.lit
+removed= 0 added= 1
+END keys exit=0
+ M spec/anchors.json
+clean:        0
+== done 2026-11-07T00:21:56Z
+s285: END exit=0 19:21:56

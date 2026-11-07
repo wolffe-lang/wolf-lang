@@ -1,8 +1,8 @@
 s285 evidence (wolf-lang: an integer literal pattern outside its scrutinee's type).
-Paths in the logs are relative to the lane's directory, written $LANE, and to the lane's
-checkouts of the org's repositories, written $ORG; the Mac is arm64 macOS. One private
-downstream consumer was measured beside the public checkouts; its lines are dropped here
-and its evidence stays outside the tree.
+Paths in the logs are relative to the lane's directory, written $LANE, to the lane's checkouts of
+the org's repositories, written $ORG, and to the home directory, written $HOME; the Mac is arm64
+macOS, the Linux host is written H1. One private downstream consumer was measured beside the
+public checkouts; its lines are dropped here and its evidence stays outside the tree.
 
 base-a4d2a9c9.log         the base: wolf at a4d2a9c9 (a clean debug build of that commit,
                           copied by value, sha256 a00fd0c3...); every probe on the checked
@@ -16,8 +16,9 @@ probe/                    the probe programs (.lu.txt; each its own directory). 
                           in-range control); p3x signed literals; p4x wrapping[T]; p5x range
                           endpoints; p6x nested positions and spellings; p7x a literal
                           scrutinee (the i32 default); p8x a duplicate after wrapping; p9x the
-                          expression twins (E0415 already); q0x the u64 edges and lupin's
-                          signed pattern.
+                          expression twins (E0415 already); q01-q07 the u64 edges and lupin's
+                          signed pattern; q08, q09 a `distinct` integer type (E0401 on the
+                          compiler; lupin runs both, an issue outside this lane).
 census-litpat.txt         the syntactic census before any code: every integer literal written
                           in an arm's pattern (the text before `=>`, or-pattern continuation
                           lines included) whose value is at least 128, in the corpus and 31
@@ -25,6 +26,40 @@ census-litpat.txt         the syntactic census before any code: every integer li
                           before `=>` too.
 census-scrutinee.txt      each candidate's enclosing `match` and its scrutinee's declared
                           type, read from the file; every one read by hand in the note.
-rig/                      the scripts as run: make-probes.py (the p* probes), probe-all.sh,
-                          locked.sh (the Mac build lock), litpat-census.py,
-                          census-scrutinee.py, sanitize.sh.
+mac-red-ad926cb6.log      the rows at the base's code (the spec clause and the rows committed,
+                          no fix): the anchors gate OUT OF SYNC; the seven rows on four
+                          machines; literal_pattern_lanes 0 passed, 7 failed by name; the three
+                          rendered E0415 snapshots missing; the corpus step `7 bad` (six files
+                          by name); conformance naming the unknown anchor in all seven rows.
+mac-regen-ad926cb6.log    `cargo xtask spec-extract`: 726 anchors, gram.pat.lit added, none
+                          removed (the key sets diffed both ways).
+mac-fix-62ed1d00.log      the fix: the rows on four machines; literal_pattern_lanes 7 passed;
+                          the corpus `0 bad`, the fail-pin ledger 393; conformance; every probe;
+                          fmt (red, one line); clippy; the wolf_sema suite (the three new
+                          snapshots missing, then made); the wolf_parse suite (one snapshot
+                          missing, see the sweep); the lexer, parser, lowering and rendered
+                          snapshot sets made with insta's update.
+mac-sweep-06a6364a.log    every test that walks the corpus with insta snapshots (21 of them),
+                          run with updates on: only the signed row's expression-tree snapshot
+                          appears; then `cargo xtask diag-catalog` (E0415's prose and fixtures)
+                          and both catalog checks.
+mac-fix-ad66c02d.log      the fix after the backstop's rework: the rows, the four-machine tests,
+                          the snapshots test, the corpus, conformance, every probe, fmt (red, one
+                          line), clippy, the wolf_sema suite, the wolf_parse suite (red: the
+                          syntax-tier fail count, 38 -> 39 by design), the backstop's unit test.
+mac-measure-ceb23098.log  at ceb23098: fmt, clippy, the wolf_parse suite, the backstop's unit
+                          test; every .lu file of the corpus and the 31 checkouts at the
+                          typecheck rung on the base binary and on the head's, one run per
+                          directory module plus each file with its own `check:` header, and the
+                          two compared run by run; then the gates shard of `cargo xtask ci` as a
+                          shakedown (not a record).
+rig/                      the Mac scripts as run: make-probes.py, probe-all.sh, locked.sh,
+                          build-at.sh, mac-rows.sh, mac-regen.sh, mac-snaps.sh, mac-measure.sh,
+                          litpat-census.py, census-scrutinee.py, measure-org.py, compare.py,
+                          pr-body.py, sanitize.sh.
+rig/linux/                the Linux gauntlet and plant scripts as run (s280's and s282's shape,
+                          copied by value; the lane's paths, names and block C adapted, and
+                          plant-inner.sh written for this lane's rows), with launch.sh.
+
+The records at the final head live outside the tree, because a record cannot predate the head
+it names; the PR body quotes every END line of the Linux gauntlet record and of the plant record.
