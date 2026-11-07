@@ -551,6 +551,18 @@ struct Obligation {
     origin: OblOrigin,
 }
 
+/// One integer literal pattern or range end (`[gram.pat.lit]`,
+/// wolf-lang#1058): where it is, the `{integer}` var it took, its value.
+#[derive(Debug, Clone)]
+struct LitPat {
+    span: Span,
+    ty: TyId,
+    value: i128,
+    /// A range's exclusive high end carries its low end's text, so the
+    /// end one past the maximum can be answered with the inclusive range.
+    exclusive_after: Option<String>,
+}
+
 struct Checker<'a> {
     sigs: &'a SigTables,
     module: usize,
@@ -667,6 +679,16 @@ struct Checker<'a> {
     /// cross a binding), so it takes `i32` and must fit it, whatever a
     /// later use of the binding decides for the VALUE.
     binding_lits: HashSet<Span>,
+    /// wolf-lang#1058 (`[gram.pat.lit]`): every integer literal pattern
+    /// and range end, as it was checked — the `{integer}` var it took
+    /// (unified with the scrutinee) and its value.
+    /// [`Checker::check_literal_fit`] ranges each against its final type,
+    /// as it ranges an expression's literals.
+    lit_pats: Vec<LitPat>,
+    /// The `{integer}` var roots [`Checker::finish_defaulting`] gave a
+    /// type, so a literal pattern's E0415 can say its `i32` is the
+    /// default's (`[type.numlit.default]`), not an annotation's.
+    defaulted_ints: HashSet<u32>,
     /// Lexically enclosing `when` blocks, outermost first
     /// ([conc.when.nonest]): a non-empty stack makes another `when`
     /// E1103. The stack survives into closures deliberately — the
@@ -874,6 +896,8 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         expect_enum: None,
         literal_default_miss: HashMap::new(),
         binding_lits: HashSet::new(),
+        lit_pats: Vec::new(),
+        defaulted_ints: HashSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -1062,6 +1086,8 @@ pub(crate) fn collect_body_rows(
         expect_enum: None,
         literal_default_miss: HashMap::new(),
         binding_lits: HashSet::new(),
+        lit_pats: Vec::new(),
+        defaulted_ints: HashSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -12189,13 +12215,24 @@ impl<'a> Checker<'a> {
         let (lit_ty, ctor) = match tok.map(|t| t.kind) {
             Some(SyntaxKind::Int) => {
                 let text = self.text(tok.expect("token").span);
+                let lit_ty = self.fresh(NumKind::Integer, pat.span);
                 let ctor = match parse_int_text(&text) {
-                    Some(v) => Ctor::Int(v),
+                    Some(v) => {
+                        // `[gram.pat.lit]`: ranged against the
+                        // scrutinee's type once types are final.
+                        self.lit_pats.push(LitPat {
+                            span: pat.span,
+                            ty: lit_ty,
+                            value: v,
+                            exclusive_after: None,
+                        });
+                        Ctor::Int(v)
+                    }
                     // Unparseable spelling: a textual-identity ctor —
                     // never claims wildcard coverage.
                     None => Ctor::Named(text),
                 };
-                (self.fresh(NumKind::Integer, pat.span), Some(ctor))
+                (lit_ty, Some(ctor))
             }
             Some(SyntaxKind::Float) => {
                 let text = self.text(tok.expect("token").span);
@@ -12249,11 +12286,12 @@ impl<'a> Checker<'a> {
         let (Some(lo), Some(hi)) = (d.lo(), d.hi()) else {
             return Ok(Pat::Wild);
         };
-        let lo_v = self.range_endpoint(lo, scrut)?;
+        let lo_v = self.range_endpoint(lo, scrut, None)?;
         // A reported low end (E0808) has said what the range needs;
         // the high end of the same spelling is not a second lesson.
         let hi_v = if lo_v.is_some() {
-            self.range_endpoint(hi, scrut)?
+            let after = (!d.inclusive()).then(|| self.text(lo.span));
+            self.range_endpoint(hi, scrut, after)?
         } else {
             None
         };
@@ -12301,16 +12339,31 @@ impl<'a> Checker<'a> {
     /// One range endpoint (`[gram.pat.range]`): an integer or `char`
     /// literal typed against the scrutinee, answered as its scalar.
     /// `None` when the endpoint was reported (a `str`, float or `bool`
-    /// literal — E0808 — or an unparseable spelling).
-    fn range_endpoint(&mut self, lit: &GreenNode, scrut: TyId) -> R<Option<i128>> {
+    /// literal — E0808 — or an unparseable spelling). An integer end is a
+    /// literal pattern (`[gram.pat.lit]`), recorded so
+    /// [`Checker::check_literal_fit`] ranges it; `exclusive_after` is the
+    /// low end's text when this is an exclusive high end.
+    fn range_endpoint(
+        &mut self,
+        lit: &GreenNode,
+        scrut: TyId,
+        exclusive_after: Option<String>,
+    ) -> R<Option<i128>> {
         let tok = lit.tokens().next();
         let (lit_ty, value) = match tok.map(|t| t.kind) {
             Some(SyntaxKind::Int) => {
                 let text = self.text(tok.expect("token").span);
-                (
-                    self.fresh(NumKind::Integer, lit.span),
-                    parse_int_text(&text),
-                )
+                let lit_ty = self.fresh(NumKind::Integer, lit.span);
+                let value = parse_int_text(&text);
+                if let Some(v) = value {
+                    self.lit_pats.push(LitPat {
+                        span: lit.span,
+                        ty: lit_ty,
+                        value: v,
+                        exclusive_after,
+                    });
+                }
+                (lit_ty, value)
             }
             Some(SyntaxKind::Char) => {
                 let text = self.text(tok.expect("token").span);
@@ -13538,6 +13591,7 @@ impl<'a> Checker<'a> {
                     let chosen = self.bound_directed_integer(v);
                     let t = self.lo.table.prim(chosen);
                     let _ = unify(&mut self.lo.table, &mut self.vars, var_ty, t);
+                    self.defaulted_ints.insert(v);
                 }
                 NumKind::Float => {
                     let f64_ = self.lo.table.prim(Prim::F64);
@@ -13836,6 +13890,71 @@ impl<'a> Checker<'a> {
                     ),
                 );
             }
+        }
+        self.check_literal_pattern_fit();
+    }
+
+    /// wolf-lang#1058 (`[gram.pat.lit]`): a literal pattern and a range end
+    /// took their scrutinee's type through unification, and must fit it as
+    /// an expression literal must. The native lowering wrapped one that did
+    /// not into the scrutinee's width, so `300` over a `u8` tested 44; the
+    /// checked machine compared the number and never matched. It is E0415
+    /// at the literal, the refusal `v == 300` already has.
+    fn check_literal_pattern_fit(&mut self) {
+        use std::collections::HashSet;
+        let pats = std::mem::take(&mut self.lit_pats);
+        let mut seen: HashSet<Span> = HashSet::new();
+        for lp in pats {
+            if !seen.insert(lp.span) {
+                continue;
+            }
+            let defaulted = match self.lo.table.kind(lp.ty) {
+                TyKind::Var(r) => self.defaulted_ints.contains(&self.vars.root(*r)),
+                _ => false,
+            };
+            let z = zonk(&mut self.lo.table, &self.vars, lp.ty);
+            let kind = match self.lo.table.kind(z).clone() {
+                TyKind::Wrapping(inner) => self.lo.table.kind(inner).clone(),
+                k => k,
+            };
+            let TyKind::Prim(p) = kind else { continue };
+            let Some((lo, hi)) = crate::wave::int_range(p) else {
+                continue;
+            };
+            let value = lp.value;
+            if lo <= value && value <= hi {
+                continue;
+            }
+            let name = p.name();
+            let note = match &lp.exclusive_after {
+                _ if defaulted => format!(
+                    "nothing but the match decides this literal's type, so it and the \
+                     scrutinee share one literal type, which defaults to `{name}` \
+                     ([type.numlit.default]), and a literal pattern must fit its \
+                     scrutinee's type ([gram.pat.lit]) — annotate the scrutinee with a \
+                     type that holds the value (`let v: int = …`)"
+                ),
+                Some(lo_text) if value == hi + 1 => format!(
+                    "a range end is a literal pattern of the scrutinee's type \
+                     ([gram.pat.lit]); `..{value}` stops before {value}, which no `{name}` \
+                     reaches — spell the range inclusively: `{lo_text}..={hi}`"
+                ),
+                _ => format!(
+                    "a literal pattern takes its scrutinee's type ([gram.pat.lit]), and \
+                     no `{name}` is {value}, so this arm could never match — wrapped into \
+                     the type's width it would test a different number; match a wider \
+                     value (`match v as int {{ … }}`) or remove the arm"
+                ),
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0415,
+                    lp.span,
+                    format!("`{value}` does not fit `{name}`"),
+                )
+                .with_label(format!("{name} holds {lo}..={hi}"))
+                .with_note(note),
+            );
         }
     }
 }
