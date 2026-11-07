@@ -1,0 +1,15 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 609..628 name=E variants=2
+StructDecl 630..656 name=P fields=2
+FnDecl 658..751 name=in_tuple body=Block
+FnDecl 753..840 name=in_payload body=Block
+FnDecl 842..937 name=in_field body=Block
+FnDecl 939..1032 name=in_alternative body=Block
+FnDecl 1034..1133 name=after_at body=Block
+FnDecl 1135..1251 name=in_statement body=Block
+FnDecl 1253..1336 name=in_hex body=Block
+FnDecl 1338..1428 name=underscored body=Block
+FnDecl 1430..1632 name=main body=Block

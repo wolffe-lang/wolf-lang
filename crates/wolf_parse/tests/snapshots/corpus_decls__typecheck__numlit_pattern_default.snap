@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 573..667 name=literal_scrutinee body=Block
+FnDecl 669..779 name=unannotated_binding body=Block
+FnDecl 781..845 name=main body=Block

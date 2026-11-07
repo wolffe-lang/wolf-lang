@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 693..782 name=high_end body=Block
+FnDecl 784..875 name=exclusive_end body=Block
+FnDecl 877..967 name=both_ends body=Block
+FnDecl 969..1062 name=signed_range body=Block
+FnDecl 1064..1159 name=main body=Block
