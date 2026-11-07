@@ -322,7 +322,7 @@ begin one. In `let` position this often means the binding name was
 deleted or a keyword sits where the name should be (that case is E0008
 with its own advice).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_keyword_pattern.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_lex.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_resolve.snap, crates/wolf_parse/tests/snapshots/corpus_decls__rows__negative__first_keyword_pattern.snap, crates/wolf_parse/tests/snapshots/corpus_decls__rows__negative__first_parse_before_lex.snap, crates/wolf_parse/tests/snapshots/corpus_decls__rows__negative__first_parse_before_resolve.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0207_missing_pattern.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__match_pattern_signed_literal.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_keyword_pattern.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_lex.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_resolve.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__match_pattern_signed_literal.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__match_pattern_signed_literal.snap, crates/wolf_parse/tests/snapshots/corpus_decls__rows__negative__first_keyword_pattern.snap, crates/wolf_parse/tests/snapshots/corpus_decls__rows__negative__first_parse_before_lex.snap, crates/wolf_parse/tests/snapshots/corpus_decls__rows__negative__first_parse_before_resolve.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0207_missing_pattern.snap
 
 ## E0208 — assignment used as an expression
 
@@ -741,14 +741,20 @@ holds nothing near it. The value is known exactly and the type is
 final, so the program can never mean what it says; the fix is a wider
 annotation (`let a: i64 = …`). A `wrapping[…]` type wraps its
 ARITHMETIC, not its literals — an overflowing literal is this same
-error there. The one negative allowance is the direct `-<literal>`
-spelling, which is checked as the negated value — `-2147483648` fits
+error there. A literal PATTERN is a literal too, and its context is
+the scrutinee (`[gram.pat.lit]`): `match v { 300 => … }` with `v: u8`
+is this error at the `300`, as `v == 300` is, and so is a range end
+the type cannot hold (`0..256` over a `u8`; every `u8` is `0..=255`).
+Such an arm could never match, and wrapping it into the type's width
+would make it test a different number. The one negative allowance is
+the direct `-<literal>` spelling of an expression, which is checked as
+the negated value (a pattern has no sign) — `-2147483648` fits
 `i32` even though `2147483648` alone does not. Before this code, the
 unfitting constant sailed into lowering and died as a verifier ICE
 (`[const-range]`, wolf-lang#151) — an abort where a diagnostic was
 owed.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__list_lit_elem_unfit.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal_call.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal_term.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__list_lit_elem_unfit.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal_call.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal_term.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_pattern_default.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_pattern_edges.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_pattern_positions.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_pattern_range.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_pattern_wraps.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0415_literal_pattern_defaulted_to_i32.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0415_literal_pattern_outside_its_type.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0415_range_exclusive_end_past_the_maximum.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
 
 ## E0416 — a `str` cannot be assigned through an index or slice
 
