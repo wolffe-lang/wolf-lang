@@ -13891,7 +13891,6 @@ impl<'a> Checker<'a> {
                 );
             }
         }
-        self.check_literal_pattern_fit();
     }
 
     /// wolf-lang#1058 (`[gram.pat.lit]`): a literal pattern and a range end
