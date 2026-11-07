@@ -315,3 +315,38 @@ fn e0806_range_in_let() {
         "fn main() -> !int {\n    let 0..10 = 5\n    0\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E0415 -----
+
+/// wolf-lang#1058 (`[gram.pat.lit]`): a literal pattern takes its
+/// scrutinee's type, so `300` over a `u8` is E0415 at the literal, as
+/// `v == 300` is.
+#[test]
+fn e0415_literal_pattern_outside_its_type() {
+    snap_one(
+        "e0415_literal_pattern_outside_its_type",
+        "fn f(v: u8) -> int {\n    match v {\n        300 => 0,\n        _ => 2,\n    }\n}\n\n\
+         fn main() -> int { f(44) }\n",
+    );
+}
+
+/// A range's exclusive end one past the maximum: E0415 at the end, with
+/// the inclusive spelling named.
+#[test]
+fn e0415_range_exclusive_end_past_the_maximum() {
+    snap_one(
+        "e0415_range_exclusive_end_past_the_maximum",
+        "fn f(v: u8) -> int {\n    match v {\n        0..256 => 0,\n        _ => 1,\n    }\n}\n\n\
+         fn main() -> int { f(255) }\n",
+    );
+}
+
+/// Nothing but the match decides: the scrutinee and the pattern share one
+/// literal type, which defaults to `i32`.
+#[test]
+fn e0415_literal_pattern_defaulted_to_i32() {
+    snap_one(
+        "e0415_literal_pattern_defaulted_to_i32",
+        "fn main() -> int {\n    let v = 5\n    match v {\n        3000000000 => 1,\n        _ => 0,\n    }\n}\n",
+    );
+}
