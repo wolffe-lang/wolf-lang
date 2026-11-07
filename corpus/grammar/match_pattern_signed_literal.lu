@@ -1,0 +1,29 @@
+//! check: fail(E0207)
+//! phase: lex
+//! conforms: gram.pat.lit, gram.pat
+//!
+//! A literal pattern carries no sign (`[gram.pat.lit]`: `literal`'s
+//! `INT` has none), so a signed literal in pattern position is E0207 at
+//! the signed literal, by name, with the guard spelling in its note: a
+//! negative literal against an unsigned scrutinee, an `i8`'s minimum
+//! less one, one inside a tuple, and one as a range end. The compiled
+//! tiers refused these already, as "expected a pattern"; lupin 0.1.59
+//! ran them, and matched `-1` against an `i8` holding -1.
+
+fn unsigned(v: u8) -> int {
+    match v { -1 => 1, _ => 0 }
+}
+
+fn below_min(v: i8) -> int {
+    match v { -129 => 1, _ => 0 }
+}
+
+fn in_tuple(v: i8) -> int {
+    match (v, 0) { (-1, _) => 1, _ => 0 }
+}
+
+fn range_end(v: i8) -> int {
+    match v { -5..=5 => 1, _ => 0 }
+}
+
+fn main() -> int { unsigned(255) + below_min(127) + in_tuple(-1) + range_end(-1) }
