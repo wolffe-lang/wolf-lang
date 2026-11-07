@@ -1,0 +1,5 @@
+type Col = distinct u8
+fn main() -> int {
+    let c: Col = 7
+    (c as u8) as int
+}
