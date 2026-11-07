@@ -1,0 +1,271 @@
+base a4d2a9c9 (wolf binary copied by value from a clean build at that sha, sha256 a00fd0c3...)
+2026-11-06T23:52:33Z
+wolf 0.2.37+dev.unknown (wolfgang)
+paired with lupin 0.1.59 (reference interpreter), pin b16353e8ae616ff3a35bd27adc56b727c50df345
+arm64
+s285: lock taken 18:52:33, 13448 MiB free, 143 GB disk; running: $LANE/rig/probe-all.sh $LANE/base-bin/wolf $LANE/probe/p00_issue_u8_300/main.lu $LANE/probe/p10_i8_max_plus_1/main.lu $LANE/probe/p11_i16_max_plus_1/main.lu $LANE/probe/p12_i32_max_plus_1/main.lu $LANE/probe/p13_i64_max_plus_1/main.lu $LANE/probe/p14_int_max_plus_1/main.lu $LANE/probe/p15_u8_max_plus_1/main.lu $LANE/probe/p16_u16_max_plus_1/main.lu $LANE/probe/p17_u32_max_plus_1/main.lu $LANE/probe/p18_u64_max_plus_1/main.lu $LANE/probe/p19_uint_max_plus_1/main.lu $LANE/probe/p20_i8_max_control/main.lu $LANE/probe/p21_i16_max_control/main.lu $LANE/probe/p22_i32_max_control/main.lu $LANE/probe/p23_i64_max_control/main.lu $LANE/probe/p24_int_max_control/main.lu $LANE/probe/p25_u8_max_control/main.lu $LANE/probe/p26_u16_max_control/main.lu $LANE/probe/p27_u32_max_control/main.lu $LANE/probe/p28_u64_max_control/main.lu $LANE/probe/p29_uint_max_control/main.lu $LANE/probe/p30_u8_negative_one/main.lu $LANE/probe/p31_i8_min_minus_1/main.lu $LANE/probe/p40_wrapping_u8_300/main.lu $LANE/probe/p41_wrapping_i8_128/main.lu $LANE/probe/p50_u8_range_hi_out_incl/main.lu $LANE/probe/p51_u8_range_hi_excl_256/main.lu $LANE/probe/p52_u8_range_both_out/main.lu $LANE/probe/p53_u8_range_lo_out/main.lu $LANE/probe/p54_i8_range_hi_out/main.lu $LANE/probe/p55_u8_range_control/main.lu $LANE/probe/p60_tuple_elem/main.lu $LANE/probe/p61_enum_payload/main.lu $LANE/probe/p62_struct_field/main.lu $LANE/probe/p63_or_alt/main.lu $LANE/probe/p64_at_binding/main.lu $LANE/probe/p65_cast_scrutinee/main.lu $LANE/probe/p66_statement_match/main.lu $LANE/probe/p67_hex_spelling/main.lu $LANE/probe/p68_underscore_spelling/main.lu $LANE/probe/p70_default_i32_scrutinee/main.lu $LANE/probe/p71_default_binding/main.lu $LANE/probe/p80_u8_unreachable_dup/main.lu $LANE/probe/p90_expr_control_e0415/main.lu $LANE/probe/p91_compare_control/main.lu
+## p00_issue_u8_300/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p10_i8_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p11_i16_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p12_i32_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p13_i64_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(2)      run       out=None warns=[] 
+## p14_int_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(2)      run       out=None warns=[] 
+## p15_u8_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p16_u16_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p17_u32_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p18_u64_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(2)      run       out=None warns=[] 
+## p19_uint_max_plus_1/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(2)      run       out=None warns=[] 
+## p20_i8_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p21_i16_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p22_i32_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p23_i64_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p24_int_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p25_u8_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p26_u16_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p27_u32_max_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p28_u64_max_control/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(0)      run       out=None warns=[] 
+## p29_uint_max_control/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(0)      run       out=None warns=[] 
+## p30_u8_negative_one/main.lu
+checked  fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+native   fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+release  fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+lupin    exit(2)      run       out=None warns=[] 
+## p31_i8_min_minus_1/main.lu
+checked  fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+native   fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+release  fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+lupin    exit(2)      run       out=None warns=[] 
+## p40_wrapping_u8_300/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p41_wrapping_i8_128/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p50_u8_range_hi_out_incl/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p51_u8_range_hi_excl_256/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p52_u8_range_both_out/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p53_u8_range_lo_out/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p54_i8_range_hi_out/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p55_u8_range_control/main.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## p60_tuple_elem/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p61_enum_payload/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p62_struct_field/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p63_or_alt/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p64_at_binding/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p65_cast_scrutinee/main.lu
+checked  trap(overflow) run       out=None warns=[] 
+native   trap(overflow) run       out=None warns=[] 
+release  trap(overflow) run       out=None warns=[] 
+lupin    trap(overflow) run       out=None warns=[] 
+## p66_statement_match/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p67_hex_spelling/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p68_underscore_spelling/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p70_default_i32_scrutinee/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p71_default_binding/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## p80_u8_unreachable_dup/main.lu
+checked  exit(1)      run       out=None warns=[] 
+native   exit(1)      run       out=None warns=[] 
+release  exit(1)      run       out=None warns=[] 
+lupin    exit(1)      run       out=None warns=[] 
+## p90_expr_control_e0415/main.lu
+checked  fail(E0415)  typecheck out=None warns=[] error[E0415]: `300` does not fit `u8`
+native   fail(E0415)  typecheck out=None warns=[] error[E0415]: `300` does not fit `u8`
+release  fail(E0415)  typecheck out=None warns=[] error[E0415]: `300` does not fit `u8`
+lupin    trap(overflow) run       out=None warns=[] 
+## p91_compare_control/main.lu
+checked  fail(E0415)  typecheck out=None warns=[] error[E0415]: `300` does not fit `u8`
+native   fail(E0415)  typecheck out=None warns=[] error[E0415]: `300` does not fit `u8`
+release  fail(E0415)  typecheck out=None warns=[] error[E0415]: `300` does not fit `u8`
+lupin    exit(2)      run       out=None warns=[] 
+s285: END exit=0 18:52:59
+
+== second probe set 2026-11-07T00:00:11Z
+s285: lock taken 19:00:11, 13378 MiB free, 140 GB disk; running: $LANE/rig/probe-all.sh $LANE/base-bin/wolf $LANE/probe/q01_i8_negative_matches/main.lu $LANE/probe/q02_u64_hex_max/main.lu $LANE/probe/q03_u64_range_high/main.lu $LANE/probe/q04_u64_range_low_value_high/main.lu $LANE/probe/q05_u64_dec_2pow63/main.lu $LANE/probe/q06_wrapping_u64_max/main.lu $LANE/probe/q07_i64_min_value_control/main.lu
+## q01_i8_negative_matches/main.lu
+checked  fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+native   fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+release  fail(E0207)  parse     out=None warns=[] error[E0207]: expected a pattern to start the match arm
+lupin    exit(0)      run       out=None warns=[] 
+## q02_u64_hex_max/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## q03_u64_range_high/main.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — this range pattern's end
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal range end
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal range end
+lupin    exit(0)      run       out=None warns=[] 
+## q04_u64_range_low_value_high/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## q05_u64_dec_2pow63/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — this literal pattern shape
+lupin    exit(0)      run       out=None warns=[] 
+## q06_wrapping_u64_max/main.lu
+checked  fail(E0415)  typecheck out=None warns=[] error[E0415]: `18446744073709551615` does not fit `i32`
+native   fail(E0415)  typecheck out=None warns=[] error[E0415]: `18446744073709551615` does not fit `i32`
+release  fail(E0415)  typecheck out=None warns=[] error[E0415]: `18446744073709551615` does not fit `i32`
+lupin    exit(0)      run       out=None warns=[] 
+## q07_i64_min_value_control/main.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+s285: END exit=0 19:00:13

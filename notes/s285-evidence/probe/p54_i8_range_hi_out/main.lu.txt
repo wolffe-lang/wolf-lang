@@ -1,0 +1,4 @@
+fn f(v: i8) -> int {
+    match v { 100..=200 => 0, _ => 2 }
+}
+fn main() -> int { f(127) }

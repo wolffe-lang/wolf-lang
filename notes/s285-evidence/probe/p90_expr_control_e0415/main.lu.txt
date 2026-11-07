@@ -1,0 +1,4 @@
+fn main() -> int {
+    let v: u8 = 300
+    v as int
+}

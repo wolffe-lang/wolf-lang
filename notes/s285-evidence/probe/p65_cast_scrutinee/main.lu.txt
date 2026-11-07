@@ -1,0 +1,4 @@
+fn main() -> int {
+    let x: int = 300
+    match x as u8 { 300 => 0, _ => 2 }
+}

@@ -1,0 +1,504 @@
+# s285 literal-pattern census: integer literals >= 128 in arm patterns
+# columns: tree file:line literal value smallest-holder range? | source line
+# $LANE/wolf-lang/corpus: 1272 .lu file(s), 734 arm line(s), 58 integer literal(s) in patterns
+# $ORG/aspen: 34 .lu file(s), 80 arm line(s), 69 integer literal(s) in patterns
+# $ORG/boreutils: 215 .lu file(s), 368 arm line(s), 0 integer literal(s) in patterns
+# $ORG/burrow: 34 .lu file(s), 63 arm line(s), 15 integer literal(s) in patterns
+# $ORG/clef: 41 .lu file(s), 125 arm line(s), 80 integer literal(s) in patterns
+# $ORG/cub: 134 .lu file(s), 870 arm line(s), 733 integer literal(s) in patterns
+# $ORG/den: 255 .lu file(s), 951 arm line(s), 37 integer literal(s) in patterns
+# $ORG/fenrir: 55 .lu file(s), 50 arm line(s), 0 integer literal(s) in patterns
+# $ORG/fugue: 41 .lu file(s), 82 arm line(s), 49 integer literal(s) in patterns
+# $ORG/jobq: 3 .lu file(s), 22 arm line(s), 0 integer literal(s) in patterns
+# $ORG/lair: 40 .lu file(s), 79 arm line(s), 71 integer literal(s) in patterns
+# $ORG/ligature: 46 .lu file(s), 82 arm line(s), 63 integer literal(s) in patterns
+# $ORG/lobo: 210 .lu file(s), 457 arm line(s), 0 integer literal(s) in patterns
+# $ORG/lope: 21 .lu file(s), 156 arm line(s), 142 integer literal(s) in patterns
+# $ORG/mk: 9 .lu file(s), 239 arm line(s), 0 integer literal(s) in patterns
+# $ORG/muzzle: 38 .lu file(s), 0 arm line(s), 0 integer literal(s) in patterns
+# $ORG/pack: 23 .lu file(s), 94 arm line(s), 86 integer literal(s) in patterns
+# $ORG/pax: 170 .lu file(s), 505 arm line(s), 308 integer literal(s) in patterns
+# $ORG/pelt: 60 .lu file(s), 292 arm line(s), 168 integer literal(s) in patterns
+# $ORG/scent: 45 .lu file(s), 119 arm line(s), 0 integer literal(s) in patterns
+# $ORG/sniff: 75 .lu file(s), 0 arm line(s), 0 integer literal(s) in patterns
+# $ORG/spell: 11 .lu file(s), 3 arm line(s), 0 integer literal(s) in patterns
+# $ORG/tomlq: 8 .lu file(s), 8 arm line(s), 0 integer literal(s) in patterns
+# $ORG/trail: 8 .lu file(s), 16 arm line(s), 15 integer literal(s) in patterns
+# $ORG/tree-sitter-wolf: 2 .lu file(s), 0 arm line(s), 0 integer literal(s) in patterns
+# $ORG/wolf-book: 483 .lu file(s), 350 arm line(s), 88 integer literal(s) in patterns
+# $ORG/wolf-interp: 2426 .lu file(s), 1341 arm line(s), 63 integer literal(s) in patterns
+# $ORG/wolf-lsp: 18 .lu file(s), 3 arm line(s), 0 integer literal(s) in patterns
+# $ORG/wolf-std: 743 .lu file(s), 881 arm line(s), 0 integer literal(s) in patterns
+# $ORG/wolf-std-5b3a5994: 671 .lu file(s), 793 arm line(s), 0 integer literal(s) in patterns
+# $ORG/wolf-web: 140 .lu file(s), 175 arm line(s), 0 integer literal(s) in patterns
+# $ORG/yew: 568 .lu file(s), 3340 arm line(s), 2175 integer literal(s) in patterns
+corpus typecheck/byte_shapes.lu:24 255 255 u8 lit | 255 => "high",
+corpus typecheck/match_narrow_scrutinee.lu:32 255 255 u8 lit | 255 => 2,
+corpus typecheck/numlit_radix.lu:27 0o755 493 i16 lit | 0o755 => "octal",
+den src/object/tree.lu:16 0o100644 33188 u16 lit | 0o100644 => "100644",
+den src/object/tree.lu:17 0o100755 33261 u16 lit | 0o100755 => "100755",
+den src/object/tree.lu:18 0o120000 40960 u16 lit | 0o120000 => "120000",
+den src/object/tree.lu:19 0o40000 16384 i16 lit | 0o40000 => "40000",
+den src/object/tree.lu:20 0o160000 57344 u16 lit | 0o160000 => "160000",
+fugue src/session/session.lu:141 1035 1035 i16 lit | 1035 => 7,
+fugue src/session/session.lu:142 1032 1032 i16 lit | 1032 => 8,
+fugue src/session/session.lu:143 1104 1104 i16 lit | 1104 => 9,
+fugue src/session/session.lu:144 1117 1117 i16 lit | 1117 => 11,
+fugue src/session/session.lu:145 1110 1110 i16 lit | 1110 => 12,
+fugue src/session/session.lu:146 1114 1114 i16 lit | 1114 => 13,
+fugue src/session/session.lu:147 1113 1113 i16 lit | 1113 => 14,
+fugue src/session/session.lu:148 1053 1053 i16 range | 1049..=1053 => n - 1033,
+fugue src/session/session.lu:149 1098 1098 i16 lit | 1098 => 21,
+fugue src/session/session.lu:150 1091 1091 i16 lit | 1091 => 22,
+fugue src/session/session.lu:151 1093 1093 i16 lit | 1093 => 23,
+fugue src/session/session.lu:152 1116 1116 i16 lit | 1116 => 24,
+fugue src/session/session.lu:153 1048 1048 i16 lit | 1048 => 25,
+fugue src/session/session.lu:154 1046 1046 i16 lit | 1046 => 28,
+fugue src/session/session.lu:155 1054 1054 i16 lit | 1054 => 26,
+fugue src/session/session.lu:156 1118 1118 i16 lit | 1118 => 27,
+fugue src/session/session.lu:157 1055 1055 i16 lit | 1055 => 29,
+fugue src/session/session.lu:158 1109 1109 i16 lit | 1109 => 30,
+ligature src/oracle/oracle.lu:53 257 257 i16 lit | 257 => "R_AARCH64_ABS64",
+ligature src/oracle/oracle.lu:54 258 258 i16 lit | 258 => "R_AARCH64_ABS32",
+ligature src/oracle/oracle.lu:55 259 259 i16 lit | 259 => "R_AARCH64_ABS16",
+ligature src/oracle/oracle.lu:56 260 260 i16 lit | 260 => "R_AARCH64_PREL64",
+ligature src/oracle/oracle.lu:57 261 261 i16 lit | 261 => "R_AARCH64_PREL32",
+ligature src/oracle/oracle.lu:58 262 262 i16 lit | 262 => "R_AARCH64_PREL16",
+ligature src/oracle/oracle.lu:59 273 273 i16 lit | 273 => "R_AARCH64_LD_PREL_LO19",
+ligature src/oracle/oracle.lu:60 274 274 i16 lit | 274 => "R_AARCH64_ADR_PREL_LO21",
+ligature src/oracle/oracle.lu:61 275 275 i16 lit | 275 => "R_AARCH64_ADR_PREL_PG_HI21",
+ligature src/oracle/oracle.lu:62 276 276 i16 lit | 276 => "R_AARCH64_ADR_PREL_PG_HI21_NC",
+ligature src/oracle/oracle.lu:63 277 277 i16 lit | 277 => "R_AARCH64_ADD_ABS_LO12_NC",
+ligature src/oracle/oracle.lu:64 278 278 i16 lit | 278 => "R_AARCH64_LDST8_ABS_LO12_NC",
+ligature src/oracle/oracle.lu:65 279 279 i16 lit | 279 => "R_AARCH64_TSTBR14",
+ligature src/oracle/oracle.lu:66 280 280 i16 lit | 280 => "R_AARCH64_CONDBR19",
+ligature src/oracle/oracle.lu:67 282 282 i16 lit | 282 => "R_AARCH64_JUMP26",
+ligature src/oracle/oracle.lu:68 283 283 i16 lit | 283 => "R_AARCH64_CALL26",
+ligature src/oracle/oracle.lu:69 284 284 i16 lit | 284 => "R_AARCH64_LDST16_ABS_LO12_NC",
+ligature src/oracle/oracle.lu:70 285 285 i16 lit | 285 => "R_AARCH64_LDST32_ABS_LO12_NC",
+ligature src/oracle/oracle.lu:71 286 286 i16 lit | 286 => "R_AARCH64_LDST64_ABS_LO12_NC",
+ligature src/oracle/oracle.lu:72 311 311 i16 lit | 311 => "R_AARCH64_ADR_GOT_PAGE",
+ligature src/oracle/oracle.lu:73 312 312 i16 lit | 312 => "R_AARCH64_LD64_GOT_LO12_NC",
+lope src/matcher/fold.lu:13 197 197 u8 range | 192..=197 => 97,
+lope src/matcher/fold.lu:14 199 199 u8 lit | 199 => 99,
+lope src/matcher/fold.lu:15 203 203 u8 range | 200..=203 => 101,
+lope src/matcher/fold.lu:16 207 207 u8 range | 204..=207 => 105,
+lope src/matcher/fold.lu:17 209 209 u8 lit | 209 => 110,
+lope src/matcher/fold.lu:18 214 214 u8 range | 210..=214 => 111,
+lope src/matcher/fold.lu:19 216 216 u8 lit | 216 => 111,
+lope src/matcher/fold.lu:20 220 220 u8 range | 217..=220 => 117,
+lope src/matcher/fold.lu:21 221 221 u8 lit | 221 => 121,
+lope src/matcher/fold.lu:22 229 229 u8 range | 224..=229 => 97,
+lope src/matcher/fold.lu:23 231 231 u8 lit | 231 => 99,
+lope src/matcher/fold.lu:24 235 235 u8 range | 232..=235 => 101,
+lope src/matcher/fold.lu:25 239 239 u8 range | 236..=239 => 105,
+lope src/matcher/fold.lu:26 241 241 u8 lit | 241 => 110,
+lope src/matcher/fold.lu:27 246 246 u8 range | 242..=246 => 111,
+lope src/matcher/fold.lu:28 248 248 u8 lit | 248 => 111,
+lope src/matcher/fold.lu:29 252 252 u8 range | 249..=252 => 117,
+lope src/matcher/fold.lu:30 253 253 u8 lit | 253 => 121,
+lope src/matcher/fold.lu:31 255 255 u8 lit | 255 => 121,
+lope src/matcher/fold.lu:32 261 261 i16 range | 256..=261 => 97,
+lope src/matcher/fold.lu:33 269 269 i16 range | 262..=269 => 99,
+lope src/matcher/fold.lu:34 273 273 i16 range | 270..=273 => 100,
+lope src/matcher/fold.lu:35 283 283 i16 range | 274..=283 => 101,
+lope src/matcher/fold.lu:36 291 291 i16 range | 284..=291 => 103,
+lope src/matcher/fold.lu:37 295 295 i16 range | 292..=295 => 104,
+lope src/matcher/fold.lu:38 304 304 i16 range | 296..=304 => 105,
+lope src/matcher/fold.lu:39 309 309 i16 range | 308..=309 => 106,
+lope src/matcher/fold.lu:40 311 311 i16 range | 310..=311 => 107,
+lope src/matcher/fold.lu:41 322 322 i16 range | 313..=322 => 108,
+lope src/matcher/fold.lu:42 328 328 i16 range | 323..=328 => 110,
+lope src/matcher/fold.lu:43 337 337 i16 range | 332..=337 => 111,
+lope src/matcher/fold.lu:44 345 345 i16 range | 340..=345 => 114,
+lope src/matcher/fold.lu:45 353 353 i16 range | 346..=353 => 115,
+lope src/matcher/fold.lu:46 359 359 i16 range | 354..=359 => 116,
+lope src/matcher/fold.lu:47 371 371 i16 range | 360..=371 => 117,
+lope src/matcher/fold.lu:48 373 373 i16 range | 372..=373 => 119,
+lope src/matcher/fold.lu:49 376 376 i16 range | 374..=376 => 121,
+lope src/matcher/fold.lu:50 382 382 i16 range | 377..=382 => 122,
+lope src/matcher/fold.lu:51 387 387 i16 range | 384..=387 => 98,
+lope src/matcher/fold.lu:52 392 392 i16 range | 391..=392 => 99,
+lope src/matcher/fold.lu:53 396 396 i16 range | 394..=396 => 100,
+lope src/matcher/fold.lu:54 402 402 i16 range | 401..=402 => 102,
+lope src/matcher/fold.lu:55 403 403 i16 lit | 403 => 103,
+lope src/matcher/fold.lu:56 407 407 i16 lit | 407 => 105,
+lope src/matcher/fold.lu:57 409 409 i16 range | 408..=409 => 107,
+lope src/matcher/fold.lu:58 410 410 i16 lit | 410 => 108,
+lope src/matcher/fold.lu:59 414 414 i16 range | 413..=414 => 110,
+lope src/matcher/fold.lu:60 417 417 i16 range | 415..=417 => 111,
+lope src/matcher/fold.lu:61 421 421 i16 range | 420..=421 => 112,
+lope src/matcher/fold.lu:62 430 430 i16 range | 427..=430 => 116,
+lope src/matcher/fold.lu:63 432 432 i16 range | 431..=432 => 117,
+lope src/matcher/fold.lu:64 434 434 i16 lit | 434 => 118,
+lope src/matcher/fold.lu:65 436 436 i16 range | 435..=436 => 121,
+lope src/matcher/fold.lu:66 438 438 i16 range | 437..=438 => 122,
+lope src/matcher/fold.lu:67 453 453 i16 lit | 453 => 100,
+lope src/matcher/fold.lu:68 456 456 i16 lit | 456 => 108,
+lope src/matcher/fold.lu:69 459 459 i16 lit | 459 => 110,
+lope src/matcher/fold.lu:70 462 462 i16 range | 461..=462 => 97,
+lope src/matcher/fold.lu:71 464 464 i16 range | 463..=464 => 105,
+lope src/matcher/fold.lu:72 466 466 i16 range | 465..=466 => 111,
+lope src/matcher/fold.lu:73 476 476 i16 range | 467..=476 => 117,
+lope src/matcher/fold.lu:74 481 481 i16 range | 478..=481 => 97,
+lope src/matcher/fold.lu:75 487 487 i16 range | 484..=487 => 103,
+lope src/matcher/fold.lu:76 489 489 i16 range | 488..=489 => 107,
+lope src/matcher/fold.lu:77 493 493 i16 range | 490..=493 => 111,
+lope src/matcher/fold.lu:78 496 496 i16 lit | 496 => 106,
+lope src/matcher/fold.lu:79 498 498 i16 lit | 498 => 100,
+lope src/matcher/fold.lu:80 501 501 i16 range | 500..=501 => 103,
+lope src/matcher/fold.lu:81 505 505 i16 range | 504..=505 => 110,
+lope src/matcher/fold.lu:82 507 507 i16 range | 506..=507 => 97,
+lope src/matcher/fold.lu:83 511 511 i16 range | 510..=511 => 111,
+lope src/matcher/fold.lu:84 515 515 i16 range | 512..=515 => 97,
+lope src/matcher/fold.lu:85 519 519 i16 range | 516..=519 => 101,
+lope src/matcher/fold.lu:86 523 523 i16 range | 520..=523 => 105,
+lope src/matcher/fold.lu:87 527 527 i16 range | 524..=527 => 111,
+lope src/matcher/fold.lu:88 531 531 i16 range | 528..=531 => 114,
+lope src/matcher/fold.lu:89 535 535 i16 range | 532..=535 => 117,
+lope src/matcher/fold.lu:90 537 537 i16 range | 536..=537 => 115,
+lope src/matcher/fold.lu:91 539 539 i16 range | 538..=539 => 116,
+lope src/matcher/fold.lu:92 543 543 i16 range | 542..=543 => 104,
+lope src/matcher/fold.lu:93 544 544 i16 lit | 544 => 110,
+lope src/matcher/fold.lu:94 545 545 i16 lit | 545 => 100,
+lope src/matcher/fold.lu:95 549 549 i16 range | 548..=549 => 122,
+lope src/matcher/fold.lu:96 551 551 i16 range | 550..=551 => 97,
+lope src/matcher/fold.lu:97 553 553 i16 range | 552..=553 => 101,
+lope src/matcher/fold.lu:98 561 561 i16 range | 554..=561 => 111,
+lope src/matcher/fold.lu:99 563 563 i16 range | 562..=563 => 121,
+lope src/matcher/fold.lu:100 564 564 i16 lit | 564 => 108,
+lope src/matcher/fold.lu:101 565 565 i16 lit | 565 => 110,
+lope src/matcher/fold.lu:102 566 566 i16 lit | 566 => 116,
+lope src/matcher/fold.lu:103 570 570 i16 lit | 570 => 97,
+lope src/matcher/fold.lu:104 572 572 i16 range | 571..=572 => 99,
+lope src/matcher/fold.lu:105 573 573 i16 lit | 573 => 108,
+lope src/matcher/fold.lu:106 574 574 i16 lit | 574 => 116,
+lope src/matcher/fold.lu:107 575 575 i16 lit | 575 => 115,
+lope src/matcher/fold.lu:108 576 576 i16 lit | 576 => 122,
+lope src/matcher/fold.lu:109 579 579 i16 lit | 579 => 98,
+lope src/matcher/fold.lu:110 583 583 i16 range | 582..=583 => 101,
+lope src/matcher/fold.lu:111 585 585 i16 range | 584..=585 => 106,
+lope src/matcher/fold.lu:112 587 587 i16 lit | 587 => 113,
+lope src/matcher/fold.lu:113 589 589 i16 range | 588..=589 => 114,
+lope src/matcher/fold.lu:114 591 591 i16 range | 590..=591 => 121,
+lope src/matcher/fold.lu:115 7681 7681 i16 range | 7680..=7681 => 97,
+lope src/matcher/fold.lu:116 7687 7687 i16 range | 7682..=7687 => 98,
+lope src/matcher/fold.lu:117 7689 7689 i16 range | 7688..=7689 => 99,
+lope src/matcher/fold.lu:118 7699 7699 i16 range | 7690..=7699 => 100,
+lope src/matcher/fold.lu:119 7709 7709 i16 range | 7700..=7709 => 101,
+lope src/matcher/fold.lu:120 7711 7711 i16 range | 7710..=7711 => 102,
+lope src/matcher/fold.lu:121 7713 7713 i16 range | 7712..=7713 => 103,
+lope src/matcher/fold.lu:122 7723 7723 i16 range | 7714..=7723 => 104,
+lope src/matcher/fold.lu:123 7727 7727 i16 range | 7724..=7727 => 105,
+lope src/matcher/fold.lu:124 7733 7733 i16 range | 7728..=7733 => 107,
+lope src/matcher/fold.lu:125 7741 7741 i16 range | 7734..=7741 => 108,
+lope src/matcher/fold.lu:126 7747 7747 i16 range | 7742..=7747 => 109,
+lope src/matcher/fold.lu:127 7755 7755 i16 range | 7748..=7755 => 110,
+lope src/matcher/fold.lu:128 7763 7763 i16 range | 7756..=7763 => 111,
+lope src/matcher/fold.lu:129 7767 7767 i16 range | 7764..=7767 => 112,
+lope src/matcher/fold.lu:130 7775 7775 i16 range | 7768..=7775 => 114,
+lope src/matcher/fold.lu:131 7785 7785 i16 range | 7776..=7785 => 115,
+lope src/matcher/fold.lu:132 7793 7793 i16 range | 7786..=7793 => 116,
+lope src/matcher/fold.lu:133 7803 7803 i16 range | 7794..=7803 => 117,
+lope src/matcher/fold.lu:134 7807 7807 i16 range | 7804..=7807 => 118,
+lope src/matcher/fold.lu:135 7817 7817 i16 range | 7808..=7817 => 119,
+lope src/matcher/fold.lu:136 7821 7821 i16 range | 7818..=7821 => 120,
+lope src/matcher/fold.lu:137 7823 7823 i16 range | 7822..=7823 => 121,
+lope src/matcher/fold.lu:138 7829 7829 i16 range | 7824..=7829 => 122,
+lope src/matcher/fold.lu:139 7830 7830 i16 lit | 7830 => 104,
+lope src/matcher/fold.lu:140 7831 7831 i16 lit | 7831 => 116,
+lope src/matcher/fold.lu:141 7832 7832 i16 lit | 7832 => 119,
+lope src/matcher/fold.lu:142 7833 7833 i16 lit | 7833 => 121,
+lope src/matcher/fold.lu:143 7834 7834 i16 lit | 7834 => 97,
+lope src/matcher/fold.lu:144 7863 7863 i16 range | 7840..=7863 => 97,
+lope src/matcher/fold.lu:145 7879 7879 i16 range | 7864..=7879 => 101,
+lope src/matcher/fold.lu:146 7883 7883 i16 range | 7880..=7883 => 105,
+lope src/matcher/fold.lu:147 7907 7907 i16 range | 7884..=7907 => 111,
+lope src/matcher/fold.lu:148 7921 7921 i16 range | 7908..=7921 => 117,
+lope src/matcher/fold.lu:149 7929 7929 i16 range | 7922..=7929 => 121,
+lope src/matcher/fold.lu:150 7935 7935 i16 range | 7934..=7935 => 121,
+pax kernel/usb_keys/usb_keys.lu:55 0xe0 224 u8 lit | 0xe0 => 0x1d, 0xe1 => 0x2a, 0xe2 => 0x38,
+pax kernel/usb_keys/usb_keys.lu:56 0xe4 228 u8 lit | 0xe4 => 0x11d, 0xe5 => 0x36, 0xe6 => 0x138,
+pax notes/px74/performance/trunk-control/kernel/usb_keys/usb_keys.lu:55 0xe0 224 u8 lit | 0xe0 => 0x1d, 0xe1 => 0x2a, 0xe2 => 0x38,
+pax notes/px74/performance/trunk-control/kernel/usb_keys/usb_keys.lu:56 0xe4 228 u8 lit | 0xe4 => 0x11d, 0xe5 => 0x36, 0xe6 => 0x138,
+pax user/fsck/main.lu:267 32768 32768 u16 lit | match kind { 32768 => 1, 16384 => 2, 8192 => 3, 24576 => 4, 4096 => 5, 49152 => 6, 40960 => 7, _ => 0 }
+wolf-book docs/audit/bs74-evidence/probes/p18.lu:13 300 300 i16 lit | Item(name, c) if c > 300 => "{name}, over three dollars",
+wolf-book docs/audit/bs74-evidence/probes/q5.lu:13 300 300 i16 lit | Item(name, c) if c > 300 => "{name}, over three dollars",
+wolf-book docs/audit/bs74-evidence/probes/r2.lu:13 300 300 i16 lit | Item(name, c) if c > 300 => "{name}: over three dollars",
+wolf-book docs/audit/bs74-evidence/probes/s10.lu:5 300 300 i16 lit | Item(_, c) if c > 300 => "dear",
+wolf-book docs/audit/bs74-evidence/probes/s4.lu:14 300 300 i16 lit | Item(_, c) if c > 300 => "*",
+wolf-book docs/audit/bs74-evidence/probes/u1.lu:4 200 200 u8 lit | Tip(c) if c > 200 => "generous",
+wolf-book docs/audit/bs74-evidence/probes/u1.lu:5 300 300 i16 lit | Item(c) if c > 300 => "dear",
+wolf-book docs/audit/bs74-evidence/probes/u2.lu:5 200 200 u8 lit | Tip(c) if c > 200 => "generous",
+wolf-book docs/audit/bs74-evidence/probes/u2.lu:6 300 300 i16 lit | Item(c) if c > 300 => "dear",
+wolf-book principles/exercises/ch03/ex3-17.lu:8 200 200 u8 lit | Tip(c) if c > 200 => "generous",
+wolf-book principles/exercises/ch03/ex3-17.lu:9 300 300 i16 lit | Item(c) if c > 300 => "dear",
+wolf-book principles/exercises/ch03/ex3-17b.lu:10 200 200 u8 lit | Tip(c) if c > 200 => "generous",
+wolf-book principles/exercises/ch03/ex3-17b.lu:11 300 300 i16 lit | Item(c) if c > 300 => "dear",
+wolf-interp vendor/upstream/corpus/typecheck/byte_shapes.lu:24 255 255 u8 lit | 255 => "high",
+wolf-interp vendor/upstream/corpus/typecheck/match_narrow_scrutinee.lu:32 255 255 u8 lit | 255 => 2,
+wolf-interp vendor/upstream/corpus/typecheck/numlit_radix.lu:27 0o755 493 i16 lit | 0o755 => "octal",
+yew src/fl_host_test.lu:53 13003 13003 i16 lit | 13003 => fl.fl_int(self.calls),
+yew src/fl_host_test.lu:54 13002 13002 i16 lit | 13002 => {
+yew src/fl_std_re_direct_test.lu:1538 128 128 u8 lit | 128 => { t_case_128() },
+yew src/fl_std_re_direct_test.lu:1539 129 129 u8 lit | 129 => { t_case_129() },
+yew src/fl_std_re_direct_test.lu:1540 130 130 u8 lit | 130 => { t_case_130() },
+yew src/fl_std_re_direct_test.lu:1541 131 131 u8 lit | 131 => { t_case_131() },
+yew src/fl_std_re_direct_test.lu:1542 132 132 u8 lit | 132 => { t_case_132() },
+yew src/fl_std_re_direct_test.lu:1543 133 133 u8 lit | 133 => { t_case_133() },
+yew src/fl_std_re_direct_test.lu:1544 134 134 u8 lit | 134 => { t_case_134() },
+yew src/fl_std_re_direct_test.lu:1545 135 135 u8 lit | 135 => { t_case_135() },
+yew src/fl_std_re_direct_test.lu:1546 136 136 u8 lit | 136 => { t_case_136() },
+yew src/fl_std_re_direct_test.lu:1547 137 137 u8 lit | 137 => { t_case_137() },
+yew src/fl_std_re_direct_test.lu:1548 138 138 u8 lit | 138 => { t_case_138() },
+yew src/fl_std_re_direct_test.lu:1549 139 139 u8 lit | 139 => { t_case_139() },
+yew src/fl_std_re_direct_test.lu:1550 140 140 u8 lit | 140 => { t_case_140() },
+yew src/fl_std_re_direct_test.lu:1551 141 141 u8 lit | 141 => { t_case_141() },
+yew src/fl_std_re_direct_test.lu:1552 142 142 u8 lit | 142 => { t_case_142() },
+yew src/fl_std_re_direct_test.lu:1553 143 143 u8 lit | 143 => { t_case_143() },
+yew src/fl_std_re_direct_test.lu:1554 144 144 u8 lit | 144 => { t_case_144() },
+yew src/fl_std_re_direct_test.lu:1555 145 145 u8 lit | 145 => { t_case_145() },
+yew src/fl_std_re_direct_test.lu:1556 146 146 u8 lit | 146 => { t_case_146() },
+yew src/fl_std_re_direct_test.lu:1557 147 147 u8 lit | 147 => { t_case_147() },
+yew src/fl_std_re_direct_test.lu:1558 148 148 u8 lit | 148 => { t_case_148() },
+yew src/fl_std_re_direct_test.lu:1559 149 149 u8 lit | 149 => { t_case_149() },
+yew src/fl_std_re_direct_test.lu:1560 150 150 u8 lit | 150 => { t_case_150() },
+yew src/fl_std_re_direct_test.lu:1561 151 151 u8 lit | 151 => { t_case_151() },
+yew src/fl_std_re_direct_test.lu:1562 152 152 u8 lit | 152 => { t_case_152() },
+yew src/fl_std_re_direct_test.lu:1563 153 153 u8 lit | 153 => { t_case_153() },
+yew src/edit/flapi_queries.lu:443 8000 8000 i16 lit | 8000 | 8001 | 8005..=8013 | 8016..=8020 | 8023 =>
+yew src/edit/flapi_queries.lu:443 8001 8001 i16 lit | 8000 | 8001 | 8005..=8013 | 8016..=8020 | 8023 =>
+yew src/edit/flapi_queries.lu:443 8013 8013 i16 range | 8000 | 8001 | 8005..=8013 | 8016..=8020 | 8023 =>
+yew src/edit/flapi_queries.lu:443 8020 8020 i16 range | 8000 | 8001 | 8005..=8013 | 8016..=8020 | 8023 =>
+yew src/edit/flapi_queries.lu:443 8023 8023 i16 lit | 8000 | 8001 | 8005..=8013 | 8016..=8020 | 8023 =>
+yew src/edit/flapi_queries.lu:445 9004 9004 i16 range | 9000..=9004 | 9008 => fq_window(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:445 9008 9008 i16 lit | 9000..=9004 | 9008 => fq_window(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:446 10004 10004 i16 range | 10000..=10004 | 10007 | 10008 | 10010 | 10011 => fq_cursor(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:446 10007 10007 i16 lit | 10000..=10004 | 10007 | 10008 | 10010 | 10011 => fq_cursor(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:446 10008 10008 i16 lit | 10000..=10004 | 10007 | 10008 | 10010 | 10011 => fq_cursor(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:446 10010 10010 i16 lit | 10000..=10004 | 10007 | 10008 | 10010 | 10011 => fq_cursor(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:446 10011 10011 i16 lit | 10000..=10004 | 10007 | 10008 | 10010 | 10011 => fq_cursor(mut vm, mut ed, kind, base),
+yew src/edit/flapi_queries.lu:447 11004 11004 i16 range | 11000..=11004 | 11011 => fq_span(mut vm, ed, kind, base),
+yew src/edit/flapi_queries.lu:447 11011 11011 i16 lit | 11000..=11004 | 11011 => fq_span(mut vm, ed, kind, base),
+yew src/edit/flapi_queries.lu:448 13003 13003 i16 lit | 13003 => {
+yew src/edit/flapi_queries.lu:454 13004 13004 i16 lit | 13004 => fq_recording(mut vm, ed),
+yew src/edit/flapi_queries.lu:455 13005 13005 i16 lit | 13005 => fq_register(mut vm, ed, base),
+yew src/edit/flapi_queries.lu:456 13006 13006 i16 lit | 13006 => fq_fuss(mut vm),
+yew src/edit/flapi_queries.lu:457 13007 13007 i16 lit | 13007 => fq_workspace(mut vm, ed),
+yew src/edit/impl.lu:769 900 900 i16 lit | 900 => ws_cmd_save_state(mut ed, cx), // yw06 ws_cmds.c
+yew src/edit/impl.lu:770 901 901 i16 lit | 901 => ws_cmd_restore_state(mut ed, cx), // yw06 ws_cmds.c
+yew src/edit/impl.lu:771 902 902 i16 lit | 902 => ws_cmd_info(mut ed, cx), // yw06 ws_cmds.c
+yew src/edit/impl.lu:772 903 903 i16 lit | 903 => ws_cmd_forget(mut ed, cx), // yw06 ws_cmds.c
+yew src/edit/impl.lu:773 904 904 i16 lit | 904 => ws_cmd_migrate(mut ed, cx), // yw06 ws_cmds.c
+yew src/edit/impl.lu:774 920 920 i16 lit | 920 => find_cmd_file(mut ed, cx), // yw06-pick yew_find_cmd_file
+yew src/edit/impl.lu:775 921 921 i16 lit | 921 => find_cmd_buffer(mut ed, cx), // yw06-pick yew_find_cmd_buffer
+yew src/edit/impl.lu:776 922 922 i16 lit | 922 => undo_cmd_branches(mut ed, cx), // yw06-pick yew_undo_cmd_branches
+yew src/edit/impl.lu:777 923 923 i16 lit | 923 => find_cmd_command(mut ed, cx), // yw06-pick yew_find_cmd_command
+yew src/edit/impl.lu:778 950 950 i16 lit | 950 => mouse_cmd_enable(mut ed, cx), // yew_mouse_cmd_enable (mouse.c:3063)
+yew src/edit/impl.lu:779 951 951 i16 lit | 951 => mouse_cmd_disable(mut ed, cx), // yew_mouse_cmd_disable (mouse.c:3073)
+yew src/edit/impl.lu:780 980 980 i16 lit | 980 => ui_cmd_context_menu(mut ed, cx), // yw06-ctx mouse.c yew_ui_cmd_context_menu
+yew src/edit/impl.lu:901 500 500 i16 lit | 500 => jump_cmd_back(mut ed, cx), // IMPL_YEW_JUMP_CMD_BACK
+yew src/edit/impl.lu:902 501 501 i16 lit | 501 => jump_cmd_fwd(mut ed, cx), // IMPL_YEW_JUMP_CMD_FWD
+yew src/edit/impl.lu:903 502 502 i16 lit | 502 => jump_cmd_list(mut ed, cx), // IMPL_YEW_JUMP_CMD_LIST
+yew src/edit/impl.lu:904 503 503 i16 lit | 503 => change_cmd_older(mut ed, cx), // IMPL_YEW_CHANGE_CMD_OLDER
+yew src/edit/impl.lu:905 504 504 i16 lit | 504 => change_cmd_newer(mut ed, cx), // IMPL_YEW_CHANGE_CMD_NEWER
+yew src/edit/impl.lu:906 505 505 i16 lit | 505 => mark_cmd_set(mut ed, cx), // IMPL_YEW_MARK_CMD_SET
+yew src/edit/impl.lu:907 506 506 i16 lit | 506 => mark_cmd_jump(mut ed, cx), // IMPL_YEW_MARK_CMD_JUMP
+yew src/edit/impl.lu:908 507 507 i16 lit | 507 => search_cmd_open(mut ed, cx), // IMPL_YEW_SEARCH_CMD_OPEN
+yew src/edit/impl.lu:909 508 508 i16 lit | 508 => search_cmd_open_back(mut ed, cx), // IMPL_YEW_SEARCH_CMD_OPEN_BACK
+yew src/edit/impl.lu:910 509 509 i16 lit | 509 => search_cmd_next(mut ed, cx), // IMPL_YEW_SEARCH_CMD_NEXT
+yew src/edit/impl.lu:911 510 510 i16 lit | 510 => search_cmd_prev(mut ed, cx), // IMPL_YEW_SEARCH_CMD_PREV
+yew src/edit/impl.lu:912 511 511 i16 lit | 511 => search_cmd_word_next(mut ed, cx), // IMPL_YEW_SEARCH_CMD_WORD_NEXT
+yew src/edit/impl.lu:913 512 512 i16 lit | 512 => search_cmd_word_prev(mut ed, cx), // IMPL_YEW_SEARCH_CMD_WORD_PREV
+yew src/edit/impl.lu:914 513 513 i16 lit | 513 => search_cmd_clear_highlight(mut ed, cx), // IMPL_YEW_SEARCH_CMD_CLEAR_HIGHLIGHT
+yew src/edit/impl.lu:915 514 514 i16 lit | 514 => search_cmd_replace(mut ed, cx), // IMPL_YEW_SEARCH_CMD_REPLACE
+yew src/edit/impl.lu:916 515 515 i16 lit | 515 => search_cmd_global(mut ed, cx), // IMPL_YEW_SEARCH_CMD_GLOBAL
+yew src/edit/impl.lu:918 300 300 i16 lit | 300 => rl_kill_word_prev(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_WORD_PREV
+yew src/edit/impl.lu:919 301 301 i16 lit | 301 => rl_kill_word_next(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_WORD_NEXT
+yew src/edit/impl.lu:920 302 302 i16 lit | 302 => rl_kill_to_home(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_TO_HOME
+yew src/edit/impl.lu:921 303 303 i16 lit | 303 => rl_kill_to_end(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_TO_END
+yew src/edit/impl.lu:922 304 304 i16 lit | 304 => rl_kill_ws_word_prev(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_WS_WORD_PREV
+yew src/edit/impl.lu:923 305 305 i16 lit | 305 => rl_kill_yank(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_YANK
+yew src/edit/impl.lu:924 306 306 i16 lit | 306 => rl_kill_yank_pop(mut ed, cx), // IMPL_YEW_RL_CMD_KILL_YANK_POP
+yew src/edit/impl.lu:925 307 307 i16 lit | 307 => rl_transpose_chars(mut ed, cx), // IMPL_YEW_RL_CMD_TRANSPOSE_CHARS
+yew src/edit/impl.lu:926 308 308 i16 lit | 308 => rl_transpose_words(mut ed, cx), // IMPL_YEW_RL_CMD_TRANSPOSE_WORDS
+yew src/edit/impl.lu:927 309 309 i16 lit | 309 => rl_case_upper_word(mut ed, cx), // IMPL_YEW_RL_CMD_CASE_UPPER_WORD
+yew src/edit/impl.lu:928 310 310 i16 lit | 310 => rl_case_lower_word(mut ed, cx), // IMPL_YEW_RL_CMD_CASE_LOWER_WORD
+yew src/edit/impl.lu:929 311 311 i16 lit | 311 => rl_case_cap_word(mut ed, cx), // IMPL_YEW_RL_CMD_CASE_CAP_WORD
+yew src/edit/impl.lu:930 312 312 i16 lit | 312 => cmdline_copy_or_cancel_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_COPY_OR_CANCEL
+yew src/edit/impl.lu:931 313 313 i16 lit | 313 => cmdline_insert_register_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_INSERT_REGISTER
+yew src/edit/impl.lu:932 314 314 i16 lit | 314 => cmdline_literal_next_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_LITERAL_NEXT
+yew src/edit/impl.lu:933 315 315 i16 lit | 315 => cmdline_hist_prev_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_HIST_PREV
+yew src/edit/impl.lu:934 316 316 i16 lit | 316 => cmdline_hist_next_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_HIST_NEXT
+yew src/edit/impl.lu:935 317 317 i16 lit | 317 => cmdline_hist_search_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_HIST_SEARCH
+yew src/edit/impl.lu:936 318 318 i16 lit | 318 => cmdline_token_prev_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_TOKEN_PREV
+yew src/edit/impl.lu:937 319 319 i16 lit | 319 => cmdline_token_next_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_TOKEN_NEXT
+yew src/edit/impl.lu:938 320 320 i16 lit | 320 => cmdline_toggle_sudo_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_TOGGLE_SUDO
+yew src/edit/impl.lu:939 321 321 i16 lit | 321 => cmdline_man_page_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MAN_PAGE
+yew src/edit/impl.lu:940 322 322 i16 lit | 322 => cmdline_complete_next_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_COMPLETE_NEXT
+yew src/edit/impl.lu:941 323 323 i16 lit | 323 => cmdline_complete_prev_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_COMPLETE_PREV
+yew src/edit/impl.lu:942 324 324 i16 lit | 324 => cmdline_ghost_accept_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_GHOST_ACCEPT
+yew src/edit/impl.lu:943 325 325 i16 lit | 325 => cmdline_ghost_accept_line_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_GHOST_ACCEPT_LINE
+yew src/edit/impl.lu:944 326 326 i16 lit | 326 => cmdline_ghost_accept_word_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_GHOST_ACCEPT_WORD
+yew src/edit/impl.lu:945 327 327 i16 lit | 327 => cmdline_menu_next_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MENU_NEXT
+yew src/edit/impl.lu:946 328 328 i16 lit | 328 => cmdline_menu_prev_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MENU_PREV
+yew src/edit/impl.lu:947 329 329 i16 lit | 329 => cmdline_up_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_UP
+yew src/edit/impl.lu:948 330 330 i16 lit | 330 => cmdline_down_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_DOWN
+yew src/edit/impl.lu:949 331 331 i16 lit | 331 => cmdline_menu_page_next_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MENU_PAGE_NEXT
+yew src/edit/impl.lu:950 332 332 i16 lit | 332 => cmdline_menu_page_prev_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MENU_PAGE_PREV
+yew src/edit/impl.lu:951 333 333 i16 lit | 333 => cmdline_menu_accept_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MENU_ACCEPT
+yew src/edit/impl.lu:952 334 334 i16 lit | 334 => cmdline_menu_dismiss_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_MENU_DISMISS
+yew src/edit/impl.lu:953 335 335 i16 lit | 335 => cmdline_last_arg_cmd(mut ed, cx), // IMPL_YEW_CMDLINE_CMD_LAST_ARG
+yew src/edit/impl.lu:954 336 336 i16 lit | 336 => opt_cmdline_set_cmd(mut ed, cx), // IMPL_YEW_OPT_CMDLINE_SET
+yew src/edit/impl.lu:955 337 337 i16 lit | 337 => cmdedit_edit_in_buffer_cmd(mut ed, cx), // IMPL_YEW_CMDEDIT_CMD_EDIT_IN_BUFFER
+yew src/edit/impl.lu:956 338 338 i16 lit | 338 => tab_cmd_close(mut ed, cx), // IMPL_YEW_TAB_CMD_CLOSE
+yew src/edit/impl.lu:958 400 400 i16 lit | 400 => shc_run(mut ed, cx), // IMPL_YEW_SHELL_CMD_RUN
+yew src/edit/impl.lu:959 401 401 i16 lit | 401 => shc_run_bg(mut ed, cx), // IMPL_YEW_SHELL_CMD_RUN_BG
+yew src/edit/impl.lu:960 402 402 i16 lit | 402 => shc_read(mut ed, cx), // IMPL_YEW_SHELL_CMD_READ
+yew src/edit/impl.lu:961 403 403 i16 lit | 403 => shc_filter(mut ed, cx), // IMPL_YEW_SHELL_CMD_FILTER
+yew src/edit/impl.lu:962 404 404 i16 lit | 404 => shc_term(mut ed, cx), // IMPL_YEW_SHELL_CMD_TERM
+yew src/edit/impl.lu:963 405 405 i16 lit | 405 => shc_term_run_cmd(mut ed, cx), // IMPL_YEW_SHELL_CMD_TERM_RUN
+yew src/edit/impl.lu:964 406 406 i16 lit | 406 => shc_complete_forget(mut ed, cx), // IMPL_YEW_COMPHELP_RUN_FORGET
+yew src/edit/impl.lu:965 407 407 i16 lit | 407 => shc_reset(mut ed, cx), // IMPL_YEW_SHELL_CMD_RESET
+yew src/edit/impl.lu:966 408 408 i16 lit | 408 => shc_job_list(mut ed, cx), // IMPL_YEW_JOB_CMD_LIST
+yew src/edit/impl.lu:967 409 409 i16 lit | 409 => shc_job_kill(mut ed, cx), // IMPL_YEW_JOB_CMD_KILL
+yew src/edit/impl.lu:968 410 410 i16 lit | 410 => shc_job_kill_force(mut ed, cx), // IMPL_YEW_JOB_CMD_KILL_FORCE
+yew src/edit/impl.lu:969 411 411 i16 lit | 411 => shc_job_jump(mut ed, cx), // IMPL_YEW_JOB_CMD_JUMP
+yew src/edit/impl.lu:970 412 412 i16 lit | 412 => shc_job_clear_finished(mut ed, cx), // IMPL_YEW_JOB_CMD_CLEAR_FINISHED
+yew src/edit/impl.lu:971 413 413 i16 lit | 413 => shc_job_rerun(mut ed, cx), // IMPL_YEW_JOB_CMD_RERUN
+yew src/edit/impl.lu:973 600 600 i16 lit | 600 => pane_cmd_split_h(mut ed, cx), // IMPL_YEW_PANE_CMD_SPLIT_H
+yew src/edit/impl.lu:974 601 601 i16 lit | 601 => pane_cmd_split_v(mut ed, cx), // IMPL_YEW_PANE_CMD_SPLIT_V
+yew src/edit/impl.lu:975 602 602 i16 lit | 602 => pane_cmd_close(mut ed, cx), // IMPL_YEW_PANE_CMD_CLOSE
+yew src/edit/impl.lu:976 603 603 i16 lit | 603 => pane_cmd_focus_left(mut ed, cx), // IMPL_YEW_PANE_CMD_FOCUS_LEFT
+yew src/edit/impl.lu:977 604 604 i16 lit | 604 => pane_cmd_focus_right(mut ed, cx), // IMPL_YEW_PANE_CMD_FOCUS_RIGHT
+yew src/edit/impl.lu:978 605 605 i16 lit | 605 => pane_cmd_focus_up(mut ed, cx), // IMPL_YEW_PANE_CMD_FOCUS_UP
+yew src/edit/impl.lu:979 606 606 i16 lit | 606 => pane_cmd_focus_down(mut ed, cx), // IMPL_YEW_PANE_CMD_FOCUS_DOWN
+yew src/edit/impl.lu:980 607 607 i16 lit | 607 => pane_cmd_focus_next(mut ed, cx), // IMPL_YEW_PANE_CMD_FOCUS_NEXT
+yew src/edit/impl.lu:981 608 608 i16 lit | 608 => pane_cmd_focus_prev(mut ed, cx), // IMPL_YEW_PANE_CMD_FOCUS_PREV
+yew src/edit/impl.lu:982 609 609 i16 lit | 609 => pane_cmd_grow(mut ed, cx), // IMPL_YEW_PANE_CMD_GROW
+yew src/edit/impl.lu:983 610 610 i16 lit | 610 => pane_cmd_shrink(mut ed, cx), // IMPL_YEW_PANE_CMD_SHRINK
+yew src/edit/impl.lu:984 611 611 i16 lit | 611 => pane_cmd_tab_split_left(mut ed, cx), // IMPL_YEW_PANE_CMD_TAB_SPLIT_LEFT
+yew src/edit/impl.lu:985 612 612 i16 lit | 612 => pane_cmd_tab_split_right(mut ed, cx), // IMPL_YEW_PANE_CMD_TAB_SPLIT_RIGHT
+yew src/edit/impl.lu:986 613 613 i16 lit | 613 => pane_cmd_tab_split_down(mut ed, cx), // IMPL_YEW_PANE_CMD_TAB_SPLIT_DOWN
+yew src/edit/impl.lu:988 800 800 i16 lit | 800 => file_cmd_next(mut ed, cx), // IMPL_YEW_FILE_CMD_NEXT
+yew src/edit/impl.lu:989 801 801 i16 lit | 801 => file_cmd_prev(mut ed, cx), // IMPL_YEW_FILE_CMD_PREV
+yew src/edit/impl.lu:990 802 802 i16 lit | 802 => group_cmd_enter(mut ed, cx), // IMPL_YEW_GROUP_CMD_ENTER
+yew src/edit/impl.lu:991 803 803 i16 lit | 803 => group_cmd_leave(mut ed, cx), // IMPL_YEW_GROUP_CMD_LEAVE
+yew src/edit/impl.lu:992 804 804 i16 lit | 804 => group_cmd_close(mut ed, cx), // IMPL_YEW_GROUP_CMD_CLOSE
+yew src/edit/impl.lu:993 805 805 i16 lit | 805 => group_cmd_dissolve(mut ed, cx), // IMPL_YEW_GROUP_CMD_DISSOLVE
+yew src/edit/impl.lu:994 806 806 i16 lit | 806 => group_cmd_remove_tab(mut ed, cx), // IMPL_YEW_GROUP_CMD_REMOVE_TAB
+yew src/edit/impl.lu:995 807 807 i16 lit | 807 => group_cmd_add_tab(mut ed, cx), // IMPL_YEW_GROUP_CMD_ADD_TAB
+yew src/edit/impl.lu:996 808 808 i16 lit | 808 => group_cmd_rename(mut ed, cx), // IMPL_YEW_GROUP_CMD_RENAME
+yew src/edit/impl.lu:997 809 809 i16 lit | 809 => gp_cmd_new(mut ed, cx), // IMPL_YEW_GP_CMD_NEW
+yew src/edit/impl.lu:998 810 810 i16 lit | 810 => gp_cmd_edit(mut ed, cx), // IMPL_YEW_GP_CMD_EDIT
+yew src/edit/impl.lu:999 811 811 i16 lit | 811 => gp_cmd_toggle(mut ed, cx), // IMPL_YEW_GP_CMD_TOGGLE
+yew src/edit/impl.lu:1000 812 812 i16 lit | 812 => gp_cmd_confirm(mut ed, cx), // IMPL_YEW_GP_CMD_CONFIRM
+yew src/edit/impl.lu:1001 813 813 i16 lit | 813 => group_cmd_from_dir(mut ed, cx), // IMPL_YEW_GROUP_CMD_FROM_DIR
+yew src/edit/impl.lu:1003 700 700 i16 lit | 700 => tab_cmd_new(mut ed, cx), // IMPL_YEW_TAB_CMD_NEW
+yew src/edit/impl.lu:1004 701 701 i16 lit | 701 => tab_cmd_open(mut ed, cx), // IMPL_YEW_TAB_CMD_OPEN
+yew src/edit/impl.lu:1005 702 702 i16 lit | 702 => tab_cmd_next(mut ed, cx), // IMPL_YEW_TAB_CMD_NEXT
+yew src/edit/impl.lu:1006 703 703 i16 lit | 703 => tab_cmd_prev(mut ed, cx), // IMPL_YEW_TAB_CMD_PREV
+yew src/edit/impl.lu:1007 704 704 i16 lit | 704 => tab_cmd_goto(mut ed, cx), // IMPL_YEW_TAB_CMD_GOTO
+yew src/edit/impl.lu:1008 705 705 i16 lit | 705 => tab_cmd_goto_bar(mut ed, cx), // IMPL_YEW_TAB_CMD_GOTO_BAR
+yew src/edit/impl.lu:1009 706 706 i16 lit | 706 => tab_cmd_move(mut ed, cx), // IMPL_YEW_TAB_CMD_MOVE
+yew src/edit/impl.lu:1010 707 707 i16 lit | 707 => tab_cmd_close_others(mut ed, cx), // IMPL_YEW_TAB_CMD_CLOSE_OTHERS
+yew src/edit/impl.lu:1011 708 708 i16 lit | 708 => tab_cmd_copy_path(mut ed, cx), // IMPL_YEW_TAB_CMD_COPY_PATH
+yew src/edit/impl.lu:1013 1000 1000 i16 lit | 1000 => record_cmd_repeat(mut ed, cx), // record.c
+yew src/edit/impl.lu:1014 1001 1001 i16 lit | 1001 => flapi_cmd_win_split(mut ed, cx), // flapi_cmds.c
+yew src/edit/impl.lu:1015 1002 1002 i16 lit | 1002 => flapi_cmd_win_focus(mut ed, cx), // flapi_cmds.c
+yew src/edit/impl.lu:1016 1003 1003 i16 lit | 1003 => flapi_cmd_cursor_set_many(mut ed, cx), // flapi_cmds.c
+yew src/edit/impl.lu:1017 1004 1004 i16 lit | 1004 => flapi_cmd_cursor_move(mut ed, cx), // flapi_cmds.c
+yew src/edit/impl.lu:1018 1005 1005 i16 lit | 1005 => flapi_cmd_span_yank(mut ed, cx), // flapi_cmds.c
+yew src/edit/impl.lu:1019 1006 1006 i16 lit | 1006 => flapi_cmd_reg_set(mut ed, cx), // flapi_cmds.c
+yew src/edit/impl.lu:1020 1007 1007 i16 lit | 1007 => fl_cmd_eval(mut ed, cx), // option.c
+yew src/edit/impl.lu:1021 1008 1008 i16 lit | 1008 => record_cmd_record(mut ed, cx), // record.c
+yew src/edit/impl.lu:1022 1009 1009 i16 lit | 1009 => record_cmd_stop(mut ed, cx), // record.c
+yew src/edit/impl.lu:1023 1010 1010 i16 lit | 1010 => record_cmd_replay(mut ed, cx), // record.c
+yew src/edit/impl.lu:1024 1011 1011 i16 lit | 1011 => record_cmd_replay_last(mut ed, cx), // record.c
+yew src/edit/impl.lu:1025 1012 1012 i16 lit | 1012 => bind_closure_cmd(mut ed, cx), // bind.c
+yew src/edit/impl.lu:1026 1013 1013 i16 lit | 1013 => bind_cmd_map(mut ed, cx), // bind.c
+yew src/edit/impl.lu:1027 1014 1014 i16 lit | 1014 => opt_cmd_get(mut ed, cx), // option.c
+yew src/edit/impl.lu:1028 1015 1015 i16 lit | 1015 => opt_cmd_set(mut ed, cx), // option.c
+yew src/edit/impl.lu:1029 1016 1016 i16 lit | 1016 => config_cmd_reload(mut ed, cx), // flconf.c
+yew src/edit/impl.lu:1030 1017 1017 i16 lit | 1017 => config_cmd_edit(mut ed, cx), // flconf.c
+yew src/edit/impl.lu:1031 1018 1018 i16 lit | 1018 => macro_cmd_list(mut ed, cx), // macrobrowse.c
+yew src/edit/impl.lu:1032 1019 1019 i16 lit | 1019 => macro_cmd_edit(mut ed, cx), // macrobrowse.c
+yew src/edit/impl.lu:1033 1020 1020 i16 lit | 1020 => macro_cmd_name(mut ed, cx), // macrobrowse.c
+yew src/edit/impl.lu:1034 1021 1021 i16 lit | 1021 => macro_cmd_reload(mut ed, cx), // macrobrowse.c
+yew src/edit/impl.lu:1035 1100 1100 i16 lit | 1100 => lsp_cmd_info(mut ed, cx), // lsp_cmds.c
+yew src/edit/impl.lu:1036 1101 1101 i16 lit | 1101 => lsp_cmd_log(mut ed, cx), // lsp_cmds.c
+yew src/edit/impl.lu:1037 1102 1102 i16 lit | 1102 => lsp_cmd_start(mut ed, cx), // lsp_cmds.c
+yew src/edit/impl.lu:1038 1103 1103 i16 lit | 1103 => lsp_cmd_stop(mut ed, cx), // lsp_cmds.c
+yew src/edit/impl.lu:1039 1104 1104 i16 lit | 1104 => lsp_cmd_diagnostics(mut ed, cx), // lsp_cmds.c
+yew src/edit/impl.lu:1040 1105 1105 i16 lit | 1105 => lsp_cmd_diag_next(mut ed, cx), // lsp_cmds.c
+yew src/edit/impl.lu:1041 1106 1106 i16 lit | 1106 => lsp_cmd_diag_prev(mut ed, cx), // lsp_cmds.c
+yew src/fl/flapi.lu:173 8000 8000 i16 lit | 8000 => api_q("buf.current", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:174 8001 8001 i16 lit | 8001 => api_q("buf.list", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:175 8002 8002 i16 lit | 8002 => api_c("buf.open", "ed.buf.open", n, 1, 1, FL_CAP_FS_READ, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:176 8003 8003 i16 lit | 8003 => api_c("buf.close", "ed.buf.close", b, 1, 2, 0, FL_ARG_BOOL, x, x, kind),
+yew src/fl/flapi.lu:177 8004 8004 i16 lit | 8004 =>
+yew src/fl/flapi.lu:179 8005 8005 i16 lit | 8005 => api_q("buf.path", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:180 8006 8006 i16 lit | 8006 => api_q("buf.name", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:181 8007 8007 i16 lit | 8007 => api_q("buf.lang", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:182 8008 8008 i16 lit | 8008 => api_q("buf.len", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:183 8009 8009 i16 lit | 8009 => api_q("buf.lines", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:184 8010 8010 i16 lit | 8010 => api_q("buf.text", b, 1, 2, h, kind),
+yew src/fl/flapi.lu:185 8011 8011 i16 lit | 8011 => api_q("buf.line", b, 2, 2, h, kind),
+yew src/fl/flapi.lu:186 8012 8012 i16 lit | 8012 => api_q("buf.span", b, 3, 3, h, kind),
+yew src/fl/flapi.lu:187 8013 8013 i16 lit | 8013 => api_q("buf.line_span", b, 2, 2, h, kind),
+yew src/fl/flapi.lu:188 8014 8014 i16 lit | 8014 =>
+yew src/fl/flapi.lu:190 8015 8015 i16 lit | 8015 =>
+yew src/fl/flapi.lu:192 8016 8016 i16 lit | 8016 => api_q("buf.find", b, 2, 3, h, kind),
+yew src/fl/flapi.lu:193 8017 8017 i16 lit | 8017 => api_q("buf.find_all", b, 2, 2, h, kind),
+yew src/fl/flapi.lu:194 8018 8018 i16 lit | 8018 => api_q("buf.dirty", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:195 8019 8019 i16 lit | 8019 => api_q("buf.readonly", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:196 8020 8020 i16 lit | 8020 => api_q("buf.undo_depth", b, 1, 1, h, kind),
+yew src/fl/flapi.lu:197 8021 8021 i16 lit | 8021 => api_q("buf.opt", b, 2, 2, e, kind),
+yew src/fl/flapi.lu:198 8022 8022 i16 lit | 8022 => api_q("buf.opt_set", b, 3, 3, e, kind),
+yew src/fl/flapi.lu:199 8023 8023 i16 lit | 8023 => api_q("buf.mark", b, 2, 2, h, kind),
+yew src/fl/flapi.lu:200 9000 9000 i16 lit | 9000 => api_q("win.current", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:201 9001 9001 i16 lit | 9001 => api_q("win.list", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:202 9002 9002 i16 lit | 9002 => api_q("win.buf", w, 1, 1, h, kind),
+yew src/fl/flapi.lu:203 9003 9003 i16 lit | 9003 => api_q("win.cursors", w, 1, 1, h, kind),
+yew src/fl/flapi.lu:204 9004 9004 i16 lit | 9004 => api_q("win.selection", w, 1, 1, h, kind),
+yew src/fl/flapi.lu:205 9005 9005 i16 lit | 9005 => api_c("win.split", "ed.win.split", w, 2, 2, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:206 9006 9006 i16 lit | 9006 => api_c("win.close", "ed.pane.close", w, 1, 1, 0, x, x, x, kind),
+yew src/fl/flapi.lu:207 9007 9007 i16 lit | 9007 => api_c("win.focus", "ed.win.focus", w, 1, 1, 0, x, x, x, kind),
+yew src/fl/flapi.lu:208 9008 9008 i16 lit | 9008 => api_q("win.viewport", w, 1, 1, h, kind),
+yew src/fl/flapi.lu:209 9009 9009 i16 lit | 9009 => api_c("win.set_cursors", "ed.cursor.set_many", w, 2, 2, 0, FL_ARG_LIST, x, x, kind),
+yew src/fl/flapi.lu:210 10000 10000 i16 lit | 10000 => api_q("cur.pos", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:211 10001 10001 i16 lit | 10001 => api_q("cur.line", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:212 10002 10002 i16 lit | 10002 => api_q("cur.col", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:213 10003 10003 i16 lit | 10003 => api_q("cur.anchor", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:214 10004 10004 i16 lit | 10004 => api_q("cur.span", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:215 10005 10005 i16 lit | 10005 => api_c("cur.goto", "ed.cursor.set", c, 2, 2, 0, FL_ARG_INT, x, x, kind),
+yew src/fl/flapi.lu:216 10006 10006 i16 lit | 10006 =>
+yew src/fl/flapi.lu:229 10007 10007 i16 lit | 10007 => api_q("cur.word", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:230 10008 10008 i16 lit | 10008 => api_q("cur.line_span", c, 1, 1, h, kind),
+yew src/fl/flapi.lu:231 10009 10009 i16 lit | 10009 => api_c("cur.insert", "ed.edit.insert.text", c, 2, 2, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:232 10010 10010 i16 lit | 10010 => api_q("cur.is_primary", c, 1, 1, e, kind),
+yew src/fl/flapi.lu:233 10011 10011 i16 lit | 10011 => api_q("cur.valid", c, 1, 1, e, kind),
+yew src/fl/flapi.lu:234 11000 11000 i16 lit | 11000 => api_q("span.lo", s, 1, 1, h, kind),
+yew src/fl/flapi.lu:235 11001 11001 i16 lit | 11001 => api_q("span.hi", s, 1, 1, h, kind),
+yew src/fl/flapi.lu:236 11002 11002 i16 lit | 11002 => api_q("span.len", s, 1, 1, h, kind),
+yew src/fl/flapi.lu:237 11003 11003 i16 lit | 11003 => api_q("span.text", s, 1, 1, h, kind),
+yew src/fl/flapi.lu:238 11004 11004 i16 lit | 11004 => api_q("span.lines", s, 1, 1, h, kind),
+yew src/fl/flapi.lu:239 11005 11005 i16 lit | 11005 => api_c("span.replace", "ed.edit.replace.span", s, 2, 2, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:240 11006 11006 i16 lit | 11006 =>
+yew src/fl/flapi.lu:253 11007 11007 i16 lit | 11007 => api_c("span.prepend", "ed.edit.insert.at", s, 2, 2, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:254 11008 11008 i16 lit | 11008 => api_c("span.append", "ed.edit.insert.at", s, 2, 2, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:255 11009 11009 i16 lit | 11009 => api_c("span.delete", "ed.edit.delete.span", s, 1, 1, 0, x, x, x, kind),
+yew src/fl/flapi.lu:256 11010 11010 i16 lit | 11010 => api_c("span.yank", "ed.edit.yank", s, 1, 2, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:257 11011 11011 i16 lit | 11011 => api_q("span.valid", s, 1, 1, e, kind),
+yew src/fl/flapi.lu:258 12000 12000 i16 lit | 12000 => api_c("opt.get", "ed.opt.get", n, 1, 1, 0, FL_ARG_STR, x, x, kind),
+yew src/fl/flapi.lu:259 12001 12001 i16 lit | 12001 => api_c("opt.set", "ed.opt.set", n, 2, 2, 0, FL_ARG_STR, FL_ARG_VALUE, x, kind),
+yew src/fl/flapi.lu:260 13002 13002 i16 lit | 13002 => api_q("ed.msg", n, 1, 2, e, kind),
+yew src/fl/flapi.lu:261 13003 13003 i16 lit | 13003 => api_q("ed.mode", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:262 13004 13004 i16 lit | 13004 => api_q("ed.recording", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:263 13005 13005 i16 lit | 13005 => api_q("ed.register", n, 1, 1, e, kind),
+yew src/fl/flapi.lu:264 13006 13006 i16 lit | 13006 => api_q("ed.fuss", n, 0, 0, e, kind),
+yew src/fl/flapi.lu:265 13007 13007 i16 lit | 13007 => api_q("ed.workspace", n, 0, 0, e, kind),
+yew src/fl/lex.lu:574 8594 8594 i16 lit | 8594 => 62,
+yew src/fl/lex.lu:575 8592 8592 i16 lit | 8592 => 60,
+yew src/fl/lex.lu:576 8593 8593 i16 lit | 8593 => 94,
+yew src/fl/lex.lu:577 8595 8595 i16 lit | 8595 => 118,
