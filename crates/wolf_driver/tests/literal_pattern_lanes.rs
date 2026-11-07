@@ -5,7 +5,7 @@
 //! a different number (`300` over a `u8` matched 44), while the checked
 //! machine and lupin never matched, and no tier said anything.
 //!
-//! lupin is the fourth machine. The pinned lupin (0.1.59) has no E0415 for
+//! lupin is the fourth machine. The pinned lupin (0.1.60, as 0.1.59) has no E0415 for
 //! a pattern and accepts a signed literal pattern; its mirror is the
 //! wolf-interp change of the same name. Until the pin moves, lupin is held
 //! to the same spans whenever its record carries the code, and otherwise to
@@ -115,7 +115,7 @@ fn errors(record: &serde_json::Value) -> Vec<(String, (u64, u64))> {
 
 /// Every compiled tier refuses `row` by `code` at exactly `spans` and at
 /// nothing else, and its rendering says each of `texts`. lupin carries
-/// `code` at the same spans, or (the pinned 0.1.59) answers `lupin_else`.
+/// `code` at the same spans, or (the pinned 0.1.60) answers `lupin_else`.
 fn refused(row: &str, code: &str, spans: &[(u64, u64)], texts: &[&str], lupin_else: &str) {
     let want: Vec<(String, (u64, u64))> = spans.iter().map(|s| (code.to_string(), *s)).collect();
     for (machine, record, stderr) in compiled(row) {
@@ -251,7 +251,7 @@ fn a_literal_scrutinee_holds_its_pattern_to_i32() {
 }
 
 /// No literal pattern carries a sign: each signed literal is E0207 by
-/// name, at the literal, in every position. lupin 0.1.59 runs the file
+/// name, at the literal, in every position. lupin 0.1.60 runs the file
 /// (and matches `-1` against an `i8` holding -1): `exit(2)`.
 #[test]
 fn a_signed_literal_pattern_is_refused_by_name() {
