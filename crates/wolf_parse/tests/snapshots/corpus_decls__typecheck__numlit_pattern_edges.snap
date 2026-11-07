@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 655..735 name=at_i8 body=Block
+FnDecl 737..821 name=at_i16 body=Block
+FnDecl 823..912 name=at_i32 body=Block
+FnDecl 914..1012 name=at_i64 body=Block
+FnDecl 1014..1112 name=at_int body=Block
+FnDecl 1114..1194 name=at_u8 body=Block
+FnDecl 1196..1280 name=at_u16 body=Block
+FnDecl 1282..1371 name=at_u32 body=Block
+FnDecl 1373..1472 name=at_u64 body=Block
+FnDecl 1474..1575 name=at_uint body=Block
+FnDecl 1577..1676 name=at_wrapping_u8 body=Block
+FnDecl 1678..1777 name=at_wrapping_i8 body=Block
+FnDecl 1779..2149 name=main body=Block

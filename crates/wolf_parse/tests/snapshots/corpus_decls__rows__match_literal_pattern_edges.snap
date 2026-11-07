@@ -1,0 +1,21 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 699..768 name=hit body=Block
+FnDecl 770..859 name=max_i8 body=Block
+FnDecl 861..954 name=max_i16 body=Block
+FnDecl 956..1054 name=max_i32 body=Block
+FnDecl 1056..1163 name=max_i64 body=Block
+FnDecl 1165..1272 name=max_int body=Block
+FnDecl 1274..1363 name=max_u8 body=Block
+FnDecl 1365..1458 name=max_u16 body=Block
+FnDecl 1460..1558 name=max_u32 body=Block
+FnDecl 1560..1668 name=max_u64 body=Block
+FnDecl 1670..1780 name=max_uint body=Block
+FnDecl 1782..1911 name=zero_u64 body=Block
+FnDecl 1913..2022 name=hex_u64 body=Block
+FnDecl 2024..2135 name=two_pow_63 body=Block
+FnDecl 2137..2260 name=wrapping_u64 body=Block
+FnDecl 2262..2383 name=nested_u64 body=Block
+FnDecl 2385..3144 name=main body=Block

@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 565..626 name=unsigned body=Block
+FnDecl 628..692 name=below_min body=Block
+FnDecl 694..765 name=in_tuple body=Block
+FnDecl 767..833 name=range_end body=Block
+FnDecl 835..917 name=main body=Block
+-- diagnostics --
+E0207 [Error] 607..609 a literal pattern has no sign
+E0207 [Error] 671..675 a literal pattern has no sign
+E0207 [Error] 742..744 a literal pattern has no sign
+E0207 [Error] 810..812 a literal pattern has no sign
