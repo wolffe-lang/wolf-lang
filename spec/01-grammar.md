@@ -1208,6 +1208,39 @@ the scrutinee's type tests it (`[gram.pat.nullary]`). Files:
 `conc/select_arm_bare_variant.lu`, `conc/select_arm_lowercase_variant.lu`,
 `conc/select_arm_lowercase_binds.lu`.
 
+Literal patterns `[gram.pat.lit]` (2026-11-06, wolf-lang#1058): a
+literal pattern is a literal, typed as every literal is
+(`[type.numlit]`): it takes its type from the context it is written
+into, and an arm's context is its scrutinee. `match v { 300 => … }`
+with `v: u8` writes `300` into a `u8` exactly as `v == 300` does. An
+integer literal pattern whose value that type cannot hold is
+**E0415** at the literal, on every tier — the refusal `v == 300` and
+`let v: u8 = 300` already have — because no value of the type is
+that number, so the arm could never match, and wrapping it into the
+type's width would make it match a different number (300 is 44 in
+eight bits). The rule holds on every integer primitive and on
+`wrapping[T]`, which wraps its arithmetic, never its literals, and
+ranges at `T`'s scalar; at every depth a pattern admits (a tuple
+element, a payload, a struct field, an or-pattern's alternative, the
+pattern after `@`); and in every spelling (`0x12c`, `65_536`). When
+nothing but the match decides the type — `match 5 { 3000000000 => …
+}`, or an unannotated `let v = 5` matched later — the scrutinee and
+the pattern share one literal type, it defaults to `i32`
+(`[type.numlit.default]`), and the pattern must fit it. A literal
+pattern carries **no sign**: `literal`'s `INT` has none
+(`[gram.lex]`), so `-1 =>` is E0207 at `-1`, in every pattern
+position, the range ends included; a negative value is matched by a
+guard (`n if n == -1 => …`). A literal pattern that fits is the scrutinee's value with that
+number, compared at the type's own width and signedness: `255` over a
+`u8` and `18446744073709551615` over a `u64` each match exactly that
+value. Files: `typecheck/numlit_pattern_wraps.lu`,
+`typecheck/numlit_pattern_edges.lu`,
+`typecheck/numlit_pattern_positions.lu`,
+`typecheck/numlit_pattern_range.lu`,
+`typecheck/numlit_pattern_default.lu`,
+`grammar/match_pattern_signed_literal.lu`,
+`rows/match_literal_pattern_edges.lu`.
+
 Range patterns `[gram.pat.range]` (s147, #287): `match` in statement
 position is wolf's switch, and a range arm is the one thing a reader
 expects of a switch that the pattern grammar lacked. `lo..hi` matches
@@ -1217,7 +1250,11 @@ literal, on every integer primitive a literal pattern may already be
 written against (`int`, the sized and unsigned primitives,
 `wrapping[T]`; `byte` adopts no literal, `[type.byte]`, so it has no
 range arm either — match over `b as int`), or a `char` literal, ordered
-by scalar value (`[type.char.order]`). No identifiers, no expressions,
+by scalar value (`[type.char.order]`). Each end is a literal pattern
+of the scrutinee's type (`[gram.pat.lit]`), so an end the type cannot
+hold is E0415 at that end — the exclusive end too: `0..256` over a
+`u8` is E0415 at `256`, and every `u8` is `0..=255`. No identifiers,
+no expressions,
 and **no open ends**: `..hi` and `lo..` are the slice spellings of
 `[gram.expr.primary]`, not patterns, and the parser refuses them in
 pattern position (E0201) with a note that names the range form — the
