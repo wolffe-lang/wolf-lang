@@ -26730,6 +26730,53 @@ mod c_layout_tests {
 }
 
 #[cfg(test)]
+mod pattern_literal_tests {
+    use super::*;
+
+    /// wolf-lang#1058's backstop (`[gram.pat.lit]`): an integer arm
+    /// constant is ranged by its exact value against its scrutinee's type
+    /// and refused when it does not fit, never wrapped into the width; one
+    /// above `i64::MAX` fits only a 64-bit unsigned type, as its bit
+    /// pattern; a type that names no integer keeps the old reading.
+    #[test]
+    fn an_arm_constant_beyond_its_type_is_refused_never_wrapped() {
+        let mut t = TypeTable::new();
+        let (u8_, i8_, i64_) = (t.prim(Prim::U8), t.prim(Prim::I8), t.prim(Prim::I64));
+        let (int_, u64_, uint_) = (t.prim(Prim::Int), t.prim(Prim::U64), t.prim(Prim::Uint));
+        let (str_, u32_) = (t.prim(Prim::Str), t.prim(Prim::U32));
+        let wrap_u8 = t.intern(TyKind::Wrapping(u8_));
+        let wrap_u64 = t.intern(TyKind::Wrapping(u64_));
+        let at = Span::new(wolf_span::FileId::from_index(0), 0, 3);
+        let read = |ty: TyId, text: &str| pattern_literal(&t, ty, text, "shape", at).ok();
+        for (ty, text, want) in [
+            (u8_, "300", None),
+            (u8_, "256", None),
+            (u8_, "255", Some(255)),
+            (u8_, "0x12c", None),
+            (wrap_u8, "256", None),
+            (wrap_u8, "0xff", Some(255)),
+            (i8_, "128", None),
+            (i8_, "127", Some(127)),
+            (u32_, "4294967296", None),
+            (u32_, "4_294_967_295", Some(4_294_967_295)),
+            (i64_, "9223372036854775808", None),
+            (i64_, "0xffffffffffffffff", None),
+            (i64_, "9223372036854775807", Some(i64::MAX)),
+            (int_, "0x8000000000000000", None),
+            (u64_, "18446744073709551615", Some(-1)),
+            (uint_, "0x8000_0000_0000_0000", Some(i64::MIN)),
+            (wrap_u64, "0o1777777777777777777777", Some(-1)),
+            (u64_, "18446744073709551616", None),
+            (str_, "5", Some(5)),
+        ] {
+            assert_eq!(read(ty, text), want, "{text} over {:?}", t.kind(ty));
+        }
+        assert_eq!(int_type_range(&t, wrap_u8), Some((0, 255)));
+        assert_eq!(int_type_range(&t, str_), None);
+    }
+}
+
+#[cfg(test)]
 mod strlit_parity {
     /// s210 (wolf-lang#585): the comptime engine and the lowering cook
     /// one value from one literal. At 0.2.23 the engine's own decoder
