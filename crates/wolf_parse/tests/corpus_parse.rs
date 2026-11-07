@@ -242,7 +242,11 @@ fn corpus_parse_expectations() {
     // by-design refusals with a fix-it: grammar/if_brace_next_line
     // (E0201, a header's `{` on the next line, wolf-lang#822) and
     // typecheck/int_not_tilde (E0107, `~` for wolf's `!`, wolf-lang#800).
-    assert_eq!(fail, 38, "syntax-tier fail-file count drifted");
+    // Plus s285's signed literal pattern
+    // (grammar/match_pattern_signed_literal — E0207 at each signed
+    // literal, which a pattern cannot be, `[gram.pat.lit]`,
+    // wolf-lang#1058).
+    assert_eq!(fail, 39, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \
