@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0415]: `3000000000` does not fit `i32`
+ --> mem:///main.lu:4:9
+  |
+4 |         3000000000 => 1,
+  |         ^^^^^^^^^^ i32 holds -2147483648..=2147483647
+  |
+  = note: nothing but the match decides this literal's type, so it and the scrutinee share one
+    literal type, which defaults to `i32` ([type.numlit.default]), and a literal pattern
+    must fit its scrutinee's type ([gram.pat.lit]) — annotate the scrutinee with a type that
+    holds the value (`let v: int = …`)

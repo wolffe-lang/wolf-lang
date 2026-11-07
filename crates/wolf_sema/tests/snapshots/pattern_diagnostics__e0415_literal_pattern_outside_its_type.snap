@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0415]: `300` does not fit `u8`
+ --> mem:///main.lu:3:9
+  |
+3 |         300 => 0,
+  |         ^^^ u8 holds 0..=255
+  |
+  = note: a literal pattern takes its scrutinee's type ([gram.pat.lit]), and no `u8` is 300, so
+    this arm could never match — wrapped into the type's width it would test a different
+    number; match a wider value (`match v as int { … }`) or remove the arm
