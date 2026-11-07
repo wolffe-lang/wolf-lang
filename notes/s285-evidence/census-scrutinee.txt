@@ -1,0 +1,28 @@
+corpus typecheck/byte_shapes.lu:22 match 'b as int' -> cast:int | 1 cand, values [255]
+corpus typecheck/match_narrow_scrutinee.lu:30 match 'u' -> decl:u8 | 1 cand, values [255]
+corpus typecheck/numlit_radix.lu:26 match 'mode' -> decl:int | 1 cand, values [493]
+den src/object/tree.lu:15 match 'mode' -> decl:int/mode | 5 cand, values [16384, 33188, 33261, 40960, 57344]
+fugue src/session/session.lu:136 match 'n' -> decl:int | 18 cand, values [1032, 1035, 1046, 1048, 1053, 1054]...
+ligature src/oracle/oracle.lu:51 match 'number' -> decl:u64 | 21 cand, values [257, 258, 259, 260, 261, 262]...
+lope src/matcher/fold.lu:12 match 'c' -> decl:int | 138 cand, values [197, 199, 203, 207, 209, 214]...
+pax kernel/usb_keys/usb_keys.lu:36 match 'usage' -> decl:u64 | 2 cand, values [224, 228]
+pax notes/px74/performance/trunk-control/kernel/usb_keys/usb_keys.lu:36 match 'usage' -> decl:u64 | 2 cand, values [224, 228]
+pax user/fsck/main.lu:267 match 'kind' -> decl:int/kind | 1 cand, values [32768]
+wolf-book docs/audit/bs74-evidence/probes/p18.lu:12 match 'l' -> decl:Line | 1 cand, values [300]
+wolf-book docs/audit/bs74-evidence/probes/q5.lu:12 match 'l' -> decl:Line | 1 cand, values [300]
+wolf-book docs/audit/bs74-evidence/probes/r2.lu:12 match 'l' -> decl:Line | 1 cand, values [300]
+wolf-book docs/audit/bs74-evidence/probes/s10.lu:4 match 'l' -> decl:Line | 1 cand, values [300]
+wolf-book docs/audit/bs74-evidence/probes/s4.lu:13 match 'l' -> decl:Line | 1 cand, values [300]
+wolf-book docs/audit/bs74-evidence/probes/u1.lu:3 match 'l' -> decl:Line | 2 cand, values [200, 300]
+wolf-book docs/audit/bs74-evidence/probes/u2.lu:3 match 'l' -> decl:Line | 2 cand, values [200, 300]
+wolf-book principles/exercises/ch03/ex3-17.lu:7 match 'l' -> decl:Line | 2 cand, values [200, 300]
+wolf-book principles/exercises/ch03/ex3-17b.lu:8 match 'l' -> decl:Line | 2 cand, values [200, 300]
+wolf-interp vendor/upstream/corpus/typecheck/byte_shapes.lu:22 match 'b as int' -> cast:int | 1 cand, values [255]
+wolf-interp vendor/upstream/corpus/typecheck/match_narrow_scrutinee.lu:30 match 'u' -> decl:u8 | 1 cand, values [255]
+wolf-interp vendor/upstream/corpus/typecheck/numlit_radix.lu:26 match 'mode' -> decl:int | 1 cand, values [493]
+yew src/fl_host_test.lu:52 match 'kind' -> decl:int | 2 cand, values [13002, 13003]
+yew src/fl_std_re_direct_test.lu:1409 match 'n' -> decl:none-found | 26 cand, values [128, 129, 130, 131, 132, 133]...
+yew src/edit/flapi_queries.lu:442 match 'kind' -> decl:int | 19 cand, values [8000, 8001, 8013, 8020, 8023, 9004]...
+yew src/edit/impl.lu:768 match 'which' -> decl:int | 147 cand, values [300, 301, 302, 303, 304, 305]...
+yew src/fl/flapi.lu:172 match 'kind' -> decl:int/kind | 66 cand, values [8000, 8001, 8002, 8003, 8004, 8005]...
+yew src/fl/lex.lu:573 match 'cp' -> decl:int | 4 cand, values [8592, 8593, 8594, 8595]

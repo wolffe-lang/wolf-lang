@@ -1,0 +1,30 @@
+s285 evidence (wolf-lang: an integer literal pattern outside its scrutinee's type).
+Paths in the logs are relative to the lane's directory, written $LANE, and to the lane's
+checkouts of the org's repositories, written $ORG; the Mac is arm64 macOS. One private
+downstream consumer was measured beside the public checkouts; its lines are dropped here
+and its evidence stays outside the tree.
+
+base-a4d2a9c9.log         the base: wolf at a4d2a9c9 (a clean debug build of that commit,
+                          copied by value, sha256 a00fd0c3...); every probe on the checked
+                          machine, native, release (wolf conform-run --json) and lupin 0.1.59
+                          (aarch64-apple-darwin, archive sha256 9f091af8...f5f5, equal to the
+                          release page, read twice). Two probe sets: p* and q*.
+probe/                    the probe programs (.lu.txt; each its own directory). Each exits 0
+                          when the out-of-range arm matched and 2 when the fallback ran.
+                          p00 is wolf-lang#1058's program; p1x every primitive at max+1,
+                          called with the value it wraps to; p2x every primitive's max (the
+                          in-range control); p3x signed literals; p4x wrapping[T]; p5x range
+                          endpoints; p6x nested positions and spellings; p7x a literal
+                          scrutinee (the i32 default); p8x a duplicate after wrapping; p9x the
+                          expression twins (E0415 already); q0x the u64 edges and lupin's
+                          signed pattern.
+census-litpat.txt         the syntactic census before any code: every integer literal written
+                          in an arm's pattern (the text before `=>`, or-pattern continuation
+                          lines included) whose value is at least 128, in the corpus and 31
+                          public checkouts (7,899 .lu files). A superset: guards are text
+                          before `=>` too.
+census-scrutinee.txt      each candidate's enclosing `match` and its scrutinee's declared
+                          type, read from the file; every one read by hand in the note.
+rig/                      the scripts as run: make-probes.py (the p* probes), probe-all.sh,
+                          locked.sh (the Mac build lock), litpat-census.py,
+                          census-scrutinee.py, sanitize.sh.

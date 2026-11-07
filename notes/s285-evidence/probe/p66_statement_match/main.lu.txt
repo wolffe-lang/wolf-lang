@@ -1,0 +1,9 @@
+fn main() -> int {
+    let v: u8 = 44
+    var r = 2
+    match v {
+        300 => { r = 0 }
+        _ => {}
+    }
+    r
+}
