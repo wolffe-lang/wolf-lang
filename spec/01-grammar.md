@@ -1255,6 +1255,29 @@ the scrutinee's type tests it (`[gram.pat.nullary]`). Files:
 `conc/select_arm_bare_variant.lu`, `conc/select_arm_lowercase_variant.lu`,
 `conc/select_arm_lowercase_binds.lu`.
 
+Or-patterns `[gram.pat.or]` (2026-11-08, wolf-lang#1061): every
+alternative of an or-pattern binds the same names, each at one type.
+A name one alternative binds and another does not is **E0828** at the
+alternative that lacks it, naming the name (`A(x) | B(_) => x`); a
+name bound at two types is **E0401** at the later binding
+(`A(x) | B(x)` with `A(int)` and `B(bool)`). The arm sees each name
+once, holding what the matching alternative bound. This holds at
+every depth an or-pattern can stand (`W((A(x) | B(x)))`) and through
+`@` (`n @ 1..=9 | n @ 20..=29`); an or-pattern that binds nothing
+(`A(_) | B(_)`) has nothing to agree on. Binder positions still refuse
+an or-pattern (E0806, `[gram.pat.binder]`). The checker reports both
+refusals, so they hold on every tier. What a machine then runs is
+apart from them: the compiled machines' join of an or-pattern's
+bindings is still being built, and until it is they refuse such an arm
+as "cannot compile this yet", which is the conservatism ledger and not
+a rule. Files: `typecheck/or_pattern_binds.lu`,
+`typecheck/or_pattern_binds_missing.lu`,
+`typecheck/or_pattern_binds_missing_left.lu`,
+`typecheck/or_pattern_binds_types.lu`,
+`typecheck/or_pattern_binds_nested.lu`,
+`typecheck/or_pattern_binds_at.lu`,
+`grammar/match_arm_or_over_product.lu`.
+
 A pattern binds each name once `[gram.pat.names]` (2026-11-08,
 wolf-lang#1062 and #1073). A name bound again anywhere in one pattern
 (two fields, two tuple elements, a payload and an enclosing `@`, both
