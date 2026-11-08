@@ -6,6 +6,11 @@
 //! Every machine ran it (exit 6).
 
 fn main() -> int {
-    match 5 { n @ 1..=9 => { n = n + 1
- n }, _ => 0 }
+    match 5 {
+        n @ 1..=9 => {
+            n = n + 1
+            n
+        },
+        _ => 0,
+    }
 }

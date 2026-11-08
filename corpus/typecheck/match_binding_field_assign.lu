@@ -11,8 +11,12 @@ struct P { a: int }
 enum E { A(P) }
 
 fn f(v: E) -> int {
-    match v { A(p) => { p.a = 9
- p.a } }
+    match v {
+        A(p) => {
+            p.a = 9
+            p.a
+        },
+    }
 }
 
 fn main() -> int { f(E.A(P { a: 3 })) }

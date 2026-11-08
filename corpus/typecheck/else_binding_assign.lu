@@ -8,6 +8,8 @@
 fn g() -> int ! {Bad(int)} { return Bad(4) }
 
 fn main() -> int {
-    g() else |Bad(n)| { n = n + 1
- n }
+    g() else |Bad(n)| {
+        n = n + 1
+        n
+    }
 }

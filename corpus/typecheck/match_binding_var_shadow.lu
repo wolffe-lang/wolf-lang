@@ -8,9 +8,13 @@
 enum E { A(int) }
 
 fn f(v: E) -> int {
-    match v { A(x) => { var x = x
- x = x + 1
- x } }
+    match v {
+        A(x) => {
+            var x = x
+            x = x + 1
+            x
+        },
+    }
 }
 
 fn main() -> int { f(E.A(3)) }
