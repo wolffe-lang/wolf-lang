@@ -1242,6 +1242,35 @@ the scrutinee's type tests it (`[gram.pat.nullary]`). Files:
 `conc/select_arm_bare_variant.lu`, `conc/select_arm_lowercase_variant.lu`,
 `conc/select_arm_lowercase_binds.lu`.
 
+A pattern binds each name once `[gram.pat.names]` (2026-11-08,
+wolf-lang#1062 and #1073). A name bound again anywhere in one pattern
+(two fields, two tuple elements, a payload and an enclosing `@`, both
+sides of `@`, at any depth) is **E0827** at the second binding, with
+the first as its secondary label, at one type or at two:
+`P { a: x, b: x }` and `let (x, x) = …` are refused, where every
+implementation used to keep the later binding and drop the earlier
+value without a word. A parameter list binds each name once too, a
+function's and a closure's: `fn f(a: int, a: int)` is E0827 at the
+second `a`. Only bindings count, so a bare name that tests a case
+binds nothing here as everywhere (`[gram.pat.nullary.scope]`):
+`(Red, Red)` over two `Color`s is two tests and is legal. Each
+alternative of an or-pattern is one pattern for this rule, and the
+or-pattern binds each of its names once in the pattern around it
+(`[gram.pat.or]`). A D63 comma group is several patterns, so
+`let a = 1, a = a + 1` binds `a` twice in sequence, the second
+shadowing the first, as two `let`s do. Whether a bare name binds is
+the scrutinee's type's question in an arm, so the checker reports
+E0827, in every position. Files:
+`typecheck/pattern_name_twice_struct.lu`,
+`typecheck/pattern_name_twice_types.lu`,
+`typecheck/pattern_name_twice_let.lu`,
+`typecheck/pattern_name_twice_at.lu`,
+`typecheck/pattern_name_twice_nested.lu`,
+`typecheck/pattern_name_twice_for.lu`,
+`typecheck/param_name_twice.lu`, `typecheck/param_name_twice_closure.lu`,
+`typecheck/let_group_shadow.lu`,
+`typecheck/pattern_variant_tests_twice.lu`.
+
 Literal patterns `[gram.pat.lit]` (2026-11-06, wolf-lang#1058): a
 literal pattern is a literal, typed as every literal is
 (`[type.numlit]`): it takes its type from the context it is written
