@@ -14,3 +14,7 @@ faf84cae  parent b2e202a8  tree = none      queued for #1060's fix; a later job 
 ddc691d0  parent 392a98a7  tree = a87166ad  every fix of #1064, #1059, #1060, #1062a, #1065 and
                                             #1061 (m2-items16-ddc691d0.log)
 ac205da7  parent a5e22942  tree = none      a check take before the snapshots were refreshed
+e1c50464  parent e36a9b29  tree = d37c3087  #1062b's walk (b10f8c3c after the rebase;
+                                            pr2-m2-item7-e1c50464.log)
+86f08fba  parent d37c3087  tree = none      #1062c's rule before its rows, for the census
+                                            (pr2-census-item8-snapshot.txt)

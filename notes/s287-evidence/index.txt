@@ -69,3 +69,47 @@ rig/, rig/linux/          the scripts as run. rig/linux/'s take scripts carry th
                           rebased records ran under (start at or under 95 C, a sensor summary),
                           and its prep reads the inputs stage-inputs.sh staged once outside the
                           locks, each by its pinned digest, so the prep downloads nothing.
+
+The second change (a type that contains itself by value, and a pattern's bindings; the note
+notes/s287-recursive-types-and-pattern-bindings.md). Its files begin pr2-.
+
+pr2-rebase-map.txt        the one rebase, from the first change's code-final commit onto its head:
+                          each commit before it and the commit it became. The two red takes ran
+                          at the commits before it.
+pr2-m2-item7-e1c50464.log #1062b's walk at a work-in-progress snapshot: the rows on four machines
+                          and the lanes test green; the anchors gate and conformance red only for
+                          the anchor not yet indexed.
+pr2-m1-red-e36a9b29.log   the rows red at #1062b's rows' commit (9704538a after the rebase): the
+                          lanes test 6 failed by name, the corpus step 9 bad in the six rows, the
+                          anchors gate out of sync, conformance red.
+pr2-m1-red-ddceedf8.log   the rows red at #1062c's (0bc1c037): 7 failed by name, 8 bad in the
+                          seven rows (one of them the bump row's undeclared W1002, fixed at
+                          aa0a3063), the anchors gate and conformance red.
+pr2-m2-regen-59f80c28.log the anchors regenerated (81ad622d after the rebase): 731 to 733 keys,
+                          gram.pat.let and type.rec added, none removed.
+pr2-m2-refresh-2968280c.log, pr2-m2-refresh-ff832fbe.log
+                          the snapshot suites with insta's update on, then the catalog: the
+                          snapshots, the ledger and the catalog committed here.
+pr2-m2-checks-b28f99d9.log
+                          the checks before the bump row's fix: every END exit=0 but the corpus,
+                          1 bad, the row's W1002 undeclared.
+pr2-m2-snap-two-aa0a3063.log
+                          the lexer and parser corpus suites with the update on, after the row
+                          declared W1002: its two snapshots, committed at 006e2f7c.
+pr2-m2-checks-2aeeb81b.log
+                          the checks after it: every END exit=0 but the catalog's check, which
+                          wanted the row's lexer snapshot under W1002 (cdc77a1f).
+pr2-m1-checks-cdc77a1f.log
+                          at the code-final head: fmt, clippy, the wolf_diag and wolf_sema suites,
+                          the lanes test (47 passed), the catalogs' checks, the anchors gate, the
+                          corpus (1327 files, 0 bad) and conformance (733 anchors).
+pr2-m2-extra-2aeeb81b.log wolf_mem's rendered diagnostics (the adjusted fixture), the
+                          element-places four-machine test, clippy on wolf_mem: every END exit=0.
+pr2-m2-snaps-2aeeb81b.log every corpus-walking snapshot suite with no update.
+pr2-census.txt            the census: every .lu of the corpus and of 38 org checkouts at the mem
+                          rung, on the first change's binary (aa3c9baa) and on bf77af3f's,
+                          compared run by run.
+pr2-census-item8-snapshot.txt
+                          the same comparison at the snapshot 86f08fba, before the witness was
+                          adjusted: the one move outside this change's rows, in the corpus.
+pr2-forassign-scan.txt    the syntactic scan for a write to a for header's name.
