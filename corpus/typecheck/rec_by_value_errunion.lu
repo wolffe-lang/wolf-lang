@@ -1,0 +1,11 @@
+//! check: fail(E0404)
+//! phase: resolve
+//! conforms: type.rec
+//!
+//! An error union holds its ok value and its tags' payloads inline
+//! ([type.rec]), so `int ! {Bad(N)}` inside `N` is a cycle. Every machine
+//! accepted it unused.
+
+struct N { v: int, next: int ! {Bad(N)} }
+
+fn main() -> int { 0 }
