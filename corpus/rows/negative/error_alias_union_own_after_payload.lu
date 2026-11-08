@@ -1,0 +1,16 @@
+//! check: fail(E0609)
+//! phase: resolve
+//! conforms: type.err.alias.union, gram.type.row.flatten
+//!
+//! wolf-lang#1065 with payloads that disagree: `Bad(str)` spelled after
+//! an alias that brings `Bad(int)` is E0609 at the row's own spelling
+//! ([type.err.alias.union]), as `{Bad(str), A}` already was. The
+//! compiled tiers answered E0601 in this order, and lupin ran it.
+
+error A = {Bad(int)}
+
+fn g(ok: bool) -> int ! {A, Bad(str)} {
+    if ok { 1 } else { return Bad(2) }
+}
+
+fn main() -> int { g(true) else 0 }
