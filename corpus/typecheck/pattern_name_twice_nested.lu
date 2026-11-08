@@ -6,5 +6,7 @@
 //! every machine kept the inner one (exit 5).
 
 fn main() -> int {
-    match (1, (2, 3)) { (x, (y, x)) => x + y }
+    match (1, (2, 3)) {
+        (x, (y, x)) => x + y,
+    }
 }

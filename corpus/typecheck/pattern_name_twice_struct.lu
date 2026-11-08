@@ -9,7 +9,9 @@
 struct P { a: int, b: int }
 
 fn f(v: P) -> int {
-    match v { P { a: x, b: x } => x }
+    match v {
+        P { a: x, b: x } => x,
+    }
 }
 
 fn main() -> int { f(P { a: 1, b: 2 }) }

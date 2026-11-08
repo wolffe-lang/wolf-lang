@@ -6,5 +6,7 @@
 //! every machine answered 5.
 
 fn main() -> int {
-    match 5 { x @ x => x }
+    match 5 {
+        x @ x => x,
+    }
 }
