@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 286..320 name=L variants=2
+EnumDecl 322..359 name=J variants=2
+StructDecl 361..396 name=N fields=2
+StructDecl 398..430 name=Bag fields=1
+EnumDecl 432..466 name=K variants=2
+FnDecl 468..648 name=sum body=Block
+FnDecl 650..916 name=main body=Block
