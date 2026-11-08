@@ -1673,6 +1673,17 @@ alternative of an or-pattern is its own pattern here (E0828 is about
 what they bind together), and a comma group (`let a = 1, a = a + 1`) is
 several patterns: the second `a` shadows the first, as two `let`s do.
 "#);
+code!(E0828, "an or-pattern's alternatives bind different names", r#"
+Every alternative of an or-pattern binds the same names (`[gram.pat.or]`),
+because the arm's body sees each name whichever alternative matched: in
+`A(x) | B(_) => x`, nothing gives `x` a value when `B` matched. The
+error is at the alternative that lacks the name, and it names the name.
+Bind it in that alternative too (`A(x) | B(x)`), or write the
+alternatives as two arms when they cannot bind the same thing. A name
+the alternatives bind at two different types is E0401 at the later
+binding: each name an or-pattern binds has one type.
+"#);
+
 
 
 
