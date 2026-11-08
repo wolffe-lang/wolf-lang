@@ -39,8 +39,10 @@
 //! (`MALLOC_ARENA_TEST`, `glibc.malloc.arena_test`) is not a limit: it only
 //! moves the moment glibc reads the CPU count, which is the read this
 //! settle removes. In a set-user-ID or set-group-ID program
-//! (`AT_SECURE`), glibc ignores those variables (mallopt(3)), so they are
-//! not the user's setting there and the limit is settled.
+//! (`AT_SECURE`), glibc ignores both (mallopt(3) for the variable;
+//! measured for the tunable, glibc 2.39: a set-user-ID probe held 160
+//! arenas on 20 CPUs with either set to 2), so they are not the user's
+//! setting there and the limit is settled.
 //!
 //! Off linux-gnu both calls do nothing: glibc's arenas are glibc's.
 
