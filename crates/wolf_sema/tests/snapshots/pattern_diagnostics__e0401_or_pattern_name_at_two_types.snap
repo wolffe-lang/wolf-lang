@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: `x` is `int` in one alternative of this or-pattern and `bool` in this one
+ --> mem:///main.lu:4:24
+  |
+4 |     match v { A(x) | B(x) => 1 }
+  |                 - `x` is `int` here
+  |                        ^ `x` is `bool` here
+  |
+  = note: each name an or-pattern binds has one type, since the arm's body sees it whichever
+    alternative matched ([gram.pat.or]). Give the two values different names in two arms, or
+    match them so they bind one type.

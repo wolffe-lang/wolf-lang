@@ -1,0 +1,23 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0410]: `gone` is bound with `let`, so it cannot be assigned again
+ --> mem:///main.lu:8:19
+  |
+6 |     let gone: int = 8
+  |     --- the binding is made immutable here
+7 |     match g(false) {
+8 |         gone => { gone = 9 },
+  |         ---- this pattern tests `gone` and binds nothing
+  |                   ^^^^ this assignment needs a mutable binding
+  |
+  = note: `let` names a value once. Declare the binding with `var` to update it in place, or
+    shadow it with a second `let` if the next value is really a new thing.
+  = note: a bare name that spells a case of the scrutinee's type tests it and binds nothing, so
+    inside its arm every name resolves as it does outside the `match`
+    ([gram.pat.nullary.scope]).
+help: make the binding mutable: `var`
+  |
+6 |     var gone: int = 8
+  |

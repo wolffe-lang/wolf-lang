@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0827]: `x` is bound twice in this pattern
+ --> mem:///main.lu:4:28
+  |
+4 |     match v { P { a: x, b: x } => x }
+  |                      - first bound here
+  |                            ^ bound again here
+  |
+  = note: a pattern binds each name once ([gram.pat.names]): a second binding would hide the first
+    one's value. Give one of them another name, or match the value you do not need with `_`.

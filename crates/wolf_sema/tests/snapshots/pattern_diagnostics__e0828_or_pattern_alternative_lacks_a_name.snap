@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0828]: `x` is bound by another alternative of this or-pattern, but not by this one
+ --> mem:///main.lu:4:22
+  |
+4 |     match v { A(x) | B(_) => x }
+  |                 - `x` is bound here
+  |                      ^^^^ this alternative binds no `x`
+  |
+  = note: every alternative of an or-pattern binds the same names, because the arm's body sees `x`
+    whichever alternative matched ([gram.pat.or]). Bind `x` in this alternative too, or
+    write the alternatives as separate arms.

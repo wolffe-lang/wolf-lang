@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0609]: the tag `Bad` reaches this error row with two different payloads
+ --> mem:///main.lu:3:29
+  |
+3 | fn g(ok: bool) -> int ! {A, Bad(str)} {
+  |                             ^^^^^^^^ `Bad(str)` here, `Bad(int)` from the alias `A`
+  |
+  = note: an error-set alias is one more layer of the row it is named in ([type.err.alias.union]),
+    so its tags meet the row's own and every other alias's as one set, and one tag carries
+    one payload shape ([gram.type.row.flatten]). Give one of the two tags another name, or
+    wrap one payload in a nominal type of its own.
+help: wrap this spelling's payload in a nominal type of its own (`type BadWrapped = distinct str`)
+  |
+3 | fn g(ok: bool) -> int ! {A, Bad(BadWrapped)} {
+  |
