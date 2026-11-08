@@ -54,6 +54,17 @@ rebase-718fe47a.txt       the one rebase, onto trunk 718fe47a: each commit befor
 m1-rebased-5fb13d74.log   at the rebased head: the checks above, the lanes test (32 passed), the
                           corpus, conformance, and every corpus-walking snapshot suite with no
                           update.
+m1-walkers-red-ac13525e.log
+                          the corpus walkers at the head the Linux record found red: wolf_fmt's
+                          corpus identity test fails at resolve/enum_variant_case_distinct.lu, and
+                          every other walker passes.
+m1-refresh-e2f00d83.log   the snapshot suites with insta's update on after the rows were
+                          formatted: only those rows' lexer and parser snapshots move.
+m1-fixed-4515ddd3.log     at the fixed head: the checks, now with the corpus walkers, the lanes
+                          test (32 passed), the corpus, conformance and every snapshot suite with
+                          no update. Every END exit=0.
+linux-sensors-ac13525e-prep.log, linux-sensors-ac13525e-build.log
+                          the package sensor every 30 s in the voided record's two takes.
 rig/, rig/linux/          the scripts as run. rig/linux/'s take scripts carry the heat gate the
                           rebased records ran under (start at or under 95 C, a sensor summary),
                           and its prep reads the inputs stage-inputs.sh staged once outside the
