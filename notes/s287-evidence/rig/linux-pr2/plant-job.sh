@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Waits (holding no lock) for the green gauntlet's exit marker; only on 0 does
-# it queue the plant take, on the same block. Prints at least every five minutes.
-#   plant-job.sh BLOCK GREEN PLANT WORK MARKER ROW...
+# it queue the plant take, in the same slot. Prints at least every five minutes.
+#   plant-job.sh GREEN PLANT WORK MARKER ROW...
 set -uo pipefail
-base=$LANE
-block=$1; green=$2; plant=$3; work=$4; marker=$5; shift 5
+base=$LANE/pr2
+green=$1; plant=$2; work=$3; marker=$4; shift 4
 label=plant-${plant:0:8}
 out=$base/records/$label.exit
 export TMPDIR=$base/tmp
@@ -12,7 +12,7 @@ printf '%s\n' "$$" > "$base/records/$label.pid"
 child=
 on_signal() { printf '%s\n' "$1" > "$out"; printf 'PLANT_STOPPED signal-exit=%s %s\n' "$1" "$(date -u +%FT%TZ)"; [ -n "$child" ] && kill -TERM "$child" 2>/dev/null; exit "$1"; }
 trap 'on_signal 143' TERM; trap 'on_signal 130' INT; trap 'on_signal 129' HUP
-printf 'PLANT_JOB_START %s green=%s plant=%s block=%s rows=%s\n' "$(date -u +%FT%TZ)" "$green" "$plant" "$block" "$*"
+printf 'PLANT_JOB_START %s green=%s plant=%s host=H2 rows=%s\n' "$(date -u +%FT%TZ)" "$green" "$plant" "$*"
 n=0
 while ! test -s "$marker"; do
   if [ $((n % 8)) -eq 0 ]; then printf 'PLANT_WAIT %s for %s\n' "$(date -u +%FT%TZ)" "$marker"; fi
@@ -25,7 +25,7 @@ if [ "$green_rc" != 0 ]; then
   printf '125\n' > "$out"
   exit 125
 fi
-bash "$base/rig/plant-take.sh" run "$block" "$label" "$work" "$green" "$plant" "$@" &
+bash "$base/rig/plant-take.sh" run "$label" "$work" "$green" "$plant" "$@" &
 child=$!
 wait "$child"
 rc=$?

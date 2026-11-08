@@ -113,3 +113,7 @@ pr2-census-item8-snapshot.txt
                           the same comparison at the snapshot 86f08fba, before the witness was
                           adjusted: the one move outside this change's rows, in the corpus.
 pr2-forassign-scan.txt    the syntactic scan for a write to a for header's name.
+rig/linux-pr2/            the second change's Linux rig: the first change's (rig/linux/) with its
+                          own base under the lane, its branch, its plant's three controls, and
+                          gate-launch.sh, which starts it only after the first change's plant
+                          take, so the two never interleave on the slot's locks.

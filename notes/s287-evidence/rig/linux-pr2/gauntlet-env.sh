@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# s287 on H1 (adapted by copy from s285's rig), inside the container (one block of six CPUs).
+# s287 on H2 (adapted by copy from s285's rig), inside the container (slot A, eight CPUs).
 export PATH=/lane/tool-bin:/opt/s263-rust/bin:$PATH
 export CARGO_HOME=/lane/cargo-home RUSTUP_HOME=/opt/s263-rustup RUSTUP_TOOLCHAIN=1.97.1
 export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=4 TMPDIR=/lane/tmp HOME=/lane/home
