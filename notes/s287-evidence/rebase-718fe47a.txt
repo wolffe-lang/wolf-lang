@@ -1,0 +1,83 @@
+s287, the first change: the one rebase, from wolf-lang trunk d848fbed onto trunk 718fe47a, which
+adds s286's change: the runtime settles glibc's arena limit, the fix for the descriptor race
+(wolf-lang#1051) that the first Linux record of this change met at its test step. Each commit
+before the rebase, and the commit it became, with the same subject. Every change is the same but
+the changelog's (9d79c7e2), whose entry now sits above s286's. The logs in this directory name the
+commit they ran at, before the rebase, except those whose names say "rebased".
+
+b531bbee -> 5a04f01f  Measure the front-end ruling cases at the base
+aaf5e8d6 -> 2041a39c  Predict the front-end rulings, their rows and the censuses
+e2f449ee -> 4bff47f5  Specify that an alias cycle is reported where it is declared
+1fa8ade7 -> f3001a16  Add the unused self-naming alias row
+099daeca -> f0f8727f  Add the unused two-alias loop row
+459bf1be -> 4b8cd114  Add the unused alias row that spells a tag twice
+023ae9cf -> 04458e55  Run the alias-cycle rows on four machines
+61c14051 -> 80989e45  Check each error alias's own row where it is declared (E0610, used or not)
+e2655ff7 -> dc0b7f79  Explain that E0610 does not wait for a use
+f0baf80c -> 3d44aeb8  Specify that a nullary arm pattern binds nothing ([gram.pat.nullary.scope])
+05ea8a4b -> 1d9f6bc2  Add the nullary-arm let row
+dcd4b747 -> 9355a0e3  Add the nullary-arm var control row
+1f33a6be -> cca0fc55  Add the row-tag arm row
+b81c65a9 -> 35640dec  Add the field write through a nullary arm row
+d0f1652e -> a0d0844d  Run the nullary-arm rows on four machines
+8bb3091f -> faeb4ca7  Share E0410's report and the assigned place's root with the checker
+c9f7bacf -> 25cade0b  Refuse a write to a let through an arm that tested its name (E0410)
+a6acf426 -> ca1e0d92  Index the [gram.pat.nullary.scope] anchor
+d786c0aa -> ef4ac885  Explain E0410 through an arm that tests its name
+2337f576 -> c7625b95  Specify distinct member names in an enum or a struct ([gram.item.type.names])
+a18fbc12 -> 3dade993  Add the variant declared twice row
+7ac47ea5 -> e67087e3  Add the variant declared twice with two payloads row
+d33cedf6 -> 5d920d63  Add the struct field declared twice row
+ceb369cd -> 978c39c2  Add the general type spellings' member rows
+1301d9ef -> e408fb66  Add the letter-case control for variant names
+b2e202a8 -> 19c83dc6  Run the member-name rows on four machines
+4ba3051e -> c749ecf1  Specify that a pattern binds each name once ([gram.pat.names])
+6aae5a66 -> 30c01a60  Register E0827, a name bound twice in one pattern or parameter list
+8f24a490 -> 80bd8258  Add the struct pattern that binds a name twice row
+a0f2cfed -> bb99f03f  Add the name bound twice at two types row
+498a1aed -> 5fe5f93b  Add the let pattern that binds a name twice row
+b241d327 -> 9bf48ef9  Add the name bound on both sides of @ row
+cc537a9a -> 34f0ada2  Add the nested name bound twice row
+339ef49e -> b015231e  Add the for header that binds a name twice row
+e6599742 -> 2ef6a95e  Add the parameter declared twice row
+4fd36f53 -> dbf586bc  Add the closure parameter declared twice row
+27c0b120 -> 5b3ee488  Add the comma-group shadowing control row
+e1232320 -> 3918ba26  Add the two tests of one variant control row
+96ccb349 -> f5cccd21  Run the name-bound-twice rows on four machines
+f4f2dfa7 -> f292bb00  Specify that a row names each tag it spells once ([gram.type.row.dup])
+fff470e6 -> c9b9df7d  Specify that an alias's tags merge in any order
+b53df9d9 -> 756b69c9  Add the tag spelled after its alias row
+d0d78092 -> 649bc870  Add the payload conflict after an alias row
+a8ddd5f6 -> 9c1c741d  Add the two aliases' payload conflict row
+1f2f8a55 -> df9adaf2  Add the tag spelled twice after its alias row
+079bad59 -> a31c50d4  Add the bare tag spelled twice row
+60e4ef38 -> 31c5a7c8  Tie the duplicate-tags row to [gram.type.row.dup]
+8181cba9 -> d85cc413  Run the alias-union rows on four machines
+51deb3ca -> f96da717  Specify what an or-pattern's alternatives bind ([gram.pat.or])
+fe757514 -> be9d3290  Register E0828, an or-pattern's alternatives binding different names
+32efa6f1 -> dc0bc4c2  Add the agreeing or-pattern bindings row
+faed68d6 -> 891be254  Add the or-pattern alternative that lacks a name row
+207703a0 -> ce2dfb77  Add the left or-pattern alternative that lacks a name row
+5447c71d -> d74e9f39  Add the or-pattern name bound at two types row
+97a43cd3 -> 672bc3bc  Add the nested or-pattern bindings row
+a82beb1a -> 9403f8c9  Add the or-pattern bindings through @ row
+da32d86b -> 4540e03b  Tie the or-over-product row to [gram.pat.or]
+392a98a7 -> a95fb217  Run the or-pattern rows on four machines
+6acbe988 -> 7b392c6d  Refuse a variant or a field declared twice (E0302)
+eed089fa -> 92adfb43  Refuse a name bound twice in one pattern or parameter list (E0827)
+142821ef -> c9527b67  Merge an alias's tags in any order; hold only a row's own spellings to once
+a87166ad -> 1002baef  Refuse or-pattern alternatives that bind different names (E0828) or types (E0401)
+6f2fcf5b -> bb7574a7  Index the [gram.item.type.names], [gram.pat.names], [gram.pat.or] and [gram.type.row.dup] anchors
+aa3c9baa -> e15ee170  Explain E0302 for members, and E0601 and E0609 beside an alias
+8b269fd6 -> a2fc76b9  Add rendered snapshots for the s287 diagnostics
+a5e22942 -> cf501a14  Render the arm E0410 snapshot through a row tag, which draws no W0801
+a174c981 -> 164aa799  Word E0609 for an alias meeting its row, and keep a loop a use meets first
+37df7bbe -> 2c122a38  Name the checker's bound-names type and format it
+4945073e -> 65dad0a9  Format the lanes test
+456a5c0e -> 9d79c7e2  Note the front-end rulings in the changelog
+8bf0bf5c -> e14ac506  Add the s287 rows' lexer snapshots
+4a0516ee -> 959929e9  Add the s287 rows' parser snapshots
+858cdc86 -> 1b2ad006  Add the rendered s287 diagnostics' snapshots
+b422ee36 -> f0fc5c37  Enter the s287 rows in the lowering ledger
+49cbd28f -> d154492a  Regenerate the diagnostics catalog
+aac7dee6 -> 5fb13d74  Write the s287 note and keep its evidence

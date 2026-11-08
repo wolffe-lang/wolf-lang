@@ -49,4 +49,10 @@ m1-checks-49cbd28f.log    at the code-final head: fmt, clippy, the wolf_diag and
                           files, 0 bad) and conformance (731 anchors). Every END exit=0.
 census-pr1.txt            the census: every .lu of the corpus and of 38 org checkouts at the mem
                           rung, on the base binary and on aa3c9baa's, compared run by run.
-rig/, rig/linux/          the scripts as run.
+rebase-718fe47a.txt       the one rebase, onto trunk 718fe47a: each commit before it and the
+                          commit it became. Every log above ran before it.
+m1-rebased-5fb13d74.log   at the rebased head: the checks above, the lanes test (32 passed), the
+                          corpus, conformance, and every corpus-walking snapshot suite with no
+                          update.
+rig/, rig/linux/          the scripts as run. rig/linux/'s take scripts carry the heat gate the
+                          rebased records ran under (start at or under 95 C, a sensor summary).
