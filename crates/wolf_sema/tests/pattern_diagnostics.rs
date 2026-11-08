@@ -401,15 +401,17 @@ fn e0401_or_pattern_name_at_two_types() {
 
 // ------------------------------------------------- s287, E0410 -----
 
-/// wolf-lang#1059 (`[gram.pat.nullary.scope]`): the arm's `Done` tests the
-/// variant and binds nothing, so `Done = 9` writes the `let`. The checker
-/// reports it, with the arm's test named.
+/// wolf-lang#1059 (`[gram.pat.nullary.scope]`): the arm's `gone` tests the
+/// tag of the scrutinee's row and binds nothing, so `gone = 9` writes the
+/// `let`. The checker reports it, with the arm's test named. (A row tag,
+/// so the `let` draws no W0801, which this helper's resolve-clean
+/// assertion would refuse.)
 #[test]
 fn e0410_let_written_through_a_nullary_arm() {
     snap_one(
         "e0410_let_written_through_a_nullary_arm",
-        "enum E { Done, Other }\n\n\
-         fn main() -> int {\n    let Done: int = 8\n    match E.Done {\n        \
-         Done => { Done = 9 },\n        Other => {},\n    }\n    Done\n}\n",
+        "fn g(ok: bool) -> int ! {gone} {\n    if ok { 1 } else { return gone }\n}\n\n\
+         fn main() -> int {\n    let gone: int = 8\n    match g(false) {\n        \
+         gone => { gone = 9 },\n        n => {},\n    }\n    gone\n}\n",
     );
 }
