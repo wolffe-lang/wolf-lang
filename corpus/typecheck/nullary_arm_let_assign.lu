@@ -1,0 +1,23 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.nullary.scope, gram.item.let
+//! warns: W0801
+//!
+//! wolf-lang#1059: the arm's `Done` tests the variant `E.Done` and binds
+//! nothing ([gram.pat.nullary.scope]), so the `Done` the arm assigns is
+//! the `let`, and the assignment is E0410, as it is outside the match.
+//! Every machine wrote through the `let` (exit 9). The checker decides
+//! whether a bare arm name tests or binds, so this E0410 is reported at
+//! the typecheck rung. W0801 is the `let`'s: its name spells a variant
+//! in scope ([gram.pat.binder]).
+
+enum E { Done, Other }
+
+fn main() -> int {
+    let Done: int = 8
+    match E.Done {
+        Done => { Done = 9 },
+        Other => {},
+    }
+    Done
+}
