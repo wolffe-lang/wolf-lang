@@ -1,0 +1,65 @@
+aspen: 34 file(s) in 24 run(s); 0 verdict(s) moved, 0 error set(s) moved
+boreutils: 215 file(s) in 49 run(s); 0 verdict(s) moved, 0 error set(s) moved
+burrow: 34 file(s) in 18 run(s); 0 verdict(s) moved, 0 error set(s) moved
+clef: 41 file(s) in 26 run(s); 0 verdict(s) moved, 0 error set(s) moved
+  corpus/typecheck/else_binding_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/for_binding_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/match_binding_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/match_binding_at_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/match_binding_field_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/match_binding_mut_param.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/match_binding_var_shadow.lu: verdict None at None -> pass at mem
+  corpus/typecheck/rec_by_value_enum.lu: verdict None at None -> fail(E0404) at typecheck
+  corpus/typecheck/rec_by_value_errunion.lu: verdict None at None -> fail(E0404) at typecheck
+  corpus/typecheck/rec_by_value_generic.lu: verdict None at None -> fail(E0404) at typecheck
+  corpus/typecheck/rec_by_value_mutual.lu: verdict None at None -> fail(E0404) at typecheck
+  corpus/typecheck/rec_by_value_tuple.lu: verdict None at None -> fail(E0404) at typecheck
+  corpus/typecheck/rec_by_value_unused.lu: verdict None at None -> fail(E0404) at typecheck
+  corpus/typecheck/rec_through_containers.lu: verdict None at None -> pass at mem
+  corpus/typecheck/select_binding_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/memory/elem_loop_induction_written_mut.lu: errors [['E1002', 'elem_loop_induction_written_mut.lu', [592, 597]]] -> [['E1002', 'elem_loop_induction_written_mut.lu', [921, 926]]]
+  corpus/typecheck/else_binding_assign.lu: errors None -> [['E0410', 'else_binding_assign.lu', [312, 313]]]
+  corpus/typecheck/for_binding_assign.lu: errors None -> [['E0410', 'for_binding_assign.lu', [290, 291]]]
+  corpus/typecheck/match_binding_assign.lu: errors None -> [['E0410', 'match_binding_assign.lu', [380, 381]]]
+  corpus/typecheck/match_binding_at_assign.lu: errors None -> [['E0410', 'match_binding_at_assign.lu', [231, 232]]]
+  corpus/typecheck/match_binding_field_assign.lu: errors None -> [['E0410', 'match_binding_field_assign.lu', [335, 338]]]
+  corpus/typecheck/match_binding_mut_param.lu: errors None -> [['E0410', 'match_binding_mut_param.lu', [394, 395]]]
+  corpus/typecheck/match_binding_var_shadow.lu: errors None -> []
+  corpus/typecheck/rec_by_value_enum.lu: errors None -> [['E0404', 'rec_by_value_enum.lu', [445, 449]]]
+  corpus/typecheck/rec_by_value_errunion.lu: errors None -> [['E0404', 'rec_by_value_errunion.lu', [256, 260]]]
+  corpus/typecheck/rec_by_value_generic.lu: errors None -> [['E0404', 'rec_by_value_generic.lu', [253, 257]]]
+  corpus/typecheck/rec_by_value_mutual.lu: errors None -> [['E0404', 'rec_by_value_mutual.lu', [351, 355]]]
+  corpus/typecheck/rec_by_value_tuple.lu: errors None -> [['E0404', 'rec_by_value_tuple.lu', [231, 235]]]
+  corpus/typecheck/rec_by_value_unused.lu: errors None -> [['E0404', 'rec_by_value_unused.lu', [225, 229]]]
+  corpus/typecheck/rec_through_containers.lu: errors None -> []
+  corpus/typecheck/select_binding_assign.lu: errors None -> [['E0410', 'select_binding_assign.lu', [347, 348]]]
+corpus: 1327 file(s) in 1324 run(s); 15 verdict(s) moved, 16 error set(s) moved
+cub: 134 file(s) in 56 run(s); 0 verdict(s) moved, 0 error set(s) moved
+den: 257 file(s) in 95 run(s); 0 verdict(s) moved, 0 error set(s) moved
+fenrir: 58 file(s) in 15 run(s); 0 verdict(s) moved, 0 error set(s) moved
+fugue: 41 file(s) in 21 run(s); 0 verdict(s) moved, 0 error set(s) moved
+jobq: 3 file(s) in 3 run(s); 0 verdict(s) moved, 0 error set(s) moved
+lair: 40 file(s) in 16 run(s); 0 verdict(s) moved, 0 error set(s) moved
+ligature: 46 file(s) in 26 run(s); 0 verdict(s) moved, 0 error set(s) moved
+lobo: 210 file(s) in 190 run(s); 0 verdict(s) moved, 0 error set(s) moved
+lope: 21 file(s) in 6 run(s); 0 verdict(s) moved, 0 error set(s) moved
+mk: 9 file(s) in 1 run(s); 0 verdict(s) moved, 0 error set(s) moved
+muzzle: 38 file(s) in 35 run(s); 0 verdict(s) moved, 0 error set(s) moved
+pack: 23 file(s) in 9 run(s); 0 verdict(s) moved, 0 error set(s) moved
+pax: 174 file(s) in 97 run(s); 0 verdict(s) moved, 0 error set(s) moved
+pelt: 60 file(s) in 18 run(s); 0 verdict(s) moved, 0 error set(s) moved
+scent: 45 file(s) in 18 run(s); 0 verdict(s) moved, 0 error set(s) moved
+sniff: 75 file(s) in 17 run(s); 0 verdict(s) moved, 0 error set(s) moved
+spell: 11 file(s) in 2 run(s); 0 verdict(s) moved, 0 error set(s) moved
+tomlq: 8 file(s) in 8 run(s); 0 verdict(s) moved, 0 error set(s) moved
+trail: 8 file(s) in 6 run(s); 0 verdict(s) moved, 0 error set(s) moved
+tree-sitter-wolf: 2 file(s) in 1 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-book: 483 file(s) in 332 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-interp: 1173 file(s) in 1070 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-lsp: 1 file(s) in 1 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-std: 758 file(s) in 723 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-std-pin: 743 file(s) in 708 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-web: 140 file(s) in 7 run(s); 0 verdict(s) moved, 0 error set(s) moved
+yew: 584 file(s) in 142 run(s); 0 verdict(s) moved, 0 error set(s) moved
+private downstream trees (7 of them): 58 file(s) in 31 run(s); 0 verdict(s) moved, 0 error set(s) moved
+TOTAL: 5095 run(s); 15 verdict(s) moved; 16 error set(s) moved

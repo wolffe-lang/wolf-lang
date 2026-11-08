@@ -1,0 +1,6 @@
+s287: M2 take at 59f80c28: regen.sh 
+s287: lock taken 00:55:03, 11242 MiB free, 95 GB disk; running: $LANE/rig/regen.sh
+spec-extract: wrote spec/anchors.json (733 anchors)
+spec-extract: wrote spec/grammar.ebnf (11380 bytes)
+anchors: 731 -> 733; added ['gram.pat.let', 'type.rec']; removed []
+s287: END exit=0 00:55:06

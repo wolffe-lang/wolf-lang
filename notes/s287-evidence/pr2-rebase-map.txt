@@ -1,0 +1,36 @@
+s287, the second change: the one rebase, from the first change's code-final commit
+4945073e onto its head aac7dee6 (which added the changelog, the snapshots, the catalog, the note
+and the evidence). Each commit before the rebase, and the commit it became, with the same subject
+and the same change. The two red takes ran at the commits before the rebase.
+
+d149a93f -> 40020d4e  Specify that a type contains itself only through a container ([type.rec])
+a133cfe0 -> dcac4bab  Add the by-value recursive enum row
+444e8629 -> 98efe598  Add the recursion through a tuple payload row
+99180ce6 -> 092fdc31  Add the struct and enum cycle row
+602af4e6 -> ae0e9cfc  Add the unused struct that holds itself row
+84f6d7bc -> 2990c0b4  Add the cycle through a generic struct row
+7cabe8b4 -> 7b2faffc  Add the cycle through an error union row
+1fbc0673 -> bcc8a663  Add the recursion through containers control row
+56f92e0e -> e36ec807  Place [type.rec]'s report at the first-declared type's member
+86a9ae26 -> bd23112b  Name the member the struct and enum cycle row is reported at
+e36a9b29 -> 9704538a  Run the recursive-type rows on four machines
+d37c3087 -> b10f8c3c  Refuse a type that contains itself by value (E0404)
+fb397c61 -> e9046887  Explain E0404 for a type that contains itself by value
+e869a5c3 -> 94eba7a0  Add a rendered snapshot for E0404 on a type that holds itself
+9b6c1930 -> dec460e0  Specify that pattern bindings bind as let does ([gram.pat.let])
+d5a7042f -> d604e6eb  Add the match binding assigned row
+0d6e7077 -> 563eafc4  Add the for binding assigned row
+49bf8608 -> a6690b33  Add the else handler binding assigned row
+64a1e4f8 -> 780119bb  Add the select receive assigned row
+21e88b4d -> d5291a7d  Add the match binding's field assigned row
+3554ec01 -> 959ea5c8  Add the @ name assigned row
+66c5681f -> 77d30ebf  Add the mut parameter trap row
+cb583e3d -> 53b18974  Add the var shadow control row
+ddceedf8 -> 0bc1c037  Run the pattern-binding rows on four machines
+b664f0fd -> 38314dd4  Copy the loop index into a var before the induction witness writes it
+e8141325 -> 21eb122a  Copy the loop index into a var in the induction-written fixture
+a50fe331 -> f9e07283  Refuse a write to a name a pattern bound outside let and var (E0410)
+bd4b5202 -> d0159584  Say which rung judges a write to a pattern's name
+5cc62d07 -> d690440e  Explain E0410 for a pattern's bindings
+59f80c28 -> 81ad622d  Add a rendered snapshot for E0410 on a match binding
+2968280c -> 3570b69a  Index the [type.rec] and [gram.pat.let] anchors

@@ -1,0 +1,270 @@
+s287: M2 take at 2aeeb81b: extra-pr2.sh 
+s287: last release 12s ago; waiting 48s for the turn
+s287: 01:14:22 mac build lock held by vc24 pid 49155; waiting
+s287: 01:14:52 mac build lock held by vc24 pid 49155; waiting
+s287: 01:15:22 mac build lock held by s286 pid 69525; waiting
+s287: 01:15:52 mac build lock held by s286 pid 69525; waiting
+s287: 01:16:22 mac build lock held by s286 pid 69525; waiting
+s287: 01:16:52 mac build lock held by s286 pid 69525; waiting
+s287: lock taken 01:17:22, 11582 MiB free, 92 GB disk; running: $LANE/rig/extra-pr2.sh
+tree of fa5d87978af3efffadc73cb4d610051727fbb5bc
+== STEP mem-diagnostics 06:17:22
+   Compiling wolf_span v0.2.38 ($LANE/src/crates/wolf_span)
+   Compiling wolf_diag v0.2.38 ($LANE/src/crates/wolf_diag)
+   Compiling wolf_ast v0.2.38 ($LANE/src/crates/wolf_ast)
+   Compiling wolf_lex v0.2.38 ($LANE/src/crates/wolf_lex)
+   Compiling wolf_parse v0.2.38 ($LANE/src/crates/wolf_parse)
+   Compiling wolf_sema v0.2.38 ($LANE/src/crates/wolf_sema)
+   Compiling wolf_mem v0.2.38 ($LANE/src/crates/wolf_mem)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.01s
+     Running tests/mem_diagnostics.rs (target/debug/deps/mem_diagnostics-db8e70b46cd4999a)
+
+running 144 tests
+test a_bound_bytes_list_is_not_a_lend ... ok
+test a_read_only_lend_stays_silent ... ok
+test clean_a_store_revives_the_literal_it_names_and_the_whole_revives_all ... ok
+test a_member_read_under_an_element_claim_stays_silent ... ok
+test clean_copy_read_after_mut_arg ... ok
+test built_strs_in_the_ambient_region_stay_silent ... ok
+test a_copy_at_a_store_into_an_outer_value_materializes ... ok
+test clean_disjoint_and_earlier_reads_beside_a_claim ... ok
+test clean_freeze_then_read_forever ... ok
+test clean_frozen_return_and_imm_edge ... ok
+test clean_handle_backedge ... ok
+test clean_iso_edge_then_open_after_close ... ok
+test clean_list_mut_receiver_len_and_index ... ok
+test clean_distinct_literals_and_the_header_after_an_element_move ... ok
+test clean_in_redirect_outlives_scratch ... ok
+test clean_pool_two_phase ... ok
+test clean_r3_a_pool_handle_local_revives ... ok
+test clean_r3_same_local_index_revives ... ok
+test clean_region_scratch_and_defaults ... ok
+test clean_sibling_multiopen ... ok
+test clean_shared_clone_drop ... ok
+test clean_r3_a_str_key_local_revives ... ok
+test clean_str_from_a_view_builtin_is_no_site ... ok
+test clean_mut_param_stored_back_before_every_return ... ok
+test clean_weak_backedge ... ok
+test clean_unsafe_tier_surface ... ok
+test copy_read_before_mut_stays_silent ... ok
+test clean_str_built_in_the_spawner_and_handed_to_a_proc ... ok
+test clean_reads_and_disjoint_writes_beside_a_mut_receiver ... ok
+test clean_write_after_a_dyn_pairs_last_use ... ok
+test e1001_a_run_time_index_may_be_the_moved_element ... ok
+test e1001_branch_sensitive_move ... ok
+test e1001_a_whole_move_is_not_revived_by_one_element_store ... ok
+test e1001_field_granular_partial_move ... ok
+test e1001_mut_param_used_after_move_reports_once ... ok
+test e1001_mut_param_moveout_on_an_early_return ... ok
+test e1001_mut_param_moveout_on_the_error_edge ... ok
+test e1001_r3_does_not_carry_across_loop_iterations ... ok
+test clean_two_phase_reads_of_a_claimed_place ... ok
+test e1001_reinit_revives_and_partial_reinit_leaves_residue ... ok
+test e1001_tuple_destructure_moves_elements ... ok
+test e1001_use_in_defer_after_move ... ok
+test e1001_whole_value_move ... ok
+test e1001_read_param_field_rebound ... ok
+test e1002_a_loop_index_the_body_writes ... ok
+test e1001_whole_read_methods_after_a_moved_part ... ok
+test e1001_mut_param_moveout_at_return ... ok
+test e1002_a_nested_call_claims_a_run_time_index ... ok
+test e1001_r3_over_a_copy_key_does_not_hold_after_the_key_is_written ... ok
+test e1002_a_run_time_index_beside_an_element_lend ... ok
+test e1002_an_index_written_between_the_claims ... ok
+test e1002_prefix_overlap_mut_mut ... ok
+test e1002_disjoint_fields_stay_silent ... ok
+test e1002_read_param_returned ... ok
+test e1002_nested_call_claims_inside_a_mut_arg ... ok
+test e1002_a_mut_receiver_written_moved_or_claimed_in_its_own_arguments ... ok
+test e1002_nested_call_claims_a_spilled_bases_prefix ... ok
+test e1001_r3_does_not_hold_after_the_index_is_written ... ok
+test e1002_read_while_mut ... ok
+test e1002_read_param_carried_out ... ok
+test e1002_take_while_mut ... ok
+test e1002_write_under_a_dyn_pair ... ok
+test e1002_the_whole_container_read_under_an_element_claim ... ok
+test e1004_param_param_store ... ok
+test e1005_move_while_open ... ok
+test e1004_cross_region_store ... ok
+test e1005_freeze_while_open ... ok
+test e1006_direct_strong_cycle ... ok
+test e1006_cycle_through_list ... ok
+test e1002_writes_and_moves_inside_a_later_arguments_claim ... ok
+test e1006_two_type_cycle ... ok
+test e1007_extra_mut ... ok
+test e1007_missing_take ... ok
+test e1009_mut_temporary ... ok
+test e1007_missing_mut ... ok
+test e1007_take_where_mut ... ok
+test e1008_view_set_violation ... ok
+test e1010_a_callee_may_keep_its_argument_in_a_mut_argument ... ok
+test e1010_a_closure_that_captured_a_channel_is_called ... ok
+test e1010_a_callee_may_send_its_argument ... ok
+test e1010_a_closure_that_captured_a_channel_is_returned ... ok
+test e1010_a_callee_may_send_what_it_builds_in_the_caller_s_region ... ok
+test e1010_a_closure_that_captured_a_channel_is_handed_to_a_callee ... ok
+test e1010_a_helper_that_leaves_a_proc_running_with_its_caller_s_region ... ok
+test e1010_a_copy_bound_inside_the_block_still_shares_its_strs ... ok
+test e1010_a_map_store_keeps_its_key ... ok
+test e1010_a_sent_argument_under_in_has_a_fix_it ... ok
+test e1010_a_helper_that_leaves_a_proc_running_with_its_parameter ... ok
+test e1010_a_kept_aggregate_argument_has_no_fix_it ... ok
+test e1010_a_spawn_argument_built_in_a_region_block ... ok
+test e1010_a_proc_s_helper_may_send_what_the_proc_built ... ok
+test e1010_a_struct_payload_and_a_channel_inside_a_struct ... ok
+test e1010_region_block_value_escapes ... ok
+test e1010_region_built_str_by_append_held_outside ... ok
+test e1010_region_built_str_is_the_block_value ... ok
+test e1010_a_spawn_argument_beside_a_channel ... ok
+test e1010_region_local_outlives_free ... ok
+test e1010_no_summary_names_a_closure_or_a_fn_value ... ok
+test e1010_region_built_str_by_interpolation_held_outside ... ok
+test e1010_str_from_a_materializing_builtin ... ok
+test e1010_str_field_read_out_of_a_region_local_struct ... ok
+test e1011_open_child_of_open_owner ... ok
+test e1012_reopen_frozen_region ... ok
+test e1012_write_through_frozen ... ok
+test e1013_push_while_iterating ... ok
+test e1013_reassign_while_iterating ... ok
+test e1013_move_while_iterating ... ok
+test e1014_read_self_method_write ... ok
+test e1014_mut_lend_of_read_param ... ok
+test e1014_write_through_read_param_projection ... ok
+test e1010_str_built_in_a_proc_and_sent ... ok
+test e1014_whole_reassign_and_compound ... ok
+test e1301_atomic_outside_unsafe ... ok
+test e1301_module_var_outside_unsafe ... ok
+test e1301_raw_ops_outside_unsafe ... ok
+test e1302_private_struct_field_is_allowed ... ok
+test e1301_volatile_outside_unsafe ... ok
+test e1014_read_param_through_a_rebinding ... ok
+test e1301_provenance_op_and_cast_outside_unsafe ... ok
+test e1304_assume_needs_pointers ... ok
+test e1305_door_misuse ... ok
+test e1302_private_and_membrane_signatures_are_allowed ... ok
+test e1302_ptr_in_signature ... ok
+test iterate_then_mutate_stays_silent ... ok
+test moves_ok_stays_silent ... ok
+test nested_call_on_a_disjoint_place_stays_silent ... ok
+test nested_fn_parameters_carry_their_modes ... ok
+test element_claims_per_leg_stay_silent ... ok
+test nested_read_iteration_stays_silent ... ok
+test kept_arguments_that_cannot_dangle_stay_silent ... ok
+test read_param_reads_stay_silent ... ok
+test offsets_and_loop_indices_stay_silent_in_one_call ... ok
+test header_methods_beside_a_moved_or_claimed_element_stay_silent ... ok
+test spawn_arguments_that_outlive_the_frame_stay_silent ... ok
+test two_literal_element_lends_stay_silent ... ok
+test read_param_moves_that_stay_legal ... ok
+test two_phase_copy_read_into_mut_call_stays_silent ... ok
+test w1004_lent_view_relent_into_an_escape ... ok
+test w1001_region_never_allocates ... ok
+test w1004_lent_view_returned ... ok
+test view_set_litmus_stays_silent ... ok
+test w1301_unsafe_block_without_safety_comment ... ok
+test sent_arguments_that_cannot_dangle_stay_silent ... ok
+test procs_waited_for_on_every_path_stay_silent ... ok
+
+test result: ok. 144 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+END mem-diagnostics exit=0
+== STEP element-places 06:17:29
+   Compiling wolf_wir v0.2.38 ($LANE/src/crates/wolf_wir)
+   Compiling wolf_fmt v0.2.38 ($LANE/src/crates/wolf_fmt)
+   Compiling wolf_rt v0.2.38 ($LANE/src/crates/wolf_rt)
+   Compiling wolf_cimport v0.2.38 ($LANE/src/crates/wolf_cimport)
+   Compiling wolf_query v0.2.38 ($LANE/src/crates/wolf_query)
+   Compiling wolf_doc v0.2.38 ($LANE/src/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.38 ($LANE/src/crates/wolf_lsp)
+   Compiling wolf_pkg v0.2.38 ($LANE/src/crates/wolf_pkg)
+   Compiling wolf_backend v0.2.38 ($LANE/src/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.38 ($LANE/src/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.38 ($LANE/src/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.38 ($LANE/src/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.66s
+
+running 67 tests
+test a_copy_element_is_not_revived_by_a_sibling_store ...      Running tests/element_places_lanes.rs (target/debug/deps/element_places_lanes-c6e6275b9337820c)
+ok
+test a_copy_element_is_not_revived_through_a_run_time_index ... ok
+test a_literal_element_is_read_inside_another_ones_claim ... ok
+test a_literal_element_moves_alone ... ok
+test a_literal_element_moves_into_a_call_another_one_is_lent_to ... ok
+test a_literal_element_moves_into_a_call_another_one_mutates_in ... ok
+test a_local_offset_stays_one_place ... ok
+test a_loop_index_outside_the_literal_goes_mut_beside_it ... ok
+test a_loop_index_the_body_writes_stays_one_place ... ok
+test a_loop_range_containing_the_literal_stays_one_place ... ok
+test a_member_read_beside_an_element_claim_runs_on_every_leg ... ok
+test a_member_read_under_an_element_claim_runs ... ok
+test a_method_named_count_is_not_a_header_read ... ok
+test a_nested_call_may_claim_another_literal_element ... ok
+test a_nested_call_may_not_claim_a_run_time_index ... ok
+test a_non_literal_range_stays_one_place ... ok
+test a_run_time_index_and_a_literal_are_one_place ... ok
+test a_run_time_index_does_not_change_under_the_loop ... ok
+test a_run_time_index_does_not_move_into_a_claiming_call ... ok
+test a_run_time_index_is_not_stored_under_a_loan ... ok
+test a_run_time_index_may_be_read_beside_a_claim ... ok
+test a_slice_beside_a_moved_element_stays_refused ... ok
+test a_store_at_another_literal_revives_nothing ... ok
+test a_store_through_a_reassigned_key_revives_nothing ... ok
+test a_store_through_a_reassigned_local_revives_nothing ... ok
+test a_store_through_a_run_time_index_revives_nothing ... ok
+test a_store_through_the_same_char_or_bool_key_revives_the_value ... ok
+test a_store_through_the_same_index_revives_the_element ... ok
+test a_store_through_the_same_literal_revives_the_element ... ok
+test a_store_through_the_same_pool_handle_revives_the_element ... ok
+test a_store_through_the_same_str_key_revives_the_value ... ok
+test a_subtracted_offset_stays_one_place ... ok
+test a_tuple_position_moves_alone ... ok
+test a_zero_offset_is_the_same_element ... ok
+test an_element_and_a_path_inside_it_stay_one_claim ... ok
+test an_impl_self_after_a_moved_field_stays_refused ... ok
+test an_inclusive_range_holding_the_literal_stays_one_place ... ok
+test an_offset_after_a_block_that_writes_the_index_stays_one_place ... ok
+test an_offset_after_a_call_that_writes_the_index_stays_one_place ... ok
+test an_offset_against_a_literal_stays_one_place ... ok
+test an_offset_through_another_local_stays_one_place ... ok
+test another_literal_element_changes_under_the_loop ... ok
+test another_literal_element_is_stored_under_a_loan ... ok
+test distinct_literal_keys_are_distinct_places ... ok
+test get_after_a_moved_element_stays_refused ... ok
+test header_methods_run_beside_a_moved_element ... ok
+test header_methods_run_under_an_element_claim ... ok
+test map_header_methods_run_beside_a_read_out_value ... ok
+test offsets_and_loop_indices_are_distinct_on_every_leg ... ok
+test one_field_of_two_literal_elements_goes_mut_together ... ok
+test paths_through_distinct_literals_are_distinct ... ok
+test paths_through_distinct_literals_go_mut_together ... ok
+test pool_header_methods_run_beside_a_moved_element ... ok
+test pop_after_a_moved_element_stays_refused ... ok
+test push_after_a_moved_element_stays_refused ... ok
+test the_header_is_not_an_element ... ok
+test the_moved_element_itself_stays_unreadable ... ok
+test the_same_literal_twice_is_one_element_everywhere ... ok
+test the_whole_container_read_under_an_element_claim_stays_refused ... ok
+test two_claims_in_one_caller_region_survive_the_release_inliner ... ok
+test two_heap_elements_swap_and_grow ... ok
+test two_literal_elements_go_mut_together ... ok
+test two_literal_elements_swap ... ok
+test two_offsets_of_one_unwritten_local_go_mut_together ... ok
+test two_pool_handles_are_one_place ... ok
+test two_run_time_indices_are_one_place ... ok
+test two_tuple_positions_go_mut_together ... ok
+
+test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.95s
+
+END element-places exit=0
+== STEP clippy-mem 06:17:55
+    Checking wolf_span v0.2.38 ($LANE/src/crates/wolf_span)
+    Checking wolf_diag v0.2.38 ($LANE/src/crates/wolf_diag)
+    Checking wolf_ast v0.2.38 ($LANE/src/crates/wolf_ast)
+    Checking wolf_lex v0.2.38 ($LANE/src/crates/wolf_lex)
+    Checking wolf_parse v0.2.38 ($LANE/src/crates/wolf_parse)
+    Checking wolf_sema v0.2.38 ($LANE/src/crates/wolf_sema)
+    Checking wolf_mem v0.2.38 ($LANE/src/crates/wolf_mem)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.65s
+END clippy-mem exit=0
+== done 2026-11-08T06:17:59Z
+s287: END exit=0 01:17:59

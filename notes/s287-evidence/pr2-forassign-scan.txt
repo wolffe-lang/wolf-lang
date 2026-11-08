@@ -1,0 +1,4 @@
+org/den/src/pack/stream.lu:68: _ => { return invalid },
+org/den/src/refcmd/cleanup.lu:33: _ => { eprint("error: cannot remove AUTO_MERGE: {e}") },
+org/wolf-interp/vendor/upstream/corpus/memory/elem_loop_induction_written_mut.lu:19: i = 0
+scan: 8124 file(s), 3 write(s) to a for header's name
