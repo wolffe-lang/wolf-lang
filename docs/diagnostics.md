@@ -3039,7 +3039,7 @@ mutation that is not there. Drop the `mut` from the parameter and
 from the call sites that pass it; the read default is the honest
 mode. (X1: the absence of a keyword is the mode.)
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__faults__exclusivity_nested_path.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__mut_param_unwritten.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1002_mut_unwritten.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__faults__exclusivity_nested_path.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__mut_param_unwritten.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_binding_mut_param.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1002_mut_unwritten.snap
 
 ## W1003 — this `take` parameter is returned unchanged
 
