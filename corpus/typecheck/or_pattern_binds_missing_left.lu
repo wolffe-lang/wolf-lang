@@ -1,0 +1,15 @@
+//! check: fail(E0828)
+//! phase: resolve
+//! conforms: gram.pat.or
+//!
+//! The same with the binding on the right: E0828 at `A(_)`, the
+//! alternative that lacks `x` ([gram.pat.or]), even though the arm's
+//! body never reads it. lupin ran it (exit 1).
+
+enum E { A(int), B(int) }
+
+fn f(v: E) -> int {
+    match v { A(_) | B(x) => 1 }
+}
+
+fn main() -> int { f(E.B(3)) }
