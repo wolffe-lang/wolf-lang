@@ -559,11 +559,19 @@ type `t = fn(t) -> …` that expands forever. No finite type satisfies
 the constraint, so wolf stops and shows the cycle rather than looping.
 This almost always signals a confusion one level up: a closure passed
 where its *result* was meant, or a recursion through values where a
-named recursive *type* (a struct or enum, which may mention itself by
-name) was intended. Introduce a named type or an explicit annotation
-at the point where the cycle closes.
+named recursive *type* was intended. Introduce a named type or an
+explicit annotation at the point where the cycle closes.
 
-Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0404_infinite.snap
+A named type is infinite in the same way when it contains itself by
+value (`[type.rec]`): a struct's fields, an enum's payloads and a
+tuple's elements are laid out inline, so `enum L { Nil, Cons(int, L) }`
+would have no finite size. A named struct or enum may mention itself,
+but only through a container that holds its element elsewhere:
+`Cons(int, List[L])`, a `Map[K, L]`, or a `handle L` into a pool. The
+error is reported once per cycle, where the type is declared, used or
+not, with the cycle named in full.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__rec_by_value_enum.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__rec_by_value_errunion.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__rec_by_value_generic.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__rec_by_value_mutual.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__rec_by_value_tuple.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__rec_by_value_unused.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0404_infinite.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0404_struct_and_enum_contain_each_other_by_value.snap
 
 ## E0405 — the type here cannot be inferred
 
@@ -655,9 +663,16 @@ that covers plain assignment and every compound form (`=`, `+=`, `-=`,
 the fix-it offers exactly that edit. When the second value is really a
 *new* thing rather than an update to the old one, the wolf idiom is
 shadowing: a second `let x = …` introduces a fresh binding under the
-same name without mutating the first. Function parameters and `match`
-bindings are not `let` bindings; their mutability is governed by modes
-(`mut`, `take`), not by this rule.
+same name without mutating the first. A function parameter is not a
+`let` binding: its mutability is governed by modes (`mut`, `take`), not
+by this rule.
+
+A name a pattern binds outside `let` and `var` (a `match` arm, a `for`
+header, an `else |…|` handler, a `select` receive) binds as `let` does
+(`[gram.pat.let]`), and assigning it, or a field of it, is this error
+too. The binding holds its own value, never a place in what was matched,
+so the write could not have reached the scrutinee anyway. Shadow it with
+a `var` at the start of the body (`var x = x`) and update that.
 
 A `match` arm whose bare name tests a case of the scrutinee's type (a
 payload-less variant, or a tag of its error row) binds nothing
@@ -665,7 +680,7 @@ payload-less variant, or a tag of its error row) binds nothing
 `let` outside the `match`: under `let Done`, `Done => { Done = 9 }` is
 this error at the assignment, and the fix is the same `var`.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_let_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_tag_assign.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_field.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0410_let_written_through_a_nullary_arm.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__else_binding_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__for_binding_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_binding_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_binding_at_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_binding_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_binding_mut_param.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_let_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_tag_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__select_binding_assign.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_field.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0410_let_written_through_a_nullary_arm.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0410_match_binding_assigned.snap
 
 ## E0411 — `str` has no character indexing
 
