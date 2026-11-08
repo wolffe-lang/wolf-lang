@@ -1103,6 +1103,19 @@ row_entry ::= path ('(' type (',' type)* ')')?
   `rows/nested_row_param.lu`, `rows/nested_row_merge_payload.lu`,
   `rows/error_alias_union.lu`,
   `rows/negative/nested_row_conflict.lu` (counter).
+- **A row names each tag once** `[gram.type.row.dup]` (2026-11-08,
+  wolf-lang#1065): within one row, the entries the row spells itself
+  name each tag once, so `{x, x}` and `{Io(str), Io}` are E0601 at the
+  second spelling — a row is a set, not a multi-map, and a tag's payload
+  is part of its one entry. An alias's tags are not spellings of this
+  row: they meet `[gram.type.row.flatten]`'s merge (and its E0609),
+  never this rule, in whichever order the entries stand, so `{A, x}`
+  with `error A = {x}` is one `x` (`[type.err.alias.union]`), and
+  `{A, x, x}` is E0601 at the second `x` the row spells. The rule was
+  the corpus's and `docs/diagnostics.md`'s since the first error rows;
+  this clause writes it into the specification. Files:
+  `rows/negative/dup_tags.lu`, `rows/negative/error_row_own_dup_bare.lu`,
+  `rows/negative/error_alias_union_own_twice.lu`.
 - `handle Node`, `shared Config`, `weak Parent`: prefix type keywords.
 - `Map[str, int]`, `List[(T, int)]`: `[]` type application.
 - `&T`-style reference *types* do not exist in the surface (borrows are
