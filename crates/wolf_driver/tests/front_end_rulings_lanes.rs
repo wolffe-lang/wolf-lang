@@ -195,3 +195,64 @@ fn a_used_alias_loop_keeps_one_e0610() {
         "fail(E0610)",
     );
 }
+
+/// Every compiled tier and lupin run `row` to `exit(want)`.
+fn runs(row: &str, want: u8) {
+    let verdict = format!("exit({want})");
+    for (machine, record, _) in compiled(row) {
+        assert_eq!(record["verdict"], verdict, "{machine} {row}: {record}");
+    }
+    if let Some(record) = lupin(row) {
+        assert_eq!(record["verdict"], verdict, "lupin {row}: {record}");
+    }
+}
+
+// ----------------------------- wolf-lang#1059, a nullary arm binds nothing --
+
+/// The arm's `Done` tests `E.Done`, so `Done = 9` assigns the `let`: E0410
+/// at the assignment, on every tier. Every machine wrote the `let`
+/// (`exit(9)`); lupin 0.1.60 still does.
+#[test]
+fn assigning_a_let_through_a_nullary_arm_is_e0410() {
+    refused(
+        "typecheck/nullary_arm_let_assign.lu",
+        "E0410",
+        &[(688, 692)],
+        &[
+            "error[E0410]: `Done` is bound with `let`, so it cannot be assigned again",
+            "this pattern tests `Done` and binds nothing",
+            "[gram.pat.nullary.scope]",
+        ],
+        "exit(9)",
+    );
+}
+
+/// The control: under `var Done` the arm writes the `var`.
+#[test]
+fn a_nullary_arm_writes_an_outer_var() {
+    runs("typecheck/nullary_arm_var_assign.lu", 9);
+}
+
+/// A row tag tested in an arm binds nothing either: E0410 at `gone = 9`.
+#[test]
+fn assigning_a_let_through_a_row_tag_arm_is_e0410() {
+    refused(
+        "typecheck/nullary_arm_tag_assign.lu",
+        "E0410",
+        &[(623, 627)],
+        &["`gone` is bound with `let`, so it cannot be assigned again"],
+        "exit(9)",
+    );
+}
+
+/// A field of the `let`, written through the arm: E0410 over the place.
+#[test]
+fn assigning_a_lets_field_through_a_nullary_arm_is_e0410() {
+    refused(
+        "typecheck/nullary_arm_field_assign.lu",
+        "E0410",
+        &[(485, 491)],
+        &["`Done` is bound with `let`, so its fields cannot be assigned either"],
+        "exit(9)",
+    );
+}
