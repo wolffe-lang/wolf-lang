@@ -1,6 +1,6 @@
 //! check: run(exit=0)
 //! phase: mem
-//! conforms: gram.pat
+//! conforms: gram.pat, gram.pat.or
 //!
 //! s131 (#196) — the c06 residue's or-pattern half, pinned loud: an
 //! or-pattern whose alternatives are PRODUCT patterns
