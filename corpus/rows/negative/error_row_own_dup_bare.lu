@@ -1,0 +1,12 @@
+//! check: fail(E0601)
+//! phase: resolve
+//! conforms: gram.type.row.dup
+//!
+//! `{x, x}` spells one tag twice ([gram.type.row.dup]): E0601 at the
+//! second `x`. The compiled tiers already refused it; lupin ran it.
+
+fn g(ok: bool) -> int ! {x, x} {
+    if ok { 1 } else { return x }
+}
+
+fn main() -> int { g(true) else 0 }
