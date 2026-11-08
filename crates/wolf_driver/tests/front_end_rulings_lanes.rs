@@ -671,7 +671,7 @@ fn assigning_a_match_binding_is_e0410() {
     refused(
         "typecheck/match_binding_assign.lu",
         "E0410",
-        &[(380, 381)],
+        &[(400, 401)],
         &[
             "error[E0410]: `x` is bound by a pattern, so it cannot be assigned",
             "var x = x",
@@ -687,7 +687,7 @@ fn assigning_a_for_binding_is_e0410() {
     refused(
         "typecheck/for_binding_assign.lu",
         "E0410",
-        &[(290, 291)],
+        &[(298, 299)],
         &["`x` is bound by a pattern, so it cannot be assigned"],
         "exit(12)",
     );
@@ -699,7 +699,7 @@ fn assigning_an_else_binding_is_e0410() {
     refused(
         "typecheck/else_binding_assign.lu",
         "E0410",
-        &[(312, 313)],
+        &[(320, 321)],
         &["`n` is bound by a pattern, so it cannot be assigned"],
         "exit(5)",
     );
@@ -711,7 +711,7 @@ fn assigning_a_select_binding_is_e0410() {
     refused(
         "typecheck/select_binding_assign.lu",
         "E0410",
-        &[(347, 348)],
+        &[(359, 360)],
         &["`n` is bound by a pattern, so it cannot be assigned"],
         "exit(5)",
     );
@@ -723,7 +723,7 @@ fn assigning_a_match_bindings_field_is_e0410() {
     refused(
         "typecheck/match_binding_field_assign.lu",
         "E0410",
-        &[(335, 338)],
+        &[(355, 358)],
         &["`p` is bound by a pattern, so its fields cannot be assigned either"],
         "exit(9)",
     );
@@ -735,7 +735,7 @@ fn assigning_an_at_name_is_e0410() {
     refused(
         "typecheck/match_binding_at_assign.lu",
         "E0410",
-        &[(231, 232)],
+        &[(251, 252)],
         &["`n` is bound by a pattern, so it cannot be assigned"],
         "exit(6)",
     );
@@ -748,7 +748,7 @@ fn the_mut_parameter_trap_is_e0410() {
     refused(
         "typecheck/match_binding_mut_param.lu",
         "E0410",
-        &[(411, 412)],
+        &[(419, 420)],
         &["`x` is bound by a pattern, so it cannot be assigned"],
         "exit(3)",
     );
