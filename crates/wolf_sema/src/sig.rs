@@ -416,6 +416,10 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // one has no single C layout (E0820) — a whole-signature question.
     let packed = crate::layout::check_aligned_in_packed(&sigs);
     sigs.diagnostics.extend(packed);
+    // `[type.rec]` (wolf-lang#1062): a type that contains itself by value
+    // has no finite size (E0404), checked where it is declared.
+    let rec = crate::rectype::check(pkg, &sigs);
+    sigs.diagnostics.extend(rec);
     wolf_diag::sort_diagnostics(&mut sigs.diagnostics);
     sigs
 }

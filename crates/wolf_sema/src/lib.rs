@@ -217,6 +217,7 @@ pub(crate) mod letcheck;
 pub mod lints;
 pub mod origin;
 pub mod prelude;
+pub(crate) mod rectype;
 pub mod resolve;
 pub mod rewrite;
 pub mod rows;
