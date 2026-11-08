@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 929..953 name=A fields=1
-StructDecl 955..979 name=B fields=1
-EnumDecl 981..1020 name=Msg variants=2
-FnDecl 1022..1121 name=pick body=Block
-FnDecl 1123..1258 name=main body=Block
+StructDecl 942..966 name=A fields=1
+StructDecl 968..992 name=B fields=1
+EnumDecl 994..1033 name=Msg variants=2
+FnDecl 1035..1134 name=pick body=Block
+FnDecl 1136..1271 name=main body=Block

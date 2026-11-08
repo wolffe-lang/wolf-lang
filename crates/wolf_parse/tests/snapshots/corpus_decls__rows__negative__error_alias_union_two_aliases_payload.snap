@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ErrorDecl 300..321 name=A tags={Bad}
+ErrorDecl 322..343 name=B tags={Bad}
+FnDecl 344..417 name=g body=Block
+FnDecl 419..454 name=main body=Block

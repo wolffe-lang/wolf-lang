@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TypeDecl 294..320 name=E def=EnumDef
+TypeDecl 321..364 name=P def=StructDef
+FnDecl 365..387 name=main body=Block
