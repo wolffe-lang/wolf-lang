@@ -1768,3 +1768,40 @@ has promised `totals.pairs().sorted_by(…)` since bs00, and
   does not pay; and its capture check is spawn's applied to a closure
   that runs in several tasks. So `par` is a builtin method on `List[T]`,
   found at `[type.method.resolve]` step (1), and needs no std root.
+
+## §17 Recursive types `[type.rec]`
+
+(2026-11-08, wolf-lang#1062, the second case.)
+
+- `[type.rec]` **A type may contain itself only through storage that is
+  not inline.** A struct's fields, an enum's payloads and a tuple's
+  elements are laid out inline (`[abi.native.enum]`: an enum value is
+  its variant tag, then its payload slots), and so are the ok type and
+  the tag payloads of an error union, `wrapping[T]`, a `distinct`
+  type's base and a range type. A type that reaches itself through
+  those alone would be a value with no finite size, so a cycle among
+  them is **E0404** ("this would be an infinite type"), once per cycle,
+  at the member that closes it, the cycle named in full. Types are
+  checked where they are declared, used or not, in declaration order,
+  so `enum L { Nil, Cons(int, L) }` is E0404 at `Cons`, and `struct N
+  { v: int, next: L }` with `enum L { Nil, More(N) }` is one E0404, at
+  `More`. A generic struct or enum is walked at its arguments: with
+  `struct Box[T] { v: T }`, `Box[L]` holds an `L` inline, while `struct
+  Bag[T] { items: List[T] }` holds its `T` elsewhere. `List[T]`,
+  `Map[K, V]`, `Pool[T]`, `handle T`, `weak T`, raw pointers, channels,
+  mutexes and function types are not inline, so `enum Value { …,
+  Arr(List[Value]) }` is legal, and that is how recursion is written.
+  `shared T` is not a way out either: a strong cycle through it is
+  E1006 (`[mem.shared.rc.2]`). A recursion that only grows its
+  arguments (`L[T]` holding `L[(T, T)]`) never repeats one type, and the
+  check, which follows a fixed depth of inline members, does not report
+  it. Before this clause the checked machine and the reference
+  interpreter ran a by-value recursive enum while native and release
+  refused it at `mem` as "cannot compile this yet", and every
+  implementation accepted an unused one. Files:
+  `typecheck/rec_by_value_enum.lu`, `typecheck/rec_by_value_tuple.lu`,
+  `typecheck/rec_by_value_mutual.lu`, `typecheck/rec_by_value_unused.lu`,
+  `typecheck/rec_by_value_generic.lu`,
+  `typecheck/rec_by_value_errunion.lu`,
+  `typecheck/rec_through_containers.lu`, with
+  `typecheck/enum_union_tree.lu` as the legal counterpart.
