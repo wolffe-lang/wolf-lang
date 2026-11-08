@@ -433,7 +433,15 @@ sharing a directory (scratch work, exercises), mark each with
 `//! member: false`: a standalone entry is its own compilation root
 and never merges with its siblings (D59).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__clash.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__other.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__sibling_diag__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
+The same rule holds inside one enum or one struct
+(`[gram.item.type.names]`): the variants of an enum have distinct
+names, and so do a struct's fields, so `enum E { A(int), A(str) }` and
+a struct that declares `a` twice are refused at the second declaration,
+used or not. A name has to pick out one variant (`E.A`, a bare `A` in an
+arm) and one field (`p.a`, `P { a }`). Names compare as spelled: `a`
+and `A` are two variants.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__clash.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__other.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__enum_variant_twice.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__enum_variant_twice_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__sibling_diag__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__struct_field_twice.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__type_decl_member_twice.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
 
 ## E0303 — modules import each other in a cycle
 
@@ -514,7 +522,7 @@ return type, the ok half of a fallible one (spec/10
 a `while` or a `print` is reported here, at the tail, with the
 declaration named as the origin.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation_two_annotations.snap, crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__list_lit_mixed.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_compare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_never_reaches_end.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_never_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__generic_bind_once.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__generic_bind_scalar.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_union.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__conc_handle_applied_scope_arity.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__conc_handle_bare_proc_arity.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__conc_handle_completion_type_mismatch.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0401_to_int_row.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0401_range_mixed_endpoints.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_closure_return_vs_tail.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_list_element_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_range_element_outside_family.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation_two_annotations.snap, crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__list_lit_mixed.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_compare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_never_reaches_end.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_never_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__generic_bind_once.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__generic_bind_scalar.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__or_pattern_binds_types.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_union.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__conc_handle_applied_scope_arity.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__conc_handle_bare_proc_arity.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__conc_handle_completion_type_mismatch.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0401_to_int_row.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0401_or_pattern_name_at_two_types.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0401_range_mixed_endpoints.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_closure_return_vs_tail.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_list_element_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_range_element_outside_family.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
@@ -651,7 +659,13 @@ same name without mutating the first. Function parameters and `match`
 bindings are not `let` bindings; their mutability is governed by modes
 (`mut`, `take`), not by this rule.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_field.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap
+A `match` arm whose bare name tests a case of the scrutinee's type (a
+payload-less variant, or a tag of its error row) binds nothing
+(`[gram.pat.nullary.scope]`), so inside that arm the name is still the
+`let` outside the `match`: under `let Done`, `Done => { Done = 9 }` is
+this error at the assignment, and the fix is the same `var`.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_let_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_tag_assign.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_field.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0410_let_written_through_a_nullary_arm.snap
 
 ## E0411 — `str` has no character indexing
 
@@ -1054,7 +1068,13 @@ error-set alias named in a row carries no payload (`{IoErrors(int)}`,
 `[type.err.alias.union]`): the alias already names what its tags
 carry, so name the tag with the payload instead.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_duplicate_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_error_alias_payload.snap
+Only the entries a row spells itself are held to this
+(`[gram.type.row.dup]`). A tag an error-set alias brings is not one of
+them: `{A, x}` with `error A = {x}` is one `x` whichever order the
+entries stand in, and a payload that disagrees is E0609, not this
+error. `{A, x, x}` is still refused, at the second `x` the row spells.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__error_alias_union_own_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_own_dup_unused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_union_own_after_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_union_own_twice.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_row_own_dup_bare.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_duplicate_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_error_alias_payload.snap
 
 ## E0602 — the error row does not include this tag
 
@@ -1167,7 +1187,13 @@ the inner one — say so nominally: wrap one payload in its own type
 (`type FailWrapped = distinct str`) and carry `Fail(FailWrapped)`; a
 nominal wrapper is what layering honestly is.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__nested_row_conflict.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0609_layer_conflict.snap
+An error-set alias named in a row is one more layer
+(`[type.err.alias.union]`), in any order: `{A, Bad(str)}` with
+`error A = {Bad(int)}` is this error at the row's own spelling
+`Bad(str)`, as `{Bad(str), A}` is, and two aliases whose `Bad` payloads
+disagree are this error at the later alias entry.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_union_own_after_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_union_two_aliases_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__nested_row_conflict.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0609_layer_conflict.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0609_payload_spelled_after_an_alias.snap
 
 ## E0610 — error-set aliases form a cycle
 
@@ -1182,7 +1208,13 @@ terminates; only a loop is refused. Break it by spelling the tags in
 one of the members, or by giving the shared tags their own alias that
 both name.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0610_error_alias_cycle.snap
+The alias is checked where it is declared, whether or not any row names
+it (`[type.err.alias.cycle]`): an unused `error E = {E}` is refused too,
+so a library cannot ship an alias that fails only in its users' builds.
+The aliases are checked in declaration order, and the loop is reported
+where it closes: `A` inside `B`'s row, when `A` comes first.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle_pair_unused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle_unused.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0610_error_alias_cycle.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0610_unused_alias_names_itself.snap
 
 ## E0611 — `?` inside a `defer` or `errdefer` has nowhere to send its error
 
@@ -1743,6 +1775,37 @@ target keeps its floating-value ban; variadic entry saves of vector state
 are guarded by the incoming C caller's vector-register count.
 
 Fixtures: crates/wolf_sema/tests/snapshots/attr_diagnostics__e0826_apple_variadic.snap
+
+## E0827 — a name bound twice in one pattern or parameter list
+
+A pattern binds each name once (`[gram.pat.names]`): `P { a: x, b: x }`,
+`let (x, x) = pair` and `n @ n` each bind `x` (or `n`) a second time,
+and the second binding would silently hide the first one's value, at
+the same type or at another. The error is at the second binding, with
+the first as its secondary label. Usually one of the two is a typo for
+another name (`P { a: x, b: y }`); when a value is not needed, `_`
+matches it without binding. A parameter list binds each name once too,
+a function's and a closure's: `fn f(a: int, a: int)` is refused at the
+second `a`. A bare name that tests a case of the scrutinee's type binds
+nothing, so `(Red, Red)` is two tests, not two bindings. Each
+alternative of an or-pattern is its own pattern here (E0828 is about
+what they bind together), and a comma group (`let a = 1, a = a + 1`) is
+several patterns: the second `a` shadows the first, as two `let`s do.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__param_name_twice.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__param_name_twice_closure.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_name_twice_at.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_name_twice_for.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_name_twice_let.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_name_twice_nested.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_name_twice_struct.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_name_twice_types.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0827_parameter_declared_twice.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0827_struct_pattern_binds_a_name_twice.snap
+
+## E0828 — an or-pattern's alternatives bind different names
+
+Every alternative of an or-pattern binds the same names (`[gram.pat.or]`),
+because the arm's body sees each name whichever alternative matched: in
+`A(x) | B(_) => x`, nothing gives `x` a value when `B` matched. The
+error is at the alternative that lacks the name, and it names the name.
+Bind it in that alternative too (`A(x) | B(x)`), or write the
+alternatives as two arms when they cannot bind the same thing. A name
+the alternatives bind at two different types is E0401 at the later
+binding: each name an or-pattern binds has one type.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__or_pattern_binds_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__or_pattern_binds_missing_left.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0828_or_pattern_alternative_lacks_a_name.snap
 
 ## E1001 — this value was moved away (or never given one) before this use
 
@@ -2935,7 +2998,7 @@ applies: the snake-case spelling, or that spelling with a trailing
 makes the test the name looked like, which a binder refuses (E0806),
 so the test moves into a `match`.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_capitalized.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_else.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_for.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_imported__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_let.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_lowercase.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_at_name.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_else.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_for.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_imported.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_let_tuple.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_struct_field.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_two_homes.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0801_binder_binds.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_capitalized.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_else.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_for.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_imported__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_let.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__binder_variant_lowercase.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_let_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__nullary_arm_var_assign.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_at_name.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_else.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_for.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_imported.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_let_tuple.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_struct_field.snap, crates/wolf_sema/tests/snapshots/binder_diagnostics__w0801_binder_two_homes.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0801_binder_binds.snap
 
 ## W1001 — this region never allocates
 
