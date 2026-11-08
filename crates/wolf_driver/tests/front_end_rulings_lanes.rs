@@ -435,3 +435,70 @@ fn a_comma_group_rebinds_by_shadowing() {
 fn two_tests_of_one_variant_are_not_a_name_bound_twice() {
     runs("typecheck/pattern_variant_tests_twice.lu", 4);
 }
+
+// --------------- wolf-lang#1065, a tag spelled after an alias that has it --
+
+/// `{A, x}` with `error A = {x}` is one `x`, in this order as in the other.
+/// The compiled tiers refused this order as E0601; lupin 0.1.60 runs it.
+#[test]
+fn a_tag_spelled_after_its_alias_merges() {
+    runs("rows/error_alias_union_own_after.lu", 1);
+}
+
+/// `{A, Bad(str)}` with `error A = {Bad(int)}`: E0609 at the row's own
+/// spelling, where the compiled tiers said E0601. lupin 0.1.60 runs it.
+#[test]
+fn a_payload_conflict_after_an_alias_is_e0609_at_the_spelling() {
+    refused(
+        "rows/negative/error_alias_union_own_after_payload.lu",
+        "E0609",
+        &[(432, 440)],
+        &["error[E0609]: the tag `Bad`"],
+        "exit(1)",
+    );
+}
+
+/// Two aliases that disagree on `Bad`: E0609 at the later alias entry.
+#[test]
+fn two_aliases_that_disagree_are_e0609_at_the_later() {
+    refused(
+        "rows/negative/error_alias_union_two_aliases_payload.lu",
+        "E0609",
+        &[(372, 373)],
+        &["error[E0609]: the tag `Bad`"],
+        "exit(1)",
+    );
+}
+
+/// `{A, x, x}`: the first `x` merges with the alias's, and the second `x`
+/// the row spells is E0601. The compiled tiers reported both spellings.
+#[test]
+fn a_tag_the_row_spells_twice_after_its_alias_is_e0601_at_the_second() {
+    refused(
+        "rows/negative/error_alias_union_own_twice.lu",
+        "E0601",
+        &[(404, 405)],
+        &["the tag `x` appears twice in this error row"],
+        "exit(1)",
+    );
+}
+
+/// `{x, x}` and `{Io(str), Io}`: E0601 at the second spelling. lupin
+/// 0.1.60 runs both.
+#[test]
+fn a_tag_the_row_spells_twice_is_e0601() {
+    refused(
+        "rows/negative/error_row_own_dup_bare.lu",
+        "E0601",
+        &[(246, 247)],
+        &["the tag `x` appears twice in this error row"],
+        "exit(1)",
+    );
+    refused(
+        "rows/negative/dup_tags.lu",
+        "E0601",
+        &[(250, 252)],
+        &["the tag `Io` appears twice in this error row"],
+        "exit(7)",
+    );
+}
