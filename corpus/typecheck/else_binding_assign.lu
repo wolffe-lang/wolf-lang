@@ -1,0 +1,13 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.let
+//!
+//! An `else |…|` handler's names bind as `let` does ([gram.pat.let]):
+//! `n = n + 1` is E0410. Every machine let the handler assign it (exit 5).
+
+fn g() -> int ! {Bad(int)} { return Bad(4) }
+
+fn main() -> int {
+    g() else |Bad(n)| { n = n + 1
+ n }
+}
