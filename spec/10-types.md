@@ -1504,6 +1504,20 @@ precedent, `[type.trait.op.alias]`. The item grammar is
   associated-type bindings. `error A = {B}` with `error B = {A}` is
   one diagnostic naming the loop, not a hang and not a report per
   member. An alias may name an alias to any depth that terminates.
+  (Amended 2026-11-08, wolf-lang#1064.) The report does not wait for a
+  use: an alias is checked where it is declared, as every item is, so
+  `error E = {E}` is E0610 at the inner `E` whether or not any row
+  names `E`, and an unused `error A = {B}` with `error B = {A}` is one
+  E0610 too. The aliases are checked in declaration order, and a loop
+  is reported at the entry that closes it: `A` inside `B`'s row, when
+  `A` is declared first. The same check reads the rest of the alias's
+  own row there (a tag it spells twice is E0601, and two of its layers
+  that disagree on a tag's payload are E0609), so a library cannot
+  ship an alias that fails only in its users' builds, and a row that
+  names the alias reports none of it again. Files:
+  `rows/negative/error_alias_cycle_unused.lu`,
+  `rows/negative/error_alias_cycle_pair_unused.lu`,
+  `rows/negative/error_alias_own_dup_unused.lu`.
 - `[type.err.alias.diag]` **Diagnostics expand the alias and keep
   naming tags.** The missing-tag report that names exactly which tags
   a handler does not cover is the best thing rows have, and an alias
