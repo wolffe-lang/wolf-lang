@@ -1,0 +1,17 @@
+//! check: fail(E0609)
+//! phase: resolve
+//! conforms: type.err.alias.union, gram.type.row.flatten
+//!
+//! Two aliases whose `Bad` payloads disagree: E0609 at the later alias
+//! entry ([type.err.alias.union]), where the conflict is met. The
+//! compiled tiers already answered this; lupin ran it.
+
+error A = {Bad(int)}
+
+error B = {Bad(str)}
+
+fn g(ok: bool) -> int ! {A, B} {
+    if ok { 1 } else { return Bad(2) }
+}
+
+fn main() -> int { g(true) else 0 }
