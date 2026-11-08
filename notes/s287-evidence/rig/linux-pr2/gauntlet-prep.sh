@@ -27,6 +27,22 @@ v=$("$LUPIN" --version)
 printf '%s\n' "$v"
 case "$v" in *0.1.60*) ;; *) echo "lupin is not 0.1.60"; exit 1 ;; esac
 mkdir -p target
+# s287 (no take depends on the network): every download the setup steps below
+# would make was staged once, outside the locks, by rig/stage-inputs.sh, and is
+# read twice here against the head's pins. Each goes where its own script looks
+# first, so no tracked script changes: the bundle in fetch-entry-bundle's cache,
+# clef's tree (with the two archives its fetch-toolchain pins) and ligature's
+# tree at their default paths, and the wolf 0.2.36 toolchain as
+# build-test-ligature's WOLF input.
+grep -q '^SHA = "8210ac2223d969ab8f0845cc74950a1c68226b58b10dd083cd2e2113acd3e37a"$' ci/fetch-entry-bundle
+grep -q '^pin=996a3ccdf160923757c4ce6aa474efdffa2135b3$' ci/build-test-clef
+grep -q '^pin=c8ca1be4b3ccb7f8c425638e2d1145d21a62ee5a$' ci/build-test-ligature
+for pass in 1 2; do (cd /lane/inputs && sha256sum -c staged.sha256); done
+mkdir -p .link-bundle-cache
+cp /lane/inputs/link-bundle/ld02-musl-link-bundle.tar.gz .link-bundle-cache/
+cp -a /lane/inputs/test-clef-996a3ccd target/test-clef
+cp -a /lane/inputs/test-ligature-c8ca1be4 target/test-ligature-c8ca1be4b3ccb7f8c425638e2d1145d21a62ee5a
+staged_wolf=/lane/inputs/wolf-0.2.36/wolf-0.2.36-x86_64-unknown-linux-gnu/wolf
 # The setup scripts write their paths here exactly as they write CI's GITHUB_ENV.
 export GITHUB_ENV=/work/target/s287-ci-env
 : > "$GITHUB_ENV"
@@ -48,6 +64,6 @@ fi
 grep 'REFUSED ld02-musl-link-bundle.tar.gz: sha256' target/link-bundle-negative.log
 ci_step python3 -I ci/fetch-test-link-bundle
 # Its own pinned fetcher supplies the verified toolchain.
-ci_step ci/build-test-ligature
+ci_step env WOLF="$staged_wolf" ci/build-test-ligature
 echo "the setup scripts' environment ($GITHUB_ENV):"
 cat "$GITHUB_ENV"

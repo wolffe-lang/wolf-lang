@@ -123,5 +123,6 @@ pr2-m2-rebased-a7078094.log
 rig/linux-pr2/            the second change's Linux rig: the first change's (rig/linux/) with its
                           own base under the lane, its branch, its plant's three controls, and
                           gate-launch.sh, which starts it only after the first change's plant
-                          take, so the two never interleave on the slot's locks; its take scripts
-                          carry the first change's heat gate.
+                          take has passed, so the two never interleave on the slot's locks; its
+                          take scripts carry the first change's heat gate, and its prep the
+                          first change's staged inputs.
