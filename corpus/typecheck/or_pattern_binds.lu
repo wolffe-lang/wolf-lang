@@ -1,0 +1,18 @@
+//! check: run(exit=3)
+//! phase: mem
+//! conforms: gram.pat.or
+//!
+//! wolf-lang#1061: both alternatives bind `x` at `int`, so the arm sees
+//! one `x`, holding what the matching alternative bound
+//! ([gram.pat.or]). The checker accepts it. The compiled machines'
+//! join of an or-pattern's bindings is still being built, so they
+//! refuse the arm at `mem` as "cannot compile this yet" (the
+//! conservatism ledger); lupin runs it (exit 3).
+
+enum E { A(int), B(int) }
+
+fn f(v: E) -> int {
+    match v { A(x) | B(x) => x }
+}
+
+fn main() -> int { f(E.B(3)) }
