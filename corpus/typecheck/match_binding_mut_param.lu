@@ -1,6 +1,7 @@
 //! check: fail(E0410)
 //! phase: resolve
 //! conforms: gram.pat.let, mem.tier0.move
+//! warns: W1002
 //!
 //! The trap the rule closes ([gram.pat.let]): `x = x + 1` reads as an
 //! update to `v`, but `x` holds its own copy, never a place in the
