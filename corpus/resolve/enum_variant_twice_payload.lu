@@ -1,0 +1,14 @@
+//! check: fail(E0302)
+//! phase: parse
+//! conforms: gram.item.type.names
+//!
+//! wolf-lang#1060 with two payloads: `E.A(5)` built the first variant
+//! on every machine (exit 5), and no spelling reached the second. The
+//! second `A` is E0302 ([gram.item.type.names]).
+
+enum E { A(int), A(str) }
+
+fn main() -> int {
+    let v = E.A(5)
+    match v { A(n) => n }
+}
