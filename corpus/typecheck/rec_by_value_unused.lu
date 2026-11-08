@@ -1,0 +1,10 @@
+//! check: fail(E0404)
+//! phase: resolve
+//! conforms: type.rec
+//!
+//! A type is checked where it is declared ([type.rec]): no program can
+//! build this `N`, and every machine accepted the declaration.
+
+struct N { v: int, next: N }
+
+fn main() -> int { 0 }
