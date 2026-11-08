@@ -1,0 +1,14 @@
+//! check: fail(E0302)
+//! phase: parse
+//! conforms: gram.item.type.names
+//!
+//! A struct's fields have distinct names ([gram.item.type.names]), so
+//! the second `a` is E0302 at its declaration, used or not. Every
+//! machine accepted it.
+
+struct P {
+    a: int
+    a: int
+}
+
+fn main() -> int { 0 }
