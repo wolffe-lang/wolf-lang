@@ -1,0 +1,120 @@
+#!/bin/bash
+# s286: one chunk of the macOS record at the final head, run behind the Mac
+# lock (one take per chunk, at most 2 h) in the build worktree. Every line it
+# prints is inside a `START`/`END <step> exit=N secs=S` pair (the org's
+# gauntlet recorder, sourced, is the step function), each step's own output
+# indented two spaces, and it stops at the first nonzero step.
+#   rows   the build shard's steps that read the changed files: fmt,
+#          fmt-fixpoint, clippy on the runtime and on the signal gaps test,
+#          the runtime's whole test suite (the settle's unit rows, the
+#          arena row's empty macOS main, the pool's tests), the signal gaps
+#          rows (#781's race row runs here; the CPU-count row is linux-gnu
+#          only), the descriptor rows and the entry shim's rows;
+#   gates  the gates shard of `cargo xtask ci` (the macOS job
+#          `native gauntlet (macOS aarch64, gates)`), read from CI_STEPS and
+#          CI_SHARDS in xtask/src/main.rs AT THIS HEAD, run in its order with
+#          its arguments.
+#   all    rows, then gates, in one take of the lock.
+# The corpus step's own refusal lines (`corpus: <file>: …`) are repeated at
+# column 0 as `FAIL <file> …`, so a red row is named in the record.
+# the-first-mac's pinned toolchain (rustup 1.97.1) has no x86_64-unknown-none target,
+# and a lane installs nothing, so where the target is absent dist-smoke runs
+# as `dist-smoke:no-none-target`: `cargo xtask dist` with WOLF_RT_NONE_REQUIRE
+# unset for that step alone, the freestanding runtime's archive a loud skip
+# and everything else the step stages and smoke-runs as CI's (record try 1 at
+# daccfe79 was red there by exactly that: `rt-none: FAILED — … can't find
+# crate for core`).
+# usage: mac-gauntlet-chunk.sh <rows|gates|all|plant> <expected-sha>
+set -u
+exec 2>&1
+L=$LANE
+source "$L/rig/gauntlet-record.sh"
+chunk=${1:?chunk} expected=${2:?sha}
+export LUPIN=$LANE/inputs/lupin060/unpacked/lupin-0.1.60-aarch64-apple-darwin/lupin
+export WOLF_RT_NONE_REQUIRE=1 WOLF_TEST_NATIVE_REQUIRE=1 WOLF_PAIRING_REQUIRE_SIBLING=1
+indent() { "$@" 2>&1 | sed 's/^/  /'; return "${PIPESTATUS[0]}"; }
+head_ok() {
+  test "$(git rev-parse HEAD)" = "$expected" || { echo "head is not $expected"; return 1; }
+  test -z "$(git status --porcelain --untracked-files=no)" || { echo "tracked checkout is dirty"; return 1; }
+  git rev-parse HEAD && git log --oneline -1 && sw_vers && uname -a && rustc -V && cargo -V &&
+    cc --version | head -1 && "$LUPIN" --version && id &&
+    ps -o pid,sig,sigmask -p $$ && df -g $HOME | tail -1 &&
+    echo "CARGO_INCREMENTAL=$CARGO_INCREMENTAL CARGO_BUILD_JOBS=$CARGO_BUILD_JOBS TMPDIR=$TMPDIR CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-<unset>}"
+}
+gauntlet_step "$chunk-head" indent head_ok || exit $?
+corpus_step() {
+  local log rc
+  log=$(mktemp "$TMPDIR/s286-corpus.XXXXXX") || return 1
+  cargo xtask corpus > "$log" 2>&1; rc=$?
+  sed 's/^/  /' "$log"
+  grep -E '^corpus: [^ ]+\.lu: ' "$log" | sed -E 's/^corpus: ([^ ]+\.lu): (.*)$/FAIL \1 \2/'
+  rm -f "$log"
+  return $rc
+}
+ci_steps() {
+  python3 - <<'PY'
+import re
+s = open("xtask/src/main.rs").read()
+def block(name):
+    i = s.index("const " + name)
+    j = s.index("\n];", i)
+    return re.sub(r"//[^\n]*", "", s[i:j])
+steps = {}
+order = []
+for m in re.finditer(r'\(\s*"([^"]+)"\s*,\s*&\[(.*?)\]\s*,?\s*\)', block("CI_STEPS"), re.S):
+    steps[m.group(1)] = re.findall(r'"([^"]*)"', m.group(2))
+    order.append(m.group(1))
+shards = block("CI_SHARDS")
+m = re.search(r'\(\s*"gates"\s*,\s*&\[(.*?)\]\s*,?\s*\)', shards, re.S)
+gates = re.findall(r'"([^"]*)"', m.group(1))
+for name in order:
+    if name in gates:
+        print(name + "\t" + "\x1f".join(steps[name]))
+PY
+}
+none_target() { rustup target list --installed 2>/dev/null | grep -qx x86_64-unknown-none; }
+dist_without_none() {
+  echo "s286: rustup $(rustc -V | cut -d' ' -f2) here has no x86_64-unknown-none target (installed: $(rustup target list --installed | tr '\n' ' '))"
+  echo "s286: so WOLF_RT_NONE_REQUIRE is unset for this step alone (CI sets it, with the target added): cargo $*"
+  env -u WOLF_RT_NONE_REQUIRE cargo "$@"
+}
+run_rows() {
+  gauntlet_step fmt indent cargo fmt --all --check || return $?
+  gauntlet_step fmt-fixpoint indent cargo xtask fmt-fixpoint || return $?
+  gauntlet_step clippy-rt indent cargo clippy --locked -p wolf_rt --all-targets -- -D warnings || return $?
+  gauntlet_step clippy-signal-gaps indent cargo clippy --locked -p wolf_driver --test signal_gaps_lanes -- -D warnings || return $?
+  gauntlet_step rt-tests indent cargo test --locked -p wolf_rt || return $?
+  gauntlet_step signal-gaps-rows indent cargo test --locked -p wolf_driver --test signal_gaps_lanes -- --nocapture || return $?
+  gauntlet_step stdfd-rows indent cargo test --locked -p wolf_driver --test stdfd_lanes -- --nocapture || return $?
+  gauntlet_step entry-shim-rows indent cargo test --locked -p wolf_codegen_clif --test entry_shim -- --nocapture || return $?
+}
+run_gates() {
+  local steps name args n=0
+  steps=$(ci_steps) || return 1
+  while IFS=$'\t' read -r name args; do
+    n=$((n + 1))
+    if [ "$name" = corpus ]; then
+      gauntlet_step corpus corpus_step || return $?
+      continue
+    fi
+    IFS=$'\x1f' read -r -a argv <<< "$args"
+    if [ "$name" = dist-smoke ] && ! none_target; then
+      gauntlet_step dist-smoke:no-none-target indent dist_without_none "${argv[@]}" || return $?
+      continue
+    fi
+    gauntlet_step "$name" indent cargo "${argv[@]}" || return $?
+  done <<< "$steps"
+  [ "$n" -eq 15 ] || { printf 'START gates-count\n  the gates shard has %s steps here, not 15\nEND gates-count exit=1 secs=0\n' "$n"; return 1; }
+}
+case $chunk in
+  rows) run_rows || exit $? ;;
+  gates) run_gates || exit $? ;;
+  all) run_rows || exit $?; run_gates || exit $? ;;
+  plant)
+    gauntlet_step plant-build indent cargo build --locked -p wolf_driver -p wolf_rt || exit $?
+    gauntlet_step plant-corpus corpus_step || exit $?
+    ;;
+  *) exit 2 ;;
+esac
+gauntlet_step "$chunk-clean" indent bash -c 'git diff --exit-code --stat && test -z "$(git status --porcelain --untracked-files=no)"' || exit $?
+exit 0
