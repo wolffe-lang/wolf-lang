@@ -597,9 +597,12 @@ impl CpuReads {
             String::from_utf8_lossy(&out.stderr)
         );
         let text = std::fs::read_to_string(&trace).expect("the trace reads");
+        // `strace -f -o` writes the thread's id, then spaces, then the
+        // call: `3899  openat(…)`.
         let lines: Vec<(&str, &str)> = text
             .lines()
             .filter_map(|l| l.trim_start().split_once(' '))
+            .map(|(t, call)| (t, call.trim_start()))
             .collect();
         let main = lines
             .first()
