@@ -1368,6 +1368,73 @@ impl<'a> Checker<'a> {
         );
     }
 
+    /// `[gram.pat.or]` (wolf-lang#1061): every alternative of an
+    /// or-pattern binds the same names, each at one type. `alts` holds each
+    /// alternative's span and the names it bound. A name another alternative
+    /// binds and this one does not is E0828 at this alternative; a name
+    /// bound at two types is E0401 at the later binding.
+    fn or_pattern_agreement(&mut self, alts: &[(Span, Vec<(String, Span, TyId)>)]) {
+        let mut all: Vec<(String, Span, TyId)> = Vec::new();
+        for (_, names) in alts {
+            for (n, s, t) in names {
+                match all.iter().find(|(m, ..)| m == n) {
+                    None => all.push((n.clone(), *s, *t)),
+                    Some(&(_, first, first_ty)) => {
+                        let snap = self.vars.snapshot();
+                        if unify(&mut self.lo.table, &mut self.vars, first_ty, *t).is_err() {
+                            self.vars.rollback(snap);
+                            let here = self.show(*t);
+                            let there = self.show(first_ty);
+                            self.diags.push(
+                                Diagnostic::error(
+                                    codes::E0401,
+                                    *s,
+                                    format!(
+                                        "`{n}` is `{there}` in one alternative of this \
+                                         or-pattern and `{here}` in this one"
+                                    ),
+                                )
+                                .with_label(format!("`{n}` is `{here}` here"))
+                                .with_secondary(first, format!("`{n}` is `{there}` here"))
+                                .with_note(
+                                    "each name an or-pattern binds has one type, since the \
+                                     arm's body sees it whichever alternative matched \
+                                     ([gram.pat.or]). Give the two values different names \
+                                     in two arms, or match them so they bind one type.",
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        for (alt, names) in alts {
+            for (n, first, _) in &all {
+                if names.iter().any(|(m, ..)| m == n) {
+                    continue;
+                }
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0828,
+                        *alt,
+                        format!(
+                            "`{n}` is bound by another alternative of this or-pattern, \
+                             but not by this one"
+                        ),
+                    )
+                    .with_label(format!("this alternative binds no `{n}`"))
+                    .with_secondary(*first, format!("`{n}` is bound here"))
+                    .with_note(format!(
+                        "every alternative of an or-pattern binds the same names, because \
+                         the arm's body sees `{n}` whichever alternative matched \
+                         ([gram.pat.or]). Bind `{n}` in this alternative too, or write \
+                         the alternatives as separate arms."
+                    )),
+                );
+            }
+        }
+    }
+
     /// The innermost binding of `name` in the lexical scopes: its scope
     /// index and origin. `None` for a name the scopes do not hold (module
     /// state, or an error already reported).
@@ -12293,6 +12360,7 @@ impl<'a> Checker<'a> {
                     bound.push((sub.span, self.close_names()));
                     alts.push(alt?);
                 }
+                self.or_pattern_agreement(&bound);
                 let mut once: Vec<(String, Span, TyId)> = Vec::new();
                 for (n, s, t) in bound.into_iter().flat_map(|(_, names)| names) {
                     if !once.iter().any(|(m, ..)| *m == n) {
