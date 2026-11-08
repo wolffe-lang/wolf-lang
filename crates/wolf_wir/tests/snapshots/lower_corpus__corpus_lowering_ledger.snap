@@ -901,6 +901,9 @@ resolve/broken_sibling/entry.lu: not mem-clean (pre-wir rungs own it)
 resolve/cycle/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/dup_bare/clash.lu: not mem-clean (pre-wir rungs own it)
 resolve/dupdef/main.lu: not mem-clean (pre-wir rungs own it)
+resolve/enum_variant_case_distinct.lu: lowers
+resolve/enum_variant_twice.lu: not mem-clean (pre-wir rungs own it)
+resolve/enum_variant_twice_payload.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
 resolve/leaf_twins/main.lu: lowers
 resolve/pkgvis/main.lu: lowers
@@ -910,7 +913,9 @@ resolve/same_name/main.lu: lowers
 resolve/sibling_diag/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/standalone_pair/left.lu: lowers
 resolve/standalone_pair/right.lu: lowers
+resolve/struct_field_twice.lu: not mem-clean (pre-wir rungs own it)
 resolve/two_mod/main.lu: lowers
+resolve/type_decl_member_twice.lu: not mem-clean (pre-wir rungs own it)
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
@@ -936,6 +941,7 @@ rows/error_alias_qualified/main.lu: lowers
 rows/error_alias_row.lu: lowers
 rows/error_alias_transparent.lu: lowers
 rows/error_alias_union.lu: lowers
+rows/error_alias_union_own_after.lu: lowers
 rows/eu_bind_empty_row.lu: lowers
 rows/eu_bind_empty_row_handled.lu: lowers
 rows/eu_bind_empty_row_unit.lu: lowers
@@ -961,8 +967,15 @@ rows/negative/ctor_arg_unresolved.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_cycle.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_cycle_pair_unused.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_cycle_unused.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_open.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_own_dup_unused.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_private/main.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_union_own_after_payload.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_union_own_twice.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_union_two_aliases_payload.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_row_own_dup_bare.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/first_boundary_before_lex.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/first_keyword_pattern.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/first_parse_before_lex.lu: not mem-clean (pre-wir rungs own it)
@@ -1144,6 +1157,7 @@ typecheck/int_truth_wrap_unsigned.lu: lowers
 typecheck/interp_spec_on_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_field_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/let_group_shadow.lu: lowers
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/list_lit_elem_i32.lu: lowers
@@ -1168,6 +1182,10 @@ typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
 typecheck/nested_fn_capture.lu: not mem-clean (pre-wir rungs own it)
 typecheck/nested_fn_value.lu: lowers
+typecheck/nullary_arm_field_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nullary_arm_let_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nullary_arm_tag_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nullary_arm_var_assign.lu: lowers
 typecheck/numlit_ambiguity_named.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_annotation_float.lu: lowers
 typecheck/numlit_arith_through.lu: lowers
@@ -1192,7 +1210,22 @@ typecheck/numlit_radix.lu: lowers
 typecheck/numlit_u64_edge.lu: lowers
 typecheck/numlit_value_refused.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_wrapping_countdown.lu: lowers
+typecheck/or_pattern_binds.lu: refused — or-patterns with payload bindings (join params)
+typecheck/or_pattern_binds_at.lu: refused — or-patterns over product patterns (join params)
+typecheck/or_pattern_binds_missing.lu: not mem-clean (pre-wir rungs own it)
+typecheck/or_pattern_binds_missing_left.lu: not mem-clean (pre-wir rungs own it)
+typecheck/or_pattern_binds_nested.lu: refused — a binding inside an or-pattern alternative (join params)
+typecheck/or_pattern_binds_types.lu: not mem-clean (pre-wir rungs own it)
+typecheck/param_name_twice.lu: not mem-clean (pre-wir rungs own it)
+typecheck/param_name_twice_closure.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_name_twice_at.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_name_twice_for.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_name_twice_let.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_name_twice_nested.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_name_twice_struct.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_name_twice_types.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
+typecheck/pattern_variant_tests_twice.lu: lowers
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut_param.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
