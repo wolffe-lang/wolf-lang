@@ -1,0 +1,37 @@
+//! check: run(exit=6)
+//! phase: run
+//! conforms: type.rec
+//!
+//! The legal counterparts ([type.rec]): `List`, `Map` and a `handle` hold
+//! their element elsewhere, and so does a generic struct whose parameter
+//! sits in a `List`, so none of these types contains itself by value.
+
+enum L { Nil, Cons(int, List[L]) }
+
+enum J { Num(int), Obj(Map[str, J]) }
+
+struct N { v: int, next: handle N }
+
+struct Bag[T] { items: List[T] }
+
+enum K { Leaf(int), Node(Bag[K]) }
+
+fn sum(l: L) -> int {
+    match l {
+        Nil => 0,
+        Cons(n, rest) => {
+            var s = n
+            for r in rest { s = s + sum(r) }
+            s
+        },
+    }
+}
+
+fn main() -> int {
+    let l = L.Cons(1, [L.Cons(2, [L.Nil]), L.Cons(3, [])])
+    let j = J.Num(0)
+    let k = K.Node(Bag { items: [K.Leaf(0)] })
+    let a = match j { Num(n) => n, Obj(_) => 1 }
+    let b = match k { Leaf(n) => n, Node(_) => 0 }
+    sum(l) + a + b
+}
