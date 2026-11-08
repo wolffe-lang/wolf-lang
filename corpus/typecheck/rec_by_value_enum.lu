@@ -12,5 +12,8 @@ enum L { Nil, Cons(int, L) }
 
 fn main() -> int {
     let l = L.Cons(1, L.Nil)
-    match l { Nil => 0, Cons(n, _) => n }
+    match l {
+        Nil => 0,
+        Cons(n, _) => n,
+    }
 }

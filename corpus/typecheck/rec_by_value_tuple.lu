@@ -9,5 +9,8 @@ enum L { Nil, Cons((int, L)) }
 
 fn main() -> int {
     let l = L.Cons((1, L.Nil))
-    match l { Nil => 0, Cons(p) => 7 }
+    match l {
+        Nil => 0,
+        Cons(p) => 7,
+    }
 }

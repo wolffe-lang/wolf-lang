@@ -13,5 +13,8 @@ enum L { Nil, More(N) }
 
 fn main() -> int {
     let l = L.More(N { v: 5, next: L.Nil })
-    match l { Nil => 0, More(n) => n.v }
+    match l {
+        Nil => 0,
+        More(n) => n.v,
+    }
 }

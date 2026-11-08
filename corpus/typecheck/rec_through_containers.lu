@@ -31,7 +31,13 @@ fn main() -> int {
     let l = L.Cons(1, [L.Cons(2, [L.Nil]), L.Cons(3, [])])
     let j = J.Num(0)
     let k = K.Node(Bag { items: [K.Leaf(0)] })
-    let a = match j { Num(n) => n, Obj(_) => 1 }
-    let b = match k { Leaf(n) => n, Node(_) => 0 }
+    let a = match j {
+        Num(n) => n,
+        Obj(_) => 1,
+    }
+    let b = match k {
+        Leaf(n) => n,
+        Node(_) => 0,
+    }
     sum(l) + a + b
 }
