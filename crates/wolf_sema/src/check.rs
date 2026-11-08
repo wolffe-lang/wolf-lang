@@ -590,6 +590,17 @@ struct BindState {
     /// index of the scope its pattern binds into, and each bare name that
     /// pattern read as a case test rather than a binding.
     arm_tests: Vec<(usize, Vec<(String, Span)>)>,
+    /// One frame per pattern (or parameter list) being bound: each name it
+    /// has bound, where, at what type (`[gram.pat.names]`, E0827). An
+    /// or-pattern's alternatives each take a frame of their own.
+    names: Vec<(NameFrame, Vec<(String, Span, TyId)>)>,
+}
+
+/// What a [`BindState::names`] frame is the names of: E0827's wording.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NameFrame {
+    Pattern,
+    Params,
 }
 
 struct Checker<'a> {
@@ -1296,6 +1307,7 @@ impl<'a> Checker<'a> {
     }
 
     fn bind(&mut self, name: String, span: Span, ty: TyId) {
+        self.note_bound_name(&name, span, ty);
         self.locals.push((name.clone(), span, ty));
         if let Some(top) = self.scopes.last_mut() {
             top.push((name, ty));
@@ -1304,6 +1316,56 @@ impl<'a> Checker<'a> {
                 o.push((origin, span));
             }
         }
+    }
+
+    /// Open a frame of bound names: one pattern, or one parameter list
+    /// (`[gram.pat.names]`).
+    fn open_names(&mut self, frame: NameFrame) {
+        self.binds.names.push((frame, Vec::new()));
+    }
+
+    /// Close the innermost frame of bound names, handing back its names.
+    fn close_names(&mut self) -> Vec<(String, Span, TyId)> {
+        self.binds.names.pop().map(|(_, n)| n).unwrap_or_default()
+    }
+
+    /// E0827 (`[gram.pat.names]`, wolf-lang#1062, #1073): a name the open
+    /// pattern or parameter list has already bound. `"_"` binds nothing.
+    fn note_bound_name(&mut self, name: &str, span: Span, ty: TyId) {
+        let Some((frame, names)) = self.binds.names.last_mut() else {
+            return;
+        };
+        if name == "_" {
+            return;
+        }
+        let Some(&(_, first, _)) = names.iter().find(|(n, ..)| n == name) else {
+            names.push((name.to_string(), span, ty));
+            return;
+        };
+        let (place, note) = match frame {
+            NameFrame::Pattern => (
+                "this pattern",
+                "a pattern binds each name once ([gram.pat.names]): a second binding \
+                 would hide the first one's value. Give one of them another name, or \
+                 match the value you do not need with `_`.",
+            ),
+            NameFrame::Params => (
+                "this parameter list",
+                "a parameter list binds each name once ([gram.pat.names]): the later \
+                 parameter would hide the earlier one for the whole body. Give one of \
+                 them another name.",
+            ),
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0827,
+                span,
+                format!("`{name}` is bound twice in {place}"),
+            )
+            .with_label("bound again here")
+            .with_secondary(first, "first bound here")
+            .with_note(note),
+        );
     }
 
     /// The innermost binding of `name` in the lexical scopes: its scope
@@ -1485,9 +1547,11 @@ impl<'a> Checker<'a> {
         self.ret = Some((sig.ret, body.name.clone(), because));
         self.row_fix = row_fix_of(&sig, &self.lo.table);
         self.push_scope();
+        self.open_names(NameFrame::Params);
         for p in &sig.params {
             self.bind(p.name.clone(), p.span, p.ty);
         }
+        self.close_names();
         let Some(block) = d.body() else {
             self.pop_scope();
             return Ok(()); // extern/bodyless: nothing to check
@@ -1542,9 +1606,11 @@ impl<'a> Checker<'a> {
                 self.ret = Some((m.sig.ret, m.name.clone(), because));
                 self.row_fix = row_fix_of(&m.sig, &self.lo.table);
                 self.push_scope();
+                self.open_names(NameFrame::Params);
                 for p in &m.sig.params {
                     self.bind(p.name.clone(), p.span, p.ty);
                 }
+                self.close_names();
                 let Some(block) = d.body() else {
                     self.pop_scope();
                     return Ok(());
@@ -1674,9 +1740,11 @@ impl<'a> Checker<'a> {
         self.ret = Some((m.sig.ret, m.name.clone(), because));
         self.row_fix = row_fix_of(&m.sig, &self.lo.table);
         self.push_scope();
+        self.open_names(NameFrame::Params);
         for p in &m.sig.params {
             self.bind(p.name.clone(), p.span, p.ty);
         }
+        self.close_names();
         let Some(block) = d.body() else {
             self.pop_scope();
             return Ok(());
@@ -4045,7 +4113,9 @@ impl<'a> Checker<'a> {
         // The binder's names carry its provenance (s287); the initializer
         // above was checked first, so nothing inside it takes this origin.
         let outer = self.binds.origin.replace(origin);
+        self.open_names(NameFrame::Pattern);
         let bound = self.bind_pattern(pat, ty);
+        self.close_names();
         self.binds.origin = outer;
         bound
     }
@@ -6547,7 +6617,9 @@ impl<'a> Checker<'a> {
                         // for every error, so a pattern that leaves a
                         // tag uncovered is E0809 with the
                         // match-over-row shape as the fix.
+                        self.open_names(NameFrame::Pattern);
                         let p = self.match_pattern(pat, row)?;
+                        self.close_names();
                         let zonked = zonk(&mut self.lo.table, &self.vars, row);
                         if let Some(col) = self.col_ty(zonked, 0) {
                             let tys = [col];
@@ -6578,7 +6650,9 @@ impl<'a> Checker<'a> {
                         }
                     } else {
                         // The caught error's type is the row itself.
+                        self.open_names(NameFrame::Pattern);
                         self.bind_pattern(pat, row)?;
+                        self.close_names();
                     }
                 }
                 if let Some(fb) = d.fallback() {
@@ -11985,10 +12059,12 @@ impl<'a> Checker<'a> {
                 .arm_tests
                 .push((self.scopes.len() - 1, Vec::new()));
             if let Some(p) = arm.pattern() {
+                self.open_names(NameFrame::Pattern);
                 let lowered = match &fallible {
                     Some((ok, row, tags)) => self.fallible_pattern(p, *ok, *row, tags)?,
                     None => self.match_pattern(p, scrut_ty)?,
                 };
+                self.close_names();
                 rec.arms.push((lowered, arm.guard().is_some(), p.span));
             }
             if let Some(g) = arm.guard()
@@ -12205,9 +12281,26 @@ impl<'a> Checker<'a> {
                 }
             }
             SyntaxKind::OrPat => {
+                // Each alternative is one pattern for `[gram.pat.names]`;
+                // the or-pattern binds each of its names once in the
+                // pattern around it.
                 let mut alts = Vec::new();
+                let mut bound: Vec<(Span, Vec<(String, Span, TyId)>)> = Vec::new();
                 for sub in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
-                    alts.push(self.match_pattern(sub, scrut)?);
+                    let frame = self.binds.names.last().map_or(NameFrame::Pattern, |f| f.0);
+                    self.open_names(frame);
+                    let alt = self.match_pattern(sub, scrut);
+                    bound.push((sub.span, self.close_names()));
+                    alts.push(alt?);
+                }
+                let mut once: Vec<(String, Span, TyId)> = Vec::new();
+                for (n, s, t) in bound.into_iter().flat_map(|(_, names)| names) {
+                    if !once.iter().any(|(m, ..)| *m == n) {
+                        once.push((n, s, t));
+                    }
+                }
+                for (n, s, t) in once {
+                    self.note_bound_name(&n, s, t);
                 }
                 Ok(Pat::Or(alts))
             }
@@ -13005,7 +13098,9 @@ impl<'a> Checker<'a> {
         };
         self.push_scope();
         if let Some(p) = d.pattern() {
+            self.open_names(NameFrame::Pattern);
             self.bind_pattern(p, elem)?;
+            self.close_names();
         }
         if let Some(b) = d.body() {
             let unit = self.lo.table.unit();
@@ -13324,6 +13419,7 @@ impl<'a> Checker<'a> {
                 });
                 self.push_scope();
                 self.level += 1;
+                self.open_names(NameFrame::Params);
                 for (p, &pty) in params.iter().zip(ptys.iter()) {
                     if let Some(t) = p.ty() {
                         let ann = self.lower_ty(t);
@@ -13343,6 +13439,7 @@ impl<'a> Checker<'a> {
                         self.bind(name, n.span, pty);
                     }
                 }
+                self.close_names();
                 let was = self.in_closure;
                 self.in_closure = true;
                 let was_defer = self.in_defer.take();
@@ -13453,6 +13550,7 @@ impl<'a> Checker<'a> {
         self.push_scope();
         self.level += 1;
         let mut ptys = Vec::new();
+        self.open_names(NameFrame::Params);
         for p in &params {
             let ty = match p.ty() {
                 Some(t) => self.lower_ty(t),
@@ -13469,6 +13567,7 @@ impl<'a> Checker<'a> {
             }
             ptys.push(ty);
         }
+        self.close_names();
         let was = self.in_closure;
         self.in_closure = true;
         let was_defer = self.in_defer.take();
@@ -13583,9 +13682,11 @@ impl<'a> Checker<'a> {
         });
         self.push_scope();
         self.level += 1;
+        self.open_names(NameFrame::Params);
         for (name, span, ty) in binds {
             self.bind(name, span, ty);
         }
+        self.close_names();
         let was = self.in_closure;
         self.in_closure = true;
         let was_defer = self.in_defer.take();
