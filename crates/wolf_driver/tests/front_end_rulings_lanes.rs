@@ -294,7 +294,7 @@ fn a_struct_field_declared_twice_is_e0302() {
     refused(
         "resolve/struct_field_twice.lu",
         "E0302",
-        &[(269, 270)],
+        &[(270, 271)],
         &["error[E0302]: the field `a` is declared twice in this struct"],
         "exit(0)",
     );
@@ -330,7 +330,7 @@ fn a_struct_pattern_that_binds_a_name_twice_is_e0827() {
     refused(
         "typecheck/pattern_name_twice_struct.lu",
         "E0827",
-        &[(376, 377)],
+        &[(384, 385)],
         &[
             "error[E0827]: `x` is bound twice in this pattern",
             "first bound here",
@@ -346,7 +346,7 @@ fn a_name_bound_twice_at_two_types_is_e0827() {
     refused(
         "typecheck/pattern_name_twice_types.lu",
         "E0827",
-        &[(333, 334)],
+        &[(341, 342)],
         &["`x` is bound twice in this pattern"],
         "exit(2)",
     );
@@ -370,7 +370,7 @@ fn a_name_on_both_sides_of_at_is_e0827() {
     refused(
         "typecheck/pattern_name_twice_at.lu",
         "E0827",
-        &[(214, 215)],
+        &[(222, 223)],
         &["`x` is bound twice in this pattern"],
         "exit(5)",
     );
@@ -382,7 +382,7 @@ fn a_nested_name_bound_twice_is_e0827() {
     refused(
         "typecheck/pattern_name_twice_nested.lu",
         "E0827",
-        &[(246, 247)],
+        &[(254, 255)],
         &["`x` is bound twice in this pattern"],
         "exit(5)",
     );
@@ -543,7 +543,7 @@ fn an_or_pattern_alternative_that_lacks_a_name_is_e0828() {
     refused(
         "typecheck/or_pattern_binds_missing.lu",
         "E0828",
-        &[(412, 416)],
+        &[(420, 424)],
         &[
             "error[E0828]: `x` is bound by another alternative of this or-pattern, but not by this one",
             "[gram.pat.or]",
@@ -558,7 +558,7 @@ fn the_left_alternative_that_lacks_a_name_is_e0828() {
     refused(
         "typecheck/or_pattern_binds_missing_left.lu",
         "E0828",
-        &[(317, 321)],
+        &[(325, 329)],
         &["this alternative binds no `x`"],
         "exit(1)",
     );
@@ -570,7 +570,7 @@ fn an_or_pattern_name_at_two_types_is_e0401() {
     refused(
         "typecheck/or_pattern_binds_types.lu",
         "E0401",
-        &[(375, 376)],
+        &[(383, 384)],
         &["`x` is `int` in one alternative of this or-pattern and `bool` in this one"],
         "exit(1)",
     );
