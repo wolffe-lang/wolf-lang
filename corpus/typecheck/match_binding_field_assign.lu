@@ -1,0 +1,18 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.let, gram.item.let
+//!
+//! Fields included ([gram.pat.let]): `p.a = 9` writes the arm's own copy
+//! of the payload, and is E0410 as it is for a `let`. Every machine ran
+//! it (exit 9).
+
+struct P { a: int }
+
+enum E { A(P) }
+
+fn f(v: E) -> int {
+    match v { A(p) => { p.a = 9
+ p.a } }
+}
+
+fn main() -> int { f(E.A(P { a: 3 })) }
