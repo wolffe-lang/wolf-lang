@@ -19,7 +19,7 @@
 //! equality, and every operation on them is NotYetCheckable — the
 //! checker never guesses.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use wolf_ast::{
     ConstDecl, EnumDecl, FnDecl, GreenNode, PathType, StructDecl, SyntaxKind, TypeDecl,
@@ -354,8 +354,24 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
         table: TypeTable::new(),
         alias_stack: Vec::new(),
         err_alias_stack: Vec::new(),
+        err_alias_loops: BTreeSet::new(),
+        err_alias_loop_diags: Vec::new(),
         diags: Vec::new(),
     };
+    // wolf-lang#1064 (`[type.err.alias.cycle]`, as amended): every error-set
+    // alias's own row is checked where the alias is declared, used or not,
+    // and before any row that names one — so a loop is reported where it
+    // closes in declaration order, once, and a row that names an alias
+    // reports nothing about the alias's own row again.
+    for &m in &pkg.topo {
+        for item in &pkg.tables[m].items {
+            if item.kind == ItemKind::Error {
+                lower.check_error_alias(m, &item.name);
+            }
+        }
+    }
+    let loops = std::mem::take(&mut lower.err_alias_loop_diags);
+    lower.diags.extend(loops);
     let mut modules: Vec<BTreeMap<String, ItemSig>> = vec![BTreeMap::new(); pkg.modules.len()];
     for &m in &pkg.topo {
         let mut sigs = BTreeMap::new();
@@ -532,6 +548,15 @@ pub(crate) struct Lower<'a> {
     /// namespaces of thing, and a cycle in one is not a cycle in the
     /// other.
     err_alias_stack: Vec<(usize, String)>,
+    /// The error-alias loops already reported, each as the set of its
+    /// members (wolf-lang#1064, `[type.err.alias.cycle]`: one report per
+    /// loop, wherever the walk meets it again).
+    err_alias_loops: BTreeSet<Vec<(usize, String)>>,
+    /// Their reports, kept apart from `diags` so that an expansion's quiet
+    /// re-reading of an alias's row cannot drop them. [`build_sigs`] adds
+    /// them to its diagnostics; a body's lowering meets only loops the
+    /// declarations already reported, and drops them.
+    err_alias_loop_diags: Vec<Diagnostic>,
     pub(crate) diags: Vec<Diagnostic>,
 }
 
@@ -542,6 +567,8 @@ impl<'a> Lower<'a> {
             table,
             alias_stack: Vec::new(),
             err_alias_stack: Vec::new(),
+            err_alias_loops: BTreeSet::new(),
+            err_alias_loop_diags: Vec::new(),
             diags: Vec::new(),
         }
     }
@@ -1118,6 +1145,22 @@ impl<'a> Lower<'a> {
         Some((item.file, d.row()?))
     }
 
+    /// Check the error-set alias `name`'s own row where the alias is
+    /// declared (wolf-lang#1064, `[type.err.alias.cycle]`): the row is
+    /// elaborated once with the alias on the expansion stack, so a loop
+    /// through it is E0610 at the entry that closes it, and its own
+    /// repeated tags (E0601) and its layers' payload conflicts (E0609) are
+    /// reported here, used or not. The tags are not kept: a row that names
+    /// the alias expands it again from its syntax, quietly.
+    fn check_error_alias(&mut self, module: usize, name: &str) {
+        let Some((file, row)) = self.error_alias_row(module, name) else {
+            return;
+        };
+        self.err_alias_stack.push((module, name.to_string()));
+        let _ = self.lower_row_parts(module, file, &[], row);
+        self.err_alias_stack.pop();
+    }
+
     /// The tags and tail of one `! {…}` row, with error-set aliases
     /// expanded in place (`[type.err.alias.union]`).
     fn lower_row_parts(
@@ -1223,6 +1266,19 @@ impl<'a> Lower<'a> {
                 }
                 let key = (amod, aname.clone());
                 if self.err_alias_stack.contains(&key) {
+                    // One report per loop (`[type.err.alias.cycle]`): the
+                    // walk at each declaration meets a loop once from each
+                    // member, and a row that names one meets it again.
+                    let mut members: Vec<(usize, String)> = self
+                        .err_alias_stack
+                        .iter()
+                        .skip_while(|k| **k != key)
+                        .cloned()
+                        .collect();
+                    members.sort();
+                    if !self.err_alias_loops.insert(members) {
+                        continue;
+                    }
                     let loop_text: Vec<String> = self
                         .err_alias_stack
                         .iter()
@@ -1230,7 +1286,7 @@ impl<'a> Lower<'a> {
                         .map(|(_, n)| n.clone())
                         .chain(std::iter::once(name.clone()))
                         .collect();
-                    self.diags.push(
+                    self.err_alias_loop_diags.push(
                         Diagnostic::error(
                             codes::E0610,
                             span,
@@ -1248,7 +1304,13 @@ impl<'a> Lower<'a> {
                     continue;
                 }
                 self.err_alias_stack.push(key);
+                // The alias's own row was checked where the alias is
+                // declared (wolf-lang#1064, `check_error_alias`), so what
+                // its expansion finds there again is not reported again;
+                // a loop's one report is kept by `err_alias_loops`.
+                let mark = self.diags.len();
                 let (inner, inner_tail) = self.lower_row_parts(amod, afile, generics, arow);
+                self.diags.truncate(mark);
                 self.err_alias_stack.pop();
                 if inner_tail.is_some() && tail.is_none() {
                     tail = inner_tail;
