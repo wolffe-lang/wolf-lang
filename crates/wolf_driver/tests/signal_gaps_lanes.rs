@@ -472,7 +472,11 @@ fn run_with_one_closed(exe: &Path, out: &Path, pin: Option<&test_cpus::Pin>) -> 
 /// both tiers, all cpus and under `taskset` on four CPUs of the allocation. Red at 0.2.32:
 /// `fs_fstat(1)` answered ok 760,739 times of 13,607,478 (kasumi), the
 /// wake pipe each wait made sitting on the closed 1 until the runtime
-/// moved it.
+/// moved it. Red again at 0.2.38 on hosts that give the program 8 or more
+/// CPUs (#1051, `ok` 7 to 27 in one window per run): glibc's CPU-count
+/// read for its arena limit, on a starting worker, was the descriptor on
+/// the closed 1. s286 settles the limit before any worker runs
+/// (`glibc_reads_the_cpu_count_only_before_any_worker_runs`).
 #[cfg(unix)]
 #[test]
 fn a_descriptor_wait_makes_no_descriptor_while_the_program_runs() {

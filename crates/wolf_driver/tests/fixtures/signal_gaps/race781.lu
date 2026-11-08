@@ -8,7 +8,11 @@
 //! a wake pipe of its own and the host put an end of it on the closed 1
 //! until the runtime moved it, so `fs_fstat(1)` answered ok there: 760,739
 //! of 13,607,478 asks on kasumi at 0.2.32. Now the pipe is made before
-//! `main`, and K is 0 by construction. Nothing is sent.
+//! `main`, and K is 0 by construction. At 0.2.38 K was 7 to 27 again on
+//! hosts that give the program 8 or more CPUs: glibc's CPU-count read for
+//! its arena limit opened a file on the closed 1 as the workers started
+//! (#1051). Since s286 the runtime settles that limit before any worker
+//! runs. Nothing is sent.
 
 fn main() -> int {
     let args = env_args()
