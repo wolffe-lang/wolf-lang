@@ -1,0 +1,16 @@
+//! check: fail(E0828)
+//! phase: resolve
+//! conforms: gram.pat.or
+//!
+//! wolf-lang#1061: `B(_)` binds no `x`, so nothing gives the arm's `x` a
+//! value when `B` matched. E0828 at the alternative that lacks it
+//! ([gram.pat.or]). The checker accepted it, both machines refused it
+//! at `mem`, and lupin called `x` unsupported at resolve.
+
+enum E { A(int), B(int) }
+
+fn f(v: E) -> int {
+    match v { A(x) | B(_) => x }
+}
+
+fn main() -> int { f(E.B(3)) }
