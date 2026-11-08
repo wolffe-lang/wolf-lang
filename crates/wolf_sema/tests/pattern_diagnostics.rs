@@ -415,3 +415,16 @@ fn e0410_let_written_through_a_nullary_arm() {
          gone => { gone = 9 },\n        n => {},\n    }\n    gone\n}\n",
     );
 }
+
+/// wolf-lang#1062 (`[gram.pat.let]`): a name an arm's pattern binds binds as
+/// `let` does, so assigning it is E0410, with the binder named and the
+/// `var x = x` fix in the note.
+#[test]
+fn e0410_match_binding_assigned() {
+    snap_one(
+        "e0410_match_binding_assigned",
+        "enum E { A(int) }\n\n\
+         fn f(v: E) -> int {\n    match v {\n        A(x) => {\n            x = x + 1\n            x\n        },\n    }\n}\n\n\
+         fn main() -> int { f(E.A(3)) }\n",
+    );
+}
