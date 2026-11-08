@@ -4,4 +4,4 @@ expression: dump
 ---
 StructDecl 332..360 name=N fields=2
 EnumDecl 362..385 name=L variants=2
-FnDecl 387..492 name=main body=Block
+FnDecl 387..513 name=main body=Block

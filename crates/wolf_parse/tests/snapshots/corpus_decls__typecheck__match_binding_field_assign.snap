@@ -4,5 +4,5 @@ expression: dump
 ---
 StructDecl 253..272 name=P fields=1
 EnumDecl 274..289 name=E variants=1
-FnDecl 291..353 name=f body=Block
-FnDecl 355..394 name=main body=Block
+FnDecl 291..397 name=f body=Block
+FnDecl 399..438 name=main body=Block
