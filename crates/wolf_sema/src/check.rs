@@ -563,6 +563,35 @@ struct LitPat {
     exclusive_after: Option<String>,
 }
 
+/// How a binding the checker made was introduced: what E0410 needs to know
+/// about a name in the cases only a type can decide (s287).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Origin {
+    /// A parameter, a `var`, a `const`, a `when` operand, an item: nothing
+    /// this checker refuses a write to.
+    Plain,
+    /// A `let` binder; the span is its `let` keyword (E0410's secondary
+    /// label and fix-it anchor).
+    Let(Span),
+}
+
+/// The checker's view of binding provenance, beside its lexical scopes
+/// (s287). The resolve rung reports E0410 for every write it can see is to
+/// a `let`; a bare arm name is a test or a binding by the scrutinee's type
+/// (`[gram.pat.binder]`), so the writes through an arm that tested and
+/// bound nothing are this checker's (`[gram.pat.nullary.scope]`).
+#[derive(Default)]
+struct BindState {
+    /// Parallel to `Checker::scopes`: each binding's origin and binder span.
+    origins: Vec<Vec<(Origin, Span)>>,
+    /// The origin [`Checker::bind`] records; set around a binder's pattern.
+    origin: Option<Origin>,
+    /// Per `match` arm (and refutable `else` handler) being checked: the
+    /// index of the scope its pattern binds into, and each bare name that
+    /// pattern read as a case test rather than a binding.
+    arm_tests: Vec<(usize, Vec<(String, Span)>)>,
+}
+
 struct Checker<'a> {
     sigs: &'a SigTables,
     module: usize,
@@ -694,6 +723,8 @@ struct Checker<'a> {
     /// E1103. The stack survives into closures deliberately — the
     /// clause's word is *lexically*.
     when_stack: Vec<Span>,
+    /// Binding provenance for the checker's E0410 (s287).
+    binds: BindState,
     /// s160: `spawn proc f(args)` targets resolved in this body
     /// (`[mem.region.proc]`), in visit order.
     proc_entries: Vec<(usize, String)>,
@@ -868,6 +899,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         bounds: traits::Bounds::new(),
         generic_info: BTreeMap::new(),
         self_ty: None,
+        binds: BindState::default(),
         obligations: Vec::new(),
         sat_cache: HashMap::new(),
         map_index_place: None,
@@ -1058,6 +1090,7 @@ pub(crate) fn collect_body_rows(
         bounds: traits::Bounds::new(),
         generic_info: BTreeMap::new(),
         self_ty: None,
+        binds: BindState::default(),
         obligations: Vec::new(),
         sat_cache: HashMap::new(),
         map_index_place: None,
@@ -1237,11 +1270,13 @@ impl<'a> Checker<'a> {
     fn push_scope(&mut self) {
         self.scopes.push(Vec::new());
         self.scope_fns.push(Vec::new());
+        self.binds.origins.push(Vec::new());
     }
 
     fn pop_scope(&mut self) {
         self.scopes.pop();
         self.scope_fns.pop();
+        self.binds.origins.pop();
     }
 
     /// wolf-lang#466: the moded nested fn the innermost binding of
@@ -1264,7 +1299,72 @@ impl<'a> Checker<'a> {
         self.locals.push((name.clone(), span, ty));
         if let Some(top) = self.scopes.last_mut() {
             top.push((name, ty));
+            let origin = self.binds.origin.unwrap_or(Origin::Plain);
+            if let Some(o) = self.binds.origins.last_mut() {
+                o.push((origin, span));
+            }
         }
+    }
+
+    /// The innermost binding of `name` in the lexical scopes: its scope
+    /// index and origin. `None` for a name the scopes do not hold (module
+    /// state, or an error already reported).
+    fn binding_origin(&self, name: &str) -> Option<(usize, Origin)> {
+        for (depth, scope) in self.scopes.iter().enumerate().rev() {
+            if let Some(i) = scope.iter().rposition(|(n, _)| n == name) {
+                let origin = self
+                    .binds
+                    .origins
+                    .get(depth)
+                    .and_then(|o| o.get(i))
+                    .map_or(Origin::Plain, |(o, _)| *o);
+                return Some((depth, origin));
+            }
+        }
+        None
+    }
+
+    /// wolf-lang#1059 (`[gram.pat.nullary.scope]`): an assignment whose
+    /// root is a `let` that an enclosing arm's bare name tested and did
+    /// not shadow. The resolve rung read that name as the arm's binding,
+    /// so the write was this checker's to refuse; it is the resolve rung's
+    /// E0410 exactly, with the arm's test named.
+    fn check_arm_let_write(&mut self, place: &GreenNode) {
+        let Some((root, ident, through_field)) = crate::letcheck::assigned_root(place) else {
+            return;
+        };
+        let name = self.text(ident);
+        let (depth, kw) = match self.binding_origin(&name) {
+            Some((depth, Origin::Let(kw))) => (depth, kw),
+            Some(_) => return,
+            None => match self.sigs.get(self.module, &name) {
+                Some(ItemSig::Global(g)) if g.kind == crate::sig::GlobalKind::Let => match g.let_kw {
+                    Some(kw) => (0, kw),
+                    None => return,
+                },
+                _ => return,
+            },
+        };
+        let local = self.binding_origin(&name).is_some();
+        let Some(test) = self.binds.arm_tests.iter().rev().find_map(|(arm, tests)| {
+            let outside = !local || depth < *arm;
+            tests
+                .iter()
+                .find(|(n, _)| outside && *n == name)
+                .map(|(_, s)| *s)
+        }) else {
+            return;
+        };
+        let span = if through_field { place.span } else { root.span };
+        self.diags.push(
+            crate::letcheck::e0410(&name, span, kw, through_field)
+                .with_secondary(test, format!("this pattern tests `{name}` and binds nothing"))
+                .with_note(
+                    "a bare name that spells a case of the scrutinee's type tests it and \
+                     binds nothing, so inside its arm every name resolves as it does \
+                     outside the `match` ([gram.pat.nullary.scope]).",
+                ),
+        );
     }
 
     /// The innermost binding of `name`. Shadowing-correct by
@@ -3867,9 +3967,13 @@ impl<'a> Checker<'a> {
             // left to right — a later binder may read an earlier one
             // (D63).
             SyntaxKind::LetDecl => {
+                let origin = s
+                    .tokens()
+                    .find(|t| t.kind == SyntaxKind::LetKw)
+                    .map_or(Origin::Plain, |t| Origin::Let(t.span));
                 if let Some(d) = LetDecl::cast(s) {
                     for b in d.binders() {
-                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node)?;
+                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node, origin)?;
                     }
                 }
                 Ok(())
@@ -3877,7 +3981,11 @@ impl<'a> Checker<'a> {
             SyntaxKind::VarDecl => {
                 if let Some(d) = VarDecl::cast(s) {
                     for b in d.binders() {
-                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node)?;
+                        self.check_binding_stmt(
+                            Some((b.pattern, b.ty, b.init)),
+                            b.node,
+                            Origin::Plain,
+                        )?;
                     }
                 }
                 Ok(())
@@ -3918,6 +4026,7 @@ impl<'a> Checker<'a> {
         &mut self,
         parts: Option<(Option<&GreenNode>, Option<&GreenNode>, Option<&GreenNode>)>,
         stmt: &GreenNode,
+        origin: Origin,
     ) -> R<()> {
         let Some((pat, ann, init)) = parts else {
             return Ok(());
@@ -3933,7 +4042,12 @@ impl<'a> Checker<'a> {
         };
         let name = single_ident(pat, self.src());
         let ty = self.binding_init(ann, init, name, stmt.span)?;
-        self.bind_pattern(pat, ty)
+        // The binder's names carry its provenance (s287); the initializer
+        // above was checked first, so nothing inside it takes this origin.
+        let outer = self.binds.origin.replace(origin);
+        let bound = self.bind_pattern(pat, ty);
+        self.binds.origin = outer;
+        bound
     }
 
     /// The shared `annotation? = init?` typing of let/var/const.
@@ -4367,7 +4481,11 @@ impl<'a> Checker<'a> {
         };
         // E0410 — `let` is immutable — is the RESOLVE rung's law
         // (s29, DIV-2026-010): binding structure is lexical, so the
-        // rejection fires before this checker ever runs.
+        // rejection fires before this checker ever runs. The one write it
+        // cannot see is through an arm whose bare name tested and bound
+        // nothing, since only the scrutinee's type says so
+        // (`[gram.pat.nullary.scope]`, wolf-lang#1059): that E0410 is ours.
+        self.check_arm_let_write(place);
         // E1101 — a task closure writing captured enclosing state
         // ([conc.task.spawn]) — is this rung's, checked on the place
         // before its type (the capture law is about the binding).
@@ -11863,6 +11981,9 @@ impl<'a> Checker<'a> {
         let mut joined: Option<(TyId, Span)> = None;
         for arm in d.arms() {
             self.push_scope();
+            self.binds
+                .arm_tests
+                .push((self.scopes.len() - 1, Vec::new()));
             if let Some(p) = arm.pattern() {
                 let lowered = match &fallible {
                     Some((ok, row, tags)) => self.fallible_pattern(p, *ok, *row, tags)?,
@@ -11897,6 +12018,7 @@ impl<'a> Checker<'a> {
                     }
                 }
             }
+            self.binds.arm_tests.pop();
             self.pop_scope();
         }
         self.match_recs.push(rec);
@@ -12025,6 +12147,14 @@ impl<'a> Checker<'a> {
                             );
                         }
                         let arity = payload.len();
+                        // A test binds nothing (`[gram.pat.nullary.scope]`):
+                        // the arm's body still sees the outer `name`.
+                        let arm_scope = self.scopes.len().wrapping_sub(1);
+                        if let Some((at, tests)) = self.binds.arm_tests.last_mut()
+                            && *at == arm_scope
+                        {
+                            tests.push((name.clone(), t.span));
+                        }
                         return Ok(Pat::Ctor {
                             ctor: Ctor::Named(name),
                             args: vec![Pat::Wild; arity],
