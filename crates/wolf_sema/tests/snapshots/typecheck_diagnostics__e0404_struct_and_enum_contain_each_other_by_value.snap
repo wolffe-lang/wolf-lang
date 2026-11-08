@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0404]: `N` contains itself by value, so it would have no finite size
+ --> mem:///main.lu:1:20
+  |
+1 | struct N { v: int, next: L }
+  |                    ^^^^ `N` reaches itself through here: N -> L -> N
+  |
+  = note: a struct's fields, an enum's payloads and a tuple's elements are laid out inline, so a
+    type that reaches itself through them alone would be a value with no finite size
+    ([type.rec]). Recurse through a container that holds its element elsewhere: `List[N]`,
+    `Map[K, N]`, or a `handle N` into a pool.
