@@ -1115,6 +1115,7 @@ typecheck/closure_module_to_module/main.lu: lowers
 typecheck/closure_param_call.lu: lowers
 typecheck/closure_return.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
+typecheck/else_binding_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/enum_str_bare_choice.lu: lowers
 typecheck/enum_union_three.lu: lowers
 typecheck/enum_union_tree.lu: lowers
@@ -1134,6 +1135,7 @@ typecheck/fn_value_captured_var_write.lu: not mem-clean (pre-wir rungs own it)
 typecheck/fn_value_capturing.lu: lowers
 typecheck/fn_value_import/main.lu: lowers
 typecheck/fn_value_two_file_module/main.lu: lowers
+typecheck/for_binding_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/generic_bind_once.lu: not mem-clean (pre-wir rungs own it)
 typecheck/generic_bind_scalar.lu: not mem-clean (pre-wir rungs own it)
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
@@ -1169,6 +1171,11 @@ typecheck/map_compound_absent.lu: not mem-clean (pre-wir rungs own it)
 typecheck/map_struct_key.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_arm_product_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_arm_product_unreachable.lu: lowers
+typecheck/match_binding_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_binding_at_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_binding_field_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_binding_mut_param.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_binding_var_shadow.lu: lowers
 typecheck/match_chain_reuse.lu: lowers
 typecheck/match_exhaustive.lu: lowers
 typecheck/match_guard_const.lu: lowers
@@ -1226,10 +1233,18 @@ typecheck/pattern_name_twice_struct.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_name_twice_types.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_variant_tests_twice.lu: lowers
+typecheck/rec_by_value_enum.lu: not mem-clean (pre-wir rungs own it)
+typecheck/rec_by_value_errunion.lu: not mem-clean (pre-wir rungs own it)
+typecheck/rec_by_value_generic.lu: not mem-clean (pre-wir rungs own it)
+typecheck/rec_by_value_mutual.lu: not mem-clean (pre-wir rungs own it)
+typecheck/rec_by_value_tuple.lu: not mem-clean (pre-wir rungs own it)
+typecheck/rec_by_value_unused.lu: not mem-clean (pre-wir rungs own it)
+typecheck/rec_through_containers.lu: lowers
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut_param.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
+typecheck/select_binding_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/str_slice_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/straight_line_as_char.lu: lowers
 typecheck/straight_line_as_narrow.lu: lowers
