@@ -1,0 +1,12 @@
+//! check: run(exit=2)
+//! phase: run
+//! conforms: gram.item.type.names
+//!
+//! Names compare as spelled ([gram.item.type.names]): `a` and `A` are
+//! two variants, and each arm tests its own.
+
+enum E { a, A }
+
+fn main() -> int {
+    match E.A { a => 1, A => 2 }
+}
