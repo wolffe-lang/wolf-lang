@@ -14,12 +14,14 @@
 //! the innermost binding of a name decides (a `var` shadowing a `let`
 //! assigns fine, and vice versa fails); a second `let x = …` *shadows*
 //! rather than assigns; parameters are not `let` bindings (their
-//! mutability is the mode system's business); pattern bindings in
-//! `match`/`for`/`else |e|` arms are not `let` bindings either. A bare
-//! arm name is read here as the arm's binding; when the scrutinee's type
-//! makes it a case test instead, it binds nothing, and the write through
-//! it to an outer `let` is the checker's E0410 (`[gram.pat.nullary.scope]`,
-//! wolf-lang#1059), built by [`e0410`] so both rungs say the same thing.
+//! mutability is the mode system's business). Pattern bindings in
+//! `match`/`for`/`else |e|`/`select` arms bind as `let` does
+//! (`[gram.pat.let]`), but whether a bare arm name binds at all is the
+//! scrutinee's type's question, so the checker reports those writes, and
+//! the write through an arm name that tested a case to an outer `let`
+//! (`[gram.pat.nullary.scope]`, wolf-lang#1059), with [`e0410`]'s text, so
+//! both rungs say the same thing. This walk reads every pattern name as
+//! assignable, so it never reports a write the checker should judge.
 //! Item-level `let` globals are immutable exactly like locals
 //! (`[gram.item.let]` — item-level and statement-level share the
 //! grammar).
