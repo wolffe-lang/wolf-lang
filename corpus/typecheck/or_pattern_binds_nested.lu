@@ -1,0 +1,17 @@
+//! check: run(exit=3)
+//! phase: mem
+//! conforms: gram.pat.or
+//!
+//! An or-pattern at depth binds the same names in each alternative
+//! ([gram.pat.or]). The checker accepts it; the compiled machines refuse
+//! it at `mem` until the join is built; lupin runs it (exit 3).
+
+enum I { A(int), B(int) }
+
+enum O { W(I) }
+
+fn f(v: O) -> int {
+    match v { W(A(x) | B(x)) => x }
+}
+
+fn main() -> int { f(O.W(I.B(3))) }
