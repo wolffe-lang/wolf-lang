@@ -1,0 +1,14 @@
+//! check: fail(E0610)
+//! phase: resolve
+//! conforms: type.err.alias.cycle
+//!
+//! wolf-lang#1064, the two-alias loop: unused, it is still one E0610
+//! ([type.err.alias.cycle]), not one per member. The aliases are
+//! checked in declaration order, so the loop is reported where it
+//! closes: at `A` inside `B`'s row.
+
+error A = {B}
+
+error B = {A}
+
+fn main() -> int { 0 }
