@@ -15,7 +15,11 @@
 //! assigns fine, and vice versa fails); a second `let x = …` *shadows*
 //! rather than assigns; parameters are not `let` bindings (their
 //! mutability is the mode system's business); pattern bindings in
-//! `match`/`for`/`else |e|` arms are not `let` bindings either.
+//! `match`/`for`/`else |e|` arms are not `let` bindings either. A bare
+//! arm name is read here as the arm's binding; when the scrutinee's type
+//! makes it a case test instead, it binds nothing, and the write through
+//! it to an outer `let` is the checker's E0410 (`[gram.pat.nullary.scope]`,
+//! wolf-lang#1059), built by [`e0410`] so both rungs say the same thing.
 //! Item-level `let` globals are immutable exactly like locals
 //! (`[gram.item.let]` — item-level and statement-level share the
 //! grammar).
@@ -223,67 +227,18 @@ impl Walk<'_> {
     /// they agreed, so the differential could not see it — which made
     /// `let` a rule about rebinding rather than about the value, and
     /// left E0410's own note ("`let` names a value once") overstating
-    /// what the compiler enforced.
+    /// what the compiler enforced. The place's root is
+    /// [`assigned_root`]'s.
     fn check_place(&mut self, place: &GreenNode) {
-        // Peel parens: `(x) = 2` assigns to `x`. Then peel field
-        // projections: `r.cents = 5` and `r.inner.n = 5` write the
-        // value `r` names.
-        let mut root = place;
-        let mut through_field = false;
-        loop {
-            match root.kind {
-                SyntaxKind::ParenExpr => match ParenExpr::cast(root).and_then(|p| p.expr()) {
-                    Some(inner) => root = inner,
-                    None => return,
-                },
-                SyntaxKind::MemberExpr => match MemberExpr::cast(root).and_then(|m| m.base()) {
-                    Some(base) => {
-                        root = base;
-                        through_field = true;
-                    }
-                    None => return,
-                },
-                _ => break,
-            }
-        }
-        if root.kind != SyntaxKind::PathExpr {
-            return;
-        }
-        let Some(t) = PathExpr::cast(root).and_then(|p| p.ident()) else {
+        let Some((root, ident, through_field)) = assigned_root(place) else {
             return;
         };
-        let name = self.text(t.span);
+        let name = self.text(ident);
         let Some(kw) = self.let_provenance(&name) else {
             return;
         };
         let span = if through_field { place.span } else { root.span };
-        let (message, note) = if through_field {
-            (
-                format!("`{name}` is bound with `let`, so its fields cannot be assigned either"),
-                "`let` names a value once, and the value includes its fields: a \
-                 `let` binding's fields are as immutable as the binding \
-                 ([gram.item.let]). Declare the binding with `var` to update it \
-                 in place, or build the value complete in the `let`.",
-            )
-        } else {
-            (
-                format!("`{name}` is bound with `let`, so it cannot be assigned again"),
-                "`let` names a value once. Declare the binding with `var` \
-                 to update it in place, or shadow it with a second \
-                 `let` if the next value is really a new thing.",
-            )
-        };
-        self.sink.push(
-            Diagnostic::error(codes::E0410, span, message)
-                .with_label("this assignment needs a mutable binding")
-                .with_secondary(kw, "the binding is made immutable here")
-                .with_note(note)
-                .with_suggestion(Suggestion::new(
-                    "make the binding mutable: `var`",
-                    vec![(kw, "var".to_string())],
-                    Applicability::Maybe,
-                )),
-        );
+        self.sink.push(e0410(&name, span, kw, through_field));
     }
 
     /// Expressions, generically: scope-forming shapes get their scopes;
@@ -405,6 +360,63 @@ impl Walk<'_> {
             }
         }
     }
+}
+
+/// The binding an assignment's place writes: parens peeled (`(x) = 2`
+/// assigns `x`), then field projections (`r.cents = 5` and `r.inner.n = 5`
+/// write the value `r` names). `(the path, its name token, through a
+/// field)`; `None` for a place rooted anywhere else (an index, a call).
+pub(crate) fn assigned_root(place: &GreenNode) -> Option<(&GreenNode, Span, bool)> {
+    let mut root = place;
+    let mut through_field = false;
+    loop {
+        match root.kind {
+            SyntaxKind::ParenExpr => root = ParenExpr::cast(root)?.expr()?,
+            SyntaxKind::MemberExpr => {
+                root = MemberExpr::cast(root)?.base()?;
+                through_field = true;
+            }
+            _ => break,
+        }
+    }
+    if root.kind != SyntaxKind::PathExpr {
+        return None;
+    }
+    let t = PathExpr::cast(root)?.ident()?;
+    Some((root, t.span, through_field))
+}
+
+/// E0410 for an assignment to a `let`-bound name (or, `through_field`, to
+/// one of its fields) at `span`, the binding's `let` keyword at `kw`. The
+/// resolve rung's walk reports it here; the checker reports the same
+/// diagnostic where only a type can tell that a bare arm name bound
+/// nothing (`[gram.pat.nullary.scope]`, wolf-lang#1059).
+pub(crate) fn e0410(name: &str, span: Span, kw: Span, through_field: bool) -> Diagnostic {
+    let (message, note) = if through_field {
+        (
+            format!("`{name}` is bound with `let`, so its fields cannot be assigned either"),
+            "`let` names a value once, and the value includes its fields: a \
+             `let` binding's fields are as immutable as the binding \
+             ([gram.item.let]). Declare the binding with `var` to update it \
+             in place, or build the value complete in the `let`.",
+        )
+    } else {
+        (
+            format!("`{name}` is bound with `let`, so it cannot be assigned again"),
+            "`let` names a value once. Declare the binding with `var` \
+             to update it in place, or shadow it with a second \
+             `let` if the next value is really a new thing.",
+        )
+    };
+    Diagnostic::error(codes::E0410, span, message)
+        .with_label("this assignment needs a mutable binding")
+        .with_secondary(kw, "the binding is made immutable here")
+        .with_note(note)
+        .with_suggestion(Suggestion::new(
+            "make the binding mutable: `var`",
+            vec![(kw, "var".to_string())],
+            Applicability::Maybe,
+        ))
 }
 
 // The unit tests live with the resolve suite
