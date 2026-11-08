@@ -1,0 +1,22 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.nullary.scope, gram.item.let
+//! warns: W0801
+//!
+//! wolf-lang#1059 through a field: the arm binds nothing, so `Done.a`
+//! is a field of the `let`, and a `let`'s fields are as immutable as
+//! the binding ([gram.item.let]): E0410 over the place. Every machine
+//! wrote the field (exit 9).
+
+struct P { a: int }
+
+enum E { Done, Other }
+
+fn main() -> int {
+    let Done = P { a: 8 }
+    match E.Done {
+        Done => { Done.a = 9 },
+        Other => {},
+    }
+    Done.a
+}
