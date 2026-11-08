@@ -661,3 +661,101 @@ fn a_cycle_through_an_error_union_is_e0404() {
 fn recursion_through_containers_is_legal() {
     runs("typecheck/rec_through_containers.lu", 6);
 }
+
+// ---------------- wolf-lang#1062, a pattern's bindings bind as `let` does --
+
+/// An arm's binding assigned: E0410 at the assignment. Every machine let
+/// the arm write it (`exit(4)`); lupin 0.1.60 still does.
+#[test]
+fn assigning_a_match_binding_is_e0410() {
+    refused(
+        "typecheck/match_binding_assign.lu",
+        "E0410",
+        &[(380, 381)],
+        &[
+            "error[E0410]: `x` is bound by a pattern, so it cannot be assigned",
+            "var x = x",
+            "[gram.pat.let]",
+        ],
+        "exit(4)",
+    );
+}
+
+/// A `for` header's binding.
+#[test]
+fn assigning_a_for_binding_is_e0410() {
+    refused(
+        "typecheck/for_binding_assign.lu",
+        "E0410",
+        &[(290, 291)],
+        &["`x` is bound by a pattern, so it cannot be assigned"],
+        "exit(12)",
+    );
+}
+
+/// An `else |Bad(n)|` handler's binding.
+#[test]
+fn assigning_an_else_binding_is_e0410() {
+    refused(
+        "typecheck/else_binding_assign.lu",
+        "E0410",
+        &[(312, 313)],
+        &["`n` is bound by a pattern, so it cannot be assigned"],
+        "exit(5)",
+    );
+}
+
+/// A `select` receive's binding.
+#[test]
+fn assigning_a_select_binding_is_e0410() {
+    refused(
+        "typecheck/select_binding_assign.lu",
+        "E0410",
+        &[(347, 348)],
+        &["`n` is bound by a pattern, so it cannot be assigned"],
+        "exit(5)",
+    );
+}
+
+/// A field of an arm's binding: E0410 over the place.
+#[test]
+fn assigning_a_match_bindings_field_is_e0410() {
+    refused(
+        "typecheck/match_binding_field_assign.lu",
+        "E0410",
+        &[(335, 338)],
+        &["`p` is bound by a pattern, so its fields cannot be assigned either"],
+        "exit(9)",
+    );
+}
+
+/// The name before `@`.
+#[test]
+fn assigning_an_at_name_is_e0410() {
+    refused(
+        "typecheck/match_binding_at_assign.lu",
+        "E0410",
+        &[(231, 232)],
+        &["`n` is bound by a pattern, so it cannot be assigned"],
+        "exit(6)",
+    );
+}
+
+/// The trap the rule closes: a write that reads as an update to a `mut`
+/// parameter wrote the arm's own copy, and every machine answered 3.
+#[test]
+fn the_mut_parameter_trap_is_e0410() {
+    refused(
+        "typecheck/match_binding_mut_param.lu",
+        "E0410",
+        &[(394, 395)],
+        &["`x` is bound by a pattern, so it cannot be assigned"],
+        "exit(3)",
+    );
+}
+
+/// The fix: shadow the binding with a `var`, and update that.
+#[test]
+fn a_var_shadow_of_a_match_binding_is_assignable() {
+    runs("typecheck/match_binding_var_shadow.lu", 4);
+}
