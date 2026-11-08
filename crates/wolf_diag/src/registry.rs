@@ -1148,6 +1148,12 @@ associated-type bindings. An alias may name an alias to any depth that
 terminates; only a loop is refused. Break it by spelling the tags in
 one of the members, or by giving the shared tags their own alias that
 both name.
+
+The alias is checked where it is declared, whether or not any row names
+it (`[type.err.alias.cycle]`): an unused `error E = {E}` is refused too,
+so a library cannot ship an alias that fails only in its users' builds.
+The aliases are checked in declaration order, and the loop is reported
+where it closes: `A` inside `B`'s row, when `A` comes first.
 "#);
 
 code!(E0611, "`?` inside a `defer` or `errdefer` has nowhere to send its error", r#"
