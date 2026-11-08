@@ -1,0 +1,12 @@
+//! check: fail(E0404)
+//! phase: resolve
+//! conforms: type.rec
+//!
+//! A generic struct is walked at its arguments ([type.rec]): `Box[L]`
+//! holds its `T`, here an `L`, inline. Every machine accepted it unused.
+
+struct Box[T] { v: T }
+
+enum L { Nil, Cons(int, Box[L]) }
+
+fn main() -> int { 0 }
