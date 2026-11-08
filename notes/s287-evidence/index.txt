@@ -120,6 +120,19 @@ pr2-m2-rebased-a7078094.log
                           at the rebased code: the checks, the lanes test (47 passed), the corpus
                           (1327 files, 0 bad), conformance (733 anchors), the adjusted fixture's
                           suites and every corpus-walking snapshot suite with no update.
+pr2-m2-walkers-red-b0dcac64.log
+                          the corpus walkers at the head before either formatting fix: wolf_fmt's
+                          corpus identity test fails at the first change's row; every other
+                          walker passes.
+pr2-m2-fmt-red-ac71f6d3.log
+                          the identity test with the first change's rows formatted and this
+                          change's not yet: it fails at typecheck/else_binding_assign.lu.
+pr2-m2-refresh-42ed8846.log
+                          the snapshot suites with insta's update on after this change's rows
+                          were formatted: only those rows' lexer and parser snapshots move.
+pr2-m2-fixed-0c23228c.log the checks with the corpus walkers, the lanes test (47 passed), the
+                          corpus (1327 files, 0 bad), conformance, the adjusted fixture's suites
+                          and every snapshot suite at the formatted code. Every END exit=0.
 rig/linux-pr2/            the second change's Linux rig: the first change's (rig/linux/) with its
                           own base under the lane, its branch, its plant's three controls, and
                           gate-launch.sh, which starts it only after the first change's plant
