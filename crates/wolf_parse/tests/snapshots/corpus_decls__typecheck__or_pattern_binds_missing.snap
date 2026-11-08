@@ -3,5 +3,5 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 EnumDecl 344..369 name=E variants=2
-FnDecl 371..425 name=f body=Block
-FnDecl 427..457 name=main body=Block
+FnDecl 371..438 name=f body=Block
+FnDecl 440..470 name=main body=Block
