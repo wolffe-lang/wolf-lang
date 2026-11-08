@@ -11,7 +11,9 @@ enum I { A(int), B(int) }
 enum O { W(I) }
 
 fn f(v: O) -> int {
-    match v { W(A(x) | B(x)) => x }
+    match v {
+        W(A(x) | B(x)) => x,
+    }
 }
 
 fn main() -> int { f(O.W(I.B(3))) }

@@ -7,7 +7,10 @@
 //! until the join is built; lupin runs it (exit 21).
 
 fn f(v: int) -> int {
-    match v { n @ 1..=9 | n @ 20..=29 => n, _ => 0 }
+    match v {
+        n @ 1..=9 | n @ 20..=29 => n,
+        _ => 0,
+    }
 }
 
 fn main() -> int { f(21) }

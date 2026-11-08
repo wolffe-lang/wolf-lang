@@ -10,7 +10,9 @@
 enum E { A(int), B(bool) }
 
 fn f(v: E) -> int {
-    match v { A(x) | B(x) => 1 }
+    match v {
+        A(x) | B(x) => 1,
+    }
 }
 
 fn main() -> int { f(E.B(true)) }
