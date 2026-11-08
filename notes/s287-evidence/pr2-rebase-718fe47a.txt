@@ -1,55 +1,55 @@
 s287, the second change: the second rebase. With the first change, onto wolf-lang trunk 718fe47a
 (the first change's rebase-718fe47a.txt says why), and then onto the first change's rebased head
-9045a3c4. Each commit before it, and the commit it became, with the same subject. Every change is
+ac13525e. Each commit before it, and the commit it became, with the same subject. Every change is
 the same but the changelog's, whose context moved, and the evidence index's and the rig copy's, where the
 first change's rebased evidence already carries part of this change's. The logs named pr2- ran at the commit
 their names give, before this rebase, except pr2-m2-rebased-a7078094.log.
 
-40020d4e -> 428993a3  Specify that a type contains itself only through a container ([type.rec])
-dcac4bab -> 9f4354b1  Add the by-value recursive enum row
-98efe598 -> ad2c3b59  Add the recursion through a tuple payload row
-092fdc31 -> e39d7627  Add the struct and enum cycle row
-ae0e9cfc -> 65f68731  Add the unused struct that holds itself row
-2990c0b4 -> c3a92477  Add the cycle through a generic struct row
-7b2faffc -> 14087517  Add the cycle through an error union row
-bcc8a663 -> 8198b53a  Add the recursion through containers control row
-e36ec807 -> 835867e2  Place [type.rec]'s report at the first-declared type's member
-bd23112b -> b3036e7f  Name the member the struct and enum cycle row is reported at
-9704538a -> e8fd0e60  Run the recursive-type rows on four machines
-b10f8c3c -> 589faef9  Refuse a type that contains itself by value (E0404)
-e9046887 -> 59b6a727  Explain E0404 for a type that contains itself by value
-94eba7a0 -> acdd87ac  Add a rendered snapshot for E0404 on a type that holds itself
-dec460e0 -> 93d4da9b  Specify that pattern bindings bind as let does ([gram.pat.let])
-d604e6eb -> 7d052001  Add the match binding assigned row
-563eafc4 -> 1c01617c  Add the for binding assigned row
-a6690b33 -> 3bde136b  Add the else handler binding assigned row
-780119bb -> 56a139be  Add the select receive assigned row
-d5291a7d -> a344fa6c  Add the match binding's field assigned row
-959ea5c8 -> a7e62e2f  Add the @ name assigned row
-77d30ebf -> 00296cbc  Add the mut parameter trap row
-53b18974 -> 9e1c3926  Add the var shadow control row
-0bc1c037 -> 6b84c492  Run the pattern-binding rows on four machines
-38314dd4 -> b2a61ad9  Copy the loop index into a var before the induction witness writes it
-21eb122a -> 3edfa948  Copy the loop index into a var in the induction-written fixture
-f9e07283 -> cb0ba1d2  Refuse a write to a name a pattern bound outside let and var (E0410)
-d0159584 -> 9165d887  Say which rung judges a write to a pattern's name
-d690440e -> 853788d0  Explain E0410 for a pattern's bindings
-81ad622d -> 866babb4  Add a rendered snapshot for E0410 on a match binding
-3570b69a -> 30a2b7a8  Index the [type.rec] and [gram.pat.let] anchors
-32b6bf5d -> 92020332  Add the second change's rows' lexer snapshots
-4d63c291 -> 1082aca1  Add the second change's rows' parser snapshots
-cb10ed50 -> 6be1961c  Move the induction-written fixture's snapshot down a line
-727909a7 -> f0053a04  Add the rendered E0410 snapshot for a match binding
-ff832fbe -> 9c89b9c3  Enter the second change's rows in the lowering ledger
-bf77af3f -> 21a8fd36  Note the recursive-type and pattern-binding rules in the changelog
-8ce4d906 -> eec51f04  Add the rendered E0404 snapshot for a type that holds itself
-b28f99d9 -> 2eef2141  Regenerate the diagnostics catalog
-aa0a3063 -> 8129a2dd  Declare the mut parameter row's W1002
-006e2f7c -> 50c08838  Refresh the mut parameter row's lexer and parser snapshots
-2aeeb81b -> 6b0d2361  Move the mut parameter row's span past its warns line
-cdc77a1f -> 15d0ee79  List the mut parameter row's snapshot under W1002 in the catalog
-20938088 -> d7503709  Add the second change's evidence logs
-6df15e48 -> bcef7918  Index the second change's evidence and snapshots
-3b53d039 -> 52c993cb  Copy the second change's rig into the evidence
-f8f51332 -> 8a45d693  Note the second change: recursive types and pattern bindings
-e18c0e71 -> 245be810  Ship the second change's Linux rig in the evidence, not the unused one
+40020d4e -> 087bb8a4  Specify that a type contains itself only through a container ([type.rec])
+dcac4bab -> e0dd8ba5  Add the by-value recursive enum row
+98efe598 -> 64ad9b1b  Add the recursion through a tuple payload row
+092fdc31 -> 638d144f  Add the struct and enum cycle row
+ae0e9cfc -> 7ec66613  Add the unused struct that holds itself row
+2990c0b4 -> 454857e0  Add the cycle through a generic struct row
+7b2faffc -> 2095162b  Add the cycle through an error union row
+bcc8a663 -> 1cafc950  Add the recursion through containers control row
+e36ec807 -> 5a7ac3dd  Place [type.rec]'s report at the first-declared type's member
+bd23112b -> d153aad4  Name the member the struct and enum cycle row is reported at
+9704538a -> 258991f1  Run the recursive-type rows on four machines
+b10f8c3c -> 3147c2a7  Refuse a type that contains itself by value (E0404)
+e9046887 -> 73a05b7b  Explain E0404 for a type that contains itself by value
+94eba7a0 -> 46216648  Add a rendered snapshot for E0404 on a type that holds itself
+dec460e0 -> 8c316dd2  Specify that pattern bindings bind as let does ([gram.pat.let])
+d604e6eb -> 4f612580  Add the match binding assigned row
+563eafc4 -> d66903b5  Add the for binding assigned row
+a6690b33 -> ed62486e  Add the else handler binding assigned row
+780119bb -> 7345b759  Add the select receive assigned row
+d5291a7d -> a89968f1  Add the match binding's field assigned row
+959ea5c8 -> 7f6dc94a  Add the @ name assigned row
+77d30ebf -> 97a38d28  Add the mut parameter trap row
+53b18974 -> 260b0910  Add the var shadow control row
+0bc1c037 -> 52445388  Run the pattern-binding rows on four machines
+38314dd4 -> aeb099f7  Copy the loop index into a var before the induction witness writes it
+21eb122a -> 24c8df00  Copy the loop index into a var in the induction-written fixture
+f9e07283 -> c20aefff  Refuse a write to a name a pattern bound outside let and var (E0410)
+d0159584 -> d8c44c23  Say which rung judges a write to a pattern's name
+d690440e -> 4a9e34c7  Explain E0410 for a pattern's bindings
+81ad622d -> 333cb738  Add a rendered snapshot for E0410 on a match binding
+3570b69a -> ce38fb79  Index the [type.rec] and [gram.pat.let] anchors
+32b6bf5d -> 0a892bec  Add the second change's rows' lexer snapshots
+4d63c291 -> a3de93a2  Add the second change's rows' parser snapshots
+cb10ed50 -> d1a7be63  Move the induction-written fixture's snapshot down a line
+727909a7 -> 1af900ef  Add the rendered E0410 snapshot for a match binding
+ff832fbe -> 6b459a2e  Enter the second change's rows in the lowering ledger
+bf77af3f -> a434723d  Note the recursive-type and pattern-binding rules in the changelog
+8ce4d906 -> dc11f6fe  Add the rendered E0404 snapshot for a type that holds itself
+b28f99d9 -> 4a79610f  Regenerate the diagnostics catalog
+aa0a3063 -> 6ca80b3c  Declare the mut parameter row's W1002
+006e2f7c -> d6310f90  Refresh the mut parameter row's lexer and parser snapshots
+2aeeb81b -> 34f5a76c  Move the mut parameter row's span past its warns line
+cdc77a1f -> c641fd1f  List the mut parameter row's snapshot under W1002 in the catalog
+20938088 -> 801c6254  Add the second change's evidence logs
+6df15e48 -> 77a7cd22  Index the second change's evidence and snapshots
+3b53d039 -> e2de6638  Copy the second change's rig into the evidence
+f8f51332 -> 07b3da92  Note the second change: recursive types and pattern bindings
+e18c0e71 -> bc761ff4  Ship the second change's Linux rig in the evidence, not the unused one
