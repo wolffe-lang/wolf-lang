@@ -1781,11 +1781,11 @@ has promised `totals.pairs().sorted_by(…)` since bs00, and
   type's base and a range type. A type that reaches itself through
   those alone would be a value with no finite size, so a cycle among
   them is **E0404** ("this would be an infinite type"), once per cycle,
-  at the member that closes it, the cycle named in full. Types are
-  checked where they are declared, used or not, in declaration order,
-  so `enum L { Nil, Cons(int, L) }` is E0404 at `Cons`, and `struct N
-  { v: int, next: L }` with `enum L { Nil, More(N) }` is one E0404, at
-  `More`. A generic struct or enum is walked at its arguments: with
+  the cycle named in full. Types are checked where they are declared,
+  used or not, in declaration order, and a cycle is reported at the
+  member through which its first-declared type reaches itself: `enum L
+  { Nil, Cons(int, L) }` is E0404 at `Cons`, and `struct N { v: int,
+  next: L }` with `enum L { Nil, More(N) }` is one E0404, at `next`. A generic struct or enum is walked at its arguments: with
   `struct Box[T] { v: T }`, `Box[L]` holds an `L` inline, while `struct
   Bag[T] { items: List[T] }` holds its `T` elsewhere. `List[T]`,
   `Map[K, V]`, `Pool[T]`, `handle T`, `weak T`, raw pointers, channels,
