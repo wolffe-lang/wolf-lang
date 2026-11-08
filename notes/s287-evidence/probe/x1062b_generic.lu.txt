@@ -1,0 +1,3 @@
+struct Box[T] { v: T }
+enum L { Nil, Cons(int, Box[L]) }
+fn main() -> int { 0 }

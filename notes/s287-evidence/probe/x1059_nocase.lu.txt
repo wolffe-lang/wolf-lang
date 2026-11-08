@@ -1,0 +1,7 @@
+fn main() -> int {
+    let n: int = 8
+    match 5 {
+        n => { n = 9
+ n },
+    }
+}

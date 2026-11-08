@@ -1,0 +1,6 @@
+fn main() -> int {
+    var total = 0
+    for x in [1, 2, 3] { x = x * 2
+ total = total + x }
+    total
+}

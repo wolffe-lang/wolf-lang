@@ -1,0 +1,8 @@
+error A = {x}
+error B = {x, y}
+
+fn g(ok: bool) -> int ! {A, B} {
+    if ok { 1 } else { return y }
+}
+
+fn main() -> int { g(true) else 0 }

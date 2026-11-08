@@ -1,0 +1,5 @@
+enum E { A(int), B(bool) }
+fn f(v: E) -> int {
+    match v { A(x) | B(x) => { if x { 1 } else { 2 } } }
+}
+fn main() -> int { f(E.B(true)) }

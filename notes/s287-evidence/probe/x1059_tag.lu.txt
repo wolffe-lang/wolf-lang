@@ -1,0 +1,11 @@
+fn g(ok: bool) -> int ! {gone} {
+    if ok { 1 } else { return gone }
+}
+fn main() -> int {
+    let gone: int = 8
+    match g(false) {
+        gone => { gone = 9 },
+        n => {},
+    }
+    gone
+}

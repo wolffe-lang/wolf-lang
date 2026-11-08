@@ -1,0 +1,5 @@
+enum E { A(int), B(int) }
+fn f(p: (int, E)) -> int {
+    match p { (x, A(x) | B(x)) => x }
+}
+fn main() -> int { f((1, E.A(2))) }

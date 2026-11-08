@@ -1,0 +1,4 @@
+fn main() -> int {
+    let g = fn(a: int, a: int) a
+    g(1, 2)
+}

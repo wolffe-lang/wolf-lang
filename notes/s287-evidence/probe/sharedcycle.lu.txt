@@ -1,0 +1,2 @@
+struct N { v: int, next: shared N }
+fn main() -> int { 0 }

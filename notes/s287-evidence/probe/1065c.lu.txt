@@ -1,0 +1,5 @@
+fn g(ok: bool) -> int ! {x, x} {
+    if ok { 1 } else { return x }
+}
+
+fn main() -> int { g(true) else 0 }

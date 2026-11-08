@@ -1,0 +1,5 @@
+fn main() -> int {
+    var t = 0
+    for (x, x) in [(1, 2)] { t = t + x }
+    t
+}

@@ -1,0 +1,5 @@
+enum E { A, A }
+fn main() -> int {
+    let v = E.A
+    match v { A => 3 }
+}

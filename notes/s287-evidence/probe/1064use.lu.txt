@@ -1,0 +1,3 @@
+error E = {E}
+fn f() -> int ! E { 1 }
+fn main() -> int { f() else 0 }

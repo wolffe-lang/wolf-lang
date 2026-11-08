@@ -1,0 +1,6 @@
+enum E { Done, Other }
+fn main() -> int {
+    let Done: int = 8
+    Done = 9
+    Done
+}

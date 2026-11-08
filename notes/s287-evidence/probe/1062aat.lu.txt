@@ -1,0 +1,3 @@
+fn main() -> int {
+    match 5 { x @ x => x }
+}

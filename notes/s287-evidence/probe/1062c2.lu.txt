@@ -1,0 +1,5 @@
+fn f(n: int) -> int {
+    n = n + 1
+    n
+}
+fn main() -> int { f(3) }

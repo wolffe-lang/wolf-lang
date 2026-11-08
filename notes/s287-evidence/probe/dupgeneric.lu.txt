@@ -1,0 +1,2 @@
+fn f[T, T](a: T) -> int { 0 }
+fn main() -> int { f(1) }

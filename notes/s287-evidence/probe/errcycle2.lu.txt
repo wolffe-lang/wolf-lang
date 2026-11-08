@@ -1,0 +1,3 @@
+error A = {B}
+error B = {A}
+fn main() -> int { 0 }

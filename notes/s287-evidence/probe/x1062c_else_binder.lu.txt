@@ -1,0 +1,5 @@
+fn g() -> int ! {Bad(int)} { return Bad(4) }
+fn main() -> int {
+    g() else |e| { e = Bad(5)
+ 2 }
+}

@@ -1,0 +1,17 @@
+s287 evidence (wolf-lang: the front-end rulings on the second compiler's spec silences:
+#1059, #1060, #1061's refusals, #1062, #1064, #1065, and #1073).
+Paths in the logs are relative to the lane's directory, written $LANE, and to the lane's
+checkouts of the org's repositories, written $ORG; the Mac is arm64 macOS. Lines naming a private
+repository are dropped here; their evidence stays outside the tree.
+
+base-d848fbed.log         the base: wolf at d848fbed (a clean debug build of that commit,
+                          copied by value, sha256 4781f945...); every probe on the checked
+                          machine, native, release (wolf conform-run --json) and lupin 0.1.60
+                          (aarch64-apple-darwin, archive sha256 f3cae16f...6bb8, equal to the
+                          release page, read twice). Three takes, in order: the ruling page's
+                          programs; the x* neighbours; then three programs re-run after a
+                          correction (dupclosure and x1062c_closure_param first spelled a closure
+                          `|a| …`, which wolf does not parse; x1062c_else_binder first assigned a
+                          tag outside a row context). probe/ holds the corrected programs.
+probe/                    the probe programs (.lu.txt, one per case). The bare names (1059 …
+                          traitcycleuse) are the ruling page's; x* are this lane's neighbours.

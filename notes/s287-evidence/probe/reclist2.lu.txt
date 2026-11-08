@@ -1,0 +1,12 @@
+enum T { Leaf(int), Node(List[T]) }
+fn sum(t: T) -> int {
+    match t {
+        Leaf(n) => n,
+        Node(ks) => {
+            var s = 0
+            for k in ks { s = s + sum(k) }
+            s
+        },
+    }
+}
+fn main() -> int { sum(T.Node([T.Leaf(2), T.Node([T.Leaf(3)])])) }

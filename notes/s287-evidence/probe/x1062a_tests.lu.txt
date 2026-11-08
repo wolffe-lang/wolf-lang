@@ -1,0 +1,9 @@
+enum C { Red, Blue }
+fn f(a: C, b: C) -> int {
+    match (a, b) {
+        (Red, Red) => 1,
+        (Blue, Blue) => 2,
+        _ => 3,
+    }
+}
+fn main() -> int { f(C.Red, C.Red) + f(C.Blue, C.Red) }

@@ -1,0 +1,6 @@
+struct Bag[T] { items: List[T] }
+enum L { Nil, Cons(int, Bag[L]) }
+fn main() -> int {
+    let l = L.Cons(1, Bag { items: [L.Nil] })
+    match l { Nil => 0, Cons(n, _) => n }
+}

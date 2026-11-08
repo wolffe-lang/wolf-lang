@@ -1,0 +1,409 @@
+s287: last release 45s ago; waiting 15s for the turn
+s287: 23:29:17 mac build lock held by another lane; waiting
+s287: lock taken 23:29:47, 12684 MiB free, 120 GB disk; running: rig/base-probes.sh $LANE/bin-d848fbed/wolf
+== wolf: $LANE/bin-d848fbed/wolf 4781f94573f855c6
+wolf 0.2.38+dev.unknown (wolfgang)
+paired with lupin 0.1.60 (reference interpreter), pin 5f1f1c949582f53121e4047bc83c86f23ff72240
+lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+## 1059/row.lu
+checked  exit(9)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   exit(9)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  exit(9)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(9)      run       out=None warns=[W0801@50-54] 
+## 1059read/row.lu
+checked  exit(8)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   exit(8)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  exit(8)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(8)      run       out=None warns=[W0801@50-54] 
+## 1059var/row.lu
+checked  exit(9)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   exit(9)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  exit(9)      run       out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(9)      run       out=None warns=[W0801@50-54] 
+## 1060/row.lu
+checked  exit(3)      run       out=None warns=[] 
+native   exit(3)      run       out=None warns=[] 
+release  exit(3)      run       out=None warns=[] 
+lupin    exit(3)      run       out=None warns=[] 
+## 1060b/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   exit(5)      run       out=None warns=[] 
+release  exit(5)      run       out=None warns=[] 
+lupin    exit(5)      run       out=None warns=[] 
+## 1061/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+lupin    exit(3)      run       out=None warns=[] 
+## 1061b/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — module items in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+lupin    unsupported  resolve   out=None warns=[] 
+## 1061c/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+lupin    exit(1)      run       out=None warns=[] 
+## 1062a/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## 1062a2/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## 1062a3/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## 1062aat/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   exit(5)      run       out=None warns=[] 
+release  exit(5)      run       out=None warns=[] 
+lupin    exit(5)      run       out=None warns=[] 
+## 1062anest/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   exit(5)      run       out=None warns=[] 
+release  exit(5)      run       out=None warns=[] 
+lupin    exit(5)      run       out=None warns=[] 
+## 1062b/row.lu
+checked  exit(1)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — deeply nested aggregate types
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — deeply nested aggregate types
+lupin    exit(1)      run       out=None warns=[] 
+## 1062b2/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## 1062c/row.lu
+checked  exit(4)      run       out=None warns=[] 
+native   exit(4)      run       out=None warns=[] 
+release  exit(4)      run       out=None warns=[] 
+lupin    exit(4)      run       out=None warns=[] 
+## 1062c2/row.lu
+checked  fail(E1014)  mem       out=None warns=[] error[E1014]: `n` is `read` for the whole call, so it cannot be assigned
+native   fail(E1014)  mem       out=None warns=[] error[E1014]: `n` is `read` for the whole call, so it cannot be assigned
+release  fail(E1014)  mem       out=None warns=[] error[E1014]: `n` is `read` for the whole call, so it cannot be assigned
+lupin    trap(exclusivity) run       out=None warns=[] 
+## 1062c3/row.lu
+checked  exit(12)     run       out=None warns=[] 
+native   exit(12)     run       out=None warns=[] 
+release  exit(12)     run       out=None warns=[] 
+lupin    exit(12)     run       out=None warns=[] 
+## 1062cmut/row.lu
+checked  exit(3)      run       out=None warns=[W1002@26-29] warning[W1002]: `v` is `mut`, and the body never writes it
+native   exit(3)      run       out=None warns=[W1002@26-29] warning[W1002]: `v` is `mut`, and the body never writes it
+release  exit(3)      run       out=None warns=[W1002@26-29] warning[W1002]: `v` is `mut`, and the body never writes it
+lupin    exit(3)      run       out=None warns=[W1002@26-29] 
+## 1064/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    fail(E0610)  resolve   out=None warns=[] 
+## 1064use/row.lu
+checked  fail(E0610)  typecheck out=None warns=[] error[E0610]: the error-set alias `E` names itself
+native   fail(E0610)  typecheck out=None warns=[] error[E0610]: the error-set alias `E` names itself
+release  fail(E0610)  typecheck out=None warns=[] error[E0610]: the error-set alias `E` names itself
+lupin    fail(E0610)  resolve   out=None warns=[] 
+## 1065/row.lu
+checked  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+native   fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+release  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+lupin    exit(1)      run       out=None warns=[] 
+## 1065alias2/row.lu
+checked  exit(1)      run       out=None warns=[] 
+native   exit(1)      run       out=None warns=[] 
+release  exit(1)      run       out=None warns=[] 
+lupin    exit(1)      run       out=None warns=[] 
+## 1065b/row.lu
+checked  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `Bad` appears twice in this error row
+native   fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `Bad` appears twice in this error row
+release  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `Bad` appears twice in this error row
+lupin    exit(1)      run       out=None warns=[] 
+## 1065c/row.lu
+checked  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+native   fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+release  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+lupin    exit(1)      run       out=None warns=[] 
+## 1065order/row.lu
+checked  exit(1)      run       out=None warns=[] 
+native   exit(1)      run       out=None warns=[] 
+release  exit(1)      run       out=None warns=[] 
+lupin    exit(1)      run       out=None warns=[] 
+## dupclosure/row.lu
+checked  fail(E0201)  parse     out=None warns=[] error[E0201]: expected an expression
+native   fail(E0201)  parse     out=None warns=[] error[E0201]: expected an expression
+release  fail(E0201)  parse     out=None warns=[] error[E0201]: expected an expression
+lupin    fail(E0201)  parse     out=None warns=[] 
+## dupfield/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## dupgeneric/row.lu
+checked  fail(E0405)  typecheck out=None warns=[] error[E0405]: wolf cannot infer a type here
+native   fail(E0405)  typecheck out=None warns=[] error[E0405]: wolf cannot infer a type here
+release  fail(E0405)  typecheck out=None warns=[] error[E0405]: wolf cannot infer a type here
+lupin    exit(0)      run       out=None warns=[] 
+## dupparam/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## duptags/row.lu
+checked  fail(E0601)  typecheck out=None warns=[W0603@231-233] error[E0601]: the tag `Io` appears twice in this error row
+native   fail(E0601)  typecheck out=None warns=[W0603@231-233] error[E0601]: the tag `Io` appears twice in this error row
+release  fail(E0601)  typecheck out=None warns=[W0603@231-233] error[E0601]: the tag `Io` appears twice in this error row
+lupin    exit(7)      run       out=None warns=[W0603@231-233] 
+## elseassign/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   exit(5)      run       out=None warns=[] 
+release  exit(5)      run       out=None warns=[] 
+lupin    exit(5)      run       out=None warns=[] 
+## errcycle2/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    fail(E0610)  resolve   out=None warns=[] 
+## forassign/row.lu
+checked  exit(12)     run       out=None warns=[] 
+native   exit(12)     run       out=None warns=[] 
+release  exit(12)     run       out=None warns=[] 
+lupin    exit(12)     run       out=None warns=[] 
+## matchvarstr/row.lu
+checked  exit(3)      run       out=None warns=[] 
+native   exit(3)      run       out=None warns=[] 
+release  exit(3)      run       out=None warns=[] 
+lupin    exit(3)      run       out=None warns=[] 
+## ordifftype_used/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+lupin    exit(1)      run       out=None warns=[] 
+## orunbound_ok/row.lu
+checked  exit(1)      run       out=None warns=[] 
+native   exit(1)      run       out=None warns=[] 
+release  exit(1)      run       out=None warns=[] 
+lupin    exit(1)      run       out=None warns=[] 
+## reclist/row.lu
+checked  exit(1)      run       out=None warns=[] 
+native   exit(1)      run       out=None warns=[] 
+release  exit(1)      run       out=None warns=[] 
+lupin    exit(1)      run       out=None warns=[] 
+## reclist2/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   exit(5)      run       out=None warns=[] 
+release  exit(5)      run       out=None warns=[] 
+lupin    exit(5)      run       out=None warns=[] 
+## recpair/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## recstructuse/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — deeply nested aggregate types
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — deeply nested aggregate types
+lupin    exit(5)      run       out=None warns=[] 
+## rectuple/row.lu
+checked  exit(7)      run       out=None warns=[] 
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — deeply nested aggregate types
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — deeply nested aggregate types
+lupin    exit(7)      run       out=None warns=[] 
+## shadowconst/row.lu
+checked  fail(E0410)  resolve   out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   fail(E0410)  resolve   out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  fail(E0410)  resolve   out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    fail(E0410)  resolve   out=None warns=[W0801@50-54] 
+## sharedcycle/row.lu
+checked  fail(E1006)  mem       out=None warns=[] error[E1006]: `N` holds a strong `shared` path back to itself
+native   fail(E1006)  mem       out=None warns=[] error[E1006]: `N` holds a strong `shared` path back to itself
+release  fail(E1006)  mem       out=None warns=[] error[E1006]: `N` holds a strong `shared` path back to itself
+lupin    exit(0)      run       out=None warns=[] 
+## traitcycle/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## traitcycleuse/row.lu
+checked  fail(E0503)  typecheck out=None warns=[] error[E0503]: the alias bound `A` names itself
+native   fail(E0503)  typecheck out=None warns=[] error[E0503]: the alias bound `A` names itself
+release  fail(E0503)  typecheck out=None warns=[] error[E0503]: the alias bound `A` names itself
+lupin    exit(0)      run       out=None warns=[] 
+s287: END exit=0 23:30:11
+s287: last release 50s ago; waiting 10s for the turn
+s287: 23:31:11 mac build lock held by another lane; waiting
+s287: 23:31:41 mac build lock held by another lane; waiting
+s287: lock taken 23:32:12, 12886 MiB free, 119 GB disk; running: rig/probes-subset.sh $LANE/bin-d848fbed/wolf x1059_field x1059_lower x1059_nocase x1059_qual x1059_tag x1060_case x1060_typedecl x1061_at x1061_missing_left x1061_nested x1062a_for x1062a_letgroup x1062a_or_outer x1062a_tests x1062b_errunion x1062b_generic x1062b_genlist x1062b_handle x1062b_map x1062c_at x1062c_closure_param x1062c_else_binder x1062c_field x1062c_select x1062c_var_shadow x1065_alias_inner_dup x1065_order_payload x1065_own_after_alias_twice x1065_twoalias_conflict
+== wolf: $LANE/bin-d848fbed/wolf 4781f94573f855c6
+## x1059_field/row.lu
+checked  exit(9)      run       out=None warns=[W0801@70-74] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   exit(9)      run       out=None warns=[W0801@70-74] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  exit(9)      run       out=None warns=[W0801@70-74] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(9)      run       out=None warns=[W0801@70-74] 
+## x1059_lower/row.lu
+checked  exit(9)      run       out=None warns=[W0801@52-56] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+native   exit(9)      run       out=None warns=[W0801@52-56] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+release  exit(9)      run       out=None warns=[W0801@52-56] warning[W0801]: `fast` binds a new name here — it does not test the variant `Mode.fast`
+lupin    unsupported  resolve   out=None warns=[W0801@52-56] 
+## x1059_nocase/row.lu
+checked  exit(9)      run       out=None warns=[] 
+native   exit(9)      run       out=None warns=[] 
+release  exit(9)      run       out=None warns=[] 
+lupin    exit(9)      run       out=None warns=[] 
+## x1059_qual/row.lu
+checked  fail(E0410)  resolve   out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   fail(E0410)  resolve   out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  fail(E0410)  resolve   out=None warns=[W0801@50-54] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    fail(E0410)  resolve   out=None warns=[W0801@50-54] 
+## x1059_tag/row.lu
+checked  exit(9)      run       out=None warns=[] 
+native   exit(9)      run       out=None warns=[] 
+release  exit(9)      run       out=None warns=[] 
+lupin    exit(9)      run       out=None warns=[] 
+## x1060_case/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## x1060_typedecl/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## x1061_at/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns over product patterns (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns over product patterns (join params)
+lupin    exit(21)     run       out=None warns=[] 
+## x1061_missing_left/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — or-patterns with payload bindings (join params)
+lupin    exit(1)      run       out=None warns=[] 
+## x1061_nested/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — a binding inside an or-pattern alternative (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — a binding inside an or-pattern alternative (join params)
+lupin    exit(3)      run       out=None warns=[] 
+## x1062a_for/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## x1062a_letgroup/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## x1062a_or_outer/row.lu
+checked  unsupported  mem       out=None warns=[] wolf conform-run --checked: unsupported — or-patterns with bindings in checked execution
+native   unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — a binding inside an or-pattern alternative (join params)
+release  unsupported  mem       out=None warns=[] wolf conform-run --native: unsupported — a binding inside an or-pattern alternative (join params)
+lupin    exit(2)      run       out=None warns=[] 
+## x1062a_tests/row.lu
+checked  exit(4)      run       out=None warns=[] 
+native   exit(4)      run       out=None warns=[] 
+release  exit(4)      run       out=None warns=[] 
+lupin    exit(4)      run       out=None warns=[] 
+## x1062b_errunion/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## x1062b_generic/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## x1062b_genlist/row.lu
+checked  exit(1)      run       out=None warns=[] 
+native   exit(1)      run       out=None warns=[] 
+release  exit(1)      run       out=None warns=[] 
+lupin    exit(1)      run       out=None warns=[] 
+## x1062b_handle/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## x1062b_map/row.lu
+checked  exit(4)      run       out=None warns=[] 
+native   exit(4)      run       out=None warns=[] 
+release  exit(4)      run       out=None warns=[] 
+lupin    exit(4)      run       out=None warns=[] 
+## x1062c_at/row.lu
+checked  exit(6)      run       out=None warns=[] 
+native   exit(6)      run       out=None warns=[] 
+release  exit(6)      run       out=None warns=[] 
+lupin    exit(6)      run       out=None warns=[] 
+## x1062c_closure_param/row.lu
+checked  fail(E0201)  parse     out=None warns=[] error[E0201]: expected an expression
+native   fail(E0201)  parse     out=None warns=[] error[E0201]: expected an expression
+release  fail(E0201)  parse     out=None warns=[] error[E0201]: expected an expression
+lupin    fail(E0201)  parse     out=None warns=[] 
+## x1062c_else_binder/row.lu
+checked  unsupported  resolve   out=None warns=[W0603@17-20] wolf conform-run: unsupported — an error-row tag outside `!T` context
+native   unsupported  resolve   out=None warns=[W0603@17-20] wolf conform-run: unsupported — an error-row tag outside `!T` context
+release  unsupported  resolve   out=None warns=[W0603@17-20] wolf conform-run: unsupported — an error-row tag outside `!T` context
+lupin    exit(2)      run       out=None warns=[W0603@17-20] 
+## x1062c_field/row.lu
+checked  exit(9)      run       out=None warns=[] 
+native   exit(9)      run       out=None warns=[] 
+release  exit(9)      run       out=None warns=[] 
+lupin    exit(9)      run       out=None warns=[] 
+## x1062c_select/row.lu
+checked  exit(5)      run       out=None warns=[] 
+native   exit(5)      run       out=None warns=[] 
+release  exit(5)      run       out=None warns=[] 
+lupin    exit(5)      run       out=None warns=[] 
+## x1062c_var_shadow/row.lu
+checked  exit(4)      run       out=None warns=[] 
+native   exit(4)      run       out=None warns=[] 
+release  exit(4)      run       out=None warns=[] 
+lupin    exit(4)      run       out=None warns=[] 
+## x1065_alias_inner_dup/row.lu
+checked  exit(0)      run       out=None warns=[] 
+native   exit(0)      run       out=None warns=[] 
+release  exit(0)      run       out=None warns=[] 
+lupin    exit(0)      run       out=None warns=[] 
+## x1065_order_payload/row.lu
+checked  fail(E0609)  typecheck out=None warns=[] error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+native   fail(E0609)  typecheck out=None warns=[] error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+release  fail(E0609)  typecheck out=None warns=[] error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+lupin    exit(1)      run       out=None warns=[] 
+## x1065_own_after_alias_twice/row.lu
+checked  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+native   fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+release  fail(E0601)  typecheck out=None warns=[] error[E0601]: the tag `x` appears twice in this error row
+lupin    exit(1)      run       out=None warns=[] 
+## x1065_twoalias_conflict/row.lu
+checked  fail(E0609)  typecheck out=None warns=[] error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+native   fail(E0609)  typecheck out=None warns=[] error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+release  fail(E0609)  typecheck out=None warns=[] error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+lupin    exit(1)      run       out=None warns=[] 
+s287: END exit=0 23:32:27
+s287: last release 16s ago; waiting 44s for the turn
+s287: 23:33:27 mac build lock held by another lane; waiting
+s287: lock taken 23:33:57, 13110 MiB free, 119 GB disk; running: rig/probes-subset.sh $LANE/bin-d848fbed/wolf dupclosure x1062c_closure_param x1062c_else_binder
+== wolf: $LANE/bin-d848fbed/wolf 4781f94573f855c6
+## dupclosure/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## x1062c_closure_param/row.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+## x1062c_else_binder/row.lu
+checked  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — an error-row tag outside `!T` context
+native   unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — an error-row tag outside `!T` context
+release  unsupported  resolve   out=None warns=[] wolf conform-run: unsupported — an error-row tag outside `!T` context
+lupin    exit(2)      run       out=None warns=[] 
+s287: END exit=0 23:33:59

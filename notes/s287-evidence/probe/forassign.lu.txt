@@ -1,0 +1,6 @@
+fn main() -> int {
+    var t = 0
+    for (a, b) in [(1, 2)] { a = 10
+ t = a + b }
+    t
+}

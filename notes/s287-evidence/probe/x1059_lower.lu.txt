@@ -1,0 +1,9 @@
+enum Mode { fast, slow }
+fn main() -> int {
+    let fast: int = 8
+    match Mode.fast {
+        fast => { fast = 9 },
+        slow => {},
+    }
+    fast
+}

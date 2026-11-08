@@ -1,0 +1,5 @@
+enum J { Num(int), Obj(Map[str, J]) }
+fn main() -> int {
+    let j = J.Num(4)
+    match j { Num(n) => n, Obj(_) => 0 }
+}

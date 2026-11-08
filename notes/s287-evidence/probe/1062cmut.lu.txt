@@ -1,0 +1,9 @@
+enum E { A(int) }
+fn bump(mut v: E) {
+    match v { A(x) => { x = x + 1 } }
+}
+fn main() -> int {
+    var e = E.A(3)
+    bump(mut e)
+    match e { A(n) => n }
+}

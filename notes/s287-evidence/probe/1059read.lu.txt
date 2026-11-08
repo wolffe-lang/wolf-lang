@@ -1,0 +1,8 @@
+enum E { Done, Other }
+fn main() -> int {
+    let Done: int = 8
+    match E.Done {
+        Done => Done,
+        Other => 0,
+    }
+}
