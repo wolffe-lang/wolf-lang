@@ -55,4 +55,6 @@ m1-rebased-5fb13d74.log   at the rebased head: the checks above, the lanes test 
                           corpus, conformance, and every corpus-walking snapshot suite with no
                           update.
 rig/, rig/linux/          the scripts as run. rig/linux/'s take scripts carry the heat gate the
-                          rebased records ran under (start at or under 95 C, a sensor summary).
+                          rebased records ran under (start at or under 95 C, a sensor summary),
+                          and its prep reads the inputs stage-inputs.sh staged once outside the
+                          locks, each by its pinned digest, so the prep downloads nothing.
