@@ -593,8 +593,12 @@ struct BindState {
     /// One frame per pattern (or parameter list) being bound: each name it
     /// has bound, where, at what type (`[gram.pat.names]`, E0827). An
     /// or-pattern's alternatives each take a frame of their own.
-    names: Vec<(NameFrame, Vec<(String, Span, TyId)>)>,
+    names: Vec<(NameFrame, BoundNames)>,
 }
+
+/// The names one pattern (or parameter list) bound: each name, the binder's
+/// span, and its type (`[gram.pat.names]`).
+type BoundNames = Vec<(String, Span, TyId)>;
 
 /// What a [`BindState::names`] frame is the names of: E0827's wording.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1325,7 +1329,7 @@ impl<'a> Checker<'a> {
     }
 
     /// Close the innermost frame of bound names, handing back its names.
-    fn close_names(&mut self) -> Vec<(String, Span, TyId)> {
+    fn close_names(&mut self) -> BoundNames {
         self.binds.names.pop().map(|(_, n)| n).unwrap_or_default()
     }
 
@@ -1373,8 +1377,8 @@ impl<'a> Checker<'a> {
     /// alternative's span and the names it bound. A name another alternative
     /// binds and this one does not is E0828 at this alternative; a name
     /// bound at two types is E0401 at the later binding.
-    fn or_pattern_agreement(&mut self, alts: &[(Span, Vec<(String, Span, TyId)>)]) {
-        let mut all: Vec<(String, Span, TyId)> = Vec::new();
+    fn or_pattern_agreement(&mut self, alts: &[(Span, BoundNames)]) {
+        let mut all: BoundNames = Vec::new();
         for (_, names) in alts {
             for (n, s, t) in names {
                 match all.iter().find(|(m, ..)| m == n) {
@@ -1467,7 +1471,8 @@ impl<'a> Checker<'a> {
             Some((depth, Origin::Let(kw))) => (depth, kw),
             Some(_) => return,
             None => match self.sigs.get(self.module, &name) {
-                Some(ItemSig::Global(g)) if g.kind == crate::sig::GlobalKind::Let => match g.let_kw {
+                Some(ItemSig::Global(g)) if g.kind == crate::sig::GlobalKind::Let => match g.let_kw
+                {
                     Some(kw) => (0, kw),
                     None => return,
                 },
@@ -1487,7 +1492,10 @@ impl<'a> Checker<'a> {
         let span = if through_field { place.span } else { root.span };
         self.diags.push(
             crate::letcheck::e0410(&name, span, kw, through_field)
-                .with_secondary(test, format!("this pattern tests `{name}` and binds nothing"))
+                .with_secondary(
+                    test,
+                    format!("this pattern tests `{name}` and binds nothing"),
+                )
                 .with_note(
                     "a bare name that spells a case of the scrutinee's type tests it and \
                      binds nothing, so inside its arm every name resolves as it does \
@@ -12352,7 +12360,7 @@ impl<'a> Checker<'a> {
                 // the or-pattern binds each of its names once in the
                 // pattern around it.
                 let mut alts = Vec::new();
-                let mut bound: Vec<(Span, Vec<(String, Span, TyId)>)> = Vec::new();
+                let mut bound: Vec<(Span, BoundNames)> = Vec::new();
                 for sub in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
                     let frame = self.binds.names.last().map_or(NameFrame::Pattern, |f| f.0);
                     self.open_names(frame);
@@ -12361,7 +12369,7 @@ impl<'a> Checker<'a> {
                     alts.push(alt?);
                 }
                 self.or_pattern_agreement(&bound);
-                let mut once: Vec<(String, Span, TyId)> = Vec::new();
+                let mut once: BoundNames = Vec::new();
                 for (n, s, t) in bound.into_iter().flat_map(|(_, names)| names) {
                     if !once.iter().any(|(m, ..)| *m == n) {
                         once.push((n, s, t));
