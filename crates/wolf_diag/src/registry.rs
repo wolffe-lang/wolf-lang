@@ -598,9 +598,17 @@ type `t = fn(t) -> …` that expands forever. No finite type satisfies
 the constraint, so wolf stops and shows the cycle rather than looping.
 This almost always signals a confusion one level up: a closure passed
 where its *result* was meant, or a recursion through values where a
-named recursive *type* (a struct or enum, which may mention itself by
-name) was intended. Introduce a named type or an explicit annotation
-at the point where the cycle closes.
+named recursive *type* was intended. Introduce a named type or an
+explicit annotation at the point where the cycle closes.
+
+A named type is infinite in the same way when it contains itself by
+value (`[type.rec]`): a struct's fields, an enum's payloads and a
+tuple's elements are laid out inline, so `enum L { Nil, Cons(int, L) }`
+would have no finite size. A named struct or enum may mention itself,
+but only through a container that holds its element elsewhere:
+`Cons(int, List[L])`, a `Map[K, L]`, or a `handle L` into a pool. The
+error is reported once per cycle, where the type is declared, used or
+not, with the cycle named in full.
 "#);
 
 code!(E0405, "the type here cannot be inferred", r#"
