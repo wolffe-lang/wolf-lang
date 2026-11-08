@@ -1,0 +1,10 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names, gram.item.fn
+//!
+//! wolf-lang#1073: a parameter list binds each name once
+//! ([gram.pat.names]). The later `a` won on every machine (exit 2).
+
+fn f(a: int, a: int) -> int { a }
+
+fn main() -> int { f(1, 2) }
