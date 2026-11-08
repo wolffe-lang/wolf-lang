@@ -502,3 +502,73 @@ fn a_tag_the_row_spells_twice_is_e0601() {
         "exit(7)",
     );
 }
+
+// ------------------ wolf-lang#1061, what an or-pattern's alternatives bind --
+
+/// A binding or-pattern whose alternatives agree passes the checker on
+/// every tier; the compiled machines then refuse it at `mem` (the join is
+/// not built yet, the conservatism ledger), and lupin runs it.
+fn checks_then_waits_for_the_join(row: &str, lupin_exit: u8) {
+    for (machine, record, stderr) in compiled(row) {
+        assert_eq!(record["verdict"], "unsupported", "{machine} {row}: {record}");
+        assert_eq!(record["phase_reached"], "mem", "{machine} {row}: {record}");
+        assert!(
+            stderr.contains("or-pattern"),
+            "{machine} {row}: the refusal names the or-pattern:\n{stderr}"
+        );
+    }
+    if let Some(record) = lupin(row) {
+        assert_eq!(
+            record["verdict"],
+            format!("exit({lupin_exit})"),
+            "lupin {row}: {record}"
+        );
+    }
+}
+
+#[test]
+fn an_or_pattern_whose_alternatives_agree_checks() {
+    checks_then_waits_for_the_join("typecheck/or_pattern_binds.lu", 3);
+    checks_then_waits_for_the_join("typecheck/or_pattern_binds_nested.lu", 3);
+    checks_then_waits_for_the_join("typecheck/or_pattern_binds_at.lu", 21);
+}
+
+/// `A(x) | B(_)`: E0828 at `B(_)`, naming `x`. lupin 0.1.60 calls the
+/// arm's `x` unsupported at resolve.
+#[test]
+fn an_or_pattern_alternative_that_lacks_a_name_is_e0828() {
+    refused(
+        "typecheck/or_pattern_binds_missing.lu",
+        "E0828",
+        &[(412, 416)],
+        &[
+            "error[E0828]: `x` is bound by another alternative of this or-pattern, but not by this one",
+            "[gram.pat.or]",
+        ],
+        "unsupported",
+    );
+}
+
+/// `A(_) | B(x)`: E0828 at `A(_)`. lupin 0.1.60 runs it.
+#[test]
+fn the_left_alternative_that_lacks_a_name_is_e0828() {
+    refused(
+        "typecheck/or_pattern_binds_missing_left.lu",
+        "E0828",
+        &[(317, 321)],
+        &["this alternative binds no `x`"],
+        "exit(1)",
+    );
+}
+
+/// `x` at `int` in `A(x)` and at `bool` in `B(x)`: E0401 at the later.
+#[test]
+fn an_or_pattern_name_at_two_types_is_e0401() {
+    refused(
+        "typecheck/or_pattern_binds_types.lu",
+        "E0401",
+        &[(375, 376)],
+        &["`x` is `int` in one alternative of this or-pattern and `bool` in this one"],
+        "exit(1)",
+    );
+}
