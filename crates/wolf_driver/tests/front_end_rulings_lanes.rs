@@ -748,7 +748,7 @@ fn the_mut_parameter_trap_is_e0410() {
     refused(
         "typecheck/match_binding_mut_param.lu",
         "E0410",
-        &[(394, 395)],
+        &[(411, 412)],
         &["`x` is bound by a pattern, so it cannot be assigned"],
         "exit(3)",
     );
