@@ -1,6 +1,6 @@
 //! check: fail(E0601)
 //! phase: resolve
-//! conforms: err.rows
+//! conforms: err.rows, gram.type.row.dup
 //! warns: W0603
 //!
 //! Rows are sets, not Koka's multi-maps: duplicate labels are rejected
