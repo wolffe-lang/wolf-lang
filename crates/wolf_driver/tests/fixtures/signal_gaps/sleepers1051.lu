@@ -1,0 +1,18 @@
+//! member: false
+//! s286 (wolf-lang#1051) — twelve tasks asleep at once. A task asleep holds
+//! its worker, and the pool starts another for each one, so the program
+//! holds more threads than glibc's arena test bound (8 on 64-bit) on any
+//! number of CPUs: one worker per CPU, twelve asleep, and main. Each new
+//! thread's first allocation gives it an arena, and until s286 the arena
+//! past the bound made glibc read the CPU count, on that worker, while the
+//! program ran. Run under `strace -f`, the row reads which thread opened
+//! `/sys/devices/system/cpu/online`. Nothing is sent and nothing is written.
+
+fn main() -> int {
+    scope s {
+        for i in 1..=12 {
+            s.spawn(fn() { time_sleep_ms(300 + i) })
+        }
+    }
+    0
+}

@@ -21,6 +21,9 @@
 //!   (`text_zero.lu`) — nothing is sent or changed.
 //! - ON A UNIX HOST: the descriptor wait beside `fs_fstat(1)` with 1
 //!   closed (`race781.lu`) — nothing is sent.
+//! - ON A LINUX-GNU HOST: which thread reads the CPU count for glibc's
+//!   arena limit, under `strace -f` (`sleepers1051.lu`, s286, #1051) —
+//!   nothing is sent.
 //! - LIVE: a group send of a fault the sender ignores (`group_fault.lu`),
 //!   a program that ends itself by a signal or is sent one
 //!   (`parent.lu` starting `exit_by.lu`), and a child that dumps core
@@ -527,6 +530,212 @@ fn a_descriptor_wait_makes_no_descriptor_while_the_program_runs() {
                  another task looked ({text})"
             );
         }
+    }
+}
+
+// ------------------------------------------------------- linux-gnu --
+
+/// The file glibc's `get_nprocs()` reads for the CPU count (get_nprocs(3)).
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+const CPU_ONLINE: &str = "/sys/devices/system/cpu/online";
+
+/// `strace` on `PATH`, or a loud skip: a failure where the run requires
+/// the tracer (`WOLF_SYSCALL_REQUIRE_STRACE`, set on CI's linux job, which
+/// installs it).
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn strace_or_skip(test: &str) -> Option<PathBuf> {
+    let found = std::env::var_os("PATH").and_then(|p| {
+        std::env::split_paths(&p)
+            .map(|d| d.join("strace"))
+            .find(|c| c.is_file())
+    });
+    if found.is_none() {
+        assert!(
+            std::env::var_os("WOLF_SYSCALL_REQUIRE_STRACE").is_none(),
+            "{test}: WOLF_SYSCALL_REQUIRE_STRACE is set and there is no `strace` on PATH"
+        );
+        eprintln!(
+            "SKIP: {test}: no `strace` on PATH (WOLF_SYSCALL_REQUIRE_STRACE makes this a failure)"
+        );
+    }
+    found
+}
+
+/// What one traced run says about the CPU-count read: the main thread's
+/// id (the first line's), every open of [`CPU_ONLINE`] as (thread, line),
+/// and the line of main's first clone.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+struct CpuReads {
+    main: String,
+    opens: Vec<(String, usize)>,
+    first_clone: Option<usize>,
+    trace: PathBuf,
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+impl CpuReads {
+    /// `exe` under `strace -f`, in an environment with none of the host's
+    /// arena settings and `env`'s added.
+    fn of(strace: &Path, exe: &Path, dir: &Path, leg: &str, env: &[(&str, &str)]) -> CpuReads {
+        let name = exe.file_name().expect("a name").to_string_lossy();
+        let trace = dir.join(format!("{name}-{leg}.trace"));
+        let mut cmd = Command::new(strace);
+        cmd.args(["-f", "-qq", "-e", "trace=openat,clone,clone3", "-o"])
+            .arg(&trace)
+            .arg(exe);
+        for k in ["MALLOC_ARENA_MAX", "MALLOC_ARENA_TEST", "GLIBC_TUNABLES"] {
+            cmd.env_remove(k);
+        }
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        let out = run_in(cmd, dir);
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{name} ({leg}) under strace: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let text = std::fs::read_to_string(&trace).expect("the trace reads");
+        let lines: Vec<(&str, &str)> = text
+            .lines()
+            .filter_map(|l| l.trim_start().split_once(' '))
+            .collect();
+        let main = lines
+            .first()
+            .map(|(t, _)| t.to_string())
+            .unwrap_or_default();
+        let opens = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, call))| call.starts_with("openat(") && call.contains(CPU_ONLINE))
+            .map(|(i, (t, _))| (t.to_string(), i))
+            .collect();
+        let first_clone = lines.iter().position(|(t, call)| {
+            *t == main && (call.starts_with("clone(") || call.starts_with("clone3("))
+        });
+        CpuReads {
+            main,
+            opens,
+            first_clone,
+            trace,
+        }
+    }
+
+    fn report(&self, what: &str) {
+        report(&format!(
+            "REPORT cpu1051 {what}: main {} opens {:?} first clone at line {:?} ({})",
+            self.main,
+            self.opens,
+            self.first_clone,
+            self.trace.display()
+        ));
+    }
+
+    /// The read happened, and only on main before it made any thread.
+    fn only_on_main_before_any_thread(&self, what: &str) {
+        assert!(
+            !self.opens.is_empty(),
+            "#1051: {what}: the runtime never read the CPU count for glibc's limit ({})",
+            self.trace.display()
+        );
+        for (tid, line) in &self.opens {
+            assert!(
+                *tid == self.main && self.first_clone.is_none_or(|c| *line < c),
+                "#1051: {what}: thread {tid} read the CPU count at line {line}, where only main \
+                 may, before its first thread (main {}, first clone at line {:?}; {})",
+                self.main,
+                self.first_clone,
+                self.trace.display()
+            );
+        }
+    }
+}
+
+/// #1051 (s286): glibc reads the CPU count only where no other thread runs
+/// the program. A program holding more threads than glibc's arena test
+/// bound (`sleepers1051.lu`: twelve tasks asleep, on any number of CPUs)
+/// made glibc open `/sys/devices/system/cpu/online` on a pool worker while
+/// main ran, and with descriptor 1 closed that open was the descriptor
+/// `fs_fstat(1)` saw (#781's race row, on hosts that give the program 8 or
+/// more CPUs). Now the runtime caps the arenas at that bound before `main`,
+/// so glibc never runs its test, and sets glibc's own limit
+/// (`8 * get_nprocs()`) when the pool starts, on main, before any worker.
+/// Each leg is read off `strace -f`, on both tiers:
+///
+/// - no arena setting, and a test bound (`glibc.malloc.arena_test=1`, which
+///   is not a limit): main reads the count before its first thread, and no
+///   other thread does;
+/// - the user's own limit (`MALLOC_ARENA_MAX=2`, or the tunable): nothing
+///   reads it, since glibc never tests and the runtime leaves the limit
+///   alone;
+/// - `MALLOC_ARENA_MAX=0`, the user asking for glibc's default policy:
+///   main never reads it (any read left is glibc's own);
+/// - `hello.lu`, which starts no pool: nothing reads it.
+///
+/// Red at 0.2.38 on every linux-gnu host, CI's included: a worker reads it.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+#[test]
+fn glibc_reads_the_cpu_count_only_before_any_worker_runs() {
+    let test = "glibc_reads_the_cpu_count_only_before_any_worker_runs";
+    let Some(strace) = strace_or_skip(test) else {
+        return;
+    };
+    let dir = scratch("cpu1051");
+    let sleepers = fixture("sleepers1051.lu");
+    let hello = corpus("hello.lu");
+    for release in [false, true] {
+        let tier = if release { "release" } else { "native" };
+        let Some(exe) = build(&sleepers, &dir, "sleepers", release) else {
+            continue;
+        };
+        for (leg, env) in [
+            ("default", &[][..]),
+            (
+                "arena_test",
+                &[("GLIBC_TUNABLES", "glibc.malloc.arena_test=1")][..],
+            ),
+        ] {
+            let r = CpuReads::of(&strace, &exe, &dir, leg, env);
+            r.report(&format!("{tier} {leg}"));
+            r.only_on_main_before_any_thread(&format!("sleepers on {tier}, {leg}"));
+        }
+        for (leg, env) in [
+            ("max2", ("MALLOC_ARENA_MAX", "2")),
+            ("tunable2", ("GLIBC_TUNABLES", "glibc.malloc.arena_max=2")),
+        ] {
+            let r = CpuReads::of(&strace, &exe, &dir, leg, &[env]);
+            r.report(&format!("{tier} {leg}"));
+            assert!(
+                r.opens.is_empty(),
+                "#1051: sleepers on {tier} with {}={}: the user's own limit stands, so nothing \
+                 reads the CPU count ({:?}; {})",
+                env.0,
+                env.1,
+                r.opens,
+                r.trace.display()
+            );
+        }
+        let r = CpuReads::of(&strace, &exe, &dir, "max0", &[("MALLOC_ARENA_MAX", "0")]);
+        r.report(&format!("{tier} max0"));
+        assert!(
+            r.opens.iter().all(|(tid, _)| *tid != r.main),
+            "#1051: sleepers on {tier} with MALLOC_ARENA_MAX=0: the user's setting stands, so \
+             main reads nothing ({:?}; {})",
+            r.opens,
+            r.trace.display()
+        );
+        let Some(h) = build(&hello, &dir, "hello", release) else {
+            continue;
+        };
+        let r = CpuReads::of(&strace, &h, &dir, "default", &[]);
+        r.report(&format!("{tier} hello"));
+        assert!(
+            r.opens.is_empty(),
+            "#1051: hello on {tier} starts no pool, so nothing reads the CPU count ({:?}; {})",
+            r.opens,
+            r.trace.display()
+        );
     }
 }
 
