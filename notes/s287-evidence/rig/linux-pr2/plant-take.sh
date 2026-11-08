@@ -8,6 +8,22 @@ base=$LANE/pr2
 podman=$LANES/H2-env/bin/podman
 export TMPDIR=$base/tmp
 cpus=0-3,8-11
+# The heat gate (H2's light-slot rule, kept for heavy takes): a take
+# starts only with the package at or under 95 C. Outside the locks it waits;
+# inside them it waits at most 15 min, then releases them (exit 75) and queues
+# again, and the wineserver check runs after it. After the take,
+# SENSOR_SUMMARY reads the take's own sensor log (max, samples over 95 C).
+pkg_c() { for z in /sys/class/hwmon/hwmon*; do [ "$(cat "$z/name" 2>/dev/null)" = coretemp ] && { echo $(( $(cat "$z/temp1_input") / 1000 )); return; }; done; echo 0; }
+heat_wait() {
+  n=0
+  while [ "$(pkg_c)" -gt 95 ]; do
+    if [ $((n % 5)) -eq 0 ]; then printf 'HEAT_WAIT package=%sC %s\n' "$(pkg_c)" "$(date -u +%FT%TZ)"; fi
+    n=$((n + 1)); sleep 60
+  done
+}
+sensor_summary() {
+  awk -v l="$1" '{ if (match($0, /\+[0-9.]+/)) { t = substr($0, RSTART + 1, RLENGTH - 1) + 0; n++; if (t > m) m = t; if (t > 95) o++ } } END { printf "SENSOR_SUMMARY %s samples=%d max=%.1fC over95=%d\n", l, n, m, o + 0 }' "$2"
+}
 wine_wait() {
   n=0
   while [ -n "$(ps -C wineserver -o pid= 2>/dev/null)" ]; do
@@ -18,6 +34,13 @@ wine_wait() {
 mode=$1; shift
 if [ "$mode" = inner ]; then
   label=$1; work=$2; green=$3; plant=$4; shift 4
+  n=0
+  while [ "$(pkg_c)" -gt 95 ]; do
+    if [ "$n" -ge 15 ]; then printf 'LOCKS_RELEASED_FOR_HEAT package=%sC %s\n' "$(pkg_c)" "$(date -u +%FT%TZ)"; exit 75; fi
+    printf 'HEAT_WAIT_IN_LOCKS package=%sC %s\n' "$(pkg_c)" "$(date -u +%FT%TZ)"
+    n=$((n + 1)); sleep 60
+  done
+  printf 'HEAT_GATE package=%sC (<= 95 C) %s\n' "$(pkg_c)" "$(date -u +%FT%TZ)"
   if [ -n "$(ps -C wineserver -o pid= 2>/dev/null)" ]; then
     printf 'LOCKS_RELEASED_FOR_WINESERVER %s\n' "$(date -u +%FT%TZ)"
     exit 75
@@ -36,6 +59,7 @@ if [ "$mode" = inner ]; then
   ' bash "$green" "$plant" "$@"
   rc=$?
   kill "$sensor" 2>/dev/null; wait "$sensor" 2>/dev/null
+  sensor_summary "$label" "$base/records/sensors-$label.log"
   printf 'LOCKS_RELEASING rc=%s %s\n' "$rc" "$(date -u +%FT%TZ)"
   exit "$rc"
 fi
@@ -43,6 +67,7 @@ label=$1; work=$2; green=$3; plant=$4; shift 4
 printf 'QUEUED %s plant=%s base=%s\n' "$(date -u +%FT%TZ)" "$plant" "$green"
 while :; do
   wine_wait
+  heat_wait
   flock -w 21600 $LANES/H2-A.lock flock -w 21600 $LANES/H2-B.lock bash "$0" inner "$label" "$work" "$green" "$plant" "$@"
   rc=$?
   [ "$rc" -eq 75 ] || break
