@@ -73,7 +73,7 @@ rig/, rig/linux/          the scripts as run. rig/linux/'s take scripts carry th
 The second change (a type that contains itself by value, and a pattern's bindings; the note
 notes/s287-recursive-types-and-pattern-bindings.md). Its files begin pr2-.
 
-pr2-rebase-map.txt        the one rebase, from the first change's code-final commit onto its head:
+pr2-rebase-map.txt        the first rebase, from the first change's code-final commit onto its head:
                           each commit before it and the commit it became. The two red takes ran
                           at the commits before it.
 pr2-m2-item7-e1c50464.log #1062b's walk at a work-in-progress snapshot: the rows on four machines
@@ -113,7 +113,15 @@ pr2-census-item8-snapshot.txt
                           the same comparison at the snapshot 86f08fba, before the witness was
                           adjusted: the one move outside this change's rows, in the corpus.
 pr2-forassign-scan.txt    the syntactic scan for a write to a for header's name.
+pr2-rebase-718fe47a.txt   the second rebase, with the first change onto trunk 718fe47a: each
+                          commit before it and the commit it became. Every pr2- log above ran
+                          before it.
+pr2-m2-rebased-a7078094.log
+                          at the rebased code: the checks, the lanes test (47 passed), the corpus
+                          (1327 files, 0 bad), conformance (733 anchors), the adjusted fixture's
+                          suites and every corpus-walking snapshot suite with no update.
 rig/linux-pr2/            the second change's Linux rig: the first change's (rig/linux/) with its
                           own base under the lane, its branch, its plant's three controls, and
                           gate-launch.sh, which starts it only after the first change's plant
-                          take, so the two never interleave on the slot's locks.
+                          take, so the two never interleave on the slot's locks; its take scripts
+                          carry the first change's heat gate.
