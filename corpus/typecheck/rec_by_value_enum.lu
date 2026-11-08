@@ -1,0 +1,16 @@
+//! check: fail(E0404)
+//! phase: resolve
+//! conforms: type.rec
+//!
+//! wolf-lang#1062: `Cons(int, L)` holds an `L` inline, so an `L` would
+//! have no finite size ([type.rec]). The checked machine and lupin ran it
+//! (exit 1); native and release refused it at `mem` as "cannot compile
+//! this yet". It is E0404 at the variant that closes the cycle, on every
+//! tier. Recursion goes through a container: `Cons(int, List[L])`.
+
+enum L { Nil, Cons(int, L) }
+
+fn main() -> int {
+    let l = L.Cons(1, L.Nil)
+    match l { Nil => 0, Cons(n, _) => n }
+}
