@@ -677,6 +677,12 @@ shadowing: a second `let x = …` introduces a fresh binding under the
 same name without mutating the first. Function parameters and `match`
 bindings are not `let` bindings; their mutability is governed by modes
 (`mut`, `take`), not by this rule.
+
+A `match` arm whose bare name tests a case of the scrutinee's type (a
+payload-less variant, or a tag of its error row) binds nothing
+(`[gram.pat.nullary.scope]`), so inside that arm the name is still the
+`let` outside the `match`: under `let Done`, `Done => { Done = 9 }` is
+this error at the assignment, and the fix is the same `var`.
 "#);
 
 code!(E0411, "`str` has no character indexing", r#"
