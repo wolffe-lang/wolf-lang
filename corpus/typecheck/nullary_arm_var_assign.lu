@@ -1,0 +1,18 @@
+//! check: run(exit=9)
+//! phase: run
+//! conforms: gram.pat.nullary.scope, gram.item.let
+//! warns: W0801
+//!
+//! The control for wolf-lang#1059: under `var Done` the arm's `Done`
+//! is the `var` ([gram.pat.nullary.scope]), and the arm writes it.
+
+enum E { Done, Other }
+
+fn main() -> int {
+    var Done: int = 8
+    match E.Done {
+        Done => { Done = 9 },
+        Other => {},
+    }
+    Done
+}
