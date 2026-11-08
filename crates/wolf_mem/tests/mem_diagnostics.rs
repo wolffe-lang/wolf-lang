@@ -1280,7 +1280,9 @@ fn e1002_an_index_written_between_the_claims() {
 #[test]
 fn e1002_a_loop_index_the_body_writes() {
     // EG3 (eg03): R2 holds only for a loop index the body never
-    // assigns; `i = 0` puts it back on the literal.
+    // assigns; `i = 0` puts it back on the literal. The index is copied
+    // into a `var` first, because the header's own `i` binds as `let`
+    // does (`[gram.pat.let]`) and writing it is E0410 before this check.
     snap(
         "e1002_elem_induction_written",
         "fn add2(mut a: int, mut b: int) {\n    \
@@ -1290,6 +1292,7 @@ fn e1002_a_loop_index_the_body_writes() {
          fn main() -> !int {\n    \
              var xs = [1, 2, 3]\n    \
              for i in 1..3 {\n        \
+                 var i = i\n        \
                  i = 0\n        \
                  add2(mut xs[0], mut xs[i])\n    \
              }\n    \
