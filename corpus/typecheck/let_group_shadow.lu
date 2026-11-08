@@ -1,0 +1,11 @@
+//! check: run(exit=2)
+//! phase: run
+//! conforms: gram.pat.names, gram.item.let
+//!
+//! A D63 comma group is several patterns ([gram.pat.names]): the second
+//! `a` shadows the first, as two `let`s do, and reads it.
+
+fn main() -> int {
+    let a = 1, a = a + 1
+    a
+}
