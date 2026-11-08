@@ -1,0 +1,14 @@
+//! check: fail(E0601)
+//! phase: resolve
+//! conforms: type.err.alias.cycle
+//!
+//! The rest of an alias's own row is checked where the alias is
+//! declared too ([type.err.alias.cycle], as amended for
+//! wolf-lang#1064): an alias that spells `x` twice is E0601 at the
+//! second `x` with no row naming it, as it already was once a row
+//! named it. A library cannot ship an alias that fails only in its
+//! users' builds.
+
+error A = {x, x}
+
+fn main() -> int { 0 }
