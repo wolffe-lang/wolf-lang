@@ -1,0 +1,10 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names
+//!
+//! Both sides of `@` ([gram.pat.names]): `x @ x` bound `x` twice, and
+//! every machine answered 5.
+
+fn main() -> int {
+    match 5 { x @ x => x }
+}
