@@ -1,0 +1,22 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.nullary.scope, gram.item.let, type.row.match
+//!
+//! wolf-lang#1059 through a row tag: `gone` tests the tag of the
+//! scrutinee's error row and binds nothing ([gram.pat.nullary.scope]),
+//! so `gone = 9` assigns the `let`, which is E0410. Every machine wrote
+//! through the `let` (exit 9). A rule decided by scope rather than by
+//! type would miss this arm, since a row tag is not a variant in scope.
+
+fn g(ok: bool) -> int ! {gone} {
+    if ok { 1 } else { return gone }
+}
+
+fn main() -> int {
+    let gone: int = 8
+    match g(false) {
+        gone => { gone = 9 },
+        n => {},
+    }
+    gone
+}
