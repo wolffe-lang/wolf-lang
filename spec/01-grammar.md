@@ -1307,6 +1307,33 @@ E0827, in every position. Files:
 `typecheck/let_group_shadow.lu`,
 `typecheck/pattern_variant_tests_twice.lu`.
 
+Pattern bindings bind as `let` does `[gram.pat.let]` (2026-11-08,
+wolf-lang#1062, the third case). A name a pattern binds outside `let`
+and `var` (in a `match` arm, a `for` header, an `else |…|` handler, a
+`select` receive, either side of `@`) is immutable for its scope,
+fields included (`[gram.item.let]`), and assigning it is **E0410**, as
+for a `let`. The binding holds its own value, moved or copied out of
+what was matched (`[mem.tier0.move]`), never a place in it, so no
+write to it could reach the scrutinee: under `fn bump(mut v: E)`,
+`match v { A(x) => { x = x + 1 } }` reads as an update to `v` and was
+one to the arm's own copy. The fix is to shadow the name with a `var`
+at the start of the body, `var x = x`, and update that. An unmarked
+binding in wolf is already immutable: an item or a statement is `let`
+unless it says `var`, and a parameter is `read` unless it says `mut`
+or `take` (`[mem.tier0.mode.read]`). A bare arm name that tests a case
+binds nothing (`[gram.pat.nullary.scope]`), so under `var Done` the
+arm `Done => { Done = 9 }` still writes the `var`. A pattern that
+would declare a mutable binding itself (`A(var x)`) is a grammar change
+for a later revision. Whether a bare arm name binds is the scrutinee's
+type's question, so the checker reports this E0410, at the typecheck
+rung. Files: `typecheck/match_binding_assign.lu`,
+`typecheck/for_binding_assign.lu`, `typecheck/else_binding_assign.lu`,
+`typecheck/select_binding_assign.lu`,
+`typecheck/match_binding_field_assign.lu`,
+`typecheck/match_binding_at_assign.lu`,
+`typecheck/match_binding_mut_param.lu`,
+`typecheck/match_binding_var_shadow.lu`.
+
 Literal patterns `[gram.pat.lit]` (2026-11-06, wolf-lang#1058): a
 literal pattern is a literal, typed as every literal is
 (`[type.numlit]`): it takes its type from the context it is written
