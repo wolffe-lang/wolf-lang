@@ -381,6 +381,10 @@ pub fn with_scope<R>(scope: &Arc<ScopeInner>, f: impl FnOnce() -> R) -> R {
 
 fn pool() -> &'static Pool {
     POOL.get_or_init(|| {
+        // s286 (#1051): glibc's own arena limit, set here, before the first
+        // worker exists, on the one thread running the program
+        // ([`crate::arena`]).
+        crate::arena::settle_at_pool_start();
         super::stack::install_overflow_handler();
         let target = std::thread::available_parallelism()
             .map(|n| n.get())
