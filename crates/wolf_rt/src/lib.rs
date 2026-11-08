@@ -99,6 +99,9 @@ pub(crate) mod scratch;
 // pipes, the readiness set's) never take a closed 0, 1 or 2.
 #[cfg(unix)]
 pub(crate) mod stdfd;
+// s286 (wolf-lang#1051): glibc's arena limit, settled before any thread
+// runs the program, so glibc never reads the CPU count on a closed 0–2.
+pub(crate) mod arena;
 // Signal RECEPTION (s114, #126): the meaning-based receive surface
 // over the self-pipe/sigaction trampoline (linux at s114, macOS since
 // s59 — `pipe` + FD_CLOEXEC where pipe2 does not exist, spec

@@ -1069,10 +1069,13 @@ pub extern "C" fn __wolf_rt_stack_start() {
 }
 
 /// The entry shim's first call (s267, wolf-lang#962, `[abi.target.main]`):
-/// the C entry's `(argc, argv, envp)`, recorded for the argv readers
-/// before user `main` runs ([`crate::os`]'s entry record), then the main
-/// thread's start-up ([`__wolf_rt_stack_start`]). One call where the shim
-/// made one before, so the shim's instruction count did not move.
+/// on linux-gnu, glibc's arena limit settled at its test bound, so glibc
+/// never reads the CPU count once threads run (s286, #1051,
+/// [`crate::arena`]); then the C entry's `(argc, argv, envp)`, recorded for
+/// the argv readers before user `main` runs ([`crate::os`]'s entry record),
+/// then the main thread's start-up ([`__wolf_rt_stack_start`]). One call
+/// where the shim made one before, so the shim's instruction count did not
+/// move.
 ///
 /// # Safety
 /// `argv` is null or addresses `argc` pointers to NUL-terminated strings
@@ -1085,6 +1088,7 @@ pub unsafe extern "C" fn __wolf_rt_main_start(
     argv: *const *const core::ffi::c_char,
     envp: *const *const core::ffi::c_char,
 ) {
+    crate::arena::settle_at_entry();
     crate::os::record_entry(argc, argv, envp);
     __wolf_rt_stack_start();
 }
