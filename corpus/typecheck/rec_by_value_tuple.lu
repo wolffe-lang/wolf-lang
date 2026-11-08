@@ -1,0 +1,13 @@
+//! check: fail(E0404)
+//! phase: resolve
+//! conforms: type.rec
+//!
+//! Through a tuple payload ([type.rec]): a tuple's elements are inline
+//! too. The checked machine and lupin ran it (exit 7); native refused it.
+
+enum L { Nil, Cons((int, L)) }
+
+fn main() -> int {
+    let l = L.Cons((1, L.Nil))
+    match l { Nil => 0, Cons(p) => 7 }
+}
