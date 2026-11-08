@@ -1,0 +1,17 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.let
+//!
+//! wolf-lang#1062, the third case: a name a `match` arm's pattern binds
+//! binds as `let` does ([gram.pat.let]), so `x = x + 1` is E0410. Every
+//! machine let the arm assign it (exit 4). The fix is `var x = x` at the
+//! start of the body.
+
+enum E { A(int) }
+
+fn f(v: E) -> int {
+    match v { A(x) => { x = x + 1
+ x } }
+}
+
+fn main() -> int { f(E.A(3)) }
