@@ -1,0 +1,11 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names, gram.item.let
+//!
+//! A binder pattern binds each name once too ([gram.pat.names]):
+//! `let (x, x) = (1, 2)` answered 2 on every machine.
+
+fn main() -> int {
+    let (x, x) = (1, 2)
+    x
+}
