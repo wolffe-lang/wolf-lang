@@ -1,0 +1,15 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names, gram.pat.struct
+//!
+//! wolf-lang#1062 at two types: `x` was the `int` and the `bool` was
+//! dropped (exit 2). A name bound twice is E0827 whatever its types
+//! ([gram.pat.names]).
+
+struct P { a: bool, b: int }
+
+fn f(v: P) -> int {
+    match v { P { a: x, b: x } => x }
+}
+
+fn main() -> int { f(P { a: true, b: 2 }) }
