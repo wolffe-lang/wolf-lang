@@ -1171,6 +1171,8 @@ impl<'a> Lower<'a> {
         row: wolf_ast::ErrorRow<'_>,
     ) -> (Vec<(String, Vec<TyId>)>, Option<TyId>) {
         let mut tags: Vec<(String, Vec<TyId>)> = Vec::new();
+        // The tags this row's own entries spell (`[gram.type.row.dup]`).
+        let mut own: Vec<String> = Vec::new();
         let mut tail: Option<TyId> = if row.is_open() {
             Some(self.table.intern(TyKind::OpenTail))
         } else {
@@ -1330,7 +1332,12 @@ impl<'a> Lower<'a> {
                 }
                 continue;
             }
-            if tags.iter().any(|(n, _)| *n == name) {
+            // `[gram.type.row.dup]` (wolf-lang#1065): the entries this row
+            // spells itself name each tag once. A tag an alias brought is
+            // not one of them: it meets the flatten merge in either order
+            // (`[type.err.alias.union]`), and a payload that disagrees is
+            // E0609 at this, the row's own spelling.
+            if own.contains(&name) {
                 self.diags.push(
                     Diagnostic::error(
                         codes::E0601,
@@ -1346,7 +1353,15 @@ impl<'a> Lower<'a> {
                 );
                 continue;
             }
-            tags.push((name, payload));
+            own.push(name.clone());
+            match tags.iter().find(|(n, _)| *n == name) {
+                None => tags.push((name, payload)),
+                Some((_, have)) if *have == payload => {}
+                Some((_, have)) => {
+                    let have = have.clone();
+                    self.layer_payload_conflict(file, &name, &have, &payload, Some(&row), span);
+                }
+            }
         }
         (tags, tail)
     }
