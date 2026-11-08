@@ -1132,6 +1132,23 @@ for enums to write — could not be spelled at all, and
 exhaustiveness had nothing to be exhaustive over. Both tools refused
 it identically, so there was no divergence to fix, only an absence.)
 
+A nullary pattern binds nothing `[gram.pat.nullary.scope]`
+(2026-11-08, wolf-lang#1059). Inside its arm, every name resolves as
+it does outside the `match`, so the arm's body cannot assign a `let`
+of the same name either: under `let Done`, `Done => { Done = 9 }` is
+E0410 at the assignment, and so is a write to one of its fields
+(`Done.a = 9`); under `var Done` the arm writes the `var`. This holds
+for a bare name that tests a variant of the scrutinee's enum and for
+one that tests a tag of its error row (`gone => …` over `T ! {gone}`).
+Whether a bare arm name tests or binds is the scrutinee's type's
+question (`[gram.pat.binder]`), so the checker decides it and reports
+this E0410, at the typecheck rung, where E0410 is otherwise a resolve
+rung refusal; the records agree on code and span all the same
+(`[proto.cmp.rung]`). Files: `typecheck/nullary_arm_let_assign.lu`,
+`typecheck/nullary_arm_var_assign.lu`,
+`typecheck/nullary_arm_tag_assign.lu`,
+`typecheck/nullary_arm_field_assign.lu`.
+
 Payload binding: `BadDigit(e) => …`; or-patterns `A | B`; guards are arm
 syntax (`[gram.expr.flow]`), not pattern syntax. `closed_pattern` is a
 pattern without a top-level `|`: positions where a `|` delimiter follows
