@@ -1,8 +1,9 @@
 s287 evidence (wolf-lang: the front-end rulings on the second compiler's spec silences:
-#1059, #1060, #1061's refusals, #1062, #1064, #1065, and #1073).
+#1059, #1060, #1061's refusals, #1062's first case, #1064, #1065, and #1073).
 Paths in the logs are relative to the lane's directory, written $LANE, and to the lane's
-checkouts of the org's repositories, written $ORG; the Mac is arm64 macOS. Lines naming a private
-repository are dropped here; their evidence stays outside the tree.
+checkouts of the org's repositories, written $ORG. The two arm64 macOS machines are written M1
+and M2 (M2 runs macOS 15.5), the Linux hosts H1 and H2. Private repositories are not named: a
+log line that names one is dropped, and the census folds them into one aggregate line.
 
 base-d848fbed.log         the base: wolf at d848fbed (a clean debug build of that commit,
                           copied by value, sha256 4781f945...); every probe on the checked
@@ -11,7 +12,41 @@ base-d848fbed.log         the base: wolf at d848fbed (a clean debug build of tha
                           release page, read twice). Three takes, in order: the ruling page's
                           programs; the x* neighbours; then three programs re-run after a
                           correction (dupclosure and x1062c_closure_param first spelled a closure
-                          `|a| …`, which wolf does not parse; x1062c_else_binder first assigned a
+                          `|a| ...`, which wolf does not parse; x1062c_else_binder first assigned a
                           tag outside a row context). probe/ holds the corrected programs.
-probe/                    the probe programs (.lu.txt, one per case). The bare names (1059 …
+probe/                    the probe programs (.lu.txt, one per case). The bare names (1059 ...
                           traitcycleuse) are the ruling page's; x* are this lane's neighbours.
+snapshots.txt             each work-in-progress snapshot a take built, its parent, and the branch
+                          commit with the same tree.
+m2-red-023ae9cf.log       the rows red at #1064's rows' commit (the base's code): the lanes test
+                          3 failed by name, the corpus step 3 bad.
+m2-red-d0f1652e.log       the rows red at #1059's: 3 failed by name, 3 bad, the anchors gate out of
+                          sync, conformance naming the unknown anchor.
+m2-red-392a98a7.log       the rows red at #1060's, #1062a's, #1065's and #1061's: 18 failed by
+                          name, 20 bad in 17 files, the anchors gate and conformance red.
+m1-item1-fix-1489788b.log #1064's fix: the rows on four machines, the lanes test, the anchors gate,
+                          the corpus and conformance.
+m1-item2-fix-d7cf5721.log #1059's fix: the rows on four machines and the lanes test.
+m2-item4-0df646cb.log     #1060's and #1062a's fixes: the lanes test (14 passed). Its four-machine
+                          step names a binary path that did not exist on M2 (NO-RECORD lines),
+                          fixed in rows.sh before the next take.
+m2-items345-72b352f1.log  #1060, #1062a and #1065: the lanes test (28 passed); its corpus step ran
+                          without the driver it looks for at target/debug (M2 kept its target
+                          elsewhere then: "phase execution pending"), fixed in m2-run.sh.
+m2-items16-ddc691d0.log   every fix of this change: the rows on four machines, the lanes test (32
+                          passed), the corpus with the phase ledger (1312 files, 0 bad, 418
+                          rules), conformance red only for the four anchors not yet indexed. Its
+                          last two lines are the runner's own shell reading the script that was
+                          edited while it ran, after the take's END; nothing ran.
+m1-take-aa3c9baa-queued-as-faf84cae.log
+                          a take queued for faf84cae that built aa3c9baa (its head line), because
+                          a later job moved the one shared build worktree under it; build-at.sh
+                          now gives each job its own worktree.
+m2-refresh-4945073e.log   the snapshot suites with insta's update on, then the diagnostics
+                          catalog: the snapshots and catalog committed here.
+m1-checks-49cbd28f.log    at the code-final head: fmt, clippy, the wolf_diag and wolf_sema suites,
+                          the lanes test, the catalogs' checks, the anchors gate, the corpus (1312
+                          files, 0 bad) and conformance (731 anchors). Every END exit=0.
+census-pr1.txt            the census: every .lu of the corpus and of 38 org checkouts at the mem
+                          rung, on the base binary and on aa3c9baa's, compared run by run.
+rig/, rig/linux/          the scripts as run.

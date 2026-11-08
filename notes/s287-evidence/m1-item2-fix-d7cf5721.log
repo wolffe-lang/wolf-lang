@@ -1,0 +1,64 @@
+s287: building at d7cf5721 in $LANE/build
+s287: last release 22s ago; waiting 38s for the turn
+s287: lock taken 23:56:18, 13387 MiB free, 116 GB disk; running: $LANE/rig/rows.sh
+== STEP head 04:56:18
+d7cf5721ca09583794549fd214085a1dbfcebc89
+d7cf5721 s287 snapshot of the working tree
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+END head exit=0
+== STEP build 04:56:18
+   Compiling wolf_sema v0.2.38 ($LANE/build/crates/wolf_sema)
+   Compiling wolf_mem v0.2.38 ($LANE/build/crates/wolf_mem)
+   Compiling wolf_query v0.2.38 ($LANE/build/crates/wolf_query)
+   Compiling wolf_lsp v0.2.38 ($LANE/build/crates/wolf_lsp)
+   Compiling wolf_doc v0.2.38 ($LANE/build/crates/wolf_doc)
+   Compiling wolf_wir v0.2.38 ($LANE/build/crates/wolf_wir)
+   Compiling wolf_backend v0.2.38 ($LANE/build/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.38 ($LANE/build/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.38 ($LANE/build/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.38 ($LANE/build/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.26s
+END build exit=0
+== STEP rows-everywhere 04:56:29
+## typecheck/nullary_arm_let_assign.lu
+checked  fail(E0410)  typecheck out=None warns=[W0801@637-641] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   fail(E0410)  typecheck out=None warns=[W0801@637-641] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  fail(E0410)  typecheck out=None warns=[W0801@637-641] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(9)      run       out=None warns=[W0801@637-641] 
+## typecheck/nullary_arm_var_assign.lu
+checked  exit(9)      run       out=None warns=[W0801@301-305] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   exit(9)      run       out=None warns=[W0801@301-305] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  exit(9)      run       out=None warns=[W0801@301-305] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(9)      run       out=None warns=[W0801@301-305] 
+## typecheck/nullary_arm_tag_assign.lu
+checked  fail(E0410)  typecheck out=None warns=[] error[E0410]: `gone` is bound with `let`, so it cannot be assigned again
+native   fail(E0410)  typecheck out=None warns=[] error[E0410]: `gone` is bound with `let`, so it cannot be assigned again
+release  fail(E0410)  typecheck out=None warns=[] error[E0410]: `gone` is bound with `let`, so it cannot be assigned again
+lupin    exit(9)      run       out=None warns=[] 
+## typecheck/nullary_arm_field_assign.lu
+checked  fail(E0410)  typecheck out=None warns=[W0801@430-434] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+native   fail(E0410)  typecheck out=None warns=[W0801@430-434] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+release  fail(E0410)  typecheck out=None warns=[W0801@430-434] warning[W0801]: `Done` binds a new name here — it does not test the variant `E.Done`
+lupin    exit(9)      run       out=None warns=[W0801@430-434] 
+END rows-everywhere exit=0
+== STEP rows-test 04:56:32
+   Compiling wolf_driver v0.2.38 ($LANE/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running tests/front_end_rulings_lanes.rs (target/debug/deps/front_end_rulings_lanes-b7c7fe7084f28358)
+
+running 4 tests
+test a_nullary_arm_writes_an_outer_var ... ok
+test assigning_a_let_through_a_nullary_arm_is_e0410 ... ok
+test assigning_a_let_through_a_row_tag_arm_is_e0410 ... ok
+test assigning_a_lets_field_through_a_nullary_arm_is_e0410 ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 3.12s
+
+END rows-test exit=0
+== STEP anchors 04:56:36
+spec-extract: spec/anchors.json OUT OF SYNC — run `cargo xtask spec-extract`
+END anchors exit=1
+== done 2026-11-08T04:56:37Z
+s287: END exit=0 23:56:37

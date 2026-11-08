@@ -1,0 +1,302 @@
+s287: M2 take at 0df646cb: rows.sh 
+s287: lock taken 00:08:39, 11351 MiB free, 100 GB disk; running: $LANE/rig/rows.sh
+== STEP head 05:08:39
+tree of 0df646cb
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+Darwin M2 24.5.0 Darwin Kernel Version 24.5.0: Tue Apr 22 19:54:26 PDT 2025; root:xnu-11417.121.6~2/RELEASE_ARM64_T8112 arm64
+END head exit=0
+== STEP build 05:08:39
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded allocator-api2 v0.2.21
+  Downloaded bitflags v1.3.2
+  Downloaded potential_utf v0.1.5
+  Downloaded rustc-hash v2.1.3
+  Downloaded equivalent v1.0.2
+  Downloaded itoa v1.0.18
+  Downloaded form_urlencoded v1.2.2
+  Downloaded idna_adapter v1.2.2
+  Downloaded arrayref v0.3.9
+  Downloaded cranelift-srcgen v0.134.3
+  Downloaded cranelift-codegen-shared v0.134.3
+  Downloaded yoke-derive v0.8.2
+  Downloaded percent-encoding v2.3.2
+  Downloaded cranelift-bitset v0.134.3
+  Downloaded cfg-if v1.0.4
+  Downloaded heck v0.5.0
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded utf8_iter v1.0.4
+  Downloaded zerofrom-derive v0.1.7
+  Downloaded cranelift-assembler-x64 v0.134.3
+  Downloaded cranelift-control v0.134.3
+  Downloaded cranelift-entity v0.134.3
+  Downloaded fnv v1.0.7
+  Downloaded foldhash v0.2.0
+  Downloaded zerofrom v0.1.8
+  Downloaded constant_time_eq v0.4.2
+  Downloaded cranelift-object v0.134.3
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded cranelift-module v0.134.3
+  Downloaded find-msvc-tools v0.1.10
+  Downloaded lsp-server v0.10.0
+  Downloaded quote v1.0.47
+  Downloaded displaydoc v0.2.7
+  Downloaded serde_repr v0.1.21
+  Downloaded shlex v2.0.1
+  Downloaded synstructure v0.13.2
+  Downloaded writeable v0.6.3
+  Downloaded tinystr v0.8.3
+  Downloaded zmij v1.0.23
+  Downloaded crc32fast v1.5.0
+  Downloaded target-lexicon v0.13.5
+  Downloaded zerovec-derive v0.11.3
+  Downloaded arbitrary v1.4.2
+  Downloaded litemap v0.8.2
+  Downloaded cranelift-bforest v0.134.3
+  Downloaded either v1.17.0
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded arrayvec v0.7.8
+  Downloaded yoke v0.8.3
+  Downloaded smallvec v1.15.2
+  Downloaded icu_provider v2.2.0
+  Downloaded cranelift-frontend v0.134.3
+  Downloaded serde_core v1.0.229
+  Downloaded anyhow v1.0.104
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded proc-macro2 v1.0.107
+  Downloaded unicode-ident v1.0.24
+  Downloaded wasmtime-internal-core v47.0.3
+  Downloaded log v0.4.33
+  Downloaded cranelift-assembler-x64-meta v0.134.3
+  Downloaded icu_locale_core v2.2.0
+  Downloaded icu_properties v2.2.0
+  Downloaded serde_derive v1.0.229
+  Downloaded icu_normalizer v2.2.0
+  Downloaded icu_normalizer_data v2.2.0
+  Downloaded lsp-types v0.95.1
+  Downloaded rayon-core v1.13.0
+  Downloaded serde v1.0.229
+  Downloaded cranelift-isle v0.134.3
+  Downloaded crossbeam-channel v0.5.16
+  Downloaded zerotrie v0.2.4
+  Downloaded icu_collections v2.2.0
+  Downloaded indexmap v2.14.0
+  Downloaded bumpalo v3.20.3
+  Downloaded cranelift-codegen-meta v0.134.3
+  Downloaded memchr v2.8.3
+  Downloaded url v2.5.8
+  Downloaded cc v1.4.2
+  Downloaded zerovec v0.11.6
+  Downloaded idna v1.1.0
+  Downloaded regalloc2 v0.15.2
+  Downloaded hashbrown v0.16.1
+  Downloaded hashbrown v0.17.1
+  Downloaded serde_json v1.0.151
+  Downloaded icu_properties_data v2.2.0
+  Downloaded libm v0.2.16
+  Downloaded rayon v1.12.0
+  Downloaded blake3 v1.8.6
+  Downloaded syn v2.0.119
+  Downloaded syn v3.0.3
+  Downloaded gimli v0.33.0
+  Downloaded object v0.39.1
+  Downloaded libc v0.2.189
+  Downloaded cranelift-codegen v0.134.3
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.38 ($LANE/src/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling hashbrown v0.17.1
+   Compiling find-msvc-tools v0.1.10
+   Compiling stable_deref_trait v1.2.1
+   Compiling cfg-if v1.0.4
+   Compiling shlex v2.0.1
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling cc v1.4.2
+   Compiling wolf_diag v0.2.38 ($LANE/src/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling blake3 v1.8.6
+   Compiling crossbeam-deque v0.8.7
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling wolf_lex v0.2.38 ($LANE/src/crates/wolf_lex)
+   Compiling rayon-core v1.13.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling constant_time_eq v0.4.2
+   Compiling cranelift-srcgen v0.134.3
+   Compiling zerofrom v0.1.8
+   Compiling smallvec v1.15.2
+   Compiling yoke v0.8.3
+   Compiling arrayvec v0.7.8
+   Compiling arrayref v0.3.9
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling zerovec v0.11.6
+   Compiling wolf_ast v0.2.38 ($LANE/src/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling wolf_parse v0.2.38 ($LANE/src/crates/wolf_parse)
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling either v1.17.0
+   Compiling rayon v1.12.0
+   Compiling indexmap v2.14.0
+   Compiling tinystr v0.8.3
+   Compiling cranelift-isle v0.134.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling hashbrown v0.16.1
+   Compiling wolf_sema v0.2.38 ($LANE/src/crates/wolf_sema)
+   Compiling libc v0.2.189
+   Compiling serde_core v1.0.229
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling icu_normalizer_data v2.2.0
+   Compiling log v0.4.33
+   Compiling heck v0.5.0
+   Compiling icu_properties_data v2.2.0
+   Compiling fnv v1.0.7
+   Compiling utf8_iter v1.0.4
+   Compiling gimli v0.33.0
+   Compiling icu_collections v2.2.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling icu_provider v2.2.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling memchr v2.8.3
+   Compiling target-lexicon v0.13.5
+   Compiling allocator-api2 v0.2.21
+   Compiling cranelift-codegen v0.134.3
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling serde v1.0.229
+   Compiling rustc-hash v2.1.3
+   Compiling zmij v1.0.23
+   Compiling arbitrary v1.4.2
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-control v0.134.3
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling cranelift-bforest v0.134.3
+   Compiling serde_derive v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling anyhow v1.0.104
+   Compiling crc32fast v1.5.0
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.38 ($LANE/src/crates/wolf_mem)
+   Compiling object v0.39.1
+   Compiling itoa v1.0.18
+   Compiling percent-encoding v2.3.2
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.38 ($LANE/src/crates/wolf_fmt)
+   Compiling wolf_wir v0.2.38 ($LANE/src/crates/wolf_wir)
+   Compiling wolf_query v0.2.38 ($LANE/src/crates/wolf_query)
+   Compiling wolf_backend v0.2.38 ($LANE/src/crates/wolf_backend)
+   Compiling url v2.5.8
+   Compiling wolf_rt v0.2.38 ($LANE/src/crates/wolf_rt)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling lsp-server v0.10.0
+   Compiling wolf_cimport v0.2.38 ($LANE/src/crates/wolf_cimport)
+   Compiling wolf_lsp v0.2.38 ($LANE/src/crates/wolf_lsp)
+   Compiling wolf_pkg v0.2.38 ($LANE/src/crates/wolf_pkg)
+   Compiling wolf_codegen_clif v0.2.38 ($LANE/src/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.38 ($LANE/src/crates/wolf_codegen_llvm)
+   Compiling wolf_doc v0.2.38 ($LANE/src/crates/wolf_doc)
+   Compiling wolf_driver v0.2.38 ($LANE/src/crates/wolf_driver)
+END build exit=0
+== STEP rows-everywhere 05:09:18
+## typecheck/pattern_name_twice_struct.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 38.71s
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/pattern_name_twice_types.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/pattern_name_twice_let.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/pattern_name_twice_at.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(5)      run       out=None warns=[] 
+## typecheck/pattern_name_twice_nested.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(5)      run       out=None warns=[] 
+## typecheck/pattern_name_twice_for.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/param_name_twice.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/param_name_twice_closure.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/let_group_shadow.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(2)      run       out=None warns=[] 
+## typecheck/pattern_variant_tests_twice.lu
+checked  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+native   NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+release  NO-RECORD $LANE/rig/probe-all.sh: line 28: $LANE/src/target/debug/wolf: No such file or directory
+lupin    exit(4)      run       out=None warns=[] 
+END rows-everywhere exit=0
+== STEP rows-test 05:09:19
+   Compiling wolf_driver v0.2.38 ($LANE/src/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests/front_end_rulings_lanes.rs ($LANE/target/debug/deps/front_end_rulings_lanes-b7c7fe7084f28358)
+
+running 14 tests
+test a_closure_parameter_declared_twice_is_e0827 ... ok
+test a_comma_group_rebinds_by_shadowing ... ok
+test a_for_header_that_binds_a_name_twice_is_e0827 ... ok
+test a_let_pattern_that_binds_a_name_twice_is_e0827 ... ok
+test a_name_bound_twice_at_two_types_is_e0827 ... ok
+test a_nested_name_bound_twice_is_e0827 ... ok
+test a_parameter_declared_twice_is_e0827 ... ok
+test a_struct_field_declared_twice_is_e0302 ... ok
+test a_struct_pattern_that_binds_a_name_twice_is_e0827 ... ok
+test a_variant_declared_twice_is_e0302 ... ok
+test a_variant_declared_twice_with_two_payloads_is_e0302 ... ok
+test an_unused_alias_that_spells_a_tag_twice_is_e0601 ... ok
+test the_general_type_spellings_refuse_a_member_declared_twice ... ok
+test two_tests_of_one_variant_are_not_a_name_bound_twice ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.09s
+
+END rows-test exit=0
+== STEP anchors 05:09:20
+END anchors exit=1
+== done 2026-11-08T05:09:24Z
+spec-extract: spec/anchors.json OUT OF SYNC — run `cargo xtask spec-extract`
+s287: END exit=0 00:09:24
+M2-EXIT 0

@@ -1,0 +1,16 @@
+s287: the takes ran at commits, never the live tree. Work in progress was built from a
+snapshot: a commit object of the working tree, parented on the branch commit named, on no
+branch. Each snapshot, its parent, and the branch commit with the same tree when one exists.
+
+1489788b  parent 023ae9cf  tree = 61c14051  #1064's fix (mac-item1-fix-1489788b.log)
+b85581a6  parent d0f1652e  tree = none      #1059's first try: no `let` provenance recorded yet,
+                                            two of the rows red; not kept
+d7cf5721  parent d0f1652e  tree = c9f7bacf  #1059's fix, with 8bb3091f folded in
+faf84cae  parent b2e202a8  tree = none      queued for #1060's fix; a later job moved the shared
+                                            build worktree under it, so it built aa3c9baa (its own
+                                            head line says so: take-aa3c9baa-queued-as-faf84cae.log)
+0df646cb  parent 96ccb349  tree = none      #1060's and #1062a's fixes together (m2-item4-0df646cb.log)
+72b352f1  parent 8181cba9  tree = none      #1060, #1062a and #1065 together (m2-items345-72b352f1.log)
+ddc691d0  parent 392a98a7  tree = a87166ad  every fix of #1064, #1059, #1060, #1062a, #1065 and
+                                            #1061 (m2-items16-ddc691d0.log)
+ac205da7  parent a5e22942  tree = none      a check take before the snapshots were refreshed

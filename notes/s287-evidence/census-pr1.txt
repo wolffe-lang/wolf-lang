@@ -1,0 +1,101 @@
+aspen: 34 file(s) in 24 run(s); 0 verdict(s) moved, 0 error set(s) moved
+boreutils: 215 file(s) in 49 run(s); 0 verdict(s) moved, 0 error set(s) moved
+burrow: 34 file(s) in 18 run(s); 0 verdict(s) moved, 0 error set(s) moved
+clef: 41 file(s) in 26 run(s); 0 verdict(s) moved, 0 error set(s) moved
+  corpus/resolve/enum_variant_case_distinct.lu: verdict None at None -> pass at mem
+  corpus/resolve/enum_variant_twice.lu: verdict None at None -> fail(E0302) at resolve
+  corpus/resolve/enum_variant_twice_payload.lu: verdict None at None -> fail(E0302) at resolve
+  corpus/resolve/struct_field_twice.lu: verdict None at None -> fail(E0302) at resolve
+  corpus/resolve/type_decl_member_twice.lu: verdict None at None -> fail(E0302) at resolve
+  corpus/rows/error_alias_union_own_after.lu: verdict None at None -> pass at mem
+  corpus/rows/negative/error_alias_cycle_pair_unused.lu: verdict None at None -> fail(E0610) at typecheck
+  corpus/rows/negative/error_alias_cycle_unused.lu: verdict None at None -> fail(E0610) at typecheck
+  corpus/rows/negative/error_alias_own_dup_unused.lu: verdict None at None -> fail(E0601) at typecheck
+  corpus/rows/negative/error_alias_union_own_after_payload.lu: verdict None at None -> fail(E0609) at typecheck
+  corpus/rows/negative/error_alias_union_own_twice.lu: verdict None at None -> fail(E0601) at typecheck
+  corpus/rows/negative/error_alias_union_two_aliases_payload.lu: verdict None at None -> fail(E0609) at typecheck
+  corpus/rows/negative/error_row_own_dup_bare.lu: verdict None at None -> fail(E0601) at typecheck
+  corpus/typecheck/let_group_shadow.lu: verdict None at None -> pass at mem
+  corpus/typecheck/nullary_arm_field_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/nullary_arm_let_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/nullary_arm_tag_assign.lu: verdict None at None -> fail(E0410) at typecheck
+  corpus/typecheck/nullary_arm_var_assign.lu: verdict None at None -> pass at mem
+  corpus/typecheck/or_pattern_binds.lu: verdict None at None -> pass at mem
+  corpus/typecheck/or_pattern_binds_at.lu: verdict None at None -> pass at mem
+  corpus/typecheck/or_pattern_binds_missing.lu: verdict None at None -> fail(E0828) at typecheck
+  corpus/typecheck/or_pattern_binds_missing_left.lu: verdict None at None -> fail(E0828) at typecheck
+  corpus/typecheck/or_pattern_binds_nested.lu: verdict None at None -> pass at mem
+  corpus/typecheck/or_pattern_binds_types.lu: verdict None at None -> fail(E0401) at typecheck
+  corpus/typecheck/param_name_twice.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/param_name_twice_closure.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_name_twice_at.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_name_twice_for.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_name_twice_let.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_name_twice_nested.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_name_twice_struct.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_name_twice_types.lu: verdict None at None -> fail(E0827) at typecheck
+  corpus/typecheck/pattern_variant_tests_twice.lu: verdict None at None -> pass at mem
+  corpus/resolve/enum_variant_case_distinct.lu: errors None -> []
+  corpus/resolve/enum_variant_twice.lu: errors None -> [['E0302', 'enum_variant_twice.lu', [348, 349]]]
+  corpus/resolve/enum_variant_twice_payload.lu: errors None -> [['E0302', 'enum_variant_twice_payload.lu', [289, 290]]]
+  corpus/resolve/struct_field_twice.lu: errors None -> [['E0302', 'struct_field_twice.lu', [269, 270]]]
+  corpus/resolve/type_decl_member_twice.lu: errors None -> [['E0302', 'type_decl_member_twice.lu', [316, 317]], ['E0302', 'type_decl_member_twice.lu', [355, 356]]]
+  corpus/rows/error_alias_union_own_after.lu: errors None -> []
+  corpus/rows/negative/dup_tags.lu: errors [['E0601', 'dup_tags.lu', [231, 233]]] -> [['E0601', 'dup_tags.lu', [250, 252]]]
+  corpus/rows/negative/error_alias_cycle_pair_unused.lu: errors None -> [['E0610', 'error_alias_cycle_pair_unused.lu', [348, 349]]]
+  corpus/rows/negative/error_alias_cycle_unused.lu: errors None -> [['E0610', 'error_alias_cycle_unused.lu', [441, 442]]]
+  corpus/rows/negative/error_alias_own_dup_unused.lu: errors None -> [['E0601', 'error_alias_own_dup_unused.lu', [440, 441]]]
+  corpus/rows/negative/error_alias_union_own_after_payload.lu: errors None -> [['E0609', 'error_alias_union_own_after_payload.lu', [432, 440]]]
+  corpus/rows/negative/error_alias_union_own_twice.lu: errors None -> [['E0601', 'error_alias_union_own_twice.lu', [404, 405]]]
+  corpus/rows/negative/error_alias_union_two_aliases_payload.lu: errors None -> [['E0609', 'error_alias_union_two_aliases_payload.lu', [372, 373]]]
+  corpus/rows/negative/error_row_own_dup_bare.lu: errors None -> [['E0601', 'error_row_own_dup_bare.lu', [246, 247]]]
+  corpus/typecheck/let_group_shadow.lu: errors None -> []
+  corpus/typecheck/nullary_arm_field_assign.lu: errors None -> [['E0410', 'nullary_arm_field_assign.lu', [485, 491]]]
+  corpus/typecheck/nullary_arm_let_assign.lu: errors None -> [['E0410', 'nullary_arm_let_assign.lu', [688, 692]]]
+  corpus/typecheck/nullary_arm_tag_assign.lu: errors None -> [['E0410', 'nullary_arm_tag_assign.lu', [623, 627]]]
+  corpus/typecheck/nullary_arm_var_assign.lu: errors None -> []
+  corpus/typecheck/or_pattern_binds.lu: errors None -> []
+  corpus/typecheck/or_pattern_binds_at.lu: errors None -> []
+  corpus/typecheck/or_pattern_binds_missing.lu: errors None -> [['E0828', 'or_pattern_binds_missing.lu', [412, 416]]]
+  corpus/typecheck/or_pattern_binds_missing_left.lu: errors None -> [['E0828', 'or_pattern_binds_missing_left.lu', [317, 321]]]
+  corpus/typecheck/or_pattern_binds_nested.lu: errors None -> []
+  corpus/typecheck/or_pattern_binds_types.lu: errors None -> [['E0401', 'or_pattern_binds_types.lu', [375, 376]]]
+  corpus/typecheck/param_name_twice.lu: errors None -> [['E0827', 'param_name_twice.lu', [230, 231]]]
+  corpus/typecheck/param_name_twice_closure.lu: errors None -> [['E0827', 'param_name_twice_closure.lu', [232, 233]]]
+  corpus/typecheck/pattern_name_twice_at.lu: errors None -> [['E0827', 'pattern_name_twice_at.lu', [214, 215]]]
+  corpus/typecheck/pattern_name_twice_for.lu: errors None -> [['E0827', 'pattern_name_twice_for.lu', [251, 252]]]
+  corpus/typecheck/pattern_name_twice_let.lu: errors None -> [['E0827', 'pattern_name_twice_let.lu', [243, 244]]]
+  corpus/typecheck/pattern_name_twice_nested.lu: errors None -> [['E0827', 'pattern_name_twice_nested.lu', [246, 247]]]
+  corpus/typecheck/pattern_name_twice_struct.lu: errors None -> [['E0827', 'pattern_name_twice_struct.lu', [376, 377]]]
+  corpus/typecheck/pattern_name_twice_types.lu: errors None -> [['E0827', 'pattern_name_twice_types.lu', [333, 334]]]
+  corpus/typecheck/pattern_variant_tests_twice.lu: errors None -> []
+corpus: 1312 file(s) in 1309 run(s); 33 verdict(s) moved, 34 error set(s) moved
+cub: 134 file(s) in 56 run(s); 0 verdict(s) moved, 0 error set(s) moved
+den: 257 file(s) in 95 run(s); 0 verdict(s) moved, 0 error set(s) moved
+fenrir: 58 file(s) in 15 run(s); 0 verdict(s) moved, 0 error set(s) moved
+fugue: 41 file(s) in 21 run(s); 0 verdict(s) moved, 0 error set(s) moved
+jobq: 3 file(s) in 3 run(s); 0 verdict(s) moved, 0 error set(s) moved
+lair: 40 file(s) in 16 run(s); 0 verdict(s) moved, 0 error set(s) moved
+ligature: 46 file(s) in 26 run(s); 0 verdict(s) moved, 0 error set(s) moved
+lobo: 210 file(s) in 190 run(s); 0 verdict(s) moved, 0 error set(s) moved
+lope: 21 file(s) in 6 run(s); 0 verdict(s) moved, 0 error set(s) moved
+mk: 9 file(s) in 1 run(s); 0 verdict(s) moved, 0 error set(s) moved
+muzzle: 38 file(s) in 35 run(s); 0 verdict(s) moved, 0 error set(s) moved
+pack: 23 file(s) in 9 run(s); 0 verdict(s) moved, 0 error set(s) moved
+pax: 174 file(s) in 97 run(s); 0 verdict(s) moved, 0 error set(s) moved
+pelt: 60 file(s) in 18 run(s); 0 verdict(s) moved, 0 error set(s) moved
+scent: 45 file(s) in 18 run(s); 0 verdict(s) moved, 0 error set(s) moved
+sniff: 75 file(s) in 17 run(s); 0 verdict(s) moved, 0 error set(s) moved
+spell: 11 file(s) in 2 run(s); 0 verdict(s) moved, 0 error set(s) moved
+tomlq: 8 file(s) in 8 run(s); 0 verdict(s) moved, 0 error set(s) moved
+trail: 8 file(s) in 6 run(s); 0 verdict(s) moved, 0 error set(s) moved
+tree-sitter-wolf: 2 file(s) in 1 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-book: 483 file(s) in 332 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-interp: 1173 file(s) in 1070 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-lsp: 1 file(s) in 1 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-std: 758 file(s) in 723 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-std-pin: 743 file(s) in 708 run(s); 0 verdict(s) moved, 0 error set(s) moved
+wolf-web: 140 file(s) in 7 run(s); 0 verdict(s) moved, 0 error set(s) moved
+yew: 584 file(s) in 142 run(s); 0 verdict(s) moved, 0 error set(s) moved
+private downstream trees (7 of them): 58 file(s) in 31 run(s); 0 verdict(s) moved, 0 error set(s) moved
+TOTAL: 5080 run(s); 33 verdict(s) moved; 34 error set(s) moved

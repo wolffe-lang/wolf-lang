@@ -1,0 +1,107 @@
+s287: building at faf84cae in $LANE/build
+s287: 00:01:08 mac build lock held by another lane; waiting
+s287: 00:01:38 mac build lock held by another lane; waiting
+s287: 00:02:08 mac build lock held by another lane; waiting
+s287: 00:02:38 mac build lock held by another lane; waiting
+s287: 00:03:08 mac build lock held by another lane; waiting
+s287: 00:03:38 mac build lock held by another lane; waiting
+s287: 00:04:08 mac build lock held by another lane; waiting
+s287: 00:04:38 mac build lock held by another lane; waiting
+s287: 00:05:08 mac build lock held by another lane; waiting
+s287: 00:05:38 mac build lock held by another lane; waiting
+s287: 00:06:08 mac build lock held by another lane; waiting
+s287: 00:06:38 mac build lock held by another lane; waiting
+s287: 00:07:08 mac build lock held by another lane; waiting
+s287: 00:07:38 mac build lock held by another lane; waiting
+s287: 00:08:09 mac build lock held by another lane; waiting
+s287: 00:08:39 mac build lock held by another lane; waiting
+s287: 00:09:09 mac build lock held by another lane; waiting
+s287: 00:09:39 mac build lock held by another lane; waiting
+s287: 00:10:09 mac build lock held by another lane; waiting
+s287: 00:10:39 mac build lock held by another lane; waiting
+s287: 00:11:09 mac build lock held by another lane; waiting
+s287: 00:11:39 mac build lock held by another lane; waiting
+s287: 00:12:09 mac build lock held by another lane; waiting
+s287: 00:12:39 mac build lock held by another lane; waiting
+s287: 00:13:09 mac build lock held by another lane; waiting
+s287: 00:13:39 mac build lock held by another lane; waiting
+s287: 00:14:09 mac build lock held by another lane; waiting
+s287: 00:14:39 mac build lock held by another lane; waiting
+s287: 00:15:09 mac build lock held by another lane; waiting
+s287: 00:15:39 mac build lock held by another lane; waiting
+s287: 00:16:09 mac build lock held by another lane; waiting
+s287: 00:16:39 mac build lock held by another lane; waiting
+s287: 00:17:09 mac build lock held by another lane; waiting
+s287: 00:17:39 mac build lock held by another lane; waiting
+s287: 00:18:09 mac build lock held by another lane; waiting
+s287: 00:18:39 mac build lock held by another lane; waiting
+s287: 00:19:09 mac build lock held by another lane; waiting
+s287: 00:19:39 mac build lock held by another lane; waiting
+s287: 00:20:09 mac build lock held by another lane; waiting
+s287: 00:20:39 mac build lock held by another lane; waiting
+s287: 00:21:09 mac build lock held by another lane; waiting
+s287: 00:21:39 mac build lock held by another lane; waiting
+s287: 00:22:09 mac build lock held by another lane; waiting
+s287: 00:22:39 mac build lock held by another lane; waiting
+s287: 00:23:09 mac build lock held by another lane; waiting
+s287: lock taken 00:23:39, 12893 MiB free, 115 GB disk; running: $LANE/rig/rows.sh
+== STEP head 05:23:39
+aa3c9baa7f2e24226920c1d55792391b940b328e
+aa3c9baa Explain E0302 for members, and E0601 and E0609 beside an alias
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+Darwin M1 25.4.0 Darwin Kernel Version 25.4.0: Thu Mar 19 19:33:50 PDT 2026; root:xnu-12377.101.15~1/RELEASE_ARM64_T6050 arm64
+END head exit=0
+== STEP build 05:23:40
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+END build exit=0
+== STEP rows-everywhere 05:23:40
+## resolve/enum_variant_twice.lu
+checked  fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+native   fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+release  fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+lupin    exit(3)      run       out=None warns=[] 
+## resolve/enum_variant_twice_payload.lu
+checked  fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+native   fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+release  fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+lupin    exit(5)      run       out=None warns=[] 
+## resolve/struct_field_twice.lu
+checked  fail(E0302)  resolve   out=None warns=[] error[E0302]: the field `a` is declared twice in this struct
+native   fail(E0302)  resolve   out=None warns=[] error[E0302]: the field `a` is declared twice in this struct
+release  fail(E0302)  resolve   out=None warns=[] error[E0302]: the field `a` is declared twice in this struct
+lupin    exit(0)      run       out=None warns=[] 
+## resolve/type_decl_member_twice.lu
+checked  fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+native   fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+release  fail(E0302)  resolve   out=None warns=[] error[E0302]: the variant `A` is declared twice in this enum
+lupin    exit(0)      run       out=None warns=[] 
+## resolve/enum_variant_case_distinct.lu
+checked  exit(2)      run       out=None warns=[] 
+native   exit(2)      run       out=None warns=[] 
+release  exit(2)      run       out=None warns=[] 
+lupin    exit(2)      run       out=None warns=[] 
+END rows-everywhere exit=0
+== STEP rows-test 05:23:43
+   Compiling wolf_driver v0.2.38 ($LANE/build/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running tests/front_end_rulings_lanes.rs (target/debug/deps/front_end_rulings_lanes-b7c7fe7084f28358)
+
+running 7 tests
+test a_closure_parameter_declared_twice_is_e0827 ... ok
+test a_parameter_declared_twice_is_e0827 ... ok
+test a_struct_field_declared_twice_is_e0302 ... ok
+test a_variant_declared_twice_is_e0302 ... ok
+test a_variant_declared_twice_with_two_payloads_is_e0302 ... ok
+test the_general_type_spellings_refuse_a_member_declared_twice ... ok
+test variant_names_differing_in_case_are_two_variants ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 3.26s
+
+END rows-test exit=0
+== STEP anchors 05:23:47
+spec-extract: spec/grammar.ebnf is in sync
+END anchors exit=0
+== done 2026-11-08T05:23:48Z
+s287: END exit=0 00:23:48
