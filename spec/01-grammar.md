@@ -443,6 +443,23 @@ enum_item   ::= 'enum' IDENT generics? '{' variant (',' variant)* ','? '}'
 
 (These two are included in `bare_item`.)
 
+Member names `[gram.item.type.names]` (2026-11-08, wolf-lang#1060):
+the variants of one enum have distinct names, and so do the fields of
+one struct, in every spelling of either (`enum E { … }`,
+`type E = enum { … }`, `struct P { … }`, `type P = struct { … }`). A
+name declared again in either list is **E0302** at the second
+declaration, with the first as its secondary label, as for two items
+of one module; the item collector reports it, used or not. Names
+compare as spelled, so `a` and `A` are two variants. The rest of the
+language already assumes it: `E.A` (`[gram.expr.variant]`) and a bare
+`A` in an arm (`[gram.pat.nullary]`) each pick out one variant, and a
+struct pattern names each field at most once (`[gram.pat.struct]`).
+Before this clause, `enum E { A(int), A(str) }` built and matched the
+first variant and left the second unreachable. Files:
+`resolve/enum_variant_twice.lu`, `resolve/enum_variant_twice_payload.lu`,
+`resolve/struct_field_twice.lu`, `resolve/type_decl_member_twice.lu`,
+`resolve/enum_variant_case_distinct.lu`.
+
 ### 2.6 Traits & impls `[gram.item.trait]`
 
 ```ebnf
