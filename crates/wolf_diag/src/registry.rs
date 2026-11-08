@@ -483,6 +483,14 @@ module — and if the two files are really two separate *programs*
 sharing a directory (scratch work, exercises), mark each with
 `//! member: false`: a standalone entry is its own compilation root
 and never merges with its siblings (D59).
+
+The same rule holds inside one enum or one struct
+(`[gram.item.type.names]`): the variants of an enum have distinct
+names, and so do a struct's fields, so `enum E { A(int), A(str) }` and
+a struct that declares `a` twice are refused at the second declaration,
+used or not. A name has to pick out one variant (`E.A`, a bare `A` in an
+arm) and one field (`p.a`, `P { a }`). Names compare as spelled: `a`
+and `A` are two variants.
 "#);
 
 code!(E0303, "modules import each other in a cycle", r#"
@@ -1044,6 +1052,12 @@ tags are structural, so any name you have not used yet is free. An
 error-set alias named in a row carries no payload (`{IoErrors(int)}`,
 `[type.err.alias.union]`): the alias already names what its tags
 carry, so name the tag with the payload instead.
+
+Only the entries a row spells itself are held to this
+(`[gram.type.row.dup]`). A tag an error-set alias brings is not one of
+them: `{A, x}` with `error A = {x}` is one `x` whichever order the
+entries stand in, and a payload that disagrees is E0609, not this
+error. `{A, x, x}` is still refused, at the second `x` the row spells.
 "#);
 
 code!(E0602, "the error row does not include this tag", r#"
@@ -1141,6 +1155,12 @@ point — an outer wrapper whose `Fail` must stay distinguishable from
 the inner one — say so nominally: wrap one payload in its own type
 (`type FailWrapped = distinct str`) and carry `Fail(FailWrapped)`; a
 nominal wrapper is what layering honestly is.
+
+An error-set alias named in a row is one more layer
+(`[type.err.alias.union]`), in any order: `{A, Bad(str)}` with
+`error A = {Bad(int)}` is this error at the row's own spelling
+`Bad(str)`, as `{Bad(str), A}` is, and two aliases whose `Bad` payloads
+disagree are this error at the later alias entry.
 "#);
 
 code!(E0610, "error-set aliases form a cycle", r#"
