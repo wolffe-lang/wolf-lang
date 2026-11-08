@@ -10,5 +10,7 @@ enum E { A(int), A(str) }
 
 fn main() -> int {
     let v = E.A(5)
-    match v { A(n) => n }
+    match v {
+        A(n) => n,
+    }
 }

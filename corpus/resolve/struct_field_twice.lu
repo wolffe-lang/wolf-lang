@@ -7,8 +7,8 @@
 //! machine accepted it.
 
 struct P {
-    a: int
-    a: int
+    a: int,
+    a: int,
 }
 
 fn main() -> int { 0 }
