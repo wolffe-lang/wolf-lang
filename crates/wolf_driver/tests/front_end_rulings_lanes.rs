@@ -575,3 +575,89 @@ fn an_or_pattern_name_at_two_types_is_e0401() {
         "exit(1)",
     );
 }
+
+// ---------------------- wolf-lang#1062, a type that contains itself by value --
+
+/// `Cons(int, L)` holds an `L` inline: E0404 at `Cons`. The checked machine
+/// and lupin ran it (`exit(1)`), native refused it at `mem`.
+#[test]
+fn an_enum_that_contains_itself_by_value_is_e0404() {
+    refused(
+        "typecheck/rec_by_value_enum.lu",
+        "E0404",
+        &[(445, 449)],
+        &[
+            "error[E0404]: `L` contains itself by value, so it would have no finite size",
+            "List[L]",
+            "[type.rec]",
+        ],
+        "exit(1)",
+    );
+}
+
+/// Through a tuple payload.
+#[test]
+fn a_cycle_through_a_tuple_payload_is_e0404() {
+    refused(
+        "typecheck/rec_by_value_tuple.lu",
+        "E0404",
+        &[(231, 235)],
+        &["`L` contains itself by value"],
+        "exit(7)",
+    );
+}
+
+/// A struct and an enum: one E0404, at `next`, the first type's member.
+#[test]
+fn a_struct_and_enum_cycle_is_one_e0404() {
+    refused(
+        "typecheck/rec_by_value_mutual.lu",
+        "E0404",
+        &[(351, 355)],
+        &["`N` reaches itself through here: N -> L -> N"],
+        "exit(5)",
+    );
+}
+
+/// Unused, and still refused where it is declared.
+#[test]
+fn an_unused_struct_that_holds_itself_is_e0404() {
+    refused(
+        "typecheck/rec_by_value_unused.lu",
+        "E0404",
+        &[(225, 229)],
+        &["`N` contains itself by value"],
+        "exit(0)",
+    );
+}
+
+/// Through a generic struct, walked at its argument.
+#[test]
+fn a_cycle_through_a_generic_struct_is_e0404() {
+    refused(
+        "typecheck/rec_by_value_generic.lu",
+        "E0404",
+        &[(253, 257)],
+        &["`L` reaches itself through here: L -> Box -> L"],
+        "exit(0)",
+    );
+}
+
+/// Through an error union's tag payload.
+#[test]
+fn a_cycle_through_an_error_union_is_e0404() {
+    refused(
+        "typecheck/rec_by_value_errunion.lu",
+        "E0404",
+        &[(256, 260)],
+        &["`N` contains itself by value"],
+        "exit(0)",
+    );
+}
+
+/// `List`, `Map`, `handle` and a generic struct over a `List` hold their
+/// element elsewhere: no cycle, and every machine runs it.
+#[test]
+fn recursion_through_containers_is_legal() {
+    runs("typecheck/rec_through_containers.lu", 6);
+}
