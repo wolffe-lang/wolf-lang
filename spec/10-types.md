@@ -1478,7 +1478,18 @@ precedent, `[type.trait.op.alias]`. The item grammar is
   rule, which this clause reuses rather than restates: an alias is one
   more layer, and layers flatten. An alias entry carries no payload
   (`{IoErrors(int)}` is E0601): the alias already names what its tags
-  carry.
+  carry. (Amended 2026-11-08, wolf-lang#1065.) The union does not
+  depend on order: `{A, x}`, `{x, A}`, and `{A, B}` where both bring `x`
+  are one row with one `x`. A payload that disagrees is E0609 at the
+  row's own spelling of the tag when one of the two sources is the
+  row's own (`{A, Bad(str)}` with `error A = {Bad(int)}`, in either
+  order), and at the later alias entry when two aliases disagree. Only
+  the entries a row spells itself are held to naming a tag once
+  (`[gram.type.row.dup]`). The compiler used to check a later spelling
+  against the tags an earlier alias had brought, so `{A, x}` was E0601
+  where `{x, A}` merged. Files: `rows/error_alias_union_own_after.lu`,
+  `rows/negative/error_alias_union_own_after_payload.lu`,
+  `rows/negative/error_alias_union_two_aliases_payload.lu`.
 - `[type.err.alias.qualified]` **The qualified spelling of an alias is
   the alias.** A row entry's path resolves exactly as a type path
   does: a bare name is this module's alias or one this file bound with
