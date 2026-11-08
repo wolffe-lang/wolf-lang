@@ -690,9 +690,16 @@ that covers plain assignment and every compound form (`=`, `+=`, `-=`,
 the fix-it offers exactly that edit. When the second value is really a
 *new* thing rather than an update to the old one, the wolf idiom is
 shadowing: a second `let x = …` introduces a fresh binding under the
-same name without mutating the first. Function parameters and `match`
-bindings are not `let` bindings; their mutability is governed by modes
-(`mut`, `take`), not by this rule.
+same name without mutating the first. A function parameter is not a
+`let` binding: its mutability is governed by modes (`mut`, `take`), not
+by this rule.
+
+A name a pattern binds outside `let` and `var` (a `match` arm, a `for`
+header, an `else |…|` handler, a `select` receive) binds as `let` does
+(`[gram.pat.let]`), and assigning it, or a field of it, is this error
+too. The binding holds its own value, never a place in what was matched,
+so the write could not have reached the scrutinee anyway. Shadow it with
+a `var` at the start of the body (`var x = x`) and update that.
 
 A `match` arm whose bare name tests a case of the scrutinee's type (a
 payload-less variant, or a tag of its error row) binds nothing
