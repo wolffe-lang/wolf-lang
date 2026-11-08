@@ -74,6 +74,8 @@ mod imp {
     }
 
     fn settles() -> bool {
+        // s286-plant: the settle never runs, so glibc's limit is left as it was.
+        return false;
         match DECISION.load(Relaxed) {
             SETTLE => true,
             LEAVE => false,
