@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0410]: `x` is bound by a pattern, so it cannot be assigned
+ --> mem:///main.lu:6:13
+  |
+5 |         A(x) => {
+  |           - bound here, as `let` binds
+6 |             x = x + 1
+  |             ^ this assignment needs a mutable binding
+  |
+  = note: a name a pattern binds outside `let` and `var` (in a `match` arm, a `for` header, an
+    `else |…|` handler or a `select` receive) binds as `let` does ([gram.pat.let]): it holds
+    its own value, never a place in what was matched, so no write to it could reach that. To
+    update it, shadow it with a `var` at the start of the body: `var x = x`.
