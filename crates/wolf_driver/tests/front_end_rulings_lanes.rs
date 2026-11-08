@@ -256,3 +256,67 @@ fn assigning_a_lets_field_through_a_nullary_arm_is_e0410() {
         "exit(9)",
     );
 }
+
+// ----------------- wolf-lang#1060, a variant or a field declared twice --
+
+/// The second `A` of one enum is E0302 at its declaration. Every machine
+/// accepted it (`exit(3)`); lupin 0.1.60 still does.
+#[test]
+fn a_variant_declared_twice_is_e0302() {
+    refused(
+        "resolve/enum_variant_twice.lu",
+        "E0302",
+        &[(348, 349)],
+        &[
+            "error[E0302]: the variant `A` is declared twice in this enum",
+            "first declared here",
+            "[gram.item.type.names]",
+        ],
+        "exit(3)",
+    );
+}
+
+/// With two payloads, the second variant could never be built: E0302.
+#[test]
+fn a_variant_declared_twice_with_two_payloads_is_e0302() {
+    refused(
+        "resolve/enum_variant_twice_payload.lu",
+        "E0302",
+        &[(289, 290)],
+        &["the variant `A` is declared twice in this enum"],
+        "exit(5)",
+    );
+}
+
+/// A struct field declared twice is E0302 at the second, used or not.
+#[test]
+fn a_struct_field_declared_twice_is_e0302() {
+    refused(
+        "resolve/struct_field_twice.lu",
+        "E0302",
+        &[(269, 270)],
+        &["error[E0302]: the field `a` is declared twice in this struct"],
+        "exit(0)",
+    );
+}
+
+/// The general `type … = enum {…}` and `= struct {…}` spellings: two E0302s.
+#[test]
+fn the_general_type_spellings_refuse_a_member_declared_twice() {
+    refused(
+        "resolve/type_decl_member_twice.lu",
+        "E0302",
+        &[(316, 317), (355, 356)],
+        &[
+            "the variant `A` is declared twice in this enum",
+            "the field `a` is declared twice in this struct",
+        ],
+        "exit(0)",
+    );
+}
+
+/// Names compare as spelled: `a` and `A` are two variants.
+#[test]
+fn variant_names_differing_in_case_are_two_variants() {
+    runs("resolve/enum_variant_case_distinct.lu", 2);
+}
