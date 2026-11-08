@@ -1,0 +1,18 @@
+//! check: run(exit=4)
+//! phase: run
+//! conforms: gram.pat.names, gram.pat.nullary
+//!
+//! Only bindings count ([gram.pat.names]): `(Red, Red)` is two tests of
+//! one variant, not one name bound twice.
+
+enum C { Red, Blue }
+
+fn f(a: C, b: C) -> int {
+    match (a, b) {
+        (Red, Red) => 1,
+        (Blue, Blue) => 2,
+        _ => 3,
+    }
+}
+
+fn main() -> int { f(C.Red, C.Red) + f(C.Blue, C.Red) }
