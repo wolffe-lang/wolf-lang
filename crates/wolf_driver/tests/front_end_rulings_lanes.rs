@@ -320,3 +320,118 @@ fn the_general_type_spellings_refuse_a_member_declared_twice() {
 fn variant_names_differing_in_case_are_two_variants() {
     runs("resolve/enum_variant_case_distinct.lu", 2);
 }
+
+// ------------ wolf-lang#1062 and #1073, a name bound twice in one pattern --
+
+/// `P { a: x, b: x }`: E0827 at the second `x`. The later binding won on
+/// every machine (`exit(2)`); lupin 0.1.60 still keeps it.
+#[test]
+fn a_struct_pattern_that_binds_a_name_twice_is_e0827() {
+    refused(
+        "typecheck/pattern_name_twice_struct.lu",
+        "E0827",
+        &[(376, 377)],
+        &[
+            "error[E0827]: `x` is bound twice in this pattern",
+            "first bound here",
+            "[gram.pat.names]",
+        ],
+        "exit(2)",
+    );
+}
+
+/// At two types, the same: E0827, not a type error.
+#[test]
+fn a_name_bound_twice_at_two_types_is_e0827() {
+    refused(
+        "typecheck/pattern_name_twice_types.lu",
+        "E0827",
+        &[(333, 334)],
+        &["`x` is bound twice in this pattern"],
+        "exit(2)",
+    );
+}
+
+/// A binder pattern: `let (x, x)`.
+#[test]
+fn a_let_pattern_that_binds_a_name_twice_is_e0827() {
+    refused(
+        "typecheck/pattern_name_twice_let.lu",
+        "E0827",
+        &[(243, 244)],
+        &["`x` is bound twice in this pattern"],
+        "exit(2)",
+    );
+}
+
+/// Both sides of `@`.
+#[test]
+fn a_name_on_both_sides_of_at_is_e0827() {
+    refused(
+        "typecheck/pattern_name_twice_at.lu",
+        "E0827",
+        &[(214, 215)],
+        &["`x` is bound twice in this pattern"],
+        "exit(5)",
+    );
+}
+
+/// At depth: `(x, (y, x))`.
+#[test]
+fn a_nested_name_bound_twice_is_e0827() {
+    refused(
+        "typecheck/pattern_name_twice_nested.lu",
+        "E0827",
+        &[(246, 247)],
+        &["`x` is bound twice in this pattern"],
+        "exit(5)",
+    );
+}
+
+/// A `for` header.
+#[test]
+fn a_for_header_that_binds_a_name_twice_is_e0827() {
+    refused(
+        "typecheck/pattern_name_twice_for.lu",
+        "E0827",
+        &[(251, 252)],
+        &["`x` is bound twice in this pattern"],
+        "exit(2)",
+    );
+}
+
+/// wolf-lang#1073: a parameter declared twice.
+#[test]
+fn a_parameter_declared_twice_is_e0827() {
+    refused(
+        "typecheck/param_name_twice.lu",
+        "E0827",
+        &[(230, 231)],
+        &["error[E0827]: `a` is bound twice in this parameter list"],
+        "exit(2)",
+    );
+}
+
+/// A closure's parameter declared twice.
+#[test]
+fn a_closure_parameter_declared_twice_is_e0827() {
+    refused(
+        "typecheck/param_name_twice_closure.lu",
+        "E0827",
+        &[(232, 233)],
+        &["`a` is bound twice in this parameter list"],
+        "exit(2)",
+    );
+}
+
+/// A comma group is several patterns: the second `a` shadows the first.
+#[test]
+fn a_comma_group_rebinds_by_shadowing() {
+    runs("typecheck/let_group_shadow.lu", 2);
+}
+
+/// Two tests of one variant bind nothing, so nothing is bound twice.
+#[test]
+fn two_tests_of_one_variant_are_not_a_name_bound_twice() {
+    runs("typecheck/pattern_variant_tests_twice.lu", 4);
+}
