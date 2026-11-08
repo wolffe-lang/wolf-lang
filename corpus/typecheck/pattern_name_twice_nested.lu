@@ -1,0 +1,10 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names
+//!
+//! At any depth ([gram.pat.names]): `(x, (y, x))` bound `x` twice, and
+//! every machine kept the inner one (exit 5).
+
+fn main() -> int {
+    match (1, (2, 3)) { (x, (y, x)) => x + y }
+}
