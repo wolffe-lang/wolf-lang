@@ -56,6 +56,15 @@ that any of them moves, other than this change's own rows.
   machines. One take was queued as one commit and built another,
   because a shared build worktree moved under it. Its log names the commit it built, and the rig
   now gives each queued job its own worktree (Evidence index).
+- **The rebase:** the branch was developed and measured on `d848fbed`, then rebased once onto trunk
+  `718fe47a`, which adds s286's change: the runtime settles glibc's arena limit (wolf-lang#1051).
+  This change's first Linux record, at the first head, met that race at its test step
+  (`signal_gaps_lanes`, #781's row) and was voided, since the fix had to land first. The rebase was
+  clean but for the changelog, where this entry now sits above s286's (`9d79c7e2`). Every log but
+  `m1-rebased-5fb13d74.log` ran before the rebase and is named by the commit it ran at, and
+  `notes/s287-evidence/rebase-718fe47a.txt` gives each one's rebased commit, with the same subject
+  and the same change. The note names rebased commits throughout. At the rebased head the checks,
+  the four-machine test and every corpus-walking snapshot suite ran again.
 - **lupin 0.1.60**, the `PAIRING` stamp: `aarch64-apple-darwin` (archive sha256 `f3cae16f…6bb8`)
   and `x86_64-unknown-linux-gnu` (`e7d4c4f1…637e`), each read twice and equal to the release page.
 - **The issues** wolf-lang#1059, #1060, #1061, #1062, #1064, #1065 and #1073, whole, and s285's
@@ -77,8 +86,8 @@ that any of them moves, other than this change's own rows.
 
 ## Prediction
 
-Committed before the first change (`aaf5e8d6`, `notes/s287-prediction.md`), after the base was
-measured (`b531bbee`). Scored:
+Committed before the first change (`2041a39c`, `notes/s287-prediction.md`), after the base was
+measured (`5a04f01f`). Scored:
 
 - **The base: hit.** Every case on the ruling page and every neighbour answers as predicted on all
   four machines (`notes/s287-evidence/base-d848fbed.log`).
@@ -93,22 +102,22 @@ measured (`b531bbee`). Scored:
 - **#1065: hit.** `{A, x}` runs. E0609 sits at the row's own spelling, and at the later alias entry
   for two aliases. `{A, x, x}` moves its E0601 to the second `x`. A miss of wording, fixed:
   E0609's text spoke of "both layers of this nested error row" for an alias, and an alias that
-  meets its row now has its own wording (`a174c981`).
+  meets its row now has its own wording (`164aa799`).
 - **#1061's refusals: hit.** E0828 at the alternative that lacks the name, on either side, and E0401
   at the later binding. The agreeing, nested and `@` rows pass the checker and stay refused at
   `mem` by the ledger, as predicted.
 - **The rows red first: hit.** At the rows' commits, on the base's code for each item
   (`notes/s287-evidence/m2-red-*.log`):
-  - `023ae9cf`, #1064: `front_end_rulings_lanes` 3 failed by name, 1 passed (the used loop, the
+  - `04458e55`, #1064: `front_end_rulings_lanes` 3 failed by name, 1 passed (the used loop, the
     control); the corpus step `3 bad`.
-  - `d0f1652e`, #1059: 3 failed by name, 5 passed (the four above and the `var` control); `3 bad`;
+  - `a0d0844d`, #1059: 3 failed by name, 5 passed (the four above and the `var` control); `3 bad`;
     the anchors gate `OUT OF SYNC`; conformance names the unknown anchor.
-  - `392a98a7`, #1060, #1062a, #1065 and #1061 together: 18 failed by name, 14 passed (the eight
+  - `a95fb217`, #1060, #1062a, #1065 and #1061 together: 18 failed by name, 14 passed (the eight
     above and the six controls); `20 bad` in 17 files, each by name; the anchors gate and
     conformance red.
 - **The census: hit, nothing moves.** Every `.lu` file of the corpus and of 38 org checkouts at
-  their trunks ran at the `mem` rung on the base binary and on this head's (`aa3c9baa`, the code
-  this head carries but for E0609's wording), and the two were compared run by run
+  their trunks ran at the `mem` rung on the base binary and on this head's (`aa3c9baa`'s, built
+  before the rebase: the code this head carries but for E0609's wording and trunk's runtime fix), and the two were compared run by run
   (`notes/s287-evidence/census-pr1.txt`). That is 5,080 runs over 6,839 files. Outside the corpus,
   3,086 of 3,771 runs reached the checker. The other 685 stop at resolve on both binaries: a module
   that is not a root, or a test whose sources a harness stages. Their code is measured through the
@@ -119,7 +128,7 @@ measured (`b531bbee`). Scored:
   both ways at each regeneration). The two amended clauses keep theirs.
 - **A miss of the rig:** the catalog's fixture rule wants a rendered snapshot for each new code. The
   first snapshot of the arm E0410 went through `let Done`, whose W0801 the helper's resolve-clean
-  assertion refuses. It renders through a row tag instead (`a5e22942`).
+  assertion refuses. It renders through a row tag instead (`cf501a14`).
 
 ## Rulings
 
@@ -174,31 +183,31 @@ lupin already gives E0610 for an unused alias loop, and needs nothing for it.
 ## Done-when
 
 Commits:
-- `b531bbee`: the base measured; `aaf5e8d6`: the prediction, before the first change.
-- #1064: `e2f449ee` (the amended clause); `1fa8ade7`, `099daeca`, `459bf1be` (the rows);
-  `023ae9cf` (the rows on four machines); `61c14051` (the declaration walk); `e2655ff7` (E0610's
+- `5a04f01f`: the base measured; `2041a39c`: the prediction, before the first change.
+- #1064: `4bff47f5` (the amended clause); `f3001a16`, `f0f8727f`, `4b8cd114` (the rows);
+  `04458e55` (the rows on four machines); `80989e45` (the declaration walk); `dc0b7f79` (E0610's
   explanation).
-- #1059: `f0baf80c` (`[gram.pat.nullary.scope]`); `05ea8a4b`, `dcd4b747`, `1f33a6be`, `b81c65a9`;
-  `d0f1652e`; `8bb3091f`, `c9f7bacf` (the shared E0410 report, the checker's E0410); `a6acf426` (the
-  anchor); `d786c0aa` (E0410's explanation).
-- #1060: `2337f576` (`[gram.item.type.names]`); `a18fbc12`, `7ac47ea5`, `d33cedf6`, `ceb369cd`,
-  `1301d9ef`; `b2e202a8`; `6acbe988` (the item collector's E0302).
-- #1062a and #1073: `4ba3051e` (`[gram.pat.names]`); `6aae5a66` (E0827); `8f24a490`, `a0f2cfed`,
-  `498a1aed`, `b241d327`, `cc537a9a`, `339ef49e`, `e6599742`, `4fd36f53`, `27c0b120`, `e1232320`;
-  `96ccb349`; `eed089fa` (the checker's name frames).
-- #1065: `f4f2dfa7` (`[gram.type.row.dup]`), `fff470e6` (the amended `[type.err.alias.union]`);
-  `b53df9d9`, `d0d78092`, `a8ddd5f6`, `1f2f8a55`, `079bad59`, `60e4ef38`; `8181cba9`; `142821ef` (the
-  merge in any order); `a174c981` (E0609's wording for an alias, and a loop a use meets first).
-- #1061: `51deb3ca` (`[gram.pat.or]`); `fe757514` (E0828); `32efa6f1`, `faed68d6`, `207703a0`,
-  `5447c71d`, `97a43cd3`, `a82beb1a`, `da32d86b`; `392a98a7`; `a87166ad` (E0828 and E0401).
-- `6f2fcf5b`: four anchors indexed. `aa3c9baa`: E0302, E0601 and E0609 explained.
-- `8b269fd6`, `a5e22942`: the rendered snapshots' tests. `37df7bbe`, `4945073e`: formatting and a
-  named type. `456a5c0e`: the changelog. `8bf0bf5c`, `4a0516ee`, `858cdc86`, `b422ee36`: the
-  snapshots and the lowering ledger. `49cbd28f`: the catalog regenerated.
+- #1059: `3d44aeb8` (`[gram.pat.nullary.scope]`); `1d9f6bc2`, `9355a0e3`, `cca0fc55`, `35640dec`;
+  `a0d0844d`; `faeb4ca7`, `25cade0b` (the shared E0410 report, the checker's E0410); `ca1e0d92` (the
+  anchor); `ef4ac885` (E0410's explanation).
+- #1060: `c7625b95` (`[gram.item.type.names]`); `3dade993`, `e67087e3`, `5d920d63`, `978c39c2`,
+  `e408fb66`; `19c83dc6`; `7b392c6d` (the item collector's E0302).
+- #1062a and #1073: `c749ecf1` (`[gram.pat.names]`); `30c01a60` (E0827); `80bd8258`, `bb99f03f`,
+  `5fe5f93b`, `9bf48ef9`, `34f0ada2`, `b015231e`, `2ef6a95e`, `dbf586bc`, `5b3ee488`, `3918ba26`;
+  `f5cccd21`; `92adfb43` (the checker's name frames).
+- #1065: `f292bb00` (`[gram.type.row.dup]`), `c9b9df7d` (the amended `[type.err.alias.union]`);
+  `756b69c9`, `649bc870`, `9c1c741d`, `df9adaf2`, `a31c50d4`, `31c5a7c8`; `d85cc413`; `c9527b67` (the
+  merge in any order); `164aa799` (E0609's wording for an alias, and a loop a use meets first).
+- #1061: `f96da717` (`[gram.pat.or]`); `be9d3290` (E0828); `dc0bc4c2`, `891be254`, `ce2dfb77`,
+  `d74e9f39`, `672bc3bc`, `9403f8c9`, `4540e03b`; `a95fb217`; `1002baef` (E0828 and E0401).
+- `bb7574a7`: four anchors indexed. `e15ee170`: E0302, E0601 and E0609 explained.
+- `a2fc76b9`, `cf501a14`: the rendered snapshots' tests. `2c122a38`, `65dad0a9`: formatting and a
+  named type. `9d79c7e2`: the changelog. `e14ac506`, `959929e9`, `1b2ad006`, `f0fc5c37`: the
+  snapshots and the lowering ledger. `d154492a`: the catalog regenerated.
 - This note and its evidence.
 
 Test targets:
-- [x] the prediction committed before the first change (`aaf5e8d6`)
+- [x] the prediction committed before the first change (`2041a39c`)
 - [x] the rows red at the base's code for each item, by name, in the lanes test and the corpus
       step (`m2-red-023ae9cf.log`, `m2-red-d0f1652e.log`, `m2-red-392a98a7.log`)
 - [x] the anchors gate red at each new clause, green at its index: 726 to 731 keys, none removed
@@ -207,10 +216,13 @@ Test targets:
 - [x] the corpus `0 bad` (1312 files; the fail-pin ledger 393 to 418 rules); conformance green
 - [x] fmt, clippy (`wolf_diag`, `wolf_sema`, `wolf_driver`, all targets, `-D warnings`), the
       `wolf_diag` and `wolf_sema` suites, the catalogs' checks, the anchors gate, the corpus and
-      conformance at `49cbd28f` (`m1-checks-49cbd28f.log`)
+      conformance at `d154492a` (`m1-checks-49cbd28f.log`)
 - [x] every corpus-walking snapshot suite: only the new rows' snapshots and the two re-tagged rows'
 - [x] the census: every program of the corpus and 38 org checkouts on the base and head binaries,
       nothing moves but this change's rows
+- [x] at the rebased head (`5fb13d74`, trunk `718fe47a`): the checks above, the lanes test, the
+      corpus, conformance, and every corpus-walking snapshot suite with no update
+      (`m1-rebased-5fb13d74.log`)
 - [ ] the Linux gauntlet record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
