@@ -350,3 +350,66 @@ fn e0415_literal_pattern_defaulted_to_i32() {
         "fn main() -> int {\n    let v = 5\n    match v {\n        3000000000 => 1,\n        _ => 0,\n    }\n}\n",
     );
 }
+
+// ------------------------------------------------- s287, E0827 -----
+
+/// wolf-lang#1062 (`[gram.pat.names]`): a pattern binds each name once,
+/// so `P { a: x, b: x }` is E0827 at the second `x`, the first named.
+#[test]
+fn e0827_struct_pattern_binds_a_name_twice() {
+    snap_one(
+        "e0827_struct_pattern_binds_a_name_twice",
+        "struct P { a: int, b: int }\n\n\
+         fn f(v: P) -> int {\n    match v { P { a: x, b: x } => x }\n}\n\n\
+         fn main() -> int { f(P { a: 1, b: 2 }) }\n",
+    );
+}
+
+/// wolf-lang#1073: a parameter list binds each name once too.
+#[test]
+fn e0827_parameter_declared_twice() {
+    snap_one(
+        "e0827_parameter_declared_twice",
+        "fn f(a: int, a: int) -> int { a }\n\nfn main() -> int { f(1, 2) }\n",
+    );
+}
+
+// ------------------------------------------- s287, E0828 and E0401 -----
+
+/// wolf-lang#1061 (`[gram.pat.or]`): `B(_)` binds no `x`, so E0828 at that
+/// alternative, naming `x` and where another alternative binds it.
+#[test]
+fn e0828_or_pattern_alternative_lacks_a_name() {
+    snap_one(
+        "e0828_or_pattern_alternative_lacks_a_name",
+        "enum E { A(int), B(int) }\n\n\
+         fn f(v: E) -> int {\n    match v { A(x) | B(_) => x }\n}\n\n\
+         fn main() -> int { f(E.B(3)) }\n",
+    );
+}
+
+/// A name the alternatives bind at two types: E0401 at the later binding.
+#[test]
+fn e0401_or_pattern_name_at_two_types() {
+    snap_one(
+        "e0401_or_pattern_name_at_two_types",
+        "enum E { A(int), B(bool) }\n\n\
+         fn f(v: E) -> int {\n    match v { A(x) | B(x) => 1 }\n}\n\n\
+         fn main() -> int { f(E.B(true)) }\n",
+    );
+}
+
+// ------------------------------------------------- s287, E0410 -----
+
+/// wolf-lang#1059 (`[gram.pat.nullary.scope]`): the arm's `Done` tests the
+/// variant and binds nothing, so `Done = 9` writes the `let`. The checker
+/// reports it, with the arm's test named.
+#[test]
+fn e0410_let_written_through_a_nullary_arm() {
+    snap_one(
+        "e0410_let_written_through_a_nullary_arm",
+        "enum E { Done, Other }\n\n\
+         fn main() -> int {\n    let Done: int = 8\n    match E.Done {\n        \
+         Done => { Done = 9 },\n        Other => {},\n    }\n    Done\n}\n",
+    );
+}

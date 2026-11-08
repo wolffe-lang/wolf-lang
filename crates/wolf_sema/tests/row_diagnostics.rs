@@ -204,3 +204,27 @@ fn error_set_aliases_are_transparent_both_ways() {
         ""
     );
 }
+
+// --------------------------------------------- s287, alias rows -----
+
+/// wolf-lang#1064 (`[type.err.alias.cycle]`): an alias that names itself is
+/// E0610 at its declaration, with no row naming it.
+#[test]
+fn e0610_unused_alias_names_itself() {
+    snap_one(
+        "e0610_unused_alias_names_itself",
+        "error E = {E}\n\nfn main() -> int { 0 }\n",
+    );
+}
+
+/// wolf-lang#1065 (`[type.err.alias.union]`): a payload spelled after an
+/// alias that brings the tag with another one is E0609 at the spelling.
+#[test]
+fn e0609_payload_spelled_after_an_alias() {
+    snap_one(
+        "e0609_payload_spelled_after_an_alias",
+        "error A = {Bad(int)}\n\n\
+         fn g(ok: bool) -> int ! {A, Bad(str)} {\n    if ok { 1 } else { return Bad(2) }\n}\n\n\
+         fn main() -> int { g(true) else 0 }\n",
+    );
+}
