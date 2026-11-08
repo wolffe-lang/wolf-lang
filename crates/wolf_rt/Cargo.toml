@@ -71,6 +71,12 @@ harness = false
 name = "chan_bench"
 harness = false
 
+# s286 (wolf-lang#1051): glibc's arena limit as the runtime settles it,
+# counted in children that each hold their own threads, so no libtest.
+[[test]]
+name = "arena_limit"
+harness = false
+
 # Root-domain death calls process::exit ([conc.proc.root]) — the
 # scenario re-execs itself as a child process, so no libtest harness.
 [[test]]
