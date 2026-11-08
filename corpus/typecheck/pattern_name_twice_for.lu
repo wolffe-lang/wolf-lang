@@ -1,0 +1,12 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names, gram.expr.flow
+//!
+//! A `for` header is one pattern ([gram.pat.names]): `(x, x)` bound `x`
+//! twice, and every machine answered 2.
+
+fn main() -> int {
+    var t = 0
+    for (x, x) in [(1, 2)] { t = t + x }
+    t
+}
