@@ -51,11 +51,17 @@ census moved no program outside the corpus.
 ## Inputs, verified
 
 The first change's inputs, plus:
-- **The base of this change:** the first change's head `aac7dee6`, on wolf-lang trunk `d848fbed`.
-  The branch was cut from the first change's code-final commit `4945073e` and rebased once onto
-  its head, which added only the changelog, snapshots, the catalog, the note and its evidence.
-  Every commit kept its subject and its change (`notes/s287-evidence/pr2-rebase-map.txt`). The two
-  red takes ran at the commits before the rebase, and the map names the commit each became.
+- **The base of this change:** the first change's head `9045a3c4`, on wolf-lang trunk `718fe47a`.
+  The branch was cut from the first change's code-final commit `4945073e` and rebased onto its
+  head `aac7dee6`, which added only the changelog, snapshots, the catalog, the note and its
+  evidence (`notes/s287-evidence/pr2-rebase-map.txt`). Then both changes were rebased onto trunk
+  `718fe47a`, for the reason the first change's note gives (`pr2-rebase-718fe47a.txt`). Every
+  commit kept its subject and its change through both, but the changelog's, whose context moved.
+  The red takes and every log but `pr2-m2-rebased-a7078094.log` ran before the second rebase, and
+  are named by the commit they ran at; the maps name the commit each became. The note names
+  rebased commits throughout. At the rebased code (`a7078094`, whose code this head carries
+  unchanged; only notes differ) the checks, the four-machine test, the adjusted fixture's suites and
+  every corpus-walking snapshot suite ran again.
 - **The spec:** `[abi.native.enum]`, `[mem.shared.rc.2]`, `[mem.tier0.move]`,
   `[mem.tier0.mode.read]`, `[gram.pat.binder]` and E0404's and E0410's explanations.
 - **The compiler, as found:**
@@ -82,8 +88,8 @@ R-s287-1 and R-s287-9. Scored:
   prediction's report site, fixed in the clause before the code: it put the report at the member
   that closes the cycle. For `L -> Box -> L` that member is `Box`'s own `v: T`, inside a generic
   definition that is not recursive by itself. The clause now names the member through which the
-  first-declared type reaches itself (`e36ec807`), and the struct-and-enum row moved from `More`
-  to `next` (`bd23112b`).
+  first-declared type reaches itself (`835867e2`), and the struct-and-enum row moved from `More`
+  to `next` (`b3036e7f`).
 - **#1062c at the base: hit.** Every machine lets the binding be written: a match arm (exit 4), a
   `for` header (12), an `else |Bad(n)|` handler (5), a `select` receive (5), a field of an arm's
   binding (9), an `@` name (6), and the `bump` trap answers 3 with only W1002
@@ -96,8 +102,8 @@ R-s287-1 and R-s287-9. Scored:
   `for` header's name.
 - **R-s287-1: as ruled,** E0410 now, no warning release.
 - **The rows red first: hit.** At the rows' commits, on the base's code for each item (the red
-  takes ran before the rebase, at `e36a9b29` and `ddceedf8`, which became `9704538a` and
-  `0bc1c037`):
+  takes ran before both rebases, at `e36a9b29` and `ddceedf8`, which became `e8fd0e60` and
+  `6b84c492`):
   - `e36a9b29`, #1062b: `front_end_rulings_lanes` 6 failed by name, 33 passed (the first change's
     32 and the container control); the corpus step `9 bad`, all in the six rows; the anchors gate
     `OUT OF SYNC`; conformance red at the unknown anchor.
@@ -106,9 +112,9 @@ R-s287-1 and R-s287-9. Scored:
     conformance red.
 - **A miss of the rows, fixed:** the `bump` row fires W1002 (its `mut` parameter is never written,
   which is the trap), and its header did not declare it. The red take's corpus step names it
-  beside the row's phase, and the checks at `b28f99d9` found it alone. The row now declares
-  `warns: W1002` (`aa0a3063`). Its snapshots and its span moved down the line that added
-  (`006e2f7c`, `2aeeb81b`), and the catalog lists its lexer snapshot under W1002 (`cdc77a1f`).
+  beside the row's phase, and the checks at `2eef2141` found it alone. The row now declares
+  `warns: W1002` (`8129a2dd`). Its snapshots and its span moved down the line that added
+  (`50c08838`, `6b0d2361`), and the catalog lists its lexer snapshot under W1002 (`15d0ee79`).
 - **Anchors: hit.** 731 keys at the first change's head, 733 here (`gram.pat.let`, `type.rec`
   added, none removed; the key sets diffed both ways, `pr2-m2-regen-59f80c28.log`).
 
@@ -142,8 +148,9 @@ lupin 0.1.60 runs, and the mirror must refuse, with the compiler's code at the c
 
 The first change's rig: every `.lu` file of the corpus and of 38 org checkouts at their trunks, one
 `conform-run --json --phase=mem` per directory module or entry file, on the first change's binary
-(`aa3c9baa`, its code-final head but for E0609's wording) and on this change's (`bf77af3f`, the
-code this head carries), compared run by run (`notes/s287-evidence/pr2-census.txt`).
+(`aa3c9baa`'s, its code-final head but for E0609's wording) and on this change's (`bf77af3f`'s, the
+code this head carries), both built before the rebase onto trunk `718fe47a`, whose change is the
+runtime's alone, compared run by run (`notes/s287-evidence/pr2-census.txt`).
 
 That is 5,095 runs over 6,854 files. No verdict and no error moved in any public tree, nor in the
 seven private downstream trees (58 files). In the corpus, the 15 new rows moved, and so did the
@@ -168,21 +175,21 @@ copy of the witness in wolf-interp's corpus, which the census skips as a copy of
 ## Done-when
 
 Commits:
-- #1062b: `40020d4e` (`[type.rec]`); `dcac4bab`, `98efe598`, `092fdc31`, `ae0e9cfc`, `2990c0b4`,
-  `7b2faffc` (the six rows), `bcc8a663` (the container control); `e36ec807`, `bd23112b` (the
-  report site, before the code); `9704538a` (the rows on four machines); `b10f8c3c` (the walk,
-  E0404); `e9046887` (E0404's explanation); `94eba7a0`, `8ce4d906` (the rendered snapshot).
-- #1062c: `dec460e0` (`[gram.pat.let]`); `d604e6eb`, `563eafc4`, `a6690b33`, `780119bb`,
-  `d5291a7d`, `959ea5c8`, `77d30ebf` (the seven rows), `53b18974` (the `var` control); `0bc1c037`
-  (the rows on four machines); `38314dd4`, `21eb122a` (the witness and the fixture adjusted, before
-  the code); `f9e07283` (the checker's E0410); `d0159584` (the resolve rung's docs say which rung
-  judges a pattern's name); `d690440e` (E0410's explanation); `81ad622d`, `727909a7` (the rendered
+- #1062b: `428993a3` (`[type.rec]`); `9f4354b1`, `ad2c3b59`, `e39d7627`, `65f68731`, `c3a92477`,
+  `14087517` (the six rows), `8198b53a` (the container control); `835867e2`, `b3036e7f` (the
+  report site, before the code); `e8fd0e60` (the rows on four machines); `589faef9` (the walk,
+  E0404); `59b6a727` (E0404's explanation); `acdd87ac`, `eec51f04` (the rendered snapshot).
+- #1062c: `93d4da9b` (`[gram.pat.let]`); `7d052001`, `1c01617c`, `3bde136b`, `56a139be`,
+  `a344fa6c`, `a7e62e2f`, `00296cbc` (the seven rows), `9e1c3926` (the `var` control); `6b84c492`
+  (the rows on four machines); `b2a61ad9`, `3edfa948` (the witness and the fixture adjusted, before
+  the code); `cb0ba1d2` (the checker's E0410); `9165d887` (the resolve rung's docs say which rung
+  judges a pattern's name); `853788d0` (E0410's explanation); `866babb4`, `f0053a04` (the rendered
   snapshot).
-- `3570b69a`: the two anchors indexed.
-- `32b6bf5d`, `4d63c291`, `cb10ed50`, `ff832fbe`: the snapshots, the fixture's snapshot and the
-  lowering ledger. `bf77af3f`: the changelog. `b28f99d9`: the catalog regenerated.
-- `aa0a3063`, `006e2f7c`, `2aeeb81b`: the `bump` row's W1002, its snapshots and its span;
-  `cdc77a1f`: the catalog lists that row's lexer snapshot under W1002.
+- `30a2b7a8`: the two anchors indexed.
+- `92020332`, `1082aca1`, `6be1961c`, `9c89b9c3`: the snapshots, the fixture's snapshot and the
+  lowering ledger. `21a8fd36`: the changelog. `2eef2141`: the catalog regenerated.
+- `8129a2dd`, `50c08838`, `6b0d2361`: the `bump` row's W1002, its snapshots and its span;
+  `15d0ee79`: the catalog lists that row's lexer snapshot under W1002.
 - This note and its evidence.
 
 Test targets:
@@ -195,12 +202,15 @@ Test targets:
 - [x] the corpus `0 bad` (1327 files; the fail-pin ledger 418 to 431 rules); conformance green
 - [x] fmt, clippy (`wolf_diag`, `wolf_sema`, `wolf_driver`, all targets, `-D warnings`), the
       `wolf_diag` and `wolf_sema` suites, the catalogs' checks, the anchors gate, the corpus and
-      conformance at `cdc77a1f`, the code-final head (`pr2-m1-checks-cdc77a1f.log`)
+      conformance at `15d0ee79`, the code-final head (`pr2-m1-checks-cdc77a1f.log`)
 - [x] the adjusted fixture: `wolf_mem`'s rendered diagnostics, the element-places four-machine
       test, clippy on `wolf_mem` (`pr2-m2-extra-2aeeb81b.log`)
-- [x] every corpus-walking snapshot suite with no update at `2aeeb81b`, whose snapshots the head
+- [x] every corpus-walking snapshot suite with no update at `6b0d2361`, whose snapshots the head
       carries (`pr2-m2-snaps-2aeeb81b.log`)
 - [x] the census: nothing moves outside the corpus
+- [x] at the rebased code (`a7078094`, trunk `718fe47a`): the checks above, the lanes test, the
+      corpus, conformance, the adjusted fixture's suites, and every corpus-walking snapshot suite
+      with no update (`pr2-m2-rebased-a7078094.log`)
 - [ ] the Linux gauntlet record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
