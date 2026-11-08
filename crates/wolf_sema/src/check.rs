@@ -573,6 +573,10 @@ enum Origin {
     /// A `let` binder; the span is its `let` keyword (E0410's secondary
     /// label and fix-it anchor).
     Let(Span),
+    /// A name a pattern binds outside `let` and `var`: a `match` arm, a
+    /// `for` header, an `else |…|` handler, a `select` receive. It binds
+    /// as `let` does (`[gram.pat.let]`).
+    Pattern,
 }
 
 /// The checker's view of binding provenance, beside its lexical scopes
@@ -1442,19 +1446,49 @@ impl<'a> Checker<'a> {
     /// The innermost binding of `name` in the lexical scopes: its scope
     /// index and origin. `None` for a name the scopes do not hold (module
     /// state, or an error already reported).
-    fn binding_origin(&self, name: &str) -> Option<(usize, Origin)> {
+    fn binding_origin(&self, name: &str) -> Option<(usize, Origin, Option<Span>)> {
         for (depth, scope) in self.scopes.iter().enumerate().rev() {
             if let Some(i) = scope.iter().rposition(|(n, _)| n == name) {
-                let origin = self
+                let (origin, span) = self
                     .binds
                     .origins
                     .get(depth)
                     .and_then(|o| o.get(i))
-                    .map_or(Origin::Plain, |(o, _)| *o);
-                return Some((depth, origin));
+                    .map_or((Origin::Plain, None), |(o, s)| (*o, Some(*s)));
+                return Some((depth, origin, span));
             }
         }
         None
+    }
+
+    /// wolf-lang#1062, the third case (`[gram.pat.let]`): an assignment
+    /// whose root is a name a pattern bound outside `let` and `var`.
+    fn check_pattern_binding_write(&mut self, place: &GreenNode) {
+        let Some((root, ident, through_field)) = crate::letcheck::assigned_root(place) else {
+            return;
+        };
+        let name = self.text(ident);
+        let Some((_, Origin::Pattern, Some(binder))) = self.binding_origin(&name) else {
+            return;
+        };
+        let span = if through_field { place.span } else { root.span };
+        let message = if through_field {
+            format!("`{name}` is bound by a pattern, so its fields cannot be assigned either")
+        } else {
+            format!("`{name}` is bound by a pattern, so it cannot be assigned")
+        };
+        self.diags.push(
+            Diagnostic::error(codes::E0410, span, message)
+                .with_label("this assignment needs a mutable binding")
+                .with_secondary(binder, "bound here, as `let` binds")
+                .with_note(format!(
+                    "a name a pattern binds outside `let` and `var` (in a `match` arm, a \
+                     `for` header, an `else |…|` handler or a `select` receive) binds as \
+                     `let` does ([gram.pat.let]): it holds its own value, never a place in \
+                     what was matched, so no write to it could reach that. To update it, \
+                     shadow it with a `var` at the start of the body: `var {name} = {name}`."
+                )),
+        );
     }
 
     /// wolf-lang#1059 (`[gram.pat.nullary.scope]`): an assignment whose
@@ -1468,7 +1502,7 @@ impl<'a> Checker<'a> {
         };
         let name = self.text(ident);
         let (depth, kw) = match self.binding_origin(&name) {
-            Some((depth, Origin::Let(kw))) => (depth, kw),
+            Some((depth, Origin::Let(kw), _)) => (depth, kw),
             Some(_) => return,
             None => match self.sigs.get(self.module, &name) {
                 Some(ItemSig::Global(g)) if g.kind == crate::sig::GlobalKind::Let => match g.let_kw
@@ -3549,7 +3583,10 @@ impl<'a> Checker<'a> {
                         SyntaxKind::IdentPat => {
                             if let Some(t) = pat.child_token(SyntaxKind::Ident) {
                                 let name = self.text(t.span);
+                                // A receive binds as `let` does (`[gram.pat.let]`).
+                                let outer = self.binds.origin.replace(Origin::Pattern);
                                 self.bind(name, t.span, elem);
+                                self.binds.origin = outer;
                             }
                         }
                         SyntaxKind::WildcardPat => {}
@@ -3579,7 +3616,9 @@ impl<'a> Checker<'a> {
                                 [one] => {
                                     if let Some(t) = one.child_token(SyntaxKind::Ident) {
                                         let name = self.text(t.span);
+                                        let outer = self.binds.origin.replace(Origin::Pattern);
                                         self.bind(name, t.span, reason_t);
+                                        self.binds.origin = outer;
                                     }
                                 }
                                 _ => {
@@ -4631,6 +4670,7 @@ impl<'a> Checker<'a> {
         // nothing, since only the scrutinee's type says so
         // (`[gram.pat.nullary.scope]`, wolf-lang#1059): that E0410 is ours.
         self.check_arm_let_write(place);
+        self.check_pattern_binding_write(place);
         // E1101 — a task closure writing captured enclosing state
         // ([conc.task.spawn]) — is this rung's, checked on the place
         // before its type (the capture law is about the binding).
@@ -6693,7 +6733,10 @@ impl<'a> Checker<'a> {
                         // tag uncovered is E0809 with the
                         // match-over-row shape as the fix.
                         self.open_names(NameFrame::Pattern);
-                        let p = self.match_pattern(pat, row)?;
+                        let outer = self.binds.origin.replace(Origin::Pattern);
+                        let p = self.match_pattern(pat, row);
+                        self.binds.origin = outer;
+                        let p = p?;
                         self.close_names();
                         let zonked = zonk(&mut self.lo.table, &self.vars, row);
                         if let Some(col) = self.col_ty(zonked, 0) {
@@ -6726,7 +6769,10 @@ impl<'a> Checker<'a> {
                     } else {
                         // The caught error's type is the row itself.
                         self.open_names(NameFrame::Pattern);
-                        self.bind_pattern(pat, row)?;
+                        let outer = self.binds.origin.replace(Origin::Pattern);
+                        let bound = self.bind_pattern(pat, row);
+                        self.binds.origin = outer;
+                        bound?;
                         self.close_names();
                     }
                 }
@@ -12135,10 +12181,13 @@ impl<'a> Checker<'a> {
                 .push((self.scopes.len() - 1, Vec::new()));
             if let Some(p) = arm.pattern() {
                 self.open_names(NameFrame::Pattern);
+                let outer = self.binds.origin.replace(Origin::Pattern);
                 let lowered = match &fallible {
-                    Some((ok, row, tags)) => self.fallible_pattern(p, *ok, *row, tags)?,
-                    None => self.match_pattern(p, scrut_ty)?,
+                    Some((ok, row, tags)) => self.fallible_pattern(p, *ok, *row, tags),
+                    None => self.match_pattern(p, scrut_ty),
                 };
+                self.binds.origin = outer;
+                let lowered = lowered?;
                 self.close_names();
                 rec.arms.push((lowered, arm.guard().is_some(), p.span));
             }
@@ -13175,7 +13224,10 @@ impl<'a> Checker<'a> {
         self.push_scope();
         if let Some(p) = d.pattern() {
             self.open_names(NameFrame::Pattern);
-            self.bind_pattern(p, elem)?;
+            let outer = self.binds.origin.replace(Origin::Pattern);
+            let bound = self.bind_pattern(p, elem);
+            self.binds.origin = outer;
+            bound?;
             self.close_names();
         }
         if let Some(b) = d.body() {
