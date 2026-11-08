@@ -510,7 +510,10 @@ fn a_tag_the_row_spells_twice_is_e0601() {
 /// not built yet, the conservatism ledger), and lupin runs it.
 fn checks_then_waits_for_the_join(row: &str, lupin_exit: u8) {
     for (machine, record, stderr) in compiled(row) {
-        assert_eq!(record["verdict"], "unsupported", "{machine} {row}: {record}");
+        assert_eq!(
+            record["verdict"], "unsupported",
+            "{machine} {row}: {record}"
+        );
         assert_eq!(record["phase_reached"], "mem", "{machine} {row}: {record}");
         assert!(
             stderr.contains("or-pattern"),
