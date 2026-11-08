@@ -1,0 +1,16 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: gram.pat.or
+//!
+//! wolf-lang#1061 at two types: `x` is an `int` in `A(x)` and a `bool`
+//! in `B(x)`. Each name an or-pattern binds has one type
+//! ([gram.pat.or]): E0401 at the later binding. The checker accepted
+//! it; lupin ran it (exit 1).
+
+enum E { A(int), B(bool) }
+
+fn f(v: E) -> int {
+    match v { A(x) | B(x) => 1 }
+}
+
+fn main() -> int { f(E.B(true)) }
