@@ -12,7 +12,7 @@ step build cargo build --locked -p wolf_driver -p wolf_rt || exit 1
 for t in wolf_codegen_clif:clif_goldens wolf_codegen_llvm:llvm_goldens wolf_fmt:broken wolf_lex:corpus_snapshots \
          wolf_lsp:completion wolf_lsp:transcript wolf_mem:cfg_dumps wolf_mem:mem_diagnostics wolf_mem:ubcheck \
          wolf_parse:ambiguity_trees wolf_parse:corpus_decls wolf_parse:diagnostics wolf_sema:conc_diagnostics \
-         wolf_sema:diagnostics wolf_sema:interface_pretty wolf_sema:wave_diagnostics wolf_sema:pattern_diagnostics wolf_sema:row_diagnostics \
+         wolf_sema:diagnostics wolf_sema:interface_pretty wolf_sema:wave_diagnostics wolf_sema:pattern_diagnostics wolf_sema:row_diagnostics wolf_sema:typecheck_diagnostics \
          wolf_wir:build_peephole wolf_wir:lower_corpus wolf_wir:midend_passes wolf_wir:wir_dumps; do
   step "suite-${t/:/-}" env INSTA_UPDATE=$MODE cargo test --locked -p "${t%%:*}" --test "${t##*:}"
 done
