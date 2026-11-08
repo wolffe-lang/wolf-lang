@@ -1,0 +1,13 @@
+//! check: fail(E0610)
+//! phase: resolve
+//! conforms: type.err.alias.cycle
+//!
+//! wolf-lang#1064: an alias that names itself is E0610 at the inner
+//! `E`, whether or not any row names it ([type.err.alias.cycle], as
+//! amended): an alias is checked where it is declared, as every item
+//! is. The compiled tiers checked an alias only where a row expanded
+//! it, so this program exited 0 while lupin refused it at the alias.
+
+error E = {E}
+
+fn main() -> int { 0 }
