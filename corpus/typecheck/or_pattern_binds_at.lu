@@ -1,0 +1,13 @@
+//! check: run(exit=21)
+//! phase: mem
+//! conforms: gram.pat.or, gram.pat.range
+//!
+//! Through `@`: each alternative binds `n` at `int` ([gram.pat.or]).
+//! The checker accepts it; the compiled machines refuse it at `mem`
+//! until the join is built; lupin runs it (exit 21).
+
+fn f(v: int) -> int {
+    match v { n @ 1..=9 | n @ 20..=29 => n, _ => 0 }
+}
+
+fn main() -> int { f(21) }
