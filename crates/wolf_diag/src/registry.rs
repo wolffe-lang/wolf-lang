@@ -1658,6 +1658,22 @@ wrapper on the other target. FreeBSD remains refused. The freestanding
 target keeps its floating-value ban; variadic entry saves of vector state
 are guarded by the incoming C caller's vector-register count.
 "#);
+code!(E0827, "a name bound twice in one pattern or parameter list", r#"
+A pattern binds each name once (`[gram.pat.names]`): `P { a: x, b: x }`,
+`let (x, x) = pair` and `n @ n` each bind `x` (or `n`) a second time,
+and the second binding would silently hide the first one's value, at
+the same type or at another. The error is at the second binding, with
+the first as its secondary label. Usually one of the two is a typo for
+another name (`P { a: x, b: y }`); when a value is not needed, `_`
+matches it without binding. A parameter list binds each name once too,
+a function's and a closure's: `fn f(a: int, a: int)` is refused at the
+second `a`. A bare name that tests a case of the scrutinee's type binds
+nothing, so `(Red, Red)` is two tests, not two bindings. Each
+alternative of an or-pattern is its own pattern here (E0828 is about
+what they bind together), and a comma group (`let a = 1, a = a + 1`) is
+several patterns: the second `a` shadows the first, as two `let`s do.
+"#);
+
 
 
 
