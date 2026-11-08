@@ -965,6 +965,13 @@ impl LoadState<'_> {
             }
         }
         self.tables[idx] = table;
+        // `[gram.item.type.names]` (wolf-lang#1060): one enum's variants,
+        // and one struct's fields, have distinct names — reported here,
+        // beside the module's own duplicate items, used or not.
+        for &fi in &file_indices {
+            let unit = &self.files[fi];
+            member_duplicates(&unit.parse.root, &unit.raw.src, &mut self.diags);
+        }
         // Resolve the import prefix of each file (may recurse).
         for (slot, &fi) in file_indices.iter().enumerate() {
             let uses = extract_uses(&self.files[fi].parse.root, &self.files[fi].raw.src);
@@ -1724,6 +1731,56 @@ pub(crate) fn pattern_names(node: &GreenNode, src: &[u8]) -> Vec<(String, Span)>
     }
     walk(node, src, &mut out);
     out
+}
+
+/// E0302 for a variant or a field declared twice in one enum or struct
+/// (`[gram.item.type.names]`, wolf-lang#1060), in every spelling of either
+/// (`enum E { … }`, `type E = enum { … }`, `struct P { … }`,
+/// `type P = struct { … }`), wherever it stands in the file. Names compare
+/// as spelled; the second declaration is reported, with the first.
+fn member_duplicates(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
+    let members: Option<(&str, Vec<&wolf_ast::GreenToken>)> = match node.kind {
+        SyntaxKind::EnumDecl => wolf_ast::EnumDecl::cast(node)
+            .map(|d| ("variant", d.variants().filter_map(|v| v.name()).collect())),
+        SyntaxKind::EnumDef => wolf_ast::EnumDef::cast(node)
+            .map(|d| ("variant", d.variants().filter_map(|v| v.name()).collect())),
+        SyntaxKind::StructDecl => wolf_ast::StructDecl::cast(node)
+            .map(|d| ("field", d.fields().filter_map(|f| f.name()).collect())),
+        SyntaxKind::StructDef => wolf_ast::StructDef::cast(node)
+            .map(|d| ("field", d.fields().filter_map(|f| f.name()).collect())),
+        _ => None,
+    };
+    if let Some((what, names)) = members {
+        let (list, kind) = if what == "variant" {
+            ("enum", "variants")
+        } else {
+            ("struct", "fields")
+        };
+        let mut seen: Vec<(String, Span)> = Vec::new();
+        for t in names {
+            let name = text(src, t.span);
+            match seen.iter().find(|(n, _)| *n == name) {
+                Some((_, first)) => diags.push(
+                    Diagnostic::error(
+                        codes::E0302,
+                        t.span,
+                        format!("the {what} `{name}` is declared twice in this {list}"),
+                    )
+                    .with_label("declared again here")
+                    .with_secondary(*first, "first declared here")
+                    .with_note(format!(
+                        "the {kind} of one {list} have distinct names, as the items of \
+                         one module do ([gram.item.type.names]): a name must pick out \
+                         one {what}. Rename or remove one of the declarations."
+                    )),
+                ),
+                None => seen.push((name, t.span)),
+            }
+        }
+    }
+    for child in node.nodes() {
+        member_duplicates(child, src, diags);
+    }
 }
 
 /// Collect the top-level items of one file: (name, kind, vis, name
