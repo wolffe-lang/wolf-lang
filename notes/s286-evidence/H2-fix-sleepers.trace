@@ -1,0 +1,57 @@
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/build/blake3-80bc1cb7c4d85e14/out/glibc-hwcaps/x86-64-v3/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/build/blake3-80bc1cb7c4d85e14/out/glibc-hwcaps/x86-64-v2/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/build/blake3-80bc1cb7c4d85e14/out/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/glibc-hwcaps/x86-64-v3/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/glibc-hwcaps/x86-64-v2/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/deps/glibc-hwcaps/x86-64-v3/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/deps/glibc-hwcaps/x86-64-v2/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/deps/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/glibc-hwcaps/x86-64-v3/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/glibc-hwcaps/x86-64-v2/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/glibc-hwcaps/x86-64-v3/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/glibc-hwcaps/x86-64-v2/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+3033  openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/build/blake3-80bc1cb7c4d85e14/out/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/w/8fd5a8ef/target/debug/deps/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/opt/s263-rustup/toolchains/1.97.1-x86_64-unknown-linux-gnu/lib/libc.so.6", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+3033  openat(AT_FDCWD, "/lib/x86_64-linux-gnu/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+3033  openat(AT_FDCWD, "/sys/devices/system/cpu/online", O_RDONLY|O_CLOEXEC) = 3
+3033  openat(AT_FDCWD, "/proc/self/cgroup", O_RDONLY|O_CLOEXEC) = 3
+3033  openat(AT_FDCWD, "/sys/fs/cgroup/cpu.max", O_RDONLY|O_CLOEXEC) = 3
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc9e62990, parent_tid=0x7efdc9e62990, exit_signal=0, stack=0x7efdc9663000, stack_size=0x7fed40, tls=0x7efdc9e626c0} => {parent_tid=[3034]}, 88) = 3034
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc964a990, parent_tid=0x7efdc964a990, exit_signal=0, stack=0x7efdc8e4b000, stack_size=0x7fed40, tls=0x7efdc964a6c0} => {parent_tid=[3035]}, 88) = 3035
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc8e32990, parent_tid=0x7efdc8e32990, exit_signal=0, stack=0x7efdc8633000, stack_size=0x7fed40, tls=0x7efdc8e326c0} => {parent_tid=[3036]}, 88) = 3036
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc3ff7990, parent_tid=0x7efdc3ff7990, exit_signal=0, stack=0x7efdc37f8000, stack_size=0x7fed40, tls=0x7efdc3ff76c0} => {parent_tid=[3037]}, 88) = 3037
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc37df990, parent_tid=0x7efdc37df990, exit_signal=0, stack=0x7efdc2fe0000, stack_size=0x7fed40, tls=0x7efdc37df6c0} => {parent_tid=[3038]}, 88) = 3038
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc2fc7990, parent_tid=0x7efdc2fc7990, exit_signal=0, stack=0x7efdc27c8000, stack_size=0x7fed40, tls=0x7efdc2fc76c0} => {parent_tid=[3039]}, 88) = 3039
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc27af990, parent_tid=0x7efdc27af990, exit_signal=0, stack=0x7efdc1fb0000, stack_size=0x7fed40, tls=0x7efdc27af6c0} => {parent_tid=[3040]}, 88) = 3040
+3033  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc1f97990, parent_tid=0x7efdc1f97990, exit_signal=0, stack=0x7efdc1798000, stack_size=0x7fed40, tls=0x7efdc1f976c0} => {parent_tid=[3041]}, 88) = 3041
+3040  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc177f990, parent_tid=0x7efdc177f990, exit_signal=0, stack=0x7efdc0f80000, stack_size=0x7fed40, tls=0x7efdc177f6c0} => {parent_tid=[3042]}, 88) = 3042
+3039  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efdc0f67990, parent_tid=0x7efdc0f67990, exit_signal=0, stack=0x7efdc0768000, stack_size=0x7fed40, tls=0x7efdc0f676c0} <unfinished ...>
+3038  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda3ff7990, parent_tid=0x7efda3ff7990, exit_signal=0, stack=0x7efda37f8000, stack_size=0x7fed40, tls=0x7efda3ff76c0} <unfinished ...>
+3041  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda37df990, parent_tid=0x7efda37df990, exit_signal=0, stack=0x7efda2fe0000, stack_size=0x7fed40, tls=0x7efda37df6c0} <unfinished ...>
+3039  <... clone3 resumed> => {parent_tid=[3043]}, 88) = 3043
+3037  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda2fc7990, parent_tid=0x7efda2fc7990, exit_signal=0, stack=0x7efda27c8000, stack_size=0x7fed40, tls=0x7efda2fc76c0} <unfinished ...>
+3038  <... clone3 resumed> => {parent_tid=[3044]}, 88) = 3044
+3041  <... clone3 resumed> => {parent_tid=[3045]}, 88) = 3045
+3037  <... clone3 resumed> => {parent_tid=[3046]}, 88) = 3046
+3036  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda27af990, parent_tid=0x7efda27af990, exit_signal=0, stack=0x7efda1fb0000, stack_size=0x7fed40, tls=0x7efda27af6c0} <unfinished ...>
+3034  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda1f97990, parent_tid=0x7efda1f97990, exit_signal=0, stack=0x7efda1798000, stack_size=0x7fed40, tls=0x7efda1f976c0} <unfinished ...>
+3036  <... clone3 resumed> => {parent_tid=[3047]}, 88) = 3047
+3035  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda177f990, parent_tid=0x7efda177f990, exit_signal=0, stack=0x7efda0f80000, stack_size=0x7fed40, tls=0x7efda177f6c0} <unfinished ...>
+3034  <... clone3 resumed> => {parent_tid=[3048]}, 88) = 3048
+3035  <... clone3 resumed> => {parent_tid=[3049]}, 88) = 3049
+3042  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efda0f67990, parent_tid=0x7efda0f67990, exit_signal=0, stack=0x7efda0768000, stack_size=0x7fed40, tls=0x7efda0f676c0} <unfinished ...>
+3046  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efd937df990, parent_tid=0x7efd937df990, exit_signal=0, stack=0x7efd92fe0000, stack_size=0x7fed40, tls=0x7efd937df6c0} <unfinished ...>
+3044  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efd92fc7990, parent_tid=0x7efd92fc7990, exit_signal=0, stack=0x7efd927c8000, stack_size=0x7fed40, tls=0x7efd92fc76c0} <unfinished ...>
+3043  clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7efd93ff7990, parent_tid=0x7efd93ff7990, exit_signal=0, stack=0x7efd937f8000, stack_size=0x7fed40, tls=0x7efd93ff76c0} <unfinished ...>
+3046  <... clone3 resumed> => {parent_tid=[3051]}, 88) = 3051
+3042  <... clone3 resumed> => {parent_tid=[3050]}, 88) = 3050
+3044  <... clone3 resumed> => {parent_tid=[3052]}, 88) = 3052
+3043  <... clone3 resumed> => {parent_tid=[3053]}, 88) = 3053

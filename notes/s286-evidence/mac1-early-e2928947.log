@@ -1,0 +1,59 @@
+mac-locked: gate ok, 12906 MiB available 04:40:42Z
+
+thread 'term::tests::the_three_raw_bits' (9291595) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+---- term::tests::the_pty_helper_answers_its_own_pair stdout ----
+
+thread '<unnamed>' (9291580) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9291581) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9291583) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9291584) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9291579) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9291577) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9291582) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread 'term::tests::the_pty_helper_answers_its_own_pair' (9291576) panicked at crates/wolf_rt/src/term.rs:820:9:
+assertion `left == right` failed: pairs whose slave was another pair's
+  left: 7
+ right: 0
+
+
+failures:
+    term::tests::the_pty_helper_answers_its_own_pair
+    term::tests::the_three_raw_bits
+
+test result: FAILED. 374 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.61s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+== signal gaps
+SKIP: exit_by: not CI's throwaway runner — the live witnesses signal their own processes and run on macOS only there
+test a_program_ends_itself_by_a_signal ... ok
+SKIP: core: not CI's throwaway runner — the live witnesses signal their own processes and run on macOS only there
+SKIP: group_fault: not CI's throwaway runner — the live witnesses signal their own processes and run on macOS only there
+test a_core_rides_the_status ... ok
+test a_group_send_of_a_fault_the_sender_ignores ... ok
+SKIP: environment cannot build the native tier: wolf build: libwolf_rt.a not found next to the `wolf` binary (build it with `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)
+SKIP: environment cannot build the native tier: wolf build: libwolf_rt.a not found next to the `wolf` binary (build it with `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)
+SKIP: environment cannot build the native tier: wolf build: libwolf_rt.a not found next to the `wolf` binary (build it with `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)
+SKIP: environment cannot build the release tier: wolf build: libwolf_rt.a not found next to the `wolf` binary (build it with `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)
+test signal_zero_has_words_on_every_host ... ok
+SKIP: environment cannot build the release tier: wolf build: libwolf_rt.a not found next to the `wolf` binary (build it with `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)
+test a_descriptor_wait_makes_no_descriptor_while_the_program_runs ... ok
+SKIP: environment cannot build the release tier: wolf build: libwolf_rt.a not found next to the `wolf` binary (build it with `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)
+test the_one_meaning_shape_rows_on_every_host ... ok
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.57s
+mac-locked: exit=0 04:41:26Z

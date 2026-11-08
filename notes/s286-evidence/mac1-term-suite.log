@@ -1,0 +1,963 @@
+== d848fbed Bring the note to the rebased head and the filed issues in $LANE/build-d848fbed 04:45:06Z
+mac-locked: gate ok, 13407 MiB available 04:45:06Z
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-20a54c16d377b89a)
+
+running 374 tests
+test coredump::tests::the_shape_is_the_clauses ... ok
+test adopt::tests::the_shape_is_refused_first ... ok
+test coredump::tests::the_limit_reads_and_sets_to_itself ... ok
+test exec::tests::search_path_reads_the_handed_environment ... ok
+test exec::tests::env_unset_removes_and_refuses_bad_names ... ok
+test exec::tests::exec_shape_rows ... ok
+test bytes::tests::a_block_of_nothing_but_the_byte_counts_every_one ... ok
+test bytes::tests::the_entries_read_a_list_header ... ok
+test exec::tests::failed_exec_restores_the_map ... ok
+test fs::tests::a_fifo_is_unseekable ... ok
+test adopt::tests::an_inherited_descriptor_adopts_once ... ok
+test exec::tests::a_file_with_no_shebang_is_io_with_enoexec ... ok
+test exec::tests::resolve_program_rows ... ok
+test fs::tests::remove_on_a_directory_is_the_hosts_row ... ok
+test fs::tests::modes_cover_read_write_append_rw_and_exclusive ... ok
+test fs::tests::os_error_is_the_last_calls_host_number ... ok
+test fs::tests::fd_table_matches_the_checked_shape ... ok
+test fs::tests::split_time_is_a_timespec ... ok
+test fs::tests::fstat_reads_the_open_handle ... ok
+test fs::tests::append_mode_appends_without_reading ... ok
+test fs::tests::entries_carry_kinds_and_bytes ... ok
+test fs::tests::byte_io_carries_a_lone_0x80 ... ok
+test fs::tests::roundtrip_and_rows ... ok
+test fs::tests::the_standard_streams_are_not_table_slots ... ok
+test fs::tests::lstat_sees_the_link_and_stat_its_target ... ok
+test fs_at::tests::the_millisecond_word_is_the_paths ... ok
+test fs::tests::rename_moves_without_reading ... ok
+test fs_at::tests::the_open_word_is_the_open_familys ... ok
+test fs_change::tests::a_bad_shape_is_invalid_before_the_host ... ok
+test fs::tests::read_nonblock_matches_read_on_a_file_and_never_parks_on_a_fifo ... ok
+test fs::tests::a_failed_copy_write_puts_the_source_back ... ok
+test fs_change::tests::the_time_words_decode ... ok
+test fs_gaps::tests::a_non_blocking_pipe_answers_busy_when_full ... ok
+test fs::tests::dir_create_remove_and_metadata ... ok
+test fs::tests::stat_record_of_a_file ... ok
+test fs::tests::seek_tell_and_read_at_on_a_file ... ok
+test fs_gaps::tests::mkfifo_makes_a_fifo ... ok
+test fs_change::tests::set_times_without_follow_sets_the_link ... ok
+test fs_change::tests::set_times_sets_each_time_or_leaves_it ... ok
+test fs_gaps::tests::access_answers_the_hosts_rows ... ok
+test fs::tests::read_dir_is_sorted_and_names_only ... ok
+test handles::tests::numbers_only_go_up ... ok
+test bytes::tests::the_scans_agree_with_the_scalar_loops ... ok
+test fs_change::tests::set_mode_sets_exactly_the_bits_and_follows_a_link ... ok
+test fs_change::tests::a_symlink_stores_its_target_verbatim ... ok
+test host::tests::the_words_are_the_clauses ... ok
+test fs_save::tests::sync_a_directory_and_refuse_the_rest ... ok
+test fs_gaps::tests::the_lock_is_the_open_files ... ok
+test fs_change::tests::a_hard_link_is_a_second_name ... ok
+test host::tests::this_host_answers_its_kernel ... ok
+test ids::tests::a_bad_owner_is_invalid_before_the_host ... ok
+test ids::tests::an_owner_word_is_an_id_or_leave ... ok
+test fs_gaps::tests::the_handle_record_is_the_paths ... ok
+ab7test fs_at::tests::the_mode_set_on_a_handle_is_the_held_files ... ok
+outer innertest io::tests::a_bare_segment_writes_through ... ok
+test fs_gaps::tests::the_nofollow_bit_refuses_a_final_link ... ok
+test io::tests::a_print_statement_is_one_buffered_line ... ok
+test io::tests::padding_matches_the_reference ... ok
+test io::tests::nesting_flushes_only_at_the_outermost_end ... ok
+test fs_save::tests::sync_a_file_and_refuse_the_rest ... ok
+test fs_change::tests::truncate_sets_the_length_and_keeps_the_offset ... ok
+test io::tests::shortest_matches_decimal_to_str ... ok
+test ids::tests::the_ids_are_the_hosts ... ok
+test io::tests::sign_zero_bases_and_precision_match_the_reference ... ok
+test fs_at::tests::the_record_by_handle_is_the_paths ... ok
+test json::tests::container_get_renders_json ... ok
+test fs_at::tests::the_calls_follow_the_handle_not_the_path ... ok
+test json::tests::depth_limit_is_a_parse_error ... ok
+test json::tests::duplicate_names_are_last_wins ... ok
+test json::tests::escapes_and_surrogates ... ok
+test json::tests::numbers_render_as_source ... ok
+test fs::tests::copy_chunk_moves_a_file ... ok
+test json::tests::rfc_smoke ... ok
+test json::tests::shim_error_codes ... ok
+test json::tests::paths_and_kinds ... ok
+test json::tests::shim_query_roundtrip ... ok
+test list::tests::copy_is_independent ... ok
+test fs_save::tests::realpath_follows_then_climbs ... ok
+test list::tests::debug_layout_tracks_the_runtime_header ... ok
+test json::tests::duplicate_names_in_a_wide_object ... ok
+test list::tests::growth_preserves_elements ... ok
+test ids::tests::an_owner_call_that_changes_nothing ... ok
+test list::tests::a_moved_region_keeps_its_container ... ok
+test list::tests::header_offsets_are_the_lowering_abi ... ok
+test list::tests::nested_regions_restore_the_enclosing_ambient ... ok
+test list::tests::growth_stays_in_the_birth_region ... ok
+test list::tests::no_ambient_region_means_the_process_root ... ok
+test list::tests::push_pop_read_write_len ... ok
+test list::tests::header_and_buffer_land_in_the_ambient_region ... ok
+test map::tests::copy_is_independent ... ok
+test map::tests::debug_layout_tracks_the_runtime_header ... ok
+test map::tests::deterministic_hash_vectors_and_empty_binary_strings ... ok
+test map::tests::full_index_miss_is_bounded_and_next_insert_grows ... ok
+test map::tests::int_keys_round_trip ... ok
+test map::tests::remove_erases_and_keeps_insertion_order ... ok
+test map::tests::scalar_hash_ignores_entry_padding_and_value_bytes ... ok
+test map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity ... ok
+test map::tests::str_keys_compare_by_bytes ... ok
+test map::tests::indexed_integer_collisions_survive_rehash ... ok
+test map::tests::indexed_growth_charges_abandoned_tables_to_birth_region ... ok
+test native::tests::assertion_detail_wire_data_cannot_imitate_a_trap_line ... ok
+test native::tests::assertion_details_are_taken_once_and_do_not_reach_the_next_trap ... ok
+test native::tests::assertion_value_buffers_are_consumed_without_materializing_a_wolf_string ... ok
+test map::tests::indexed_clear_reuses_storage_and_forgets_old_keys ... ok
+test native::tests::bump_regions_allocate_and_free ... ok
+test map::tests::indexed_string_collisions_compare_contents_after_growth ... ok
+test map::tests::indexed_remove_patches_survivors_without_reordering ... ok
+test native::tests::chunk_ladder_starts_small_and_caps_out ... ok
+test native::tests::region_cap_at_cap_exactly_is_not_a_breach ... ok
+test native::tests::trap_names_cover_the_vocabulary ... ok
+test native::tests::trap_report_first_line_is_byte_identical_with_and_without_site ... ok
+test native::tests::chunk_bases_are_formally_aligned ... ok
+test net::tests::an_accepted_stream_arrives_non_blocking_and_close_on_exec ... ok
+test ids::tests::the_ids_shape_sorts_the_groups_and_has_no_leave ... ok
+test net::tests::loopback_echo_roundtrip ... ok
+test net::tests::closed_and_forged_fd_rows ... ok
+test net::tests::echo_under_deadline ... ok
+test net::tests::refused_is_a_row ... ok
+test net::tests::listen_with_rows_and_reuse_port_shares_the_port ... ok
+test net::tests::nodelay_is_paid_at_the_write_that_could_be_delayed ... ok
+test net::tests::adopt_listener_takes_a_handed_descriptor_and_refuses_strangers ... ok
+test net::tests::shim_refused_code ... ok
+test net::tests::every_socket_lives_nonblocking_under_the_runtime ... ok
+test net::tests::shim_listen_with_and_adopt_codes ... ok
+test net::tests::shim_invalid_utf8_is_the_utf8_code ... ok
+test net::tests::shim_writev_and_nodelay_codes ... ok
+test net::tests::shim_echo_roundtrip_and_rows ... ok
+test net::tests::shim_byte_roundtrip_and_invalid ... ok
+test net::tests::wrong_kind_is_io ... ok
+test os::tests::a_stopped_child_still_ends_for_the_blocking_wait ... ok
+test os::tests::chdir_rows_that_do_not_move ... ok
+test os::tests::cpus_is_at_least_one_and_agrees_with_the_pool ... ok
+test os::tests::cwd_is_a_str ... ok
+test os::tests::env_roundtrip_and_rows ... ok
+test os::tests::exe_is_an_existing_path ... ok
+test os::tests::kill_then_wait_is_signal_and_reaps ... ok
+test os::tests::map_of_rows ... ok
+test os::tests::a_child_keeps_an_ignored_sigpipe ... ok
+test os::tests::pipe_round_trip_through_the_fs_table ... ok
+test os::tests::own_pid_and_parent_pid ... ok
+test os::tests::process_rows_without_a_child ... ok
+test os::tests::shim_process_rows ... ok
+test os::tests::shim_spawn_wait_kill_roundtrip ... ok
+test os::tests::shim_spawn_with_maps_net_handles_and_refuses_forged_ones ... ok
+test os::tests::spawn_fds_hands_the_child_a_pipe_as_stdout ... ok
+test os::tests::spawn_fds_keeps_the_enoexec_number ... ok
+test net::tests::shim_deadline_times_out_and_clears ... ok
+test os::tests::spawn_fds_leaks_nothing ... ok
+test os::tests::spawn_fds_refuses_in_order ... ok
+test net::tests::shim_net_wait_mints_the_ready_subset ... ok
+test net::tests::shim_unix_echo_rows_and_cleanup ... ok
+test os::tests::spawn_job_shape_is_invalid_first ... ok
+test os::tests::spawn_job_tty_must_be_a_terminal ... ok
+test os::tests::spawn_fds_places_five_and_closes_two ... ok
+test os::tests::the_entry_record_decodes_argv_verbatim ... ok
+test os::tests::spawn_job_into_a_missing_group_is_denied ... ok
+test os::tests::vars_are_sorted_kv_lines ... ok
+test os::tests::spawn_job_leads_and_joins_a_group ... ok
+test os::tests::wait_reaps_and_double_wait_is_io ... ok
+test os::tests::without_the_wolf_entry_the_readers_keep_the_standard_capture ... ok
+test pool::tests::a_handle_packs_index_and_generation ... ok
+test os::tests::the_hooked_exec_hands_argv_and_the_environment ... ok
+test pool::tests::a_removed_handle_is_stale_everywhere ... ok
+test pool::tests::a_reused_slot_does_not_answer_the_old_handle ... ok
+test pool::tests::an_empty_pool_iterates_zero_times ... ok
+test pool::tests::clear_stales_every_handle_and_keeps_capacity ... ok
+test pool::tests::growth_keeps_every_live_handle_valid ... ok
+test pool::tests::iteration_walks_the_live_slots_in_reservation_order ... ok
+test pool::tests::reserve_init_read_round_trips ... ok
+test pool::tests::slot_zero_at_generation_zero_is_not_the_end_of_iteration ... ok
+test pool::tests::the_address_is_the_payload_and_a_place_write_lands_in_it ... ok
+test procattr::tests::chroot_of_a_missing_path ... ok
+test procattr::tests::the_priority_reads_and_a_zero_delta_keeps_it ... ok
+test procattr::tests::the_target_saturates_and_clamps ... ok
+test prof::tests::a_missing_header_refuses ... ok
+test prof::tests::a_record_past_the_array_refuses ... ok
+test prof::tests::a_total_that_disagrees_refuses ... ok
+test prof::tests::a_version_mismatch_refuses ... ok
+test prof::tests::an_all_zero_run_still_renders_a_valid_profile ... ok
+test prof::tests::an_unknown_directive_refuses ... ok
+test prof::tests::bumping_before_init_is_a_no_op_not_a_crash ... ok
+test prof::tests::dumping_before_init_writes_nothing ... ok
+test prof::tests::render_emits_canonical_wprof_v1 ... ok
+test quarantine::tests::a_released_granule_leaves_no_backing_behind ... ok
+test prof::tests::the_index_round_trips_its_ranges ... ok
+test quarantine::tests::contract_shapes_exist ... ok
+test quarantine::tests::no_hook_is_a_stub_any_more ... ok
+test quarantine::tests::the_tag_stream_never_draws_the_reserved_value ... ok
+test random::tests::shim_mints_lists_and_refuses_negative ... ok
+test random::tests::two_draws_differ ... ok
+test os::tests::wait_status_carries_the_signal_number ... ok
+test random::tests::zero_length_fill_succeeds ... ok
+test random::tests::large_fill_is_complete_and_nonzero ... ok
+
+running 1 test
+test net::tests::writev_gathers_parts_in_order ... ok
+test os::tests::spawn_with_hands_descriptors_to_the_child_from_3 ... ok
+test net::tests::timeout_row_reachable ... ok
+test reactor::tests::cancellation_surfaces_at_parked_io_wait ... ok
+test scratch::tests::a_nested_use_gets_its_own_buffer ... ok
+test scratch::tests::the_buffer_is_reused_and_grows_once ... ok
+test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+test signal::tests::disposition_of_a_bad_set_is_io ... ok
+test signal::tests::disposition_one_rows ... ok
+test signal::tests::empty_set_is_io_not_a_hang ... ok
+test signal::tests::group_and_all_shape_rows ... ok
+test signal::tests::host_numbers ... ok
+test signal::tests::ignored_reads_the_disposition ... ok
+test signal::tests::new_meanings_round_trip_by_index ... ok
+test signal::tests::number_rows ... ok
+test handles::tests::storage_is_reused ... ok
+test reactor::tests::many_waiters_one_reactor ... ok
+test reactor::tests::deadline_fires_on_never_ready_fd ... ok
+test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+test handles::tests::a_closed_handle_never_reaches_a_later_one ... ok
+test os::tests::poll_reports_a_stop_once_and_each_end ... ok
+test reactor::tests::readiness_completes_wait_and_emits_io_arrive ... ok
+test signal::tests::poll_right_after_raise_never_misses ... ok
+test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+test signal::tests::raise_unmapped_is_io ... ok
+test signal::tests::set_pgid_shape_rows ... ok
+test signal::tests::text_rows ... ok
+test signal::tests::the_action_query_reads_and_refuses_by_shape ... ok
+test net::tests::wait_names_the_socket_that_spoke ... ok
+test os::tests::a_file_with_no_shebang_is_io_on_every_spawn ... ok
+test reactor::tests::timers_fire_in_deadline_order ... ok
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+test net::tests::ready_sockets_never_touch_the_reactor ... ok
+test statfs::tests::a_missing_path_is_not_found ... ok
+test statfs::tests::a_nul_in_the_path_is_io ... ok
+test statfs::tests::the_id_is_gnus_order ... ok
+test statfs::tests::the_record_of_the_current_directory ... ok
+test stdfd::tests::a_descriptor_above_two_stays_where_it_is ... ok
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+test str::tests::byte_view_is_the_receiver_pair ... ok
+test str::tests::char_boundary_rule_is_the_two_bit_test ... ok
+test str::tests::chars_are_the_scalars_in_order ... ok
+test str::tests::a_dead_threads_strings_outlive_it ... ok
+test str::tests::from_utf8_accepts_text_and_refuses_the_ugly_inputs ... ok
+test str::tests::from_utf8_materializes_into_the_ambient_region ... ok
+test str::tests::get_matches_the_checked_domain ... ok
+test str::tests::inline_domain_matches_the_shim ... ok
+test str::tests::no_continuation_byte_starts_a_separator ... ok
+test str::tests::ordering_is_byte_lexicographic ... ok
+test str::tests::split_yields_count_plus_one_fields ... ok
+test str::tests::strbuf_builds_interpolations ... ok
+test str::tests::the_common_path_takes_no_shared_lock ... ok
+test str::tests::the_find_shim_reads_its_direction_flag ... ok
+test str::tests::concurrent_allocations_never_overlap ... ok
+test str::tests::the_method_set_matches_std ... ok
+test str::tests::the_short_needle_path_answers_exactly_as_core_does ... ok
+test str::tests::the_split_shim_rides_the_clause_walks ... ok
+test str::tests::the_walks_answer_the_clause_on_the_ugly_inputs ... ok
+test str::tests::to_int_parses_trimmed_decimal_i64_or_rows ... ok
+test str::tests::trim_uses_the_frozen_set ... ok
+test str::tests::the_frozen_set_still_matches_the_host_table ... ok
+test str::tests::ws_inline_matches_the_shim ... ok
+test str::tests::zero_copy_results_share_the_receiver_storage ... ok
+test task::chan::tests::c_surface_round_trip ... ok
+test handles::tests::the_table_agrees_with_a_model ... ok
+test net::tests::write_drains_a_large_body_through_parks_and_the_budget_covers_the_drain ... ok
+test task::chan::tests::cancellation_surfaces_at_blocked_recv ... ok
+test task::chan::tests::chan_shapes_snapshot ... ok
+test task::chan::tests::close_drains_then_yields_closed_error ... ok
+test task::chan::tests::cancellation_surfaces_at_blocked_select ... ok
+test task::chan::tests::kth_send_pairs_kth_recv ... ok
+test task::chan::tests::rendezvous_pairs_directly ... ok
+test task::chan::tests::cancellation_surfaces_at_blocked_send ... ok
+test task::chan::tests::close_wakes_blocked_ops_with_error_value ... ok
+test task::chan::tests::select_closed_arms_are_ready ... ok
+test task::chan::tests::select_fairness_under_seed ... ok
+test task::chan::tests::select_blocks_then_commits_one_arm ... ok
+test task::chan::tests::select_send_arm_commits ... ok
+test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... ok
+test task::chan::tests::send_region_moves_the_word ... ok
+test task::conc_abi::tests::cancel_tag_is_not_a_scope_failure ... ok
+test task::conc_abi::tests::proc_env_is_copied_at_spawn ... ok
+test task::conc_abi::tests::proc_spawn_outcome_maps_the_protocol ... ok
+test task::conc_abi::tests::task_env_is_copied_into_the_scope ... ok
+test task::conc_abi::tests::task_killed_polls_the_scope_chain ... ok
+test task::deque::tests::concurrent_steal_stress ... ok
+test task::deque::tests::full_deque_refuses ... ok
+test task::deque::tests::lifo_pop_fifo_steal ... ok
+test task::chan::tests::seam_observes_channel_events ... ok
+test task::chan::tests::select_parked_wakes_on_close ... ok
+test task::chan::tests::select_timeout_and_else ... ok
+test str::tests::ws_at_is_the_twenty_five_scalars ... ok
+test task::det::tests::replay_spec_grammar ... ok
+test task::det::tests::explicit_stream_replays_the_run ... ok
+test task::det::tests::schema_round_trip_and_frozen_v1 ... ok
+test task::det::tests::packed_token_replays_the_run ... ok
+test handles::tests::a_burst_is_given_back ... ok
+test task::hooks::tests::rng_is_deterministic_per_worker ... ok
+test task::leave::tests::a_leave_discards_the_frames_below_the_entry ... ok
+test task::leave::tests::enter_answers_the_entrys_value ... ok
+test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... ok
+test signal::tests::self_raise_delivers_the_meaning ... ok
+test task::parked::tests::wake_all_nudges_exactly_the_registered_waits ... ok
+test task::pool::os::joinable_thread_handle_can_cross_threads ... ok
+test task::par_tests::par_results_are_in_input_order ... ok
+test task::proc::tests::c_surface_round_trip ... ok
+test signal::tests::send_rows ... ok
+test signal::tests::the_eleven_new_meanings_round_trip ... ok
+test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+test task::proc::tests::crash_frees_ledger_and_delivers_planted_error ... ok
+test task::proc::tests::exit_reason_taxonomy_and_packing_snapshot ... ok
+test task::proc::tests::current_proc_attribution ... ok
+test task::proc::tests::cancelled_proc_runs_defers ... ok
+test task::proc::tests::cancelled_proc_completing_keeps_normal ... ok
+
+thread '<unnamed>' (9326659) panicked at crates/wolf_rt/src/task/pool.rs:501:5:
+blocking primitive called inside a proc message handler ([conc.chan.mailbox]: handlers are atomic and non-blocking — spawn the work onto the proc's scope and complete via a message)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test task::proc::tests::join_after_exit_reads_the_tombstone ... ok
+test task::proc::tests::exit_words_answer_like_a_vector ... ok
+test task::proc::tests::join_of_a_stale_id_is_stale ... ok
+test task::proc::tests::handler_blocking_debug_asserts_and_spawn_pattern_passes ... ok
+test task::proc::tests::join_answers_every_exit_class ... ok
+
+thread '<unnamed>' (9326652) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::late_kill_is_noop ... ok
+test task::proc::tests::ledger_moves_with_region_transfer ... ok
+test task::proc::tests::fault_propagates_over_links ... ok
+test task::proc::tests::monitor_normal_and_late_monitor ... ok
+test task::proc::tests::negative_cap_contained_as_fault ... ok
+
+thread '<unnamed>' (9326678) panicked at crates/wolf_rt/src/task/proc.rs:1597:13:
+contained at the proc boundary
+test task::proc::tests::proc_trap_becomes_error_reason ... ok
+
+thread '<unnamed>' (9326659) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+
+thread '<unnamed>' (9326671) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+
+thread '<unnamed>' (9326652) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::link_trap_converts_kill_to_message ... ok
+test task::proc::tests::link_pair_shares_fate ... ok
+test task::proc::tests::region_cap_breach_contained_as_fault_at_join ... ok
+
+thread '<unnamed>' (9326674) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::stale_ids_fault_cleanly ... ok
+test task::proc::tests::seam_observes_proc_events ... ok
+test task::stack::tests::map_trim_and_registry ... ok
+test task::proc::tests::supervisor_restarts_then_gives_up ... ok
+test task::tests::c_surface_round_trip ... ok
+test task::tests::blocking_compensation_recovers_throughput ... ok
+test task::tests::exit_reason_shape_snapshot ... ok
+test task::tests::first_failure_wins_rest_attach ... ok
+test task::tests::nested_scopes_join_inside_out ... ok
+
+thread '<unnamed>' (9326647) panicked at crates/wolf_rt/src/task/mod.rs:637:33:
+caught at the task boundary
+test task::tests::panic_becomes_exit_reason ... ok
+test task::tests::region_transfer_identity ... ok
+test task::tests::sched_seam_observes_events ... ok
+test task::tests::scope_joins_all_children ... ok
+test task::tests::sibling_cancel_and_reraise ... ok
+test task::det::tests::exploration_finds_reorder_and_seed_replays_it ... ok
+test task::when::tests::acquisition_follows_canonical_order ... ok
+test task::when::tests::c_surface_round_trip ... ok
+
+thread '<unnamed>' (9326638) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::killed_proc_skips_defers_and_frees_regions ... ok
+
+thread '<unnamed>' (9326691) panicked at crates/wolf_rt/src/task/when.rs:233:9:
+assertion `left == right` failed: nested acquisition inside a `when` body ([conc.when.nonest]): the compiler forbids this lexically; something smuggled a lock in
+  left: 1
+ right: 0
+test task::when::tests::nested_acquisition_debug_asserts ... ok
+test task::when::tests::self_acquisition_is_deadlock_value ... ok
+test task::tests::dump_names_scopes_and_tasks ... ok
+test term::tests::a_mode_outside_the_bits_is_invalid ... ok
+test term::tests::chars_and_the_two_new_bits ... ok
+test term::tests::not_a_terminal_is_io ... ok
+test term::tests::pgid_is_the_process_group ... ok
+test term::tests::raw_lf_reads_and_sets_onlcr ... ok
+test term::tests::size_reads_what_the_terminal_was_told ... ok
+test task::det::tests::subject_ids_are_normalized ... ok
+test task::when::tests::cancellation_surfaces_at_blocked_acquire ... ok
+test term::tests::the_three_raw_bits ... FAILED
+test time::tests::monotonic_and_sleep ... ok
+test time::tests::ns_resolves_what_ms_cannot ... ok
+test time::tests::unix_is_after_2020 ... ok
+test task::proc::tests::procs_that_end_alike_share_a_word ... ok
+test term::tests::the_pty_helper_answers_its_own_pair ... FAILED
+test task::det::tests::pool_plumbing_collapses_into_pick ... ok
+test task::par_tests::par_failure_cancels_siblings ... ok
+test task::det::tests::virtual_timer_fires_without_sleeping ... ok
+test task::tests::ten_k_tasks_bounded_threads ... ok
+test term::tests::the_restore_sets_the_mode_and_writes_the_bytes_once ... ok
+test task::det::tests::same_seed_same_stream_same_outcome ... ok
+test task::proc::tests::a_monitor_channel_is_dropped_once_received ... ok
+test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... ok
+test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+test signal::tests::wait_fds_answers_write_readiness ... ok
+test signal::tests::wait_filters_by_set ... ok
+test net::tests::reuse_port_group_delivery_is_the_hosts_measured_posture ... ok
+test net::tests::lost_accept_race_returns_within_its_budget ... ok
+test net::tests::shim_lost_race_returns_within_budget ... ok
+test task::when::tests::when_inversion_no_deadlock ... ok
+
+failures:
+
+---- term::tests::the_three_raw_bits stdout ----
+
+thread 'term::tests::the_three_raw_bits' (9326751) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+---- term::tests::the_pty_helper_answers_its_own_pair stdout ----
+
+thread '<unnamed>' (9326742) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9326736) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9326739) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9326740) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9326737) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9326735) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9326738) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread 'term::tests::the_pty_helper_answers_its_own_pair' (9326734) panicked at crates/wolf_rt/src/term.rs:820:9:
+assertion `left == right` failed: pairs whose slave was another pair's
+  left: 7
+ right: 0
+
+
+failures:
+    term::tests::the_pty_helper_answers_its_own_pair
+    term::tests::the_three_raw_bits
+
+test result: FAILED. 372 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.66s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+mac-locked: exit=101 04:45:10Z
+== terminal rows and verdict:
+   8 posix_openpt
+   1 test result: FAILED. 372 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.66s
+   1 test term::tests::a_mode_outside_the_bits_is_invalid ... ok
+   1 test term::tests::chars_and_the_two_new_bits ... ok
+   1 test term::tests::not_a_terminal_is_io ... ok
+   1 test term::tests::pgid_is_the_process_group ... ok
+   1 test term::tests::raw_lf_reads_and_sets_onlcr ... ok
+   1 test term::tests::size_reads_what_the_terminal_was_told ... ok
+   1 test term::tests::the_pty_helper_answers_its_own_pair ... FAILED
+   1 test term::tests::the_restore_sets_the_mode_and_writes_the_bytes_once ... ok
+   1 test term::tests::the_three_raw_bits ... FAILED
+== exit=101 04:45:10Z
+== e2928947 Name the C library's read in #781's row and fixture in $LANE/build-e2928947 04:46:15Z
+mac-locked: waiting on another lane 04:46:15Z
+mac-locked: waiting on another lane 04:46:45Z
+mac-locked: waiting on another lane 04:47:15Z
+mac-locked: waiting on another lane 04:47:45Z
+mac-locked: waiting on another lane 04:48:15Z
+mac-locked: waiting on another lane 04:48:45Z
+mac-locked: waiting on another lane 04:49:15Z
+mac-locked: waiting on another lane 04:49:45Z
+mac-locked: waiting on another lane 04:50:15Z
+mac-locked: waiting on another lane 04:50:45Z
+mac-locked: waiting on another lane 04:51:15Z
+mac-locked: waiting on another lane 04:51:45Z
+mac-locked: waiting on another lane 04:52:15Z
+mac-locked: waiting on another lane 04:52:45Z
+mac-locked: gate ok, 13429 MiB available 04:53:15Z
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-20a54c16d377b89a)
+
+running 376 tests
+test coredump::tests::the_shape_is_the_clauses ... ok
+test adopt::tests::the_shape_is_refused_first ... ok
+test coredump::tests::the_limit_reads_and_sets_to_itself ... ok
+test exec::tests::env_unset_removes_and_refuses_bad_names ... ok
+test exec::tests::search_path_reads_the_handed_environment ... ok
+test arena::tests::a_test_bound_or_a_lookalike_is_not_a_limit ... ok
+test arena::tests::the_users_limit_is_named_by_either_spelling ... ok
+test bytes::tests::a_block_of_nothing_but_the_byte_counts_every_one ... ok
+test exec::tests::exec_shape_rows ... ok
+test bytes::tests::the_entries_read_a_list_header ... ok
+test exec::tests::failed_exec_restores_the_map ... ok
+test adopt::tests::an_inherited_descriptor_adopts_once ... ok
+test fs::tests::a_fifo_is_unseekable ... ok
+test exec::tests::a_file_with_no_shebang_is_io_with_enoexec ... ok
+test fs::tests::remove_on_a_directory_is_the_hosts_row ... ok
+test fs::tests::os_error_is_the_last_calls_host_number ... ok
+test fs::tests::fstat_reads_the_open_handle ... ok
+test fs::tests::append_mode_appends_without_reading ... ok
+test fs::tests::fd_table_matches_the_checked_shape ... ok
+test fs::tests::split_time_is_a_timespec ... ok
+test fs::tests::the_standard_streams_are_not_table_slots ... ok
+test fs::tests::modes_cover_read_write_append_rw_and_exclusive ... ok
+test fs_at::tests::the_millisecond_word_is_the_paths ... ok
+test fs::tests::read_nonblock_matches_read_on_a_file_and_never_parks_on_a_fifo ... ok
+test fs_at::tests::the_open_word_is_the_open_familys ... ok
+test fs::tests::byte_io_carries_a_lone_0x80 ... ok
+test fs::tests::rename_moves_without_reading ... ok
+test fs_change::tests::a_bad_shape_is_invalid_before_the_host ... ok
+test fs::tests::entries_carry_kinds_and_bytes ... ok
+test exec::tests::resolve_program_rows ... ok
+test fs::tests::lstat_sees_the_link_and_stat_its_target ... ok
+test fs::tests::seek_tell_and_read_at_on_a_file ... ok
+test fs::tests::stat_record_of_a_file ... ok
+test fs_change::tests::the_time_words_decode ... ok
+test fs::tests::roundtrip_and_rows ... ok
+test fs::tests::dir_create_remove_and_metadata ... ok
+test fs::tests::a_failed_copy_write_puts_the_source_back ... ok
+test fs::tests::read_dir_is_sorted_and_names_only ... ok
+test fs_gaps::tests::a_non_blocking_pipe_answers_busy_when_full ... ok
+test fs_gaps::tests::access_answers_the_hosts_rows ... ok
+test fs_at::tests::the_mode_set_on_a_handle_is_the_held_files ... ok
+test fs_gaps::tests::mkfifo_makes_a_fifo ... ok
+test fs_change::tests::set_times_without_follow_sets_the_link ... ok
+test fs_change::tests::set_times_sets_each_time_or_leaves_it ... ok
+test fs_gaps::tests::the_lock_is_the_open_files ... ok
+test fs_gaps::tests::the_handle_record_is_the_paths ... ok
+test handles::tests::numbers_only_go_up ... ok
+test fs_change::tests::truncate_sets_the_length_and_keeps_the_offset ... ok
+test fs_change::tests::set_mode_sets_exactly_the_bits_and_follows_a_link ... ok
+test fs_gaps::tests::the_nofollow_bit_refuses_a_final_link ... ok
+test fs::tests::copy_chunk_moves_a_file ... ok
+test host::tests::the_words_are_the_clauses ... ok
+test fs_at::tests::the_calls_follow_the_handle_not_the_path ... ok
+test fs_at::tests::the_record_by_handle_is_the_paths ... ok
+test host::tests::this_host_answers_its_kernel ... ok
+ab7test fs_save::tests::sync_a_file_and_refuse_the_rest ... ok
+outer innertest ids::tests::a_bad_owner_is_invalid_before_the_host ... ok
+test fs_change::tests::a_hard_link_is_a_second_name ... ok
+test ids::tests::an_owner_word_is_an_id_or_leave ... ok
+test fs_change::tests::a_symlink_stores_its_target_verbatim ... ok
+test fs_save::tests::sync_a_directory_and_refuse_the_rest ... ok
+test ids::tests::the_ids_are_the_hosts ... ok
+test io::tests::a_bare_segment_writes_through ... ok
+test io::tests::a_print_statement_is_one_buffered_line ... ok
+test io::tests::nesting_flushes_only_at_the_outermost_end ... ok
+test io::tests::padding_matches_the_reference ... ok
+test io::tests::shortest_matches_decimal_to_str ... ok
+test io::tests::sign_zero_bases_and_precision_match_the_reference ... ok
+test bytes::tests::the_scans_agree_with_the_scalar_loops ... ok
+test json::tests::container_get_renders_json ... ok
+test json::tests::depth_limit_is_a_parse_error ... ok
+test json::tests::escapes_and_surrogates ... ok
+test fs_save::tests::realpath_follows_then_climbs ... ok
+test json::tests::duplicate_names_are_last_wins ... ok
+test json::tests::numbers_render_as_source ... ok
+test ids::tests::an_owner_call_that_changes_nothing ... ok
+test json::tests::rfc_smoke ... ok
+test json::tests::shim_error_codes ... ok
+test json::tests::paths_and_kinds ... ok
+test json::tests::shim_query_roundtrip ... ok
+test json::tests::duplicate_names_in_a_wide_object ... ok
+test map::tests::copy_is_independent ... ok
+test map::tests::debug_layout_tracks_the_runtime_header ... ok
+test map::tests::deterministic_hash_vectors_and_empty_binary_strings ... ok
+test list::tests::header_offsets_are_the_lowering_abi ... ok
+test list::tests::push_pop_read_write_len ... ok
+test list::tests::debug_layout_tracks_the_runtime_header ... ok
+test list::tests::nested_regions_restore_the_enclosing_ambient ... ok
+test list::tests::copy_is_independent ... ok
+test list::tests::growth_preserves_elements ... ok
+test list::tests::no_ambient_region_means_the_process_root ... ok
+test map::tests::full_index_miss_is_bounded_and_next_insert_grows ... ok
+test list::tests::header_and_buffer_land_in_the_ambient_region ... ok
+test list::tests::growth_stays_in_the_birth_region ... ok
+test list::tests::a_moved_region_keeps_its_container ... ok
+test map::tests::int_keys_round_trip ... ok
+test map::tests::indexed_integer_collisions_survive_rehash ... ok
+test map::tests::remove_erases_and_keeps_insertion_order ... ok
+test map::tests::scalar_hash_ignores_entry_padding_and_value_bytes ... ok
+test map::tests::str_keys_compare_by_bytes ... ok
+test map::tests::indexed_copy_has_independent_storage_and_grows_from_exact_capacity ... ok
+test map::tests::indexed_growth_charges_abandoned_tables_to_birth_region ... ok
+test map::tests::indexed_clear_reuses_storage_and_forgets_old_keys ... ok
+test native::tests::assertion_detail_wire_data_cannot_imitate_a_trap_line ... ok
+test native::tests::assertion_details_are_taken_once_and_do_not_reach_the_next_trap ... ok
+test native::tests::assertion_value_buffers_are_consumed_without_materializing_a_wolf_string ... ok
+test map::tests::indexed_string_collisions_compare_contents_after_growth ... ok
+test native::tests::bump_regions_allocate_and_free ... ok
+test map::tests::indexed_remove_patches_survivors_without_reordering ... ok
+test native::tests::chunk_ladder_starts_small_and_caps_out ... ok
+test native::tests::region_cap_at_cap_exactly_is_not_a_breach ... ok
+test native::tests::trap_names_cover_the_vocabulary ... ok
+test native::tests::trap_report_first_line_is_byte_identical_with_and_without_site ... ok
+test native::tests::chunk_bases_are_formally_aligned ... ok
+test net::tests::refused_is_a_row ... ok
+test net::tests::echo_under_deadline ... ok
+test net::tests::listen_with_rows_and_reuse_port_shares_the_port ... ok
+test net::tests::an_accepted_stream_arrives_non_blocking_and_close_on_exec ... ok
+test ids::tests::the_ids_shape_sorts_the_groups_and_has_no_leave ... ok
+test net::tests::closed_and_forged_fd_rows ... ok
+test net::tests::nodelay_is_paid_at_the_write_that_could_be_delayed ... ok
+test net::tests::loopback_echo_roundtrip ... ok
+test net::tests::every_socket_lives_nonblocking_under_the_runtime ... ok
+test net::tests::shim_byte_roundtrip_and_invalid ... ok
+test net::tests::shim_refused_code ... ok
+test net::tests::adopt_listener_takes_a_handed_descriptor_and_refuses_strangers ... ok
+test net::tests::shim_invalid_utf8_is_the_utf8_code ... ok
+test net::tests::shim_listen_with_and_adopt_codes ... ok
+test net::tests::shim_echo_roundtrip_and_rows ... ok
+test net::tests::shim_writev_and_nodelay_codes ... ok
+test net::tests::wrong_kind_is_io ... ok
+test os::tests::a_stopped_child_still_ends_for_the_blocking_wait ... ok
+test os::tests::chdir_rows_that_do_not_move ... ok
+test os::tests::cpus_is_at_least_one_and_agrees_with_the_pool ... ok
+test os::tests::cwd_is_a_str ... ok
+test os::tests::env_roundtrip_and_rows ... ok
+test os::tests::exe_is_an_existing_path ... ok
+test os::tests::kill_then_wait_is_signal_and_reaps ... ok
+test os::tests::map_of_rows ... ok
+test os::tests::a_child_keeps_an_ignored_sigpipe ... ok
+test os::tests::pipe_round_trip_through_the_fs_table ... ok
+test os::tests::own_pid_and_parent_pid ... ok
+test os::tests::process_rows_without_a_child ... ok
+test os::tests::shim_process_rows ... ok
+test os::tests::shim_spawn_wait_kill_roundtrip ... ok
+test os::tests::shim_spawn_with_maps_net_handles_and_refuses_forged_ones ... ok
+test os::tests::spawn_fds_hands_the_child_a_pipe_as_stdout ... ok
+test os::tests::spawn_fds_keeps_the_enoexec_number ... ok
+test os::tests::spawn_fds_leaks_nothing ... ok
+test net::tests::shim_deadline_times_out_and_clears ... ok
+test os::tests::spawn_fds_refuses_in_order ... ok
+test os::tests::spawn_job_into_a_missing_group_is_denied ... ok
+test os::tests::spawn_fds_places_five_and_closes_two ... ok
+test os::tests::spawn_job_shape_is_invalid_first ... ok
+test os::tests::spawn_job_tty_must_be_a_terminal ... ok
+test net::tests::shim_net_wait_mints_the_ready_subset ... ok
+test os::tests::the_entry_record_decodes_argv_verbatim ... ok
+test net::tests::shim_unix_echo_rows_and_cleanup ... ok
+test os::tests::vars_are_sorted_kv_lines ... ok
+test os::tests::spawn_job_leads_and_joins_a_group ... ok
+test os::tests::wait_reaps_and_double_wait_is_io ... ok
+test os::tests::without_the_wolf_entry_the_readers_keep_the_standard_capture ... ok
+test pool::tests::a_handle_packs_index_and_generation ... ok
+test pool::tests::a_removed_handle_is_stale_everywhere ... ok
+test pool::tests::a_reused_slot_does_not_answer_the_old_handle ... ok
+test os::tests::the_hooked_exec_hands_argv_and_the_environment ... ok
+test pool::tests::an_empty_pool_iterates_zero_times ... ok
+test pool::tests::clear_stales_every_handle_and_keeps_capacity ... ok
+test pool::tests::growth_keeps_every_live_handle_valid ... ok
+test pool::tests::iteration_walks_the_live_slots_in_reservation_order ... ok
+test pool::tests::reserve_init_read_round_trips ... ok
+test pool::tests::slot_zero_at_generation_zero_is_not_the_end_of_iteration ... ok
+test pool::tests::the_address_is_the_payload_and_a_place_write_lands_in_it ... ok
+test procattr::tests::chroot_of_a_missing_path ... ok
+test procattr::tests::the_priority_reads_and_a_zero_delta_keeps_it ... ok
+test procattr::tests::the_target_saturates_and_clamps ... ok
+test prof::tests::a_missing_header_refuses ... ok
+test prof::tests::a_record_past_the_array_refuses ... ok
+test prof::tests::a_total_that_disagrees_refuses ... ok
+test prof::tests::a_version_mismatch_refuses ... ok
+test prof::tests::an_unknown_directive_refuses ... ok
+test prof::tests::an_all_zero_run_still_renders_a_valid_profile ... ok
+test os::tests::wait_status_carries_the_signal_number ... ok
+test prof::tests::bumping_before_init_is_a_no_op_not_a_crash ... ok
+test prof::tests::dumping_before_init_writes_nothing ... ok
+test prof::tests::render_emits_canonical_wprof_v1 ... ok
+test prof::tests::the_index_round_trips_its_ranges ... ok
+test quarantine::tests::a_released_granule_leaves_no_backing_behind ... ok
+test quarantine::tests::contract_shapes_exist ... ok
+test quarantine::tests::no_hook_is_a_stub_any_more ... ok
+test quarantine::tests::the_tag_stream_never_draws_the_reserved_value ... ok
+test random::tests::shim_mints_lists_and_refuses_negative ... ok
+test random::tests::two_draws_differ ... ok
+test random::tests::zero_length_fill_succeeds ... ok
+test random::tests::large_fill_is_complete_and_nonzero ... ok
+
+running 1 test
+test os::tests::spawn_with_hands_descriptors_to_the_child_from_3 ... ok
+test net::tests::writev_gathers_parts_in_order ... ok
+test net::tests::timeout_row_reachable ... ok
+test reactor::tests::cancellation_surfaces_at_parked_io_wait ... ok
+test scratch::tests::a_nested_use_gets_its_own_buffer ... ok
+test scratch::tests::the_buffer_is_reused_and_grows_once ... ok
+test signal::tests::a_bit_outside_the_listenable_meanings_is_io_everywhere ... ok
+test signal::tests::det_excludes_signal_delivery_from_replay ... ok
+test signal::tests::disposition_of_a_bad_set_is_io ... ok
+test signal::tests::disposition_one_rows ... ok
+test signal::tests::empty_set_is_io_not_a_hang ... ok
+test signal::tests::group_and_all_shape_rows ... ok
+test signal::tests::host_numbers ... ok
+test signal::tests::ignored_reads_the_disposition ... ok
+test signal::tests::new_meanings_round_trip_by_index ... ok
+test signal::tests::number_rows ... ok
+test reactor::tests::many_waiters_one_reactor ... ok
+test reactor::tests::deadline_fires_on_never_ready_fd ... ok
+test handles::tests::storage_is_reused ... ok
+test signal::tests::parked_supervisor_wakes_on_sibling_raise ... ok
+test signal::tests::poll_right_after_raise_never_misses ... ok
+test signal::tests::poll_takes_what_arrived_and_never_waits ... ok
+test reactor::tests::readiness_completes_wait_and_emits_io_arrive ... ok
+test signal::tests::raise_from_a_thread_that_blocks_it_still_arrives ... ok
+test signal::tests::raise_unmapped_is_io ... ok
+test os::tests::poll_reports_a_stop_once_and_each_end ... ok
+test handles::tests::a_closed_handle_never_reaches_a_later_one ... ok
+test signal::tests::set_pgid_shape_rows ... ok
+test signal::tests::text_rows ... ok
+test signal::tests::the_action_query_reads_and_refuses_by_shape ... ok
+test net::tests::wait_names_the_socket_that_spoke ... ok
+test os::tests::a_file_with_no_shebang_is_io_on_every_spawn ... ok
+test reactor::tests::timers_fire_in_deadline_order ... ok
+test signal::tests::s275_a_drain_thread_that_ends_is_made_again ... ok
+test signal::tests::s275_a_poll_interrupted_in_a_forks_hold_keeps_the_drain_thread ... ok
+test signal::tests::s275_a_transient_poll_failure_keeps_the_drain_thread ... ok
+test statfs::tests::a_missing_path_is_not_found ... ok
+test statfs::tests::a_nul_in_the_path_is_io ... ok
+test statfs::tests::the_id_is_gnus_order ... ok
+test statfs::tests::the_record_of_the_current_directory ... ok
+test stdfd::tests::a_descriptor_above_two_stays_where_it_is ... ok
+test net::tests::ready_sockets_never_touch_the_reactor ... ok
+test str::tests::byte_view_is_the_receiver_pair ... ok
+test str::tests::char_boundary_rule_is_the_two_bit_test ... ok
+test str::tests::chars_are_the_scalars_in_order ... ok
+test str::tests::a_dead_threads_strings_outlive_it ... ok
+test str::tests::from_utf8_accepts_text_and_refuses_the_ugly_inputs ... ok
+test str::tests::from_utf8_materializes_into_the_ambient_region ... ok
+test str::tests::get_matches_the_checked_domain ... ok
+test str::tests::inline_domain_matches_the_shim ... ok
+test str::tests::no_continuation_byte_starts_a_separator ... ok
+test str::tests::ordering_is_byte_lexicographic ... ok
+test str::tests::split_yields_count_plus_one_fields ... ok
+test str::tests::strbuf_builds_interpolations ... ok
+test str::tests::the_common_path_takes_no_shared_lock ... ok
+test str::tests::the_find_shim_reads_its_direction_flag ... ok
+test str::tests::concurrent_allocations_never_overlap ... ok
+test str::tests::the_method_set_matches_std ... ok
+test str::tests::the_short_needle_path_answers_exactly_as_core_does ... ok
+test str::tests::the_split_shim_rides_the_clause_walks ... ok
+test str::tests::the_walks_answer_the_clause_on_the_ugly_inputs ... ok
+test str::tests::to_int_parses_trimmed_decimal_i64_or_rows ... ok
+test str::tests::trim_uses_the_frozen_set ... ok
+test str::tests::the_frozen_set_still_matches_the_host_table ... ok
+test handles::tests::the_table_agrees_with_a_model ... ok
+test str::tests::zero_copy_results_share_the_receiver_storage ... ok
+test task::chan::tests::c_surface_round_trip ... ok
+test str::tests::ws_inline_matches_the_shim ... ok
+test net::tests::write_drains_a_large_body_through_parks_and_the_budget_covers_the_drain ... ok
+test task::chan::tests::cancellation_surfaces_at_blocked_recv ... ok
+test task::chan::tests::chan_shapes_snapshot ... ok
+test task::chan::tests::close_drains_then_yields_closed_error ... ok
+test task::chan::tests::cancellation_surfaces_at_blocked_select ... ok
+test task::chan::tests::kth_send_pairs_kth_recv ... ok
+test task::chan::tests::rendezvous_pairs_directly ... ok
+test task::chan::tests::cancellation_surfaces_at_blocked_send ... ok
+test task::chan::tests::close_wakes_blocked_ops_with_error_value ... ok
+test task::chan::tests::select_closed_arms_are_ready ... ok
+test task::chan::tests::select_fairness_under_seed ... ok
+test task::chan::tests::select_blocks_then_commits_one_arm ... ok
+test task::chan::tests::select_send_arm_commits ... ok
+test reactor::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_reactor_thread ... ok
+test task::chan::tests::send_region_moves_the_word ... ok
+test task::conc_abi::tests::cancel_tag_is_not_a_scope_failure ... ok
+test task::conc_abi::tests::proc_env_is_copied_at_spawn ... ok
+test task::conc_abi::tests::proc_spawn_outcome_maps_the_protocol ... ok
+test task::conc_abi::tests::task_env_is_copied_into_the_scope ... ok
+test task::conc_abi::tests::task_killed_polls_the_scope_chain ... ok
+test task::deque::tests::concurrent_steal_stress ... ok
+test task::deque::tests::full_deque_refuses ... ok
+test task::deque::tests::lifo_pop_fifo_steal ... ok
+test task::chan::tests::seam_observes_channel_events ... ok
+test task::chan::tests::select_parked_wakes_on_close ... ok
+test task::chan::tests::select_timeout_and_else ... ok
+test str::tests::ws_at_is_the_twenty_five_scalars ... ok
+test task::det::tests::replay_spec_grammar ... ok
+test task::det::tests::packed_token_replays_the_run ... ok
+test task::det::tests::schema_round_trip_and_frozen_v1 ... ok
+test task::det::tests::explicit_stream_replays_the_run ... ok
+test signal::tests::s284_a_release_in_the_claims_gap_never_lets_a_fork_claim_a_working_drain_thread ... ok
+test task::hooks::tests::rng_is_deterministic_per_worker ... ok
+test signal::tests::self_raise_delivers_the_meaning ... ok
+test task::leave::tests::a_leave_discards_the_frames_below_the_entry ... ok
+test task::leave::tests::enter_answers_the_entrys_value ... ok
+test task::par_tests::par_results_are_in_input_order ... ok
+test task::parked::tests::wake_all_nudges_exactly_the_registered_waits ... ok
+test task::pool::os::joinable_thread_handle_can_cross_threads ... ok
+test signal::tests::send_rows ... ok
+test signal::tests::the_eleven_new_meanings_round_trip ... ok
+test signal::tests::wait_fd_answers_input_or_the_meaning ... ok
+test task::proc::tests::c_surface_round_trip ... ok
+test task::proc::tests::crash_frees_ledger_and_delivers_planted_error ... ok
+test task::proc::tests::current_proc_attribution ... ok
+test task::proc::tests::exit_reason_taxonomy_and_packing_snapshot ... ok
+test task::proc::tests::cancelled_proc_runs_defers ... ok
+test task::proc::tests::cancelled_proc_completing_keeps_normal ... ok
+
+thread '<unnamed>' (9422976) panicked at crates/wolf_rt/src/task/pool.rs:505:5:
+blocking primitive called inside a proc message handler ([conc.chan.mailbox]: handlers are atomic and non-blocking — spawn the work onto the proc's scope and complete via a message)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test task::proc::tests::exit_words_answer_like_a_vector ... ok
+test task::proc::tests::join_after_exit_reads_the_tombstone ... ok
+test task::proc::tests::join_answers_every_exit_class ... ok
+test task::proc::tests::join_of_a_stale_id_is_stale ... ok
+
+thread '<unnamed>' (9422703) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::fault_propagates_over_links ... ok
+test task::proc::tests::handler_blocking_debug_asserts_and_spawn_pattern_passes ... ok
+test task::proc::tests::late_kill_is_noop ... ok
+test task::proc::tests::ledger_moves_with_region_transfer ... ok
+
+thread '<unnamed>' (9422959) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+
+thread '<unnamed>' (9422991) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+
+thread '<unnamed>' (9422703) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::link_pair_shares_fate ... ok
+test task::proc::tests::link_trap_converts_kill_to_message ... ok
+test task::proc::tests::negative_cap_contained_as_fault ... ok
+
+thread '<unnamed>' (9422992) panicked at crates/wolf_rt/src/task/proc.rs:1597:13:
+contained at the proc boundary
+test task::proc::tests::monitor_normal_and_late_monitor ... ok
+test task::proc::tests::proc_trap_becomes_error_reason ... ok
+test task::proc::tests::region_cap_breach_contained_as_fault_at_join ... ok
+
+thread '<unnamed>' (9422993) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::seam_observes_proc_events ... ok
+test task::proc::tests::stale_ids_fault_cleanly ... ok
+test task::proc::tests::supervisor_restarts_then_gives_up ... ok
+test task::stack::tests::map_trim_and_registry ... ok
+test task::tests::blocking_compensation_recovers_throughput ... ok
+test task::tests::c_surface_round_trip ... ok
+test handles::tests::a_burst_is_given_back ... ok
+test task::tests::exit_reason_shape_snapshot ... ok
+test task::tests::first_failure_wins_rest_attach ... ok
+test task::tests::nested_scopes_join_inside_out ... ok
+
+thread '<unnamed>' (9422993) panicked at crates/wolf_rt/src/task/mod.rs:637:33:
+caught at the task boundary
+test task::tests::panic_becomes_exit_reason ... ok
+test task::tests::region_transfer_identity ... ok
+test task::tests::sched_seam_observes_events ... ok
+test task::tests::scope_joins_all_children ... ok
+test task::tests::sibling_cancel_and_reraise ... ok
+test task::det::tests::exploration_finds_reorder_and_seed_replays_it ... ok
+test task::when::tests::acquisition_follows_canonical_order ... ok
+test task::when::tests::c_surface_round_trip ... ok
+
+thread '<unnamed>' (9422975) panicked at crates/wolf_rt/src/task/pool.rs:275:9:
+Box<dyn Any>
+test task::proc::tests::killed_proc_skips_defers_and_frees_regions ... ok
+
+thread '<unnamed>' (9422703) panicked at crates/wolf_rt/src/task/when.rs:233:9:
+assertion `left == right` failed: nested acquisition inside a `when` body ([conc.when.nonest]): the compiler forbids this lexically; something smuggled a lock in
+  left: 1
+ right: 0
+test task::when::tests::nested_acquisition_debug_asserts ... ok
+test task::when::tests::self_acquisition_is_deadlock_value ... ok
+test task::tests::dump_names_scopes_and_tasks ... ok
+test term::tests::a_mode_outside_the_bits_is_invalid ... ok
+test term::tests::chars_and_the_two_new_bits ... ok
+test term::tests::not_a_terminal_is_io ... ok
+test term::tests::pgid_is_the_process_group ... ok
+test term::tests::raw_lf_reads_and_sets_onlcr ... ok
+test term::tests::size_reads_what_the_terminal_was_told ... ok
+test task::det::tests::subject_ids_are_normalized ... ok
+test task::proc::tests::procs_that_end_alike_share_a_word ... ok
+test task::when::tests::cancellation_surfaces_at_blocked_acquire ... ok
+test term::tests::the_three_raw_bits ... FAILED
+test time::tests::monotonic_and_sleep ... ok
+test time::tests::unix_is_after_2020 ... ok
+test time::tests::ns_resolves_what_ms_cannot ... ok
+test term::tests::the_pty_helper_answers_its_own_pair ... FAILED
+test task::det::tests::pool_plumbing_collapses_into_pick ... ok
+test task::par_tests::par_failure_cancels_siblings ... ok
+test task::det::tests::virtual_timer_fires_without_sleeping ... ok
+test task::tests::ten_k_tasks_bounded_threads ... ok
+test term::tests::the_restore_sets_the_mode_and_writes_the_bytes_once ... ok
+test task::det::tests::same_seed_same_stream_same_outcome ... ok
+test task::proc::tests::a_monitor_channel_is_dropped_once_received ... ok
+test signal::tests::wait_fd_wakes_for_a_signal_while_parked ... ok
+test signal::tests::wait_fds_answers_the_deadline_an_index_or_the_meaning ... ok
+test signal::tests::wait_fds_answers_write_readiness ... ok
+test signal::tests::wait_filters_by_set ... ok
+test net::tests::reuse_port_group_delivery_is_the_hosts_measured_posture ... ok
+test net::tests::lost_accept_race_returns_within_its_budget ... ok
+test net::tests::shim_lost_race_returns_within_budget ... ok
+test task::when::tests::when_inversion_no_deadlock ... ok
+
+failures:
+
+---- term::tests::the_three_raw_bits stdout ----
+
+thread 'term::tests::the_three_raw_bits' (9423071) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+---- term::tests::the_pty_helper_answers_its_own_pair stdout ----
+
+thread '<unnamed>' (9423062) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9423056) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9423061) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9423063) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9423059) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9423058) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread '<unnamed>' (9423060) panicked at crates/wolf_rt/src/term.rs:767:13:
+posix_openpt
+
+thread 'term::tests::the_pty_helper_answers_its_own_pair' (9423055) panicked at crates/wolf_rt/src/term.rs:820:9:
+assertion `left == right` failed: pairs whose slave was another pair's
+  left: 7
+ right: 0
+
+
+failures:
+    term::tests::the_pty_helper_answers_its_own_pair
+    term::tests::the_three_raw_bits
+
+test result: FAILED. 374 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s
+
+error: test failed, to rerun pass `-p wolf_rt --lib`
+mac-locked: exit=101 04:53:19Z
+== terminal rows and verdict:
+   8 posix_openpt
+   1 test result: FAILED. 374 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s
+   1 test term::tests::a_mode_outside_the_bits_is_invalid ... ok
+   1 test term::tests::chars_and_the_two_new_bits ... ok
+   1 test term::tests::not_a_terminal_is_io ... ok
+   1 test term::tests::pgid_is_the_process_group ... ok
+   1 test term::tests::raw_lf_reads_and_sets_onlcr ... ok
+   1 test term::tests::size_reads_what_the_terminal_was_told ... ok
+   1 test term::tests::the_pty_helper_answers_its_own_pair ... FAILED
+   1 test term::tests::the_restore_sets_the_mode_and_writes_the_bytes_once ... ok
+   1 test term::tests::the_three_raw_bits ... FAILED
+== exit=101 04:53:19Z
+SUITE_DONE 04:53:19Z

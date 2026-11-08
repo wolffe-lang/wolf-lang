@@ -1,0 +1,25 @@
+t1 family B, ns per op (every run of every round)
+  row                                            before      after   ratio  margin  verdict
+  b3_churn/c_naive                               6.7210     6.7150  0.9991  0.0226  tie (n=90,90)
+  b3_churn/c_native                              6.3406     6.3117  0.9954  0.0293  tie (n=30,30)
+  b3_churn/rust                                 45.7744    45.5882  0.9959  0.0200  tie (n=30,30)
+  b3_churn/wolf                                 36.7089    36.7089  1.0000  0.0200  tie (n=90,90)
+  b3_churn/wolf_pgo                             35.4430    36.7089  1.0357  0.0200  slower (n=30,30)
+  list_alloc/c_expert                            1.5840     1.5859  1.0011  0.0200  tie (n=30,30)
+  list_alloc/c_naive                            19.8105    19.8128  1.0001  0.0200  tie (n=90,90)
+  list_alloc/c_native                           19.7973    19.8217  1.0012  0.0200  tie (n=30,30)
+  list_alloc/rust                                2.0105     2.0121  1.0008  0.0200  tie (n=30,30)
+  list_alloc/wolf                                2.1667     2.1667  1.0000  0.0200  tie (n=90,90)
+  list_alloc/wolf_pgo                            2.1667     2.1667  1.0000  0.0200  tie (n=30,30)
+
+the pool's benches, ns (every run)
+  row                                            before      after   ratio  margin  verdict
+  chan_bench/bounded16_rt                        3405.0     3487.0  1.0241  0.1119  tie (n=9,9)
+  chan_bench/bounded16_stream                     180.0      189.0  1.0500  0.1333  tie (n=9,9)
+  chan_bench/rendezvous_rt                       3428.0     3435.0  1.0020  0.0394  tie (n=9,9)
+  chan_bench/select_2ready                         64.0       64.0  1.0000  0.0200  tie (n=9,9)
+  spawn_bench/per_task_join                       829.0      760.0  0.9168  0.0869  tie (n=9,9)
+  spawn_bench/spawn_median                        588.0      575.0  0.9779  0.1633  tie (n=9,9)
+  spawn_bench/spawn_wake_join_median            20900.0    20342.0  0.9733  0.1022  tie (n=9,9)
+  spawn_bench/worker_spawn_median                 512.0      450.0  0.8789  0.0820  faster (n=9,9)
+

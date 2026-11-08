@@ -1,0 +1,583 @@
+QUEUED label=full-c09042b8-8fd5a8ef-sat16 scope=full cpus=0-15 mode=full heads=c09042b830284d5678a28e8aa171a5955389b2ce 8fd5a8ef068275e631f351cd073dd895c1b02e2e 2026-11-08T04:53:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:53:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:54:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:55:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:56:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:57:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:58:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T04:59:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:00:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:01:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:02:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:03:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:04:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:05:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:06:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:07:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:08:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:09:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:10:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:11:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:12:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:13:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:14:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:15:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:16:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:17:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:18:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:19:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:20:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:21:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:22:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:23:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:24:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:25:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:26:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:27:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:28:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:29:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:30:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:31:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:32:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:33:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:34:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:35:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:36:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:37:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:38:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:39:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:40:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:41:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:42:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:43:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:44:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:45:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:46:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:47:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:48:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:49:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:50:31Z
+LOCKS_ACQUIRED scope=full locks=$LANES/H2-A.lock $LANES/H2-B.lock $LANES/H2-light.lock 2026-11-08T05:51:02Z
+START env
+  label=full-c09042b8-8fd5a8ef-sat16 mode=full heads=c09042b830284d5678a28e8aa171a5955389b2ce 8fd5a8ef068275e631f351cd073dd895c1b02e2e
+  affinity=0-15 nproc=16 kernel=7.2.14-arch1-1
+  ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39
+  strace -- version 6.8
+  SigBlk:	0000000000000000
+  SigIgn:	0000000000000000
+  CapEff:	0000000000000000
+  NoNewPrivs:	0
+  PID1 uid=0 workload uid=1000
+  /w/c09042b8: c09042b830284d5678a28e8aa171a5955389b2ce (expected c09042b830284d5678a28e8aa171a5955389b2ce)
+  /w/8fd5a8ef: 8fd5a8ef068275e631f351cd073dd895c1b02e2e (expected 8fd5a8ef068275e631f351cd073dd895c1b02e2e)
+END env exit=0 secs=0
+START build-red
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+    Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-808de1a9821f3e2c)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+    Executable tests/arena_limit.rs (target/debug/deps/arena_limit-7447ffed3aa602e5)
+END build-red exit=0 secs=1
+START build-green
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+    Executable tests/signal_gaps_lanes.rs (target/debug/deps/signal_gaps_lanes-808de1a9821f3e2c)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+    Executable tests/arena_limit.rs (target/debug/deps/arena_limit-7447ffed3aa602e5)
+END build-green exit=0 secs=0
+START race-direct-red
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:51:31Z
+  race native cpus=0-5,8-13 run 1: exit=0 waits 652777 ready 652777, fstat(1) asked 6893092, ok 0 green
+  race native cpus=0-5,8-13 run 2: exit=0 waits 678785 ready 678785, fstat(1) asked 6908166, ok 0 green
+  race native cpus=0-5,8-13 run 3: exit=0 waits 668784 ready 668784, fstat(1) asked 6998846, ok 0 green
+  race native cpus=0-5,8-13 run 4: exit=0 waits 645920 ready 645920, fstat(1) asked 6803955, ok 0 green
+  race native cpus=0-5,8-13 run 5: exit=0 waits 575860 ready 575860, fstat(1) asked 6792732, ok 0 green
+  race native cpus=0-5,8-13 run 6: exit=0 waits 654982 ready 654982, fstat(1) asked 6719587, ok 0 green
+  race native cpus=0-5,8-13 run 7: exit=0 waits 679769 ready 679769, fstat(1) asked 6928665, ok 0 green
+  race native cpus=0-5,8-13 run 8: exit=0 waits 693707 ready 693707, fstat(1) asked 6944608, ok 0 green
+  race native cpus=0-5,8-13 run 9: exit=0 waits 668176 ready 668176, fstat(1) asked 7092042, ok 0 green
+  race native cpus=0-5,8-13 run 10: exit=0 waits 653832 ready 653832, fstat(1) asked 6801431, ok 0 green
+  RACE head=c09042b8 tier=native cpus=0-5,8-13 runs=10 red=0
+  race release cpus=0-5,8-13 run 1: exit=0 waits 664055 ready 664055, fstat(1) asked 7101024, ok 0 green
+  race release cpus=0-5,8-13 run 2: exit=0 waits 642339 ready 642339, fstat(1) asked 6943172, ok 0 green
+  race release cpus=0-5,8-13 run 3: exit=0 waits 698120 ready 698120, fstat(1) asked 7077699, ok 0 green
+  race release cpus=0-5,8-13 run 4: exit=0 waits 654515 ready 654515, fstat(1) asked 6877716, ok 0 green
+  race release cpus=0-5,8-13 run 5: exit=0 waits 652140 ready 652140, fstat(1) asked 6766571, ok 0 green
+  race release cpus=0-5,8-13 run 6: exit=0 waits 649067 ready 649067, fstat(1) asked 6612912, ok 0 green
+  race release cpus=0-5,8-13 run 7: exit=0 waits 663637 ready 663637, fstat(1) asked 6377072, ok 0 green
+  race release cpus=0-5,8-13 run 8: exit=0 waits 673535 ready 673535, fstat(1) asked 7119107, ok 0 green
+  race release cpus=0-5,8-13 run 9: exit=0 waits 678501 ready 678501, fstat(1) asked 7011954, ok 0 green
+  race release cpus=0-5,8-13 run 10: exit=0 waits 678191 ready 678191, fstat(1) asked 7031013, ok 0 green
+  RACE head=c09042b8 tier=release cpus=0-5,8-13 runs=10 red=0
+  race native cpus=0-15 run 1: exit=0 waits 686466 ready 686466, fstat(1) asked 6909390, ok 0 green
+  race native cpus=0-15 run 2: exit=0 waits 627617 ready 627617, fstat(1) asked 6760517, ok 0 green
+  race native cpus=0-15 run 3: exit=0 waits 631606 ready 631606, fstat(1) asked 6750156, ok 0 green
+  race native cpus=0-15 run 4: exit=0 waits 645380 ready 645380, fstat(1) asked 6919793, ok 0 green
+  race native cpus=0-15 run 5: exit=0 waits 650126 ready 650126, fstat(1) asked 7034498, ok 0 green
+  race native cpus=0-15 run 6: exit=0 waits 662379 ready 662379, fstat(1) asked 6782820, ok 0 green
+  race native cpus=0-15 run 7: exit=0 waits 671034 ready 671034, fstat(1) asked 6834434, ok 0 green
+  race native cpus=0-15 run 8: exit=0 waits 664296 ready 664296, fstat(1) asked 6819750, ok 0 green
+  race native cpus=0-15 run 9: exit=0 waits 653373 ready 653373, fstat(1) asked 7081625, ok 0 green
+  race native cpus=0-15 run 10: exit=0 waits 673471 ready 673471, fstat(1) asked 7050716, ok 0 green
+  RACE head=c09042b8 tier=native cpus=0-15 runs=10 red=0
+  race release cpus=0-15 run 1: exit=0 waits 698668 ready 698668, fstat(1) asked 7156232, ok 0 green
+  race release cpus=0-15 run 2: exit=0 waits 707451 ready 707451, fstat(1) asked 7192485, ok 0 green
+  race release cpus=0-15 run 3: exit=0 waits 677000 ready 677000, fstat(1) asked 6772236, ok 0 green
+  race release cpus=0-15 run 4: exit=0 waits 649589 ready 649589, fstat(1) asked 7196702, ok 0 green
+  race release cpus=0-15 run 5: exit=0 waits 696610 ready 696610, fstat(1) asked 7138503, ok 0 green
+  race release cpus=0-15 run 6: exit=0 waits 688433 ready 688433, fstat(1) asked 7154363, ok 0 green
+  race release cpus=0-15 run 7: exit=0 waits 674603 ready 674603, fstat(1) asked 6999051, ok 0 green
+  race release cpus=0-15 run 8: exit=0 waits 674866 ready 674866, fstat(1) asked 7250937, ok 0 green
+  race release cpus=0-15 run 9: exit=0 waits 686575 ready 686575, fstat(1) asked 7208680, ok 0 green
+  race release cpus=0-15 run 10: exit=0 waits 644133 ready 644133, fstat(1) asked 7189649, ok 0 green
+  RACE head=c09042b8 tier=release cpus=0-15 runs=10 red=0
+END race-direct-red exit=0 secs=80
+START race-direct-green
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:52:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:53:31Z
+  race native cpus=0-5,8-13 run 1: exit=0 waits 649465 ready 649465, fstat(1) asked 6907376, ok 0 green
+  race native cpus=0-5,8-13 run 2: exit=0 waits 640263 ready 640263, fstat(1) asked 6837810, ok 0 green
+  race native cpus=0-5,8-13 run 3: exit=0 waits 656695 ready 656695, fstat(1) asked 6990670, ok 0 green
+  race native cpus=0-5,8-13 run 4: exit=0 waits 648327 ready 648327, fstat(1) asked 6916007, ok 0 green
+  race native cpus=0-5,8-13 run 5: exit=0 waits 632063 ready 632063, fstat(1) asked 7023753, ok 0 green
+  race native cpus=0-5,8-13 run 6: exit=0 waits 664470 ready 664470, fstat(1) asked 7045050, ok 0 green
+  race native cpus=0-5,8-13 run 7: exit=0 waits 645120 ready 645120, fstat(1) asked 6702772, ok 0 green
+  race native cpus=0-5,8-13 run 8: exit=0 waits 612547 ready 612547, fstat(1) asked 6596437, ok 0 green
+  race native cpus=0-5,8-13 run 9: exit=0 waits 642509 ready 642509, fstat(1) asked 6990624, ok 0 green
+  race native cpus=0-5,8-13 run 10: exit=0 waits 624389 ready 624389, fstat(1) asked 6611488, ok 0 green
+  race native cpus=0-5,8-13 run 11: exit=0 waits 650863 ready 650863, fstat(1) asked 7125906, ok 0 green
+  race native cpus=0-5,8-13 run 12: exit=0 waits 639147 ready 639147, fstat(1) asked 6991725, ok 0 green
+  race native cpus=0-5,8-13 run 13: exit=0 waits 648327 ready 648327, fstat(1) asked 6934619, ok 0 green
+  race native cpus=0-5,8-13 run 14: exit=0 waits 651249 ready 651249, fstat(1) asked 6955499, ok 0 green
+  race native cpus=0-5,8-13 run 15: exit=0 waits 663374 ready 663374, fstat(1) asked 6902931, ok 0 green
+  race native cpus=0-5,8-13 run 16: exit=0 waits 664917 ready 664917, fstat(1) asked 6964483, ok 0 green
+  race native cpus=0-5,8-13 run 17: exit=0 waits 671261 ready 671261, fstat(1) asked 6156053, ok 0 green
+  race native cpus=0-5,8-13 run 18: exit=0 waits 645343 ready 645343, fstat(1) asked 6975249, ok 0 green
+  race native cpus=0-5,8-13 run 19: exit=0 waits 654302 ready 654302, fstat(1) asked 6629763, ok 0 green
+  race native cpus=0-5,8-13 run 20: exit=0 waits 669427 ready 669427, fstat(1) asked 6732970, ok 0 green
+  race native cpus=0-5,8-13 run 21: exit=0 waits 676465 ready 676465, fstat(1) asked 6877314, ok 0 green
+  race native cpus=0-5,8-13 run 22: exit=0 waits 629920 ready 629920, fstat(1) asked 6737183, ok 0 green
+  race native cpus=0-5,8-13 run 23: exit=0 waits 657755 ready 657755, fstat(1) asked 7104224, ok 0 green
+  race native cpus=0-5,8-13 run 24: exit=0 waits 630900 ready 630900, fstat(1) asked 6674835, ok 0 green
+  race native cpus=0-5,8-13 run 25: exit=0 waits 672947 ready 672947, fstat(1) asked 6959459, ok 0 green
+  race native cpus=0-5,8-13 run 26: exit=0 waits 638475 ready 638475, fstat(1) asked 6425032, ok 0 green
+  race native cpus=0-5,8-13 run 27: exit=0 waits 660890 ready 660890, fstat(1) asked 6981336, ok 0 green
+  race native cpus=0-5,8-13 run 28: exit=0 waits 640622 ready 640622, fstat(1) asked 6776332, ok 0 green
+  race native cpus=0-5,8-13 run 29: exit=0 waits 641068 ready 641068, fstat(1) asked 6812614, ok 0 green
+  race native cpus=0-5,8-13 run 30: exit=0 waits 620167 ready 620167, fstat(1) asked 6469853, ok 0 green
+  race native cpus=0-5,8-13 run 31: exit=0 waits 667948 ready 667948, fstat(1) asked 6825457, ok 0 green
+  race native cpus=0-5,8-13 run 32: exit=0 waits 647041 ready 647041, fstat(1) asked 6817122, ok 0 green
+  race native cpus=0-5,8-13 run 33: exit=0 waits 641933 ready 641933, fstat(1) asked 6759390, ok 0 green
+  race native cpus=0-5,8-13 run 34: exit=0 waits 623723 ready 623723, fstat(1) asked 6719259, ok 0 green
+  race native cpus=0-5,8-13 run 35: exit=0 waits 644136 ready 644136, fstat(1) asked 6421519, ok 0 green
+  race native cpus=0-5,8-13 run 36: exit=0 waits 621843 ready 621843, fstat(1) asked 6606904, ok 0 green
+  race native cpus=0-5,8-13 run 37: exit=0 waits 629292 ready 629292, fstat(1) asked 6906315, ok 0 green
+  race native cpus=0-5,8-13 run 38: exit=0 waits 665771 ready 665771, fstat(1) asked 7038876, ok 0 green
+  race native cpus=0-5,8-13 run 39: exit=0 waits 653650 ready 653650, fstat(1) asked 6836603, ok 0 green
+  race natTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:54:31Z
+ive cpus=0-5,8-13 run 40: exit=0 waits 660393 ready 660393, fstat(1) asked 6309928, ok 0 green
+  race native cpus=0-5,8-13 run 41: exit=0 waits 651356 ready 651356, fstat(1) asked 6820807, ok 0 green
+  race native cpus=0-5,8-13 run 42: exit=0 waits 627573 ready 627573, fstat(1) asked 6606105, ok 0 green
+  race native cpus=0-5,8-13 run 43: exit=0 waits 627717 ready 627717, fstat(1) asked 6668613, ok 0 green
+  race native cpus=0-5,8-13 run 44: exit=0 waits 655676 ready 655676, fstat(1) asked 7057740, ok 0 green
+  race native cpus=0-5,8-13 run 45: exit=0 waits 618005 ready 618005, fstat(1) asked 6640350, ok 0 green
+  race native cpus=0-5,8-13 run 46: exit=0 waits 647212 ready 647212, fstat(1) asked 7051566, ok 0 green
+  race native cpus=0-5,8-13 run 47: exit=0 waits 649001 ready 649001, fstat(1) asked 7008340, ok 0 green
+  race native cpus=0-5,8-13 run 48: exit=0 waits 661571 ready 661571, fstat(1) asked 7206747, ok 0 green
+  race native cpus=0-5,8-13 run 49: exit=0 waits 661294 ready 661294, fstat(1) asked 7025712, ok 0 green
+  race native cpus=0-5,8-13 run 50: exit=0 waits 666466 ready 666466, fstat(1) asked 6823674, ok 0 green
+  race native cpus=0-5,8-13 run 51: exit=0 waits 660111 ready 660111, fstat(1) asked 6864330, ok 0 green
+  race native cpus=0-5,8-13 run 52: exit=0 waits 627897 ready 627897, fstat(1) asked 6787754, ok 0 green
+  race native cpus=0-5,8-13 run 53: exit=0 waits 646803 ready 646803, fstat(1) asked 6746936, ok 0 green
+  race native cpus=0-5,8-13 run 54: exit=0 waits 666421 ready 666421, fstat(1) asked 6892494, ok 0 green
+  race native cpus=0-5,8-13 run 55: exit=0 waits 634171 ready 634171, fstat(1) asked 6460980, ok 0 green
+  race native cpus=0-5,8-13 run 56: exit=0 waits 655240 ready 655240, fstat(1) asked 7140464, ok 0 green
+  race native cpus=0-5,8-13 run 57: exit=0 waits 667778 ready 667778, fstat(1) asked 6888766, ok 0 green
+  race native cpus=0-5,8-13 run 58: exit=0 waits 668617 ready 668617, fstat(1) asked 7046101, ok 0 green
+  race native cpus=0-5,8-13 run 59: exit=0 waits 637963 ready 637963, fstat(1) asked 6854429, ok 0 green
+  race native cpus=0-5,8-13 run 60: exit=0 waits 659310 ready 659310, fstat(1) asked 7117213, ok 0 green
+  race native cpus=0-5,8-13 run 61: exit=0 waits 647195 ready 647195, fstat(1) asked 6904871, ok 0 green
+  race native cpus=0-5,8-13 run 62: exit=0 waits 644835 ready 644835, fstat(1) asked 6994169, ok 0 green
+  race native cpus=0-5,8-13 run 63: exit=0 waits 664313 ready 664313, fstat(1) asked 7148145, ok 0 green
+  race native cpus=0-5,8-13 run 64: exit=0 waits 660021 ready 660021, fstat(1) asked 7018160, ok 0 green
+  race native cpus=0-5,8-13 run 65: exit=0 waits 650302 ready 650302, fstat(1) asked 6875638, ok 0 green
+  race native cpus=0-5,8-13 run 66: exit=0 waits 646449 ready 646449, fstat(1) asked 6999472, ok 0 green
+  race native cpus=0-5,8-13 run 67: exit=0 waits 670913 ready 670913, fstat(1) asked 6912580, ok 0 green
+  race native cpus=0-5,8-13 run 68: exit=0 waits 648111 ready 648111, fstat(1) asked 6870726, ok 0 green
+  race native cpus=0-5,8-13 run 69: exit=0 waits 645213 ready 645213, fstat(1) asked 6912446, ok 0 green
+  race native cpus=0-5,8-13 run 70: exit=0 waits 651749 ready 651749, fstat(1) asked 7029360, ok 0 green
+  race native cpus=0-5,8-13 run 71: exit=0 waits 637628 ready 637628, fstat(1) asked 6746606, ok 0 green
+  race native cpus=0-5,8-13 run 72: exit=0 waits 655630 ready 655630, fstat(1) asked 7110172, ok 0 green
+  race native cpus=0-5,8-13 run 73: exit=0 waits 662017 ready 662017, fstat(1) asked 6979046, ok 0 green
+  race native cpus=0-5,8-13 run 74: exit=0 waits 675470 ready 675470, fstat(1) asked 6583794, ok 0 green
+  race native cpus=0-5,8-13 run 75: exit=0 waits 655763 ready 655763, fstat(1) asked 6879764, ok 0 green
+  race native cpus=0-5,8-13 run 76: exit=0 waits 650063 ready 650063, fstat(1) asked 6939778, ok 0 green
+  race native cpus=0-5,8-13 run 77: exit=0 waits 634012 ready 634012, fstat(1) asked 7031476, ok 0 green
+  race native cpus=0-5,8-13 run 78: exit=0 waits 647561 ready 647561, fstat(1) asked 7078279, ok 0 green
+  race natiTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:55:31Z
+ve cpus=0-5,8-13 run 79: exit=0 waits 673404 ready 673404, fstat(1) asked 6925101, ok 0 green
+  race native cpus=0-5,8-13 run 80: exit=0 waits 647781 ready 647781, fstat(1) asked 6993755, ok 0 green
+  race native cpus=0-5,8-13 run 81: exit=0 waits 631378 ready 631378, fstat(1) asked 6939868, ok 0 green
+  race native cpus=0-5,8-13 run 82: exit=0 waits 662110 ready 662110, fstat(1) asked 7017863, ok 0 green
+  race native cpus=0-5,8-13 run 83: exit=0 waits 622062 ready 622062, fstat(1) asked 6728521, ok 0 green
+  race native cpus=0-5,8-13 run 84: exit=0 waits 649808 ready 649808, fstat(1) asked 6960612, ok 0 green
+  race native cpus=0-5,8-13 run 85: exit=0 waits 670830 ready 670830, fstat(1) asked 7030348, ok 0 green
+  race native cpus=0-5,8-13 run 86: exit=0 waits 665446 ready 665446, fstat(1) asked 6946309, ok 0 green
+  race native cpus=0-5,8-13 run 87: exit=0 waits 667174 ready 667174, fstat(1) asked 6798797, ok 0 green
+  race native cpus=0-5,8-13 run 88: exit=0 waits 650612 ready 650612, fstat(1) asked 6957694, ok 0 green
+  race native cpus=0-5,8-13 run 89: exit=0 waits 644983 ready 644983, fstat(1) asked 6937747, ok 0 green
+  race native cpus=0-5,8-13 run 90: exit=0 waits 633373 ready 633373, fstat(1) asked 6896954, ok 0 green
+  race native cpus=0-5,8-13 run 91: exit=0 waits 665458 ready 665458, fstat(1) asked 6822891, ok 0 green
+  race native cpus=0-5,8-13 run 92: exit=0 waits 653831 ready 653831, fstat(1) asked 6779770, ok 0 green
+  race native cpus=0-5,8-13 run 93: exit=0 waits 598267 ready 598267, fstat(1) asked 6923432, ok 0 green
+  race native cpus=0-5,8-13 run 94: exit=0 waits 665133 ready 665133, fstat(1) asked 6744297, ok 0 green
+  race native cpus=0-5,8-13 run 95: exit=0 waits 669549 ready 669549, fstat(1) asked 7100538, ok 0 green
+  race native cpus=0-5,8-13 run 96: exit=0 waits 670885 ready 670885, fstat(1) asked 6922419, ok 0 green
+  race native cpus=0-5,8-13 run 97: exit=0 waits 653467 ready 653467, fstat(1) asked 6954976, ok 0 green
+  race native cpus=0-5,8-13 run 98: exit=0 waits 656674 ready 656674, fstat(1) asked 6689520, ok 0 green
+  race native cpus=0-5,8-13 run 99: exit=0 waits 645085 ready 645085, fstat(1) asked 6855583, ok 0 green
+  race native cpus=0-5,8-13 run 100: exit=0 waits 633566 ready 633566, fstat(1) asked 6819533, ok 0 green
+  RACE head=8fd5a8ef tier=native cpus=0-5,8-13 runs=100 red=0
+  race release cpus=0-5,8-13 run 1: exit=0 waits 629430 ready 629430, fstat(1) asked 6793123, ok 0 green
+  race release cpus=0-5,8-13 run 2: exit=0 waits 660719 ready 660719, fstat(1) asked 7007213, ok 0 green
+  race release cpus=0-5,8-13 run 3: exit=0 waits 655501 ready 655501, fstat(1) asked 7142182, ok 0 green
+  race release cpus=0-5,8-13 run 4: exit=0 waits 673176 ready 673176, fstat(1) asked 6932115, ok 0 green
+  race release cpus=0-5,8-13 run 5: exit=0 waits 662490 ready 662490, fstat(1) asked 7026774, ok 0 green
+  race release cpus=0-5,8-13 run 6: exit=0 waits 649217 ready 649217, fstat(1) asked 7026246, ok 0 green
+  race release cpus=0-5,8-13 run 7: exit=0 waits 658552 ready 658552, fstat(1) asked 6979446, ok 0 green
+  race release cpus=0-5,8-13 run 8: exit=0 waits 668084 ready 668084, fstat(1) asked 7090816, ok 0 green
+  race release cpus=0-5,8-13 run 9: exit=0 waits 652881 ready 652881, fstat(1) asked 6953074, ok 0 green
+  race release cpus=0-5,8-13 run 10: exit=0 waits 652538 ready 652538, fstat(1) asked 7076631, ok 0 green
+  race release cpus=0-5,8-13 run 11: exit=0 waits 669981 ready 669981, fstat(1) asked 7087778, ok 0 green
+  race release cpus=0-5,8-13 run 12: exit=0 waits 649381 ready 649381, fstat(1) asked 6995616, ok 0 green
+  race release cpus=0-5,8-13 run 13: exit=0 waits 649737 ready 649737, fstat(1) asked 6653367, ok 0 green
+  race release cpus=0-5,8-13 run 14: exit=0 waits 641979 ready 641979, fstat(1) asked 6956587, ok 0 green
+  race release cpus=0-5,8-13 run 15: exit=0 waits 650902 ready 650902, fstat(1) asked 6731276, ok 0 green
+  race release cpus=0-5,8-13 run 16: exit=0 waits 656966 ready 656966, fstat(1) asked 7116779, ok 0 green
+  race release cpus=0-5,8-13 run 17: exit=0 waiTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:56:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:57:31Z
+ts 668236 ready 668236, fstat(1) asked 6842179, ok 0 green
+  race release cpus=0-5,8-13 run 18: exit=0 waits 673634 ready 673634, fstat(1) asked 7023094, ok 0 green
+  race release cpus=0-5,8-13 run 19: exit=0 waits 649244 ready 649244, fstat(1) asked 6656614, ok 0 green
+  race release cpus=0-5,8-13 run 20: exit=0 waits 651066 ready 651066, fstat(1) asked 7069815, ok 0 green
+  race release cpus=0-5,8-13 run 21: exit=0 waits 647566 ready 647566, fstat(1) asked 6981391, ok 0 green
+  race release cpus=0-5,8-13 run 22: exit=0 waits 653972 ready 653972, fstat(1) asked 7129488, ok 0 green
+  race release cpus=0-5,8-13 run 23: exit=0 waits 661651 ready 661651, fstat(1) asked 7029862, ok 0 green
+  race release cpus=0-5,8-13 run 24: exit=0 waits 665945 ready 665945, fstat(1) asked 7078353, ok 0 green
+  race release cpus=0-5,8-13 run 25: exit=0 waits 662480 ready 662480, fstat(1) asked 7061585, ok 0 green
+  race release cpus=0-5,8-13 run 26: exit=0 waits 667698 ready 667698, fstat(1) asked 7013226, ok 0 green
+  race release cpus=0-5,8-13 run 27: exit=0 waits 651239 ready 651239, fstat(1) asked 6977326, ok 0 green
+  race release cpus=0-5,8-13 run 28: exit=0 waits 656509 ready 656509, fstat(1) asked 6406446, ok 0 green
+  race release cpus=0-5,8-13 run 29: exit=0 waits 672490 ready 672490, fstat(1) asked 7148963, ok 0 green
+  race release cpus=0-5,8-13 run 30: exit=0 waits 652373 ready 652373, fstat(1) asked 7055961, ok 0 green
+  race release cpus=0-5,8-13 run 31: exit=0 waits 658545 ready 658545, fstat(1) asked 7042642, ok 0 green
+  race release cpus=0-5,8-13 run 32: exit=0 waits 637804 ready 637804, fstat(1) asked 6436584, ok 0 green
+  race release cpus=0-5,8-13 run 33: exit=0 waits 652949 ready 652949, fstat(1) asked 6951824, ok 0 green
+  race release cpus=0-5,8-13 run 34: exit=0 waits 657630 ready 657630, fstat(1) asked 7137007, ok 0 green
+  race release cpus=0-5,8-13 run 35: exit=0 waits 635931 ready 635931, fstat(1) asked 6793175, ok 0 green
+  race release cpus=0-5,8-13 run 36: exit=0 waits 669058 ready 669058, fstat(1) asked 7135616, ok 0 green
+  race release cpus=0-5,8-13 run 37: exit=0 waits 662553 ready 662553, fstat(1) asked 7029633, ok 0 green
+  race release cpus=0-5,8-13 run 38: exit=0 waits 667068 ready 667068, fstat(1) asked 7027120, ok 0 green
+  race release cpus=0-5,8-13 run 39: exit=0 waits 671124 ready 671124, fstat(1) asked 6783966, ok 0 green
+  race release cpus=0-5,8-13 run 40: exit=0 waits 652763 ready 652763, fstat(1) asked 6643691, ok 0 green
+  race release cpus=0-5,8-13 run 41: exit=0 waits 665432 ready 665432, fstat(1) asked 6836589, ok 0 green
+  race release cpus=0-5,8-13 run 42: exit=0 waits 663363 ready 663363, fstat(1) asked 7046213, ok 0 green
+  race release cpus=0-5,8-13 run 43: exit=0 waits 674120 ready 674120, fstat(1) asked 6784907, ok 0 green
+  race release cpus=0-5,8-13 run 44: exit=0 waits 657640 ready 657640, fstat(1) asked 7077303, ok 0 green
+  race release cpus=0-5,8-13 run 45: exit=0 waits 667743 ready 667743, fstat(1) asked 7065488, ok 0 green
+  race release cpus=0-5,8-13 run 46: exit=0 waits 653993 ready 653993, fstat(1) asked 7015628, ok 0 green
+  race release cpus=0-5,8-13 run 47: exit=0 waits 624128 ready 624128, fstat(1) asked 6615916, ok 0 green
+  race release cpus=0-5,8-13 run 48: exit=0 waits 660739 ready 660739, fstat(1) asked 7111792, ok 0 green
+  race release cpus=0-5,8-13 run 49: exit=0 waits 665206 ready 665206, fstat(1) asked 7088227, ok 0 green
+  race release cpus=0-5,8-13 run 50: exit=0 waits 655491 ready 655491, fstat(1) asked 6921748, ok 0 green
+  race release cpus=0-5,8-13 run 51: exit=0 waits 663992 ready 663992, fstat(1) asked 7099118, ok 0 green
+  race release cpus=0-5,8-13 run 52: exit=0 waits 652395 ready 652395, fstat(1) asked 6904465, ok 0 green
+  race release cpus=0-5,8-13 run 53: exit=0 waits 657261 ready 657261, fstat(1) asked 7098423, ok 0 green
+  race release cpus=0-5,8-13 run 54: exit=0 waits 644130 ready 644130, fstat(1) asked 6765403, ok 0 green
+  race release cpus=0-5,8-13 run 55: exit=0 waits 657999 ready 657999, fstat(1) asked 7070918, ok 0 green
+  race reTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:58:31Z
+lease cpus=0-5,8-13 run 56: exit=0 waits 667401 ready 667401, fstat(1) asked 6729657, ok 0 green
+  race release cpus=0-5,8-13 run 57: exit=0 waits 638497 ready 638497, fstat(1) asked 6973076, ok 0 green
+  race release cpus=0-5,8-13 run 58: exit=0 waits 652384 ready 652384, fstat(1) asked 7083153, ok 0 green
+  race release cpus=0-5,8-13 run 59: exit=0 waits 656807 ready 656807, fstat(1) asked 7033161, ok 0 green
+  race release cpus=0-5,8-13 run 60: exit=0 waits 652824 ready 652824, fstat(1) asked 7008100, ok 0 green
+  race release cpus=0-5,8-13 run 61: exit=0 waits 636186 ready 636186, fstat(1) asked 6818477, ok 0 green
+  race release cpus=0-5,8-13 run 62: exit=0 waits 657443 ready 657443, fstat(1) asked 7030797, ok 0 green
+  race release cpus=0-5,8-13 run 63: exit=0 waits 668817 ready 668817, fstat(1) asked 7109579, ok 0 green
+  race release cpus=0-5,8-13 run 64: exit=0 waits 659843 ready 659843, fstat(1) asked 7037402, ok 0 green
+  race release cpus=0-5,8-13 run 65: exit=0 waits 665322 ready 665322, fstat(1) asked 7066455, ok 0 green
+  race release cpus=0-5,8-13 run 66: exit=0 waits 664142 ready 664142, fstat(1) asked 7125029, ok 0 green
+  race release cpus=0-5,8-13 run 67: exit=0 waits 665970 ready 665970, fstat(1) asked 6791376, ok 0 green
+  race release cpus=0-5,8-13 run 68: exit=0 waits 656005 ready 656005, fstat(1) asked 7005027, ok 0 green
+  race release cpus=0-5,8-13 run 69: exit=0 waits 673310 ready 673310, fstat(1) asked 6873656, ok 0 green
+  race release cpus=0-5,8-13 run 70: exit=0 waits 652150 ready 652150, fstat(1) asked 7029890, ok 0 green
+  race release cpus=0-5,8-13 run 71: exit=0 waits 669764 ready 669764, fstat(1) asked 7105910, ok 0 green
+  race release cpus=0-5,8-13 run 72: exit=0 waits 664646 ready 664646, fstat(1) asked 6989807, ok 0 green
+  race release cpus=0-5,8-13 run 73: exit=0 waits 653398 ready 653398, fstat(1) asked 6782943, ok 0 green
+  race release cpus=0-5,8-13 run 74: exit=0 waits 656817 ready 656817, fstat(1) asked 6969730, ok 0 green
+  race release cpus=0-5,8-13 run 75: exit=0 waits 664247 ready 664247, fstat(1) asked 6967366, ok 0 green
+  race release cpus=0-5,8-13 run 76: exit=0 waits 663041 ready 663041, fstat(1) asked 7119320, ok 0 green
+  race release cpus=0-5,8-13 run 77: exit=0 waits 658945 ready 658945, fstat(1) asked 7016848, ok 0 green
+  race release cpus=0-5,8-13 run 78: exit=0 waits 672959 ready 672959, fstat(1) asked 7245070, ok 0 green
+  race release cpus=0-5,8-13 run 79: exit=0 waits 669415 ready 669415, fstat(1) asked 6824238, ok 0 green
+  race release cpus=0-5,8-13 run 80: exit=0 waits 672532 ready 672532, fstat(1) asked 7090830, ok 0 green
+  race release cpus=0-5,8-13 run 81: exit=0 waits 656176 ready 656176, fstat(1) asked 7123884, ok 0 green
+  race release cpus=0-5,8-13 run 82: exit=0 waits 674135 ready 674135, fstat(1) asked 7183960, ok 0 green
+  race release cpus=0-5,8-13 run 83: exit=0 waits 662437 ready 662437, fstat(1) asked 6894251, ok 0 green
+  race release cpus=0-5,8-13 run 84: exit=0 waits 622361 ready 622361, fstat(1) asked 6747423, ok 0 green
+  race release cpus=0-5,8-13 run 85: exit=0 waits 677763 ready 677763, fstat(1) asked 7138602, ok 0 green
+  race release cpus=0-5,8-13 run 86: exit=0 waits 673017 ready 673017, fstat(1) asked 7064601, ok 0 green
+  race release cpus=0-5,8-13 run 87: exit=0 waits 655554 ready 655554, fstat(1) asked 7026829, ok 0 green
+  race release cpus=0-5,8-13 run 88: exit=0 waits 671800 ready 671800, fstat(1) asked 7127217, ok 0 green
+  race release cpus=0-5,8-13 run 89: exit=0 waits 634597 ready 634597, fstat(1) asked 7033203, ok 0 green
+  race release cpus=0-5,8-13 run 90: exit=0 waits 663184 ready 663184, fstat(1) asked 7045966, ok 0 green
+  race release cpus=0-5,8-13 run 91: exit=0 waits 644267 ready 644267, fstat(1) asked 6831462, ok 0 green
+  race release cpus=0-5,8-13 run 92: exit=0 waits 656484 ready 656484, fstat(1) asked 6971146, ok 0 green
+  race release cpus=0-5,8-13 run 93: exit=0 waits 657626 ready 657626, fstat(1) asked 7034463, ok 0 green
+  race release cpus=0-5,8-13 run 94: exit=0 waits 662858 ready 662858, fstat(TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T05:59:31Z
+1) asked 6976947, ok 0 green
+  race release cpus=0-5,8-13 run 95: exit=0 waits 640167 ready 640167, fstat(1) asked 7077637, ok 0 green
+  race release cpus=0-5,8-13 run 96: exit=0 waits 656695 ready 656695, fstat(1) asked 6991173, ok 0 green
+  race release cpus=0-5,8-13 run 97: exit=0 waits 670304 ready 670304, fstat(1) asked 7062985, ok 0 green
+  race release cpus=0-5,8-13 run 98: exit=0 waits 664411 ready 664411, fstat(1) asked 6993476, ok 0 green
+  race release cpus=0-5,8-13 run 99: exit=0 waits 667634 ready 667634, fstat(1) asked 6833893, ok 0 green
+  race release cpus=0-5,8-13 run 100: exit=0 waits 668865 ready 668865, fstat(1) asked 7023742, ok 0 green
+  RACE head=8fd5a8ef tier=release cpus=0-5,8-13 runs=100 red=0
+  race native cpus=0-15 run 1: exit=0 waits 658318 ready 658318, fstat(1) asked 6957055, ok 0 green
+  race native cpus=0-15 run 2: exit=0 waits 657717 ready 657717, fstat(1) asked 6901152, ok 0 green
+  race native cpus=0-15 run 3: exit=0 waits 639908 ready 639908, fstat(1) asked 6674174, ok 0 green
+  race native cpus=0-15 run 4: exit=0 waits 629298 ready 629298, fstat(1) asked 6943363, ok 0 green
+  race native cpus=0-15 run 5: exit=0 waits 674733 ready 674733, fstat(1) asked 7048801, ok 0 green
+  race native cpus=0-15 run 6: exit=0 waits 655406 ready 655406, fstat(1) asked 6767286, ok 0 green
+  race native cpus=0-15 run 7: exit=0 waits 651335 ready 651335, fstat(1) asked 7004704, ok 0 green
+  race native cpus=0-15 run 8: exit=0 waits 654366 ready 654366, fstat(1) asked 7017393, ok 0 green
+  race native cpus=0-15 run 9: exit=0 waits 645484 ready 645484, fstat(1) asked 6748474, ok 0 green
+  race native cpus=0-15 run 10: exit=0 waits 673919 ready 673919, fstat(1) asked 6887797, ok 0 green
+  race native cpus=0-15 run 11: exit=0 waits 650479 ready 650479, fstat(1) asked 6895023, ok 0 green
+  race native cpus=0-15 run 12: exit=0 waits 651399 ready 651399, fstat(1) asked 6984035, ok 0 green
+  race native cpus=0-15 run 13: exit=0 waits 643394 ready 643394, fstat(1) asked 6854813, ok 0 green
+  race native cpus=0-15 run 14: exit=0 waits 667855 ready 667855, fstat(1) asked 6832591, ok 0 green
+  race native cpus=0-15 run 15: exit=0 waits 643374 ready 643374, fstat(1) asked 6606773, ok 0 green
+  race native cpus=0-15 run 16: exit=0 waits 631774 ready 631774, fstat(1) asked 6720122, ok 0 green
+  race native cpus=0-15 run 17: exit=0 waits 644551 ready 644551, fstat(1) asked 6761620, ok 0 green
+  race native cpus=0-15 run 18: exit=0 waits 638597 ready 638597, fstat(1) asked 6729625, ok 0 green
+  race native cpus=0-15 run 19: exit=0 waits 654544 ready 654544, fstat(1) asked 6915000, ok 0 green
+  race native cpus=0-15 run 20: exit=0 waits 642677 ready 642677, fstat(1) asked 6960631, ok 0 green
+  race native cpus=0-15 run 21: exit=0 waits 649224 ready 649224, fstat(1) asked 6919731, ok 0 green
+  race native cpus=0-15 run 22: exit=0 waits 655773 ready 655773, fstat(1) asked 6991795, ok 0 green
+  race native cpus=0-15 run 23: exit=0 waits 638288 ready 638288, fstat(1) asked 6896151, ok 0 green
+  race native cpus=0-15 run 24: exit=0 waits 660881 ready 660881, fstat(1) asked 6883327, ok 0 green
+  race native cpus=0-15 run 25: exit=0 waits 626035 ready 626035, fstat(1) asked 6628057, ok 0 green
+  race native cpus=0-15 run 26: exit=0 waits 654486 ready 654486, fstat(1) asked 6966539, ok 0 green
+  race native cpus=0-15 run 27: exit=0 waits 665139 ready 665139, fstat(1) asked 7049387, ok 0 green
+  race native cpus=0-15 run 28: exit=0 waits 663734 ready 663734, fstat(1) asked 6769925, ok 0 green
+  race native cpus=0-15 run 29: exit=0 waits 659883 ready 659883, fstat(1) asked 7017481, ok 0 green
+  race native cpus=0-15 run 30: exit=0 waits 657573 ready 657573, fstat(1) asked 6964392, ok 0 green
+  race native cpus=0-15 run 31: exit=0 waits 625647 ready 625647, fstat(1) asked 6668967, ok 0 green
+  race native cpus=0-15 run 32: exit=0 waits 665428 ready 665428, fstat(1) asked 7017652, ok 0 green
+  race native cpus=0-15 run 33: exit=0 waits 650797 ready 650797, fstat(1) asked 7019118, ok 0 green
+  race native cpus=0-15 run 34: exit=0 waitTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T06:00:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T06:01:31Z
+s 643530 ready 643530, fstat(1) asked 6883243, ok 0 green
+  race native cpus=0-15 run 35: exit=0 waits 652069 ready 652069, fstat(1) asked 6850399, ok 0 green
+  race native cpus=0-15 run 36: exit=0 waits 635133 ready 635133, fstat(1) asked 6825690, ok 0 green
+  race native cpus=0-15 run 37: exit=0 waits 655929 ready 655929, fstat(1) asked 6745763, ok 0 green
+  race native cpus=0-15 run 38: exit=0 waits 651877 ready 651877, fstat(1) asked 7025198, ok 0 green
+  race native cpus=0-15 run 39: exit=0 waits 661865 ready 661865, fstat(1) asked 6879202, ok 0 green
+  race native cpus=0-15 run 40: exit=0 waits 634703 ready 634703, fstat(1) asked 6985044, ok 0 green
+  race native cpus=0-15 run 41: exit=0 waits 651897 ready 651897, fstat(1) asked 7029417, ok 0 green
+  race native cpus=0-15 run 42: exit=0 waits 674589 ready 674589, fstat(1) asked 7088768, ok 0 green
+  race native cpus=0-15 run 43: exit=0 waits 637636 ready 637636, fstat(1) asked 6862945, ok 0 green
+  race native cpus=0-15 run 44: exit=0 waits 656186 ready 656186, fstat(1) asked 6668044, ok 0 green
+  race native cpus=0-15 run 45: exit=0 waits 680195 ready 680195, fstat(1) asked 7025921, ok 0 green
+  race native cpus=0-15 run 46: exit=0 waits 646471 ready 646471, fstat(1) asked 6980810, ok 0 green
+  race native cpus=0-15 run 47: exit=0 waits 656008 ready 656008, fstat(1) asked 6785042, ok 0 green
+  race native cpus=0-15 run 48: exit=0 waits 621288 ready 621288, fstat(1) asked 6639511, ok 0 green
+  race native cpus=0-15 run 49: exit=0 waits 642817 ready 642817, fstat(1) asked 6922624, ok 0 green
+  race native cpus=0-15 run 50: exit=0 waits 662659 ready 662659, fstat(1) asked 7035329, ok 0 green
+  race native cpus=0-15 run 51: exit=0 waits 662233 ready 662233, fstat(1) asked 6839655, ok 0 green
+  race native cpus=0-15 run 52: exit=0 waits 652344 ready 652344, fstat(1) asked 7143980, ok 0 green
+  race native cpus=0-15 run 53: exit=0 waits 651302 ready 651302, fstat(1) asked 6845452, ok 0 green
+  race native cpus=0-15 run 54: exit=0 waits 655912 ready 655912, fstat(1) asked 6923770, ok 0 green
+  race native cpus=0-15 run 55: exit=0 waits 648748 ready 648748, fstat(1) asked 6956690, ok 0 green
+  race native cpus=0-15 run 56: exit=0 waits 671552 ready 671552, fstat(1) asked 6804519, ok 0 green
+  race native cpus=0-15 run 57: exit=0 waits 636421 ready 636421, fstat(1) asked 6921400, ok 0 green
+  race native cpus=0-15 run 58: exit=0 waits 647234 ready 647234, fstat(1) asked 7042177, ok 0 green
+  race native cpus=0-15 run 59: exit=0 waits 644688 ready 644688, fstat(1) asked 6704988, ok 0 green
+  race native cpus=0-15 run 60: exit=0 waits 663796 ready 663796, fstat(1) asked 7066969, ok 0 green
+  race native cpus=0-15 run 61: exit=0 waits 634541 ready 634541, fstat(1) asked 6984056, ok 0 green
+  race native cpus=0-15 run 62: exit=0 waits 656843 ready 656843, fstat(1) asked 6853640, ok 0 green
+  race native cpus=0-15 run 63: exit=0 waits 658069 ready 658069, fstat(1) asked 7155125, ok 0 green
+  race native cpus=0-15 run 64: exit=0 waits 647891 ready 647891, fstat(1) asked 6994837, ok 0 green
+  race native cpus=0-15 run 65: exit=0 waits 647882 ready 647882, fstat(1) asked 7023694, ok 0 green
+  race native cpus=0-15 run 66: exit=0 waits 659291 ready 659291, fstat(1) asked 6969113, ok 0 green
+  race native cpus=0-15 run 67: exit=0 waits 645748 ready 645748, fstat(1) asked 6947182, ok 0 green
+  race native cpus=0-15 run 68: exit=0 waits 671961 ready 671961, fstat(1) asked 6920215, ok 0 green
+  race native cpus=0-15 run 69: exit=0 waits 636278 ready 636278, fstat(1) asked 6796891, ok 0 green
+  race native cpus=0-15 run 70: exit=0 waits 674186 ready 674186, fstat(1) asked 6969322, ok 0 green
+  race native cpus=0-15 run 71: exit=0 waits 649098 ready 649098, fstat(1) asked 7035548, ok 0 green
+  race native cpus=0-15 run 72: exit=0 waits 649436 ready 649436, fstat(1) asked 6791382, ok 0 green
+  race native cpus=0-15 run 73: exit=0 waits 652366 ready 652366, fstat(1) asked 7050388, ok 0 green
+  race native cpus=0-15 run 74: exit=0 waits 636587 ready 636587, fstat(1) asked 6880574, ok 0 greeTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T06:02:31Z
+n
+  race native cpus=0-15 run 75: exit=0 waits 647397 ready 647397, fstat(1) asked 6850137, ok 0 green
+  race native cpus=0-15 run 76: exit=0 waits 644150 ready 644150, fstat(1) asked 6813396, ok 0 green
+  race native cpus=0-15 run 77: exit=0 waits 658902 ready 658902, fstat(1) asked 7051207, ok 0 green
+  race native cpus=0-15 run 78: exit=0 waits 655804 ready 655804, fstat(1) asked 6696522, ok 0 green
+  race native cpus=0-15 run 79: exit=0 waits 662804 ready 662804, fstat(1) asked 7074286, ok 0 green
+  race native cpus=0-15 run 80: exit=0 waits 631085 ready 631085, fstat(1) asked 6792088, ok 0 green
+  race native cpus=0-15 run 81: exit=0 waits 649329 ready 649329, fstat(1) asked 7093341, ok 0 green
+  race native cpus=0-15 run 82: exit=0 waits 626641 ready 626641, fstat(1) asked 6730876, ok 0 green
+  race native cpus=0-15 run 83: exit=0 waits 652296 ready 652296, fstat(1) asked 7090709, ok 0 green
+  race native cpus=0-15 run 84: exit=0 waits 655500 ready 655500, fstat(1) asked 7001249, ok 0 green
+  race native cpus=0-15 run 85: exit=0 waits 666684 ready 666684, fstat(1) asked 6775514, ok 0 green
+  race native cpus=0-15 run 86: exit=0 waits 652870 ready 652870, fstat(1) asked 6750017, ok 0 green
+  race native cpus=0-15 run 87: exit=0 waits 647354 ready 647354, fstat(1) asked 7039340, ok 0 green
+  race native cpus=0-15 run 88: exit=0 waits 657756 ready 657756, fstat(1) asked 6940182, ok 0 green
+  race native cpus=0-15 run 89: exit=0 waits 681511 ready 681511, fstat(1) asked 6913043, ok 0 green
+  race native cpus=0-15 run 90: exit=0 waits 650488 ready 650488, fstat(1) asked 7064746, ok 0 green
+  race native cpus=0-15 run 91: exit=0 waits 665579 ready 665579, fstat(1) asked 6733911, ok 0 green
+  race native cpus=0-15 run 92: exit=0 waits 647596 ready 647596, fstat(1) asked 6917680, ok 0 green
+  race native cpus=0-15 run 93: exit=0 waits 638524 ready 638524, fstat(1) asked 7016595, ok 0 green
+  race native cpus=0-15 run 94: exit=0 waits 651727 ready 651727, fstat(1) asked 7068330, ok 0 green
+  race native cpus=0-15 run 95: exit=0 waits 652814 ready 652814, fstat(1) asked 6913595, ok 0 green
+  race native cpus=0-15 run 96: exit=0 waits 647353 ready 647353, fstat(1) asked 6959376, ok 0 green
+  race native cpus=0-15 run 97: exit=0 waits 643354 ready 643354, fstat(1) asked 6979846, ok 0 green
+  race native cpus=0-15 run 98: exit=0 waits 620569 ready 620569, fstat(1) asked 6574786, ok 0 green
+  race native cpus=0-15 run 99: exit=0 waits 658309 ready 658309, fstat(1) asked 7050070, ok 0 green
+  race native cpus=0-15 run 100: exit=0 waits 655109 ready 655109, fstat(1) asked 7067645, ok 0 green
+  RACE head=8fd5a8ef tier=native cpus=0-15 runs=100 red=0
+  race release cpus=0-15 run 1: exit=0 waits 665191 ready 665191, fstat(1) asked 7158680, ok 0 green
+  race release cpus=0-15 run 2: exit=0 waits 677230 ready 677230, fstat(1) asked 7192134, ok 0 green
+  race release cpus=0-15 run 3: exit=0 waits 672223 ready 672223, fstat(1) asked 7219032, ok 0 green
+  race release cpus=0-15 run 4: exit=0 waits 666241 ready 666241, fstat(1) asked 6842703, ok 0 green
+  race release cpus=0-15 run 5: exit=0 waits 659593 ready 659593, fstat(1) asked 6982272, ok 0 green
+  race release cpus=0-15 run 6: exit=0 waits 655056 ready 655056, fstat(1) asked 6694781, ok 0 green
+  race release cpus=0-15 run 7: exit=0 waits 658245 ready 658245, fstat(1) asked 7128504, ok 0 green
+  race release cpus=0-15 run 8: exit=0 waits 653199 ready 653199, fstat(1) asked 7070917, ok 0 green
+  race release cpus=0-15 run 9: exit=0 waits 670896 ready 670896, fstat(1) asked 7053292, ok 0 green
+  race release cpus=0-15 run 10: exit=0 waits 672320 ready 672320, fstat(1) asked 6971437, ok 0 green
+  race release cpus=0-15 run 11: exit=0 waits 667962 ready 667962, fstat(1) asked 7038890, ok 0 green
+  race release cpus=0-15 run 12: exit=0 waits 670797 ready 670797, fstat(1) asked 6898340, ok 0 green
+  race release cpus=0-15 run 13: exit=0 waits 657678 ready 657678, fstat(1) asked 7165510, ok 0 green
+  race release cpus=0-15 run 14: exit=0 waits 647221 ready 647221, fstat(1) asked 6905025, oTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T06:03:31Z
+k 0 green
+  race release cpus=0-15 run 15: exit=0 waits 659859 ready 659859, fstat(1) asked 7057913, ok 0 green
+  race release cpus=0-15 run 16: exit=0 waits 644199 ready 644199, fstat(1) asked 6852637, ok 0 green
+  race release cpus=0-15 run 17: exit=0 waits 671977 ready 671977, fstat(1) asked 7111089, ok 0 green
+  race release cpus=0-15 run 18: exit=0 waits 652891 ready 652891, fstat(1) asked 6916154, ok 0 green
+  race release cpus=0-15 run 19: exit=0 waits 691655 ready 691655, fstat(1) asked 7128845, ok 0 green
+  race release cpus=0-15 run 20: exit=0 waits 663471 ready 663471, fstat(1) asked 6770087, ok 0 green
+  race release cpus=0-15 run 21: exit=0 waits 655960 ready 655960, fstat(1) asked 6935920, ok 0 green
+  race release cpus=0-15 run 22: exit=0 waits 674205 ready 674205, fstat(1) asked 7228670, ok 0 green
+  race release cpus=0-15 run 23: exit=0 waits 671924 ready 671924, fstat(1) asked 7058353, ok 0 green
+  race release cpus=0-15 run 24: exit=0 waits 654747 ready 654747, fstat(1) asked 6894989, ok 0 green
+  race release cpus=0-15 run 25: exit=0 waits 669085 ready 669085, fstat(1) asked 7165351, ok 0 green
+  race release cpus=0-15 run 26: exit=0 waits 646251 ready 646251, fstat(1) asked 6973654, ok 0 green
+  race release cpus=0-15 run 27: exit=0 waits 667048 ready 667048, fstat(1) asked 7119184, ok 0 green
+  race release cpus=0-15 run 28: exit=0 waits 666467 ready 666467, fstat(1) asked 7063880, ok 0 green
+  race release cpus=0-15 run 29: exit=0 waits 666590 ready 666590, fstat(1) asked 7122212, ok 0 green
+  race release cpus=0-15 run 30: exit=0 waits 673042 ready 673042, fstat(1) asked 7167489, ok 0 green
+  race release cpus=0-15 run 31: exit=0 waits 657138 ready 657138, fstat(1) asked 7082624, ok 0 green
+  race release cpus=0-15 run 32: exit=0 waits 670654 ready 670654, fstat(1) asked 7108511, ok 0 green
+  race release cpus=0-15 run 33: exit=0 waits 658988 ready 658988, fstat(1) asked 7033074, ok 0 green
+  race release cpus=0-15 run 34: exit=0 waits 654545 ready 654545, fstat(1) asked 6871252, ok 0 green
+  race release cpus=0-15 run 35: exit=0 waits 652400 ready 652400, fstat(1) asked 6873395, ok 0 green
+  race release cpus=0-15 run 36: exit=0 waits 646445 ready 646445, fstat(1) asked 7036819, ok 0 green
+  race release cpus=0-15 run 37: exit=0 waits 666819 ready 666819, fstat(1) asked 7105388, ok 0 green
+  race release cpus=0-15 run 38: exit=0 waits 663810 ready 663810, fstat(1) asked 6961187, ok 0 green
+  race release cpus=0-15 run 39: exit=0 waits 652844 ready 652844, fstat(1) asked 6360552, ok 0 green
+  race release cpus=0-15 run 40: exit=0 waits 630479 ready 630479, fstat(1) asked 6794350, ok 0 green
+  race release cpus=0-15 run 41: exit=0 waits 665967 ready 665967, fstat(1) asked 7075688, ok 0 green
+  race release cpus=0-15 run 42: exit=0 waits 663099 ready 663099, fstat(1) asked 7105866, ok 0 green
+  race release cpus=0-15 run 43: exit=0 waits 645673 ready 645673, fstat(1) asked 7022509, ok 0 green
+  race release cpus=0-15 run 44: exit=0 waits 659925 ready 659925, fstat(1) asked 7015054, ok 0 green
+  race release cpus=0-15 run 45: exit=0 waits 664477 ready 664477, fstat(1) asked 7074192, ok 0 green
+  race release cpus=0-15 run 46: exit=0 waits 644462 ready 644462, fstat(1) asked 6944945, ok 0 green
+  race release cpus=0-15 run 47: exit=0 waits 678002 ready 678002, fstat(1) asked 6992267, ok 0 green
+  race release cpus=0-15 run 48: exit=0 waits 646082 ready 646082, fstat(1) asked 6947349, ok 0 green
+  race release cpus=0-15 run 49: exit=0 waits 683492 ready 683492, fstat(1) asked 7151254, ok 0 green
+  race release cpus=0-15 run 50: exit=0 waits 657734 ready 657734, fstat(1) asked 7092434, ok 0 green
+  race release cpus=0-15 run 51: exit=0 waits 672855 ready 672855, fstat(1) asked 7180963, ok 0 green
+  race release cpus=0-15 run 52: exit=0 waits 670147 ready 670147, fstat(1) asked 6775497, ok 0 green
+  race release cpus=0-15 run 53: exit=0 waits 658237 ready 658237, fstat(1) asked 7055911, ok 0 green
+  race release cpus=0-15 run 54: exit=0 waits 649523 ready 649523, fstat(1) asked 6721384, ok 0 green
+  raceTAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T06:04:31Z
+TAKE_ALIVE label=full-c09042b8-8fd5a8ef-sat16 2026-11-08T06:05:31Z
+ release cpus=0-15 run 55: exit=0 waits 651237 ready 651237, fstat(1) asked 7049267, ok 0 green
+  race release cpus=0-15 run 56: exit=0 waits 656832 ready 656832, fstat(1) asked 7014615, ok 0 green
+  race release cpus=0-15 run 57: exit=0 waits 654249 ready 654249, fstat(1) asked 6988268, ok 0 green
+  race release cpus=0-15 run 58: exit=0 waits 668318 ready 668318, fstat(1) asked 7064188, ok 0 green
+  race release cpus=0-15 run 59: exit=0 waits 669526 ready 669526, fstat(1) asked 7031781, ok 0 green
+  race release cpus=0-15 run 60: exit=0 waits 653508 ready 653508, fstat(1) asked 7056620, ok 0 green
+  race release cpus=0-15 run 61: exit=0 waits 664212 ready 664212, fstat(1) asked 6949425, ok 0 green
+  race release cpus=0-15 run 62: exit=0 waits 669386 ready 669386, fstat(1) asked 6746164, ok 0 green
+  race release cpus=0-15 run 63: exit=0 waits 647241 ready 647241, fstat(1) asked 7061564, ok 0 green
+  race release cpus=0-15 run 64: exit=0 waits 672757 ready 672757, fstat(1) asked 7139019, ok 0 green
+  race release cpus=0-15 run 65: exit=0 waits 667751 ready 667751, fstat(1) asked 7128480, ok 0 green
+  race release cpus=0-15 run 66: exit=0 waits 655870 ready 655870, fstat(1) asked 7021535, ok 0 green
+  race release cpus=0-15 run 67: exit=0 waits 669050 ready 669050, fstat(1) asked 7143177, ok 0 green
+  race release cpus=0-15 run 68: exit=0 waits 673075 ready 673075, fstat(1) asked 7055711, ok 0 green
+  race release cpus=0-15 run 69: exit=0 waits 668093 ready 668093, fstat(1) asked 6809337, ok 0 green
+  race release cpus=0-15 run 70: exit=0 waits 666080 ready 666080, fstat(1) asked 7057072, ok 0 green
+  race release cpus=0-15 run 71: exit=0 waits 651798 ready 651798, fstat(1) asked 7077529, ok 0 green
+  race release cpus=0-15 run 72: exit=0 waits 673492 ready 673492, fstat(1) asked 6849130, ok 0 green
+  race release cpus=0-15 run 73: exit=0 waits 651451 ready 651451, fstat(1) asked 7021117, ok 0 green
+  race release cpus=0-15 run 74: exit=0 waits 660327 ready 660327, fstat(1) asked 6883789, ok 0 green
+  race release cpus=0-15 run 75: exit=0 waits 642742 ready 642742, fstat(1) asked 6970179, ok 0 green
+  race release cpus=0-15 run 76: exit=0 waits 652842 ready 652842, fstat(1) asked 6872853, ok 0 green
+  race release cpus=0-15 run 77: exit=0 waits 671186 ready 671186, fstat(1) asked 7199793, ok 0 green
+  race release cpus=0-15 run 78: exit=0 waits 678853 ready 678853, fstat(1) asked 7177223, ok 0 green
+  race release cpus=0-15 run 79: exit=0 waits 672603 ready 672603, fstat(1) asked 7140641, ok 0 green
+  race release cpus=0-15 run 80: exit=0 waits 666225 ready 666225, fstat(1) asked 7158890, ok 0 green
+  race release cpus=0-15 run 81: exit=0 waits 659577 ready 659577, fstat(1) asked 7012997, ok 0 green
+  race release cpus=0-15 run 82: exit=0 waits 671974 ready 671974, fstat(1) asked 7088859, ok 0 green
+  race release cpus=0-15 run 83: exit=0 waits 662220 ready 662220, fstat(1) asked 6792481, ok 0 green
+  race release cpus=0-15 run 84: exit=0 waits 660523 ready 660523, fstat(1) asked 7040924, ok 0 green
+  race release cpus=0-15 run 85: exit=0 waits 648409 ready 648409, fstat(1) asked 6663856, ok 0 green
+  race release cpus=0-15 run 86: exit=0 waits 657894 ready 657894, fstat(1) asked 6906548, ok 0 green
+  race release cpus=0-15 run 87: exit=0 waits 654991 ready 654991, fstat(1) asked 7125220, ok 0 green
+  race release cpus=0-15 run 88: exit=0 waits 668453 ready 668453, fstat(1) asked 7088741, ok 0 green
+  race release cpus=0-15 run 89: exit=0 waits 652338 ready 652338, fstat(1) asked 7039752, ok 0 green
+  race release cpus=0-15 run 90: exit=0 waits 669588 ready 669588, fstat(1) asked 7107164, ok 0 green
+  race release cpus=0-15 run 91: exit=0 waits 651922 ready 651922, fstat(1) asked 7026816, ok 0 green
+  race release cpus=0-15 run 92: exit=0 waits 674075 ready 674075, fstat(1) asked 7208916, ok 0 green
+  race release cpus=0-15 run 93: exit=0 waits 679252 ready 679252, fstat(1) asked 7195481, ok 0 green
+  race release cpus=0-15 run 94: exit=0 waits 657273 ready 657273, fstat(1) asked 7013753, ok 0 green
+  race release cpus=0-15 run 95: exit=0 waits 660805 ready 660805, fstat(1) asked 7005775, ok 0 green
+  race release cpus=0-15 run 96: exit=0 waits 667140 ready 667140, fstat(1) asked 7040790, ok 0 green
+  race release cpus=0-15 run 97: exit=0 waits 663663 ready 663663, fstat(1) asked 6814762, ok 0 green
+  race release cpus=0-15 run 98: exit=0 waits 647655 ready 647655, fstat(1) asked 6993676, ok 0 green
+  race release cpus=0-15 run 99: exit=0 waits 632065 ready 632065, fstat(1) asked 6629115, ok 0 green
+  race release cpus=0-15 run 100: exit=0 waits 657372 ready 657372, fstat(1) asked 7074189, ok 0 green
+  RACE head=8fd5a8ef tier=release cpus=0-15 runs=100 red=0
+END race-direct-green exit=0 secs=802
+START race-row-red
+  run 1: REPORT race781 native: exit Some(0): waits 690435 ready 690435, fstat(1) asked 6974615, ok 0
+  run 1: REPORT race781 native (taskset -c 0-3): exit Some(0): waits 640912 ready 640912, fstat(1) asked 7004750, ok 0
+  run 1: REPORT race781 release: exit Some(0): waits 678245 ready 678245, fstat(1) asked 7213365, ok 0
+  run 1: REPORT race781 release (taskset -c 0-3): exit Some(0): waits 672215 ready 672215, fstat(1) asked 7023165, ok 0
+  run 1: test exit=0
+  race781 row runs=1 red_runs=0 affinity=0-15
+END race-row-red exit=0 secs=8
+START race-row-green
+  run 1: REPORT race781 native: exit Some(0): waits 652888 ready 652888, fstat(1) asked 6698063, ok 0
+  run 1: REPORT race781 native (taskset -c 0-3): exit Some(0): waits 653706 ready 653706, fstat(1) asked 7046829, ok 0
+  run 1: REPORT race781 release: exit Some(0): waits 670767 ready 670767, fstat(1) asked 6908487, ok 0
+  run 1: REPORT race781 release (taskset -c 0-3): exit Some(0): waits 671906 ready 671906, fstat(1) asked 6826860, ok 0
+  run 1: test exit=0
+  run 2: REPORT race781 native: exit Some(0): waits 661191 ready 661191, fstat(1) asked 7028757, ok 0
+  run 2: REPORT race781 native (taskset -c 0-3): exit Some(0): waits 653178 ready 653178, fstat(1) asked 6951062, ok 0
+  run 2: REPORT race781 release: exit Some(0): waits 638916 ready 638916, fstat(1) asked 6952493, ok 0
+  run 2: REPORT race781 release (taskset -c 0-3): exit Some(0): waits 653850 ready 653850, fstat(1) asked 7053646, ok 0
+  run 2: test exit=0
+  run 3: REPORT race781 native: exit Some(0): waits 660623 ready 660623, fstat(1) asked 6826614, ok 0
+  run 3: REPORT race781 native (taskset -c 0-3): exit Some(0): waits 645161 ready 645161, fstat(1) asked 7055627, ok 0
+  run 3: REPORT race781 release: exit Some(0): waits 660617 ready 660617, fstat(1) asked 7052443, ok 0
+  run 3: REPORT race781 release (taskset -c 0-3): exit Some(0): waits 657917 ready 657917, fstat(1) asked 6977969, ok 0
+  run 3: test exit=0
+  race781 row runs=3 red_runs=0 affinity=0-15
+END race-row-green exit=0 secs=26
+INNER first_rc=0
+LOCKS_RELEASING rc=0 2026-11-08T06:06:19Z
+TAKE_END label=full-c09042b8-8fd5a8ef-sat16 exit=0 2026-11-08T06:06:31Z

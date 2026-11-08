@@ -1,0 +1,16 @@
+b3_churn/wolf at 7900000 ops, ns  : before 37.4684 after 37.5949 ratio 1.0034 margin 0.0200 tie (n=20,20)
+b3_churn/wolf at 7900000 ops, user: before 0.2960 after 0.2970 ratio 1.0034 margin 0.0200 tie (n=20,20)
+b3_churn/wolf_pgo at 7900000 ops, ns  : before 36.9620 after 37.2152 ratio 1.0068 margin 0.0200 tie (n=20,20)
+b3_churn/wolf_pgo at 7900000 ops, user: before 0.2915 after 0.2940 ratio 1.0086 margin 0.0200 tie (n=20,20)
+
+the pool's benches, ns (every run)
+  row                                            before      after   ratio  margin  verdict
+  chan_bench/bounded16_rt                        3410.0     3424.5  1.0043  0.0607  tie (n=30,30)
+  chan_bench/bounded16_stream                     180.0      184.0  1.0222  0.1667  tie (n=30,30)
+  chan_bench/rendezvous_rt                       3328.5     3360.0  1.0095  0.0838  tie (n=30,30)
+  chan_bench/select_2ready                         64.0       64.0  1.0000  0.0200  tie (n=30,30)
+  spawn_bench/per_task_join                       785.0      754.0  0.9605  0.0631  tie (n=30,30)
+  spawn_bench/spawn_median                        584.0      587.0  1.0051  0.0591  tie (n=30,30)
+  spawn_bench/spawn_wake_join_median            19689.0    19773.0  1.0043  0.0585  tie (n=30,30)
+  spawn_bench/worker_spawn_median                 495.5      457.5  0.9233  0.0636  faster (n=30,30)
+

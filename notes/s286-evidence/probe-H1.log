@@ -1,0 +1,10 @@
+ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39
+7.2.4
+20
+probe arena-probe none: arenas=160 | PROBE secure=0 ruid=1000 euid=1000 get_nprocs=20 affinity=2 threads=168
+probe arena-probe MALLOC_ARENA_MAX=2: arenas=2 | PROBE secure=0 ruid=1000 euid=1000 get_nprocs=20 affinity=2 threads=168
+probe arena-probe GLIBC_TUNABLES=glibc.malloc.arena_max=2: arenas=2 | PROBE secure=0 ruid=1000 euid=1000 get_nprocs=20 affinity=2 threads=168
+probe arena-probe-suid none: arenas=160 | PROBE secure=1 ruid=1000 euid=0 get_nprocs=20 affinity=2 threads=168
+probe arena-probe-suid MALLOC_ARENA_MAX=2: arenas=160 | PROBE secure=1 ruid=1000 euid=0 get_nprocs=20 affinity=2 threads=168
+probe arena-probe-suid GLIBC_TUNABLES=glibc.malloc.arena_max=2: arenas=160 | PROBE secure=1 ruid=1000 euid=0 get_nprocs=20 affinity=2 threads=168
+probe-light exit=0

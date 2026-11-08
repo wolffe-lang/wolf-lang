@@ -1,0 +1,50 @@
+s286 evidence (wolf-lang#1051: glibc's CPU-count read on a closed descriptor 1; the arena limit,
+settled). Paths in the logs are written $LANE (this lane's directory on each host), $LANES (the
+lanes' directory) and $HOME. The Linux hosts are written H1 (20 CPUs, kernel 7.2.4) and H2 (16
+threads, kernel 7.2.14); the Macs are the first Mac and the second Mac (both arm64 macOS). Every
+Linux row ran in the toolchain container (Ubuntu glibc 2.39, strace 6.8, clang 18), the workload
+as an unprivileged uid under taskset, the container's own root as process 1.
+
+H2-red-c09042b8.log        H2, one slot of 8 CPUs, at c09042b8 (the two rows, no settle):
+                           the arena probe plain and set-user-ID with each setting and at two
+                           affinities; get_nprocs()'s calls; arena_limit red (the entry step alone
+                           reached 128 arenas); the CPU-count row red for the parser fault that
+                           5e333326 fixes; #781's race row 10 of 10 red.
+H2-green-8fd5a8ef.log      H2, the same slot, at 8fd5a8ef (the settle): arena_limit green; the CPU-
+                           count row's same parser fault; the settle's own calls (fix-calls, cut
+                           short by that row); #781's race row 3 of 3 green; its fixture run
+                           directly, descriptor 1 closed, 100 runs per tier, 0 red.
+H2-full-c09042b8-8fd5a8ef.log
+                           H2's whole package (all three of its locks): the base's fixture on 12
+                           and 16 CPUs, 10 runs per tier each, 0 red; the fix's, 100 runs per tier
+                           each, 0 red; the row at the base on 16 (green) and at the fix (3 of 3).
+H2-sensors-*.log           H2's package temperature every 30 s beside each take (98-100 C: the
+                           host runs hot by design and throttles at 100 C).
+H2-base-sleepers.trace     strace -f -e trace=openat,clone,clone3 of sleepers1051.lu on native,
+H2-fix-sleepers.trace      H2's 8 CPUs, at the base (four workers open the CPU file) and at the
+                           fix (main opens it once, before its first clone).
+probe-H1.log               the arena probe on H1 (20 online, an affinity of 2), plain and
+                           set-user-ID, with no setting, MALLOC_ARENA_MAX=2 and the tunable at 2.
+probe-H1-void.log          its first run, void: the compiler removed each thread's malloc/free
+                           pair (1 arena everywhere); the probe now keeps each block in a slot.
+perf-H1.log                H1, one block of six CPUs with its light lock held, the base's runtime
+perf-H1-ratios.txt         (c09042b8) and the settle's (8fd5a8ef), six rounds ABBAAB: t1's family B
+perf-H1-raw/               (list_alloc, b3_churn; 10 runs a round) and the pool's benches (3 runs a
+                           round); bench diff on each pair; the ratios against the protocol's
+                           margin (rig/perf-ratios.py); every raw record.
+perf-H1-pgo.log            H1, the same block: b3_churn at ten times the operations, 20 rounds
+perf-H1-pgo-ratios.txt     ABBA (wolf and the PGO lane, the kernel's clock and user CPU time; the
+                           binaries' and the profiles' digests), then the pool's benches, 30 runs a
+                           head (rig/pgo-read.py, rig/perf-ratios.py).
+mac1-term-alone.log        the first Mac: term::tests::the_three_raw_bits and
+                           the_pty_helper_answers_its_own_pair alone, at d848fbed and e2928947:
+                           both pass at both.
+mac1-term-suite.log        the first Mac: the runtime's lib suite whole at both: the same two tests
+                           fail at posix_openpt at both (372 passed, 2 failed; 374 and 2).
+mac2-term-suite.log        the second Mac: the same suite at both: every test passes (374; 376).
+mac1-early-e2928947.log    the first Mac's first run at e2928947, where the two failures were seen.
+rig/                       the scripts as run: linux-h2/ (H2's takes: the take wrappers, the
+                           container's root entry, the in-container steps, the plant's steps, the
+                           probe, the taskset shim), linux-h1/ (H1's cost takes and the probe),
+                           linux-h1-gauntlet/ (H1's gauntlet, by copy from s285's), mac1/ and mac2/
+                           (each Mac's lock wrapper and records), and the lane's own helpers.

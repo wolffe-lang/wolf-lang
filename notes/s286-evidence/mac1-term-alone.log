@@ -1,0 +1,29 @@
+== d848fbed Bring the note to the rebased head and the filed issues in $LANE/build-d848fbed 04:43:02Z
+mac-locked: gate ok, 13504 MiB available 04:43:02Z
+   Compiling libc v0.2.189
+   Compiling wolf_rt v0.2.38 ($LANE/build-d848fbed/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.58s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-20a54c16d377b89a)
+
+running 2 tests
+test term::tests::the_three_raw_bits ... ok
+test term::tests::the_pty_helper_answers_its_own_pair ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 372 filtered out; finished in 0.13s
+
+mac-locked: exit=0 04:43:07Z
+== exit=0 04:43:07Z
+== e2928947 Name the C library's read in #781's row and fixture in $LANE/build-e2928947 04:44:12Z
+mac-locked: gate ok, 13598 MiB available 04:44:12Z
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/wolf_rt-20a54c16d377b89a)
+
+running 2 tests
+test term::tests::the_three_raw_bits ... ok
+test term::tests::the_pty_helper_answers_its_own_pair ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 374 filtered out; finished in 0.13s
+
+mac-locked: exit=0 04:44:12Z
+== exit=0 04:44:12Z
+PAIR_DONE 04:44:12Z

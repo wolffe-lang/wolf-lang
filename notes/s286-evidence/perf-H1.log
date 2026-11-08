@@ -1,0 +1,608 @@
+QUEUED label=perf2-c09042b8-8fd5a8ef-B block=B before=c09042b830284d5678a28e8aa171a5955389b2ce after=8fd5a8ef068275e631f351cd073dd895c1b02e2e 2026-11-08T05:01:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:01:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:02:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:03:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:04:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:05:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:06:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:07:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:08:51Z
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:09:51Z
+LOCKS_ACQUIRED H1-block-B,H1-B,H1-B-light 2026-11-08T05:10:15Z cpus=6-11 kernel=7.2.4
+START env
+  before=c09042b830284d5678a28e8aa171a5955389b2ce after=8fd5a8ef068275e631f351cd073dd895c1b02e2e affinity=6-11 kernel=7.2.4
+  ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39
+  Ubuntu clang version 18.1.3 (1ubuntu1)
+  no perf: wall time only
+END env exit=0 secs=0
+START build-before
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.38 (/w/c09042b8/crates/wolf_span)
+     Compiling hashbrown v0.17.1
+     Compiling cfg-if v1.0.4
+     Compiling shlex v2.0.1
+     Compiling stable_deref_trait v1.2.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling wolf_diag v0.2.38 (/w/c09042b8/crates/wolf_diag)
+     Compiling cc v1.4.2
+     Compiling crossbeam-epoch v0.9.20
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.38 (/w/c09042b8/crates/wolf_lex)
+     Compiling cranelift-srcgen v0.134.3
+     Compiling arrayref v0.3.9
+     Compiling constant_time_eq v0.4.2
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling arrayvec v0.7.8
+     Compiling rayon-core v1.13.0
+     Compiling cpufeatures v0.3.0
+     Compiling smallvec v1.15.2
+     Compiling blake3 v1.8.6
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.38 (/w/c09042b8/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling wolf_parse v0.2.38 (/w/c09042b8/crates/wolf_parse)
+     Compiling equivalent v1.0.2
+     Compiling either v1.17.0
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling indexmap v2.14.0
+     Compiling rayon v1.12.0
+     Compiling synstructure v0.13.2
+     Compiling displaydoc v0.2.7
+     Compiling cranelift-isle v0.134.3
+     Compiling litemap v0.8.2
+     Compiling writeable v0.6.3
+     Compiling hashbrown v0.16.1
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling zerofrom v0.1.8
+     Compiling heck v0.5.0
+     Compiling log v0.4.33
+     Compiling yoke v0.8.3
+     Compiling icu_properties_data v2.2.0
+     Compiling zerotrie v0.2.4
+     Compiling wolf_sema v0.2.38 (/w/c09042b8/crates/wolf_sema)
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling utf8_iter v1.0.4
+     Compiling serde_core v1.0.229
+     Compiling icu_normalizer_data v2.2.0
+     Compiling fnv v1.0.7
+     Compiling libc v0.2.189
+     Compiling gimli v0.33.0
+     Compiling zerovec v0.11.6
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling target-lexicon v0.13.5
+     Compiling tinystr v0.8.3
+     Compiling icu_locale_core v2.2.0
+     Compiling potential_utf v0.1.5
+     Compiling icu_collections v2.2.0
+     Compiling memchr v2.8.3
+     Compiling icu_provider v2.2.0
+     Compiling allocator-api2 v0.2.21
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling cranelift-codegen v0.134.3
+     Compiling serde v1.0.229
+     Compiling rustc-hash v2.1.3
+     Compiling zmij v1.0.23
+     Compiling arbitrary v1.4.2
+     Compiling regalloc2 v0.15.2
+     Compiling cranelift-control v0.134.3
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling icu_properties v2.2.0
+     Compiling serde_derive v1.0.229
+     Compiling anyhow v1.0.104
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling idna_adapter v1.2.2
+     Compiling wolf_mem v0.2.38 (/w/c09042b8/crates/wolf_mem)
+     Compiling itoa v1.0.18
+     Compiling percent-encoding v2.3.2
+     Compiling object v0.39.1
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.38 (/w/c09042b8/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_query v0.2.38 (/w/c09042b8/crates/wolf_query)
+     Compiling wolf_rt v0.2.38 (/w/c09042b8/crates/wolf_rt)
+     Compiling wolf_wir v0.2.38 (/w/c09042b8/crates/wolf_wir)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.38 (/w/c09042b8/crates/wolf_cimport)
+     Compiling wolf_doc v0.2.38 (/w/c09042b8/crates/wolf_doc)
+     Compiling wolf_backend v0.2.38 (/w/c09042b8/crates/wolf_backend)
+     Compiling wolf_pkg v0.2.38 TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:10:51Z
+(/w/c09042b8/crates/wolf_pkg)
+     Compiling wolf_codegen_llvm v0.2.38 (/w/c09042b8/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.38 (/w/c09042b8/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.38 (/w/c09042b8/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.38 (/w/c09042b8/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 32.67s
+     Compiling libc v0.2.189
+     Compiling wolf_rt v0.2.38 (/w/c09042b8/crates/wolf_rt)
+      Finished `release` profile [optimized + debuginfo] target(s) in 7.02s
+     Compiling wolf_rt v0.2.38 (/w/c09042b8/crates/wolf_rt)
+      Finished `release` profile [optimized + debuginfo] target(s) in 0.30s
+    Executable tests/chan_bench.rs (target/release/deps/chan_bench-0c9c7e23bcba6624)
+    Executable tests/spawn_bench.rs (target/release/deps/spawn_bench-34fd7c5be8c0dee4)
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.34%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +0.00%  (floor 0.61%, one clock tick 3.45%)  -> TIE
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.173x vs naive C  WIN  (floor  0.34%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.184x vs naive C  LOSS (floor  0.61%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.299x
+  
+    SUITE geomean: 1.299x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 90 record(s) -> /lane/tmp/perf2-c09042b8-8fd5a8ef-B/warm-c09042b8.jsonl
+END build-before exit=0 secs=51
+START build-after
+     Compiling unicode-ident v1.0.24
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+     Compiling crossbeam-utils v0.8.22
+     Compiling foldhash v0.2.0
+     Compiling wolf_span v0.2.38 (/w/8fd5a8ef/crates/wolf_span)
+     Compiling hashbrown v0.17.1
+     Compiling find-msvc-tools v0.1.10
+     Compiling stable_deref_trait v1.2.1
+     Compiling shlex v2.0.1
+     Compiling cfg-if v1.0.4
+     Compiling wolf_diag v0.2.38 (/w/8fd5a8ef/crates/wolf_diag)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling cc v1.4.2
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_lex v0.2.38 (/w/8fd5a8ef/crates/wolf_lex)
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling rayon-core v1.13.0
+     Compiling cranelift-srcgen v0.134.3
+     Compiling constant_time_eq v0.4.2
+     Compiling cpufeatures v0.3.0
+     Compiling smallvec v1.15.2
+     Compiling arrayvec v0.7.8
+     Compiling arrayref v0.3.9
+     Compiling cranelift-assembler-x64-meta v0.134.3
+     Compiling wolf_ast v0.2.38 (/w/8fd5a8ef/crates/wolf_ast)
+     Compiling libm v0.2.16
+     Compiling blake3 v1.8.6
+     Compiling wolf_parse v0.2.38 (/w/8fd5a8ef/crates/wolf_parse)
+     Compiling either v1.17.0
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling synstructure v0.13.2
+     Compiling equivalent v1.0.2
+     Compiling displaydoc v0.2.7
+     Compiling indexmap v2.14.0
+     Compiling rayon v1.12.0
+     Compiling litemap v0.8.2
+     Compiling cranelift-isle v0.134.3
+     Compiling zerofrom-derive v0.1.7
+     Compiling yoke-derive v0.8.2
+     Compiling zerovec-derive v0.11.3
+     Compiling writeable v0.6.3
+     Compiling fnv v1.0.7
+     Compiling icu_normalizer_data v2.2.0
+     Compiling icu_properties_data v2.2.0
+     Compiling zerofrom v0.1.8
+     Compiling utf8_iter v1.0.4
+     Compiling yoke v0.8.3
+     Compiling heck v0.5.0
+     Compiling zerotrie v0.2.4
+     Compiling zerovec v0.11.6
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling hashbrown v0.16.1
+     Compiling libc v0.2.189
+     Compiling serde_core v1.0.229
+     Compiling log v0.4.33
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling cranelift-bitset v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling tinystr v0.8.3
+     Compiling wolf_sema v0.2.38 (/w/8fd5a8ef/crates/wolf_sema)
+     Compiling potential_utf v0.1.5
+     Compiling icu_locale_core v2.2.0
+     Compiling icu_collections v2.2.0
+     Compiling gimli v0.33.0
+     Compiling allocator-api2 v0.2.21
+     Compiling memchr v2.8.3
+     Compiling icu_provider v2.2.0
+     Compiling target-lexicon v0.13.5
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling rustc-hash v2.1.3
+     Compiling arbitrary v1.4.2
+     Compiling cranelift-codegen v0.134.3
+     Compiling zmij v1.0.23
+     Compiling serde v1.0.229
+     Compiling cranelift-control v0.134.3
+     Compiling regalloc2 v0.15.2
+     Compiling icu_properties v2.2.0
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-bforest v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling serde_json v1.0.151
+     Compiling crc32fast v1.5.0
+     Compiling anyhow v1.0.104
+     Compiling wolf_mem v0.2.38 (/w/8fd5a8ef/crates/wolf_mem)
+     Compiling idna_adapter v1.2.2
+     Compiling object v0.39.1
+     Compiling percent-encoding v2.3.2
+     Compiling itoa v1.0.18
+     Compiling form_urlencoded v1.2.2
+     Compiling idna v1.1.0
+     Compiling wolf_fmt v0.2.38 (/w/8fd5a8ef/crates/wolf_fmt)
+     Compiling url v2.5.8
+     Compiling wolf_query v0.2.38 (/w/8fd5a8ef/crates/wolf_query)
+     Compiling wolf_rt v0.2.38 (/w/8fd5a8ef/crates/wolf_rt)
+     Compiling wolf_wir v0.2.38 (/w/8fd5a8ef/crates/wolf_wir)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling wolf_cimport v0.2.38 (/w/8fd5a8ef/crates/wolf_cimport)
+     Compiling wolf_doc v0.2.38 (/w/8fd5a8ef/crates/wolf_doc)
+     Compiling wolf_pkg v0.2.38 (/w/8fd5a8ef/crates/wolf_pkg)
+     Compiling wolf_backend v0.2.38 (/w/TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:11:51Z
+8fd5a8ef/crates/wolf_backend)
+     Compiling wolf_codegen_llvm v0.2.38 (/w/8fd5a8ef/crates/wolf_codegen_llvm)
+     Compiling wolf_lsp v0.2.38 (/w/8fd5a8ef/crates/wolf_lsp)
+     Compiling cranelift-module v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling cranelift-object v0.134.3
+     Compiling wolf_codegen_clif v0.2.38 (/w/8fd5a8ef/crates/wolf_codegen_clif)
+     Compiling wolf_driver v0.2.38 (/w/8fd5a8ef/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 40.43s
+     Compiling libc v0.2.189
+     Compiling wolf_rt v0.2.38 (/w/8fd5a8ef/crates/wolf_rt)
+      Finished `release` profile [optimized + debuginfo] target(s) in 4.63s
+     Compiling wolf_rt v0.2.38 (/w/8fd5a8ef/crates/wolf_rt)
+      Finished `release` profile [optimized + debuginfo] target(s) in 0.28s
+    Executable tests/chan_bench.rs (target/release/deps/chan_bench-0c9c7e23bcba6624)
+    Executable tests/spawn_bench.rs (target/release/deps/spawn_bench-34fd7c5be8c0dee4)
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.16%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +3.57%  (floor 2.10%, one clock tick 3.57%)  -> WIN
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.155x vs naive C  WIN  (floor  0.16%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.183x vs naive C  LOSS (floor  2.10%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.294x
+  
+    SUITE geomean: 1.294x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 90 record(s) -> /lane/tmp/perf2-c09042b8-8fd5a8ef-B/warm-8fd5a8ef.jsonl
+END build-after exit=0 secs=55
+START round-1-c09042b8
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.17%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +3.57%  (floor 1.46%, one clock tick 3.57%)  -> WIN
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.119x vs naive C  WIN  (floor  0.17%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.184x vs naive C  LOSS (floor  1.46%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.296x
+  
+    SUITE geomean: 1.296x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 223 record(s) -> /lane/records/perf2-c09042b8-8fd5a8ef-B/t1-r1-c09042b8.jsonl
+  r1 c09042b8 spawn_bench: spawn_median=573ns worker_spawn_median=526ns per_task_join=783ns spawn_wake_join_median=19.654µs
+  r1 c09042b8 chan_bench: rendezvous_rt=3.698µs bounded16_rt=2.803µs bounded16_stream=193ns select_2ready=64ns
+  r1 c09042b8 spawn_bench: spawn_median=598ns worker_spawn_median=487ns per_task_join=833ns spawn_wake_join_median=20.9µs
+  r1 c09042b8 chan_bench: rendezvous_rt=3.77µs bounded16_rt=3.355µs bounded16_stream=184ns select_2ready=66ns
+  r1 c09042b8 spawn_bench: spawn_median=611ns worker_spawn_median=512ns per_task_join=840ns spawn_wake_join_median=21.589µs
+  r1 c09042b8 chan_bench: rendezvous_rt=3.424µs bounded16_rt=3.404µs bounded16_stream=157ns select_2ready=65ns
+END round-1-c09042b8 exit=0 secs=18
+START round-2-8fd5a8ef
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.12%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +0.00%  (floor 0.64%, one clock tick 3.45%)  -> TIE
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.159x vs naive C  WIN  (floor  0.12%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.183x vs naive C  LOSS (floor  0.64%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.294x
+  
+    SUITE geomean: 1.294x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 223 record(s) -> /lane/records/perf2-c09042b8-8fd5a8ef-B/t1-r2-8fd5a8ef.jsonl
+  r2 8fd5a8ef spawn_bench: spawn_median=537ns worker_spawn_median=420ns per_task_join=780ns spawn_wake_join_median=23.312µs
+  r2 8fd5a8ef chan_bench: rendezvous_rt=3.437µs bounded16_rt=3.831µs bounded16_stream=189ns select_2ready=66ns
+  r2 8fd5a8ef spawn_bench: spawn_median=543ns worker_spawn_median=441ns per_task_join=745ns spawn_wake_join_median=18.582µs
+  r2 8fd5a8ef chan_bench: rendezvous_rt=3.435µs bounded16_rt=3.617µs bounded16_stream=202ns select_2ready=64ns
+  r2 8fd5a8ef spawn_bench: spawn_median=542ns worker_spawn_median=419ns per_task_join=808ns spawn_wake_join_median=20.342µs
+  r2 8fd5a8ef chan_bench: rendezvous_rt=3.826µs bounded16_rt=3.36µs bounded16_stream=199ns select_2ready=64ns
+END round-2-8fd5a8ef exit=0 secs=19
+START round-3-8fd5a8ef
+TAKE_ALIVE label=perf2-c09042b8-8fd5a8ef-B 2026-11-08T05:12:51Z
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.05%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +1.75%  (floor 0.17%, one clock tick 3.51%)  -> TIE
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.146x vs naive C  WIN  (floor  0.05%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.183x vs naive C  LOSS (floor  0.17%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.293x
+  
+    SUITE geomean: 1.293x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 223 record(s) -> /lane/records/perf2-c09042b8-8fd5a8ef-B/t1-r3-8fd5a8ef.jsonl
+  r3 8fd5a8ef spawn_bench: spawn_median=576ns worker_spawn_median=446ns per_task_join=719ns spawn_wake_join_median=20.569µs
+  r3 8fd5a8ef chan_bench: rendezvous_rt=3.529µs bounded16_rt=3.316µs bounded16_stream=185ns select_2ready=64ns
+  r3 8fd5a8ef spawn_bench: spawn_median=665ns worker_spawn_median=450ns per_task_join=835ns spawn_wake_join_median=20.258µs
+  r3 8fd5a8ef chan_bench: rendezvous_rt=3.39µs bounded16_rt=3.589µs bounded16_stream=196ns select_2ready=64ns
+  r3 8fd5a8ef spawn_bench: spawn_median=575ns worker_spawn_median=463ns per_task_join=757ns spawn_wake_join_median=23.62µs
+  r3 8fd5a8ef chan_bench: rendezvous_rt=3.582µs bounded16_rt=3.565µs bounded16_stream=187ns select_2ready=65ns
+END round-3-8fd5a8ef exit=0 secs=18
+START round-4-c09042b8
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.54%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +3.57%  (floor 0.61%, one clock tick 3.57%)  -> WIN
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.156x vs naive C  WIN  (floor  0.54%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.183x vs naive C  LOSS (floor  0.61%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.296x
+  
+    SUITE geomean: 1.296x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 223 record(s) -> /lane/records/perf2-c09042b8-8fd5a8ef-B/t1-r4-c09042b8.jsonl
+  r4 c09042b8 spawn_bench: spawn_median=588ns worker_spawn_median=498ns per_task_join=831ns spawn_wake_join_median=20.099µs
+  r4 c09042b8 chan_bench: rendezvous_rt=3.438µs bounded16_rt=3.45µs bounded16_stream=178ns select_2ready=68ns
+  r4 c09042b8 spawn_bench: spawn_median=502ns worker_spawn_median=438ns per_task_join=847ns spawn_wake_join_median=21.241µs
+  r4 c09042b8 chan_bench: rendezvous_rt=3.425µs bounded16_rt=3.414µs bounded16_stream=172ns select_2ready=64ns
+  r4 c09042b8 spawn_bench: spawn_median=568ns worker_spawn_median=489ns per_task_join=798ns spawn_wake_join_median=20.505µs
+  r4 c09042b8 chan_bench: rendezvous_rt=3.543µs bounded16_rt=3.405µs bounded16_stream=180ns select_2ready=64ns
+END round-4-c09042b8 exit=0 secs=18
+START round-5-c09042b8
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.20%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +3.57%  (floor 0.31%, one clock tick 3.57%)  -> WIN
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.137x vs naive C  WIN  (floor  0.20%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.183x vs naive C  LOSS (floor  0.31%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.292x
+  
+    SUITE geomean: 1.292x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 223 record(s) -> /lane/records/perf2-c09042b8-8fd5a8ef-B/t1-r5-c09042b8.jsonl
+  r5 c09042b8 spawn_bench: spawn_median=624ns worker_spawn_median=515ns per_task_join=829ns spawn_wake_join_median=23.302µs
+  r5 c09042b8 chan_bench: rendezvous_rt=3.428µs bounded16_rt=3.44µs bounded16_stream=189ns select_2ready=64ns
+  r5 c09042b8 spawn_bench: spawn_median=605ns worker_spawn_median=513ns per_task_join=823ns spawn_wake_join_median=21.087µs
+  r5 c09042b8 chan_bench: rendezvous_rt=3.415µs bounded16_rt=3.244µs bounded16_stream=180ns select_2ready=64ns
+  r5 c09042b8 spawn_bench: spawn_median=583ns worker_spawn_median=516ns per_task_join=790ns spawn_wake_join_median=20.305µs
+  r5 c09042b8 chan_bench: rendezvous_rt=3.401µs bounded16_rt=3.465µs bounded16_stream=171ns select_2ready=64ns
+END round-5-c09042b8 exit=0 secs=18
+START round-6-8fd5a8ef
+  t1: wolf lanes link wolf_rt: release (target/release/libwolf_rt.a)
+  t1: perf(1) unavailable — instruction counts skipped (wall time only)
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      list_alloc         +0.00%  (floor 0.06%, one clock tick 3.85%)  -> TIE
+  /usr/bin/ld: cannot find /usr/lib/llvm-18/lib/clang/18/lib/linux/libclang_rt.profile-x86_64.a: No such file or directory
+  clang: error: linker command failed with exit code 1 (use -v to see invocation)
+    pgo      b3_churn           +0.00%  (floor 0.16%, one clock tick 3.45%)  -> TIE
+  
+  == T1 suite: wolf vs naive clang -O3 (layout floor applied)
+    list_alloc         B   9.136x vs naive C  WIN  (floor  0.06%)  region bump-allocate + wholesale free vs malloc/free per node
+    b3_churn           B   0.183x vs naive C  LOSS (floor  0.16%)  b3-request-churn: one scratch region per request vs malloc/free per request
+  
+  == per family (geomean speedup vs naive C; a family-shaped loss must not hide)
+    family B: 1.293x
+  
+    SUITE geomean: 1.293x  (M2 primary needs >= 1.000)
+    M2 primary gate: HOLDS
+  bench: 223 record(s) -> /lane/records/perf2-c09042b8-8fd5a8ef-B/t1-r6-8fd5a8ef.jsonl
+  r6 8fd5a8ef spawn_bench: spawn_median=560ns worker_spawn_median=462ns per_task_join=702ns spawn_wake_join_median=20.271µs
+  r6 8fd5a8ef chan_bench: rendezvous_rt=3.398µs bounded16_rt=3.334µs bounded16_stream=184ns select_2ready=64ns
+  r6 8fd5a8ef spawn_bench: spawn_median=619ns worker_spawn_median=464ns per_task_join=784ns spawn_wake_join_median=21.7µs
+  r6 8fd5a8ef chan_bench: rendezvous_rt=3.368µs bounded16_rt=3.364µs bounded16_stream=180ns select_2ready=64ns
+  r6 8fd5a8ef spawn_bench: spawn_median=592ns worker_spawn_median=469ns per_task_join=760ns spawn_wake_join_median=19.63µs
+  r6 8fd5a8ef chan_bench: rendezvous_rt=3.434µs bounded16_rt=3.487µs bounded16_stream=192ns select_2ready=64ns
+END round-6-8fd5a8ef exit=0 secs=17
+START bench-diff
+  == pair rounds 1 (before) and 2 (after)
+    b3_churn/t1/c_naive/layout_noise_floor: improved -56.0%
+    b3_churn/t1/c_naive/ns_per_op: unchanged
+    b3_churn/t1/c_naive/ns_per_op_median: unchanged
+    b3_churn/t1/c_native/ns_per_op: unchanged
+    b3_churn/t1/c_native/ns_per_op_median: unchanged
+    b3_churn/t1/rust/ns_per_op: unchanged
+    b3_churn/t1/rust/ns_per_op_median: unchanged
+    b3_churn/t1/suite/layout_noise_floor: improved -56.0%
+    b3_churn/t1/wolf/clock_quantum_frac: unchanged
+    b3_churn/t1/wolf/layout_noise_floor: unchanged
+    b3_churn/t1/wolf/ns_per_op: unchanged
+    b3_churn/t1/wolf/ns_per_op_median: unchanged
+    b3_churn/t1/wolf/pgo_speedup: improved -3.4%
+    b3_churn/t1/wolf/speedup_vs_c_naive: unchanged
+    b3_churn/t1/wolf/speedup_vs_c_native: unchanged
+    b3_churn/t1/wolf/speedup_vs_rust: unchanged
+    b3_churn/t1/wolf_pgo/clock_quantum_frac: improved -3.4%
+    b3_churn/t1/wolf_pgo/ns_per_op: REGRESSED +3.6% (report-only: hardware-sensitive, no variance floor yet)
+    b3_churn/t1/wolf_pgo/ns_per_op_median: REGRESSED +3.6% (report-only: hardware-sensitive, no variance floor yet)
+    list_alloc/t1/c_expert/ns_per_op: unchanged
+    list_alloc/t1/c_expert/ns_per_op_median: unchanged
+    list_alloc/t1/c_naive/layout_noise_floor: improved -28.1%
+    list_alloc/t1/c_naive/ns_per_op: unchanged
+    list_alloc/t1/c_naive/ns_per_op_median: unchanged
+    list_alloc/t1/c_native/ns_per_op: unchanged
+    list_alloc/t1/c_native/ns_per_op_median: unchanged
+    list_alloc/t1/rust/ns_per_op: unchanged
+    list_alloc/t1/rust/ns_per_op_median: unchanged
+    list_alloc/t1/suite/layout_noise_floor: improved -28.1%
+    list_alloc/t1/wolf/clock_quantum_frac: unchanged
+    list_alloc/t1/wolf/layout_noise_floor: unchanged
+    list_alloc/t1/wolf/ns_per_op: unchanged
+    list_alloc/t1/wolf/ns_per_op_median: unchanged
+    list_alloc/t1/wolf/pgo_speedup: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_expert: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_naive: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_native: unchanged
+    list_alloc/t1/wolf/speedup_vs_rust: unchanged
+    list_alloc/t1/wolf_pgo/clock_quantum_frac: unchanged
+    list_alloc/t1/wolf_pgo/ns_per_op: unchanged
+    list_alloc/t1/wolf_pgo/ns_per_op_median: unchanged
+    suite/t1/wolf/geomean_speedup_vs_c_naive: unchanged
+    suite/t1/wolf/geomean_speedup_vs_c_naive_family_B: unchanged
+    suite/t1/wolf/runtime_build: unchanged
+  == pair rounds 4 (before) and 3 (after)
+    b3_churn/t1/c_naive/layout_noise_floor: improved -71.3%
+    b3_churn/t1/c_naive/ns_per_op: unchanged
+    b3_churn/t1/c_naive/ns_per_op_median: unchanged
+    b3_churn/t1/c_native/ns_per_op: unchanged
+    b3_churn/t1/c_native/ns_per_op_median: unchanged
+    b3_churn/t1/rust/ns_per_op: unchanged
+    b3_churn/t1/rust/ns_per_op_median: unchanged
+    b3_churn/t1/suite/layout_noise_floor: improved -71.3%
+    b3_churn/t1/wolf/clock_quantum_frac: unchanged
+    b3_churn/t1/wolf/layout_noise_floor: unchanged
+    b3_churn/t1/wolf/ns_per_op: unchanged
+    b3_churn/t1/wolf/ns_per_op_median: unchanged
+    b3_churn/t1/wolf/pgo_speedup: unchanged
+    b3_churn/t1/wolf/speedup_vs_c_naive: unchanged
+    b3_churn/t1/wolf/speedup_vs_c_native: unchanged
+    b3_churn/t1/wolf/speedup_vs_rust: unchanged
+    b3_churn/t1/wolf_pgo/clock_quantum_frac: unchanged
+    b3_churn/t1/wolf_pgo/ns_per_op: unchanged
+    b3_churn/t1/wolf_pgo/ns_per_op_median: unchanged
+    list_alloc/t1/c_expert/ns_per_op: unchanged
+    list_alloc/t1/c_expert/ns_per_op_median: unchanged
+    list_alloc/t1/c_naive/layout_noise_floor: improved -90.1%
+    list_alloc/t1/c_naive/ns_per_op: unchanged
+    list_alloc/t1/c_naive/ns_per_op_median: unchanged
+    list_alloc/t1/c_native/ns_per_op: unchanged
+    list_alloc/t1/c_native/ns_per_op_median: unchanged
+    list_alloc/t1/rust/ns_per_op: unchanged
+    list_alloc/t1/rust/ns_per_op_median: unchanged
+    list_alloc/t1/suite/layout_noise_floor: improved -90.1%
+    list_alloc/t1/wolf/clock_quantum_frac: unchanged
+    list_alloc/t1/wolf/layout_noise_floor: unchanged
+    list_alloc/t1/wolf/ns_per_op: unchanged
+    list_alloc/t1/wolf/ns_per_op_median: unchanged
+    list_alloc/t1/wolf/pgo_speedup: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_expert: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_naive: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_native: unchanged
+    list_alloc/t1/wolf/speedup_vs_rust: unchanged
+    list_alloc/t1/wolf_pgo/clock_quantum_frac: unchanged
+    list_alloc/t1/wolf_pgo/ns_per_op: unchanged
+    list_alloc/t1/wolf_pgo/ns_per_op_median: unchanged
+    suite/t1/wolf/geomean_speedup_vs_c_naive: unchanged
+    suite/t1/wolf/geomean_speedup_vs_c_naive_family_B: unchanged
+    suite/t1/wolf/runtime_build: unchanged
+  == pair rounds 5 (before) and 6 (after)
+    b3_churn/t1/c_naive/layout_noise_floor: improved -48.9%
+    b3_churn/t1/c_naive/ns_per_op: unchanged
+    b3_churn/t1/c_naive/ns_per_op_median: unchanged
+    b3_churn/t1/c_native/ns_per_op: unchanged
+    b3_churn/t1/c_native/ns_per_op_median: unchanged
+    b3_churn/t1/rust/ns_per_op: unchanged
+    b3_churn/t1/rust/ns_per_op_median: unchanged
+    b3_churn/t1/suite/layout_noise_floor: improved -48.9%
+    b3_churn/t1/wolf/clock_quantum_frac: unchanged
+    b3_churn/t1/wolf/layout_noise_floor: unchanged
+    b3_churn/t1/wolf/ns_per_op: unchanged
+    b3_churn/t1/wolf/ns_per_op_median: unchanged
+    b3_churn/t1/wolf/pgo_speedup: improved -3.4%
+    b3_churn/t1/wolf/speedup_vs_c_naive: unchanged
+    b3_churn/t1/wolf/speedup_vs_c_native: unchanged
+    b3_churn/t1/wolf/speedup_vs_rust: unchanged
+    b3_churn/t1/wolf_pgo/clock_quantum_frac: improved -3.4%
+    b3_churn/t1/wolf_pgo/ns_per_op: REGRESSED +3.6% (report-only: hardware-sensitive, no variance floor yet)
+    b3_churn/t1/wolf_pgo/ns_per_op_median: REGRESSED +3.6% (report-only: hardware-sensitive, no variance floor yet)
+    list_alloc/t1/c_expert/ns_per_op: unchanged
+    list_alloc/t1/c_expert/ns_per_op_median: unchanged
+    list_alloc/t1/c_naive/layout_noise_floor: improved -68.7%
+    list_alloc/t1/c_naive/ns_per_op: unchanged
+    list_alloc/t1/c_naive/ns_per_op_median: unchanged
+    list_alloc/t1/c_native/ns_per_op: unchanged
+    list_alloc/t1/c_native/ns_per_op_median: unchanged
+    list_alloc/t1/rust/ns_per_op: unchanged
+    list_alloc/t1/rust/ns_per_op_median: unchanged
+    list_alloc/t1/suite/layout_noise_floor: improved -68.7%
+    list_alloc/t1/wolf/clock_quantum_frac: unchanged
+    list_alloc/t1/wolf/layout_noise_floor: unchanged
+    list_alloc/t1/wolf/ns_per_op: unchanged
+    list_alloc/t1/wolf/ns_per_op_median: unchanged
+    list_alloc/t1/wolf/pgo_speedup: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_expert: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_naive: unchanged
+    list_alloc/t1/wolf/speedup_vs_c_native: unchanged
+    list_alloc/t1/wolf/speedup_vs_rust: unchanged
+    list_alloc/t1/wolf_pgo/clock_quantum_frac: unchanged
+    list_alloc/t1/wolf_pgo/ns_per_op: unchanged
+    list_alloc/t1/wolf_pgo/ns_per_op_median: unchanged
+    suite/t1/wolf/geomean_speedup_vs_c_naive: unchanged
+    suite/t1/wolf/geomean_speedup_vs_c_naive_family_B: unchanged
+    suite/t1/wolf/runtime_build: unchanged
+END bench-diff exit=0 secs=0
+PERF first_rc=0
+LOCKS_RELEASING rc=0 2026-11-08T05:13:50Z
+TAKE_END label=perf2-c09042b8-8fd5a8ef-B exit=0 2026-11-08T05:13:51Z
