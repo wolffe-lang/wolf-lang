@@ -1,0 +1,15 @@
+//! check: fail(E0827)
+//! phase: resolve
+//! conforms: gram.pat.names, gram.pat.struct
+//!
+//! wolf-lang#1062: `P { a: x, b: x }` binds `x` twice in one pattern
+//! ([gram.pat.names]). Every machine kept the later binding and dropped
+//! `a` without a word (exit 2). It is E0827 at the second `x`.
+
+struct P { a: int, b: int }
+
+fn f(v: P) -> int {
+    match v { P { a: x, b: x } => x }
+}
+
+fn main() -> int { f(P { a: 1, b: 2 }) }
