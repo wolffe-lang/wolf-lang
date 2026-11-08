@@ -1,0 +1,18 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.let, gram.expr.conc
+//!
+//! A `select` receive's name binds as `let` does ([gram.pat.let]):
+//! `n = n + 1` is E0410. Every machine let the arm assign it (exit 5).
+
+fn main() -> !int {
+    let ch = channel[int](1)
+    ch.send(4)?
+    var got = 0
+    select {
+        n from ch => { n = n + 1
+ got = n },
+        timeout(1.s) => { got = 0 },
+    }
+    got
+}
