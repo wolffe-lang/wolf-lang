@@ -1,0 +1,16 @@
+//! check: fail(E0601)
+//! phase: resolve
+//! conforms: gram.type.row.dup, type.err.alias.union
+//!
+//! A row's own entries name each tag once, after an alias too
+//! ([gram.type.row.dup]): the first `x` merges with the alias's, and the
+//! second `x` the row spells is E0601. The compiled tiers reported the
+//! first `x` instead, against the alias's tag.
+
+error A = {x}
+
+fn g(ok: bool) -> int ! {A, x, x} {
+    if ok { 1 } else { return x }
+}
+
+fn main() -> int { g(true) else 0 }
