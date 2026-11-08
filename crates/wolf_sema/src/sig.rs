@@ -370,8 +370,6 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
             }
         }
     }
-    let loops = std::mem::take(&mut lower.err_alias_loop_diags);
-    lower.diags.extend(loops);
     let mut modules: Vec<BTreeMap<String, ItemSig>> = vec![BTreeMap::new(); pkg.modules.len()];
     for &m in &pkg.topo {
         let mut sigs = BTreeMap::new();
@@ -381,6 +379,9 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
         }
         modules[m] = sigs;
     }
+    // Every loop the walk above met, and any a signature's row met first.
+    let loops = std::mem::take(&mut lower.err_alias_loop_diags);
+    lower.diags.extend(loops);
     // The s14 layer: trait declarations, impls, coherence, dyn use
     // checks — all elaborating into the same base table.
     let (traits, impls) = crate::traits::build(&mut lower);
@@ -1171,8 +1172,12 @@ impl<'a> Lower<'a> {
         row: wolf_ast::ErrorRow<'_>,
     ) -> (Vec<(String, Vec<TyId>)>, Option<TyId>) {
         let mut tags: Vec<(String, Vec<TyId>)> = Vec::new();
-        // The tags this row's own entries spell (`[gram.type.row.dup]`).
+        // The tags this row's own entries spell (`[gram.type.row.dup]`),
+        // with each entry's span, and, parallel to `tags`, the alias each
+        // tag came from (`None`: the row spelled it).
         let mut own: Vec<String> = Vec::new();
+        let mut own_spans: Vec<(String, Span)> = Vec::new();
+        let mut from: Vec<Option<String>> = Vec::new();
         let mut tail: Option<TyId> = if row.is_open() {
             Some(self.table.intern(TyKind::OpenTail))
         } else {
@@ -1318,15 +1323,42 @@ impl<'a> Lower<'a> {
                     tail = inner_tail;
                 }
                 for (n, p) in inner {
-                    match tags.iter().find(|(m, _)| *m == n) {
-                        None => tags.push((n, p)),
+                    match tags.iter().position(|(m, _)| *m == n) {
+                        None => {
+                            tags.push((n, p));
+                            from.push(Some(name.clone()));
+                        }
                         // The same tag from two sources with the same
                         // payload is ONE tag — set union, exactly
                         // `[gram.type.row.flatten]`'s silent merge.
-                        Some((_, have)) if *have == p => {}
-                        Some((_, have)) => {
-                            let have = have.clone();
-                            self.layer_payload_conflict(file, &n, &have, &p, Some(&row), span);
+                        Some(i) if tags[i].1 == p => {}
+                        Some(i) => {
+                            let have = tags[i].1.clone();
+                            match from[i].clone() {
+                                // The row spelled it first: reported at that
+                                // spelling (`[type.err.alias.union]`).
+                                None => {
+                                    let at = own_spans
+                                        .iter()
+                                        .find(|(m, _)| *m == n)
+                                        .map_or(span, |(_, s)| *s);
+                                    let src = format!("from the alias `{name}`");
+                                    self.alias_payload_conflict(&n, at, &have, None, &p, &src);
+                                }
+                                // Two aliases: reported at the later entry.
+                                Some(first) => {
+                                    let here = format!("from the alias `{name}`");
+                                    let src = format!("from the alias `{first}`");
+                                    self.alias_payload_conflict(
+                                        &n,
+                                        span,
+                                        &p,
+                                        Some(&here),
+                                        &have,
+                                        &src,
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -1354,16 +1386,76 @@ impl<'a> Lower<'a> {
                 continue;
             }
             own.push(name.clone());
-            match tags.iter().find(|(n, _)| *n == name) {
-                None => tags.push((name, payload)),
-                Some((_, have)) if *have == payload => {}
-                Some((_, have)) => {
-                    let have = have.clone();
-                    self.layer_payload_conflict(file, &name, &have, &payload, Some(&row), span);
+            let entry_span = entry.syntax().span;
+            own_spans.push((name.clone(), entry_span));
+            match tags.iter().position(|(n, _)| *n == name) {
+                None => {
+                    tags.push((name, payload));
+                    from.push(None);
+                }
+                Some(i) if tags[i].1 == payload => {}
+                Some(i) => {
+                    let have = tags[i].1.clone();
+                    let src = match &from[i] {
+                        Some(alias) => format!("from the alias `{alias}`"),
+                        None => "from this row".to_string(),
+                    };
+                    self.alias_payload_conflict(&name, entry_span, &payload, None, &have, &src);
                 }
             }
         }
         (tags, tail)
+    }
+
+    /// E0609 where an error-set alias meets the row it is named in, or
+    /// another alias there (`[type.err.alias.union]`, wolf-lang#1065): one
+    /// tag reaches the row with two payloads. `at` is the row's own spelling
+    /// of the tag when it has one (`here` is `None`, and the wrapper fix
+    /// rewrites that spelling), else the later alias entry.
+    fn alias_payload_conflict(
+        &mut self,
+        tag: &str,
+        at: Span,
+        here_payload: &[TyId],
+        here: Option<&str>,
+        other_payload: &[TyId],
+        other: &str,
+    ) {
+        let no_vars = |_: u32| -> Result<TyId, &'static str> { Err("_") };
+        let here_r = crate::types::render_tag(&self.table, tag, here_payload, &no_vars);
+        let other_r = crate::types::render_tag(&self.table, tag, other_payload, &no_vars);
+        let mut d = Diagnostic::error(
+            codes::E0609,
+            at,
+            format!("the tag `{tag}` reaches this error row with two different payloads"),
+        )
+        .with_label(format!(
+            "`{here_r}` {}, `{other_r}` {other}",
+            here.unwrap_or("here")
+        ))
+        .with_note(
+            "an error-set alias is one more layer of the row it is named in \
+             ([type.err.alias.union]), so its tags meet the row's own and every \
+             other alias's as one set, and one tag carries one payload shape \
+             ([gram.type.row.flatten]). Give one of the two tags another name, or \
+             wrap one payload in a nominal type of its own.",
+        );
+        if here.is_none() {
+            let payload_r: Vec<String> = here_payload
+                .iter()
+                .map(|t| crate::types::render(&self.table, *t, &no_vars))
+                .collect();
+            d = d.with_suggestion(Suggestion::new(
+                format!(
+                    "wrap this spelling's payload in a nominal type of its own \
+                     (`type {tag}Wrapped = distinct {}`)",
+                    payload_r.join(", ")
+                ),
+                vec![(at, format!("{tag}({tag}Wrapped)"))],
+                Applicability::HasPlaceholders,
+            ));
+        }
+        self.diags.push(d);
     }
 
     /// D51 (#34) — a nested error row FLATTENS: `T ! {a} ! {b}` means
