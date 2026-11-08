@@ -1,0 +1,15 @@
+//! check: fail(E0302)
+//! phase: parse
+//! conforms: gram.item.type.names
+//!
+//! wolf-lang#1060: one enum's variants have distinct names
+//! ([gram.item.type.names]), so the second `A` is E0302, with the
+//! first as its secondary label. Every machine accepted it, and the
+//! second variant could never be built or matched by name.
+
+enum E { A, A }
+
+fn main() -> int {
+    let v = E.A
+    match v { A => 3 }
+}
