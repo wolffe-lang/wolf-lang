@@ -1,0 +1,11 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.let
+//!
+//! The name before `@` is a pattern binding too ([gram.pat.let]): E0410.
+//! Every machine ran it (exit 6).
+
+fn main() -> int {
+    match 5 { n @ 1..=9 => { n = n + 1
+ n }, _ => 0 }
+}
