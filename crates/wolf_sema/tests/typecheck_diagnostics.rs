@@ -884,3 +884,16 @@ fn e0825_second_start() {
         "export fn f(n: i32, ...) { unsafe { let ap = va_start(); let bp = va_start() } }\n",
     );
 }
+
+// ------------------------------------------------- s287, E0404 -----
+
+/// wolf-lang#1062 (`[type.rec]`): a struct and an enum that hold each other
+/// inline are one E0404, at the first-declared type's member, the cycle
+/// named in full.
+#[test]
+fn e0404_struct_and_enum_contain_each_other_by_value() {
+    snap_one(
+        "e0404_struct_and_enum_contain_each_other_by_value",
+        "struct N { v: int, next: L }\n\nenum L { Nil, More(N) }\n\nfn main() -> int { 0 }\n",
+    );
+}
