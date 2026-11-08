@@ -65,6 +65,13 @@ that any of them moves, other than this change's own rows.
   `notes/s287-evidence/rebase-718fe47a.txt` gives each one's rebased commit, with the same subject
   and the same change. The note names rebased commits throughout. At the rebased head the checks,
   the four-machine test and every corpus-walking snapshot suite ran again.
+- **The Linux records:** the first, at the first head, met trunk's race and was voided. The next,
+  at `9045a3c4`, ended in its prep at a 504 from GitHub's release downloads and was voided; the
+  prep now reads every download it would make from inputs staged once outside the locks, each by
+  its pinned digest (`rig/linux/stage-inputs.sh`). The next, at `ac13525e`, was red at
+  `wolf_fmt`'s corpus identity test, a miss of this change's rows (Prediction). Heat, as measured
+  on the host's package sensor in that take: prep over 95 °C in 7 of 9 samples, build in 14 of
+  39, both at most 100 °C (`linux-sensors-ac13525e-*.log`). Every take starts at or under 95 °C.
 - **lupin 0.1.60**, the `PAIRING` stamp: `aarch64-apple-darwin` (archive sha256 `f3cae16f…6bb8`)
   and `x86_64-unknown-linux-gnu` (`e7d4c4f1…637e`), each read twice and equal to the release page.
 - **The issues** wolf-lang#1059, #1060, #1061, #1062, #1064, #1065 and #1073, whole, and s285's
@@ -129,6 +136,18 @@ measured (`5a04f01f`). Scored:
 - **A miss of the rig:** the catalog's fixture rule wants a rendered snapshot for each new code. The
   first snapshot of the arm E0410 went through `let Done`, whose W0801 the helper's resolve-clean
   assertion refuses. It renders through a row tag instead (`cf501a14`).
+- **A miss of the rows, found by the Linux record:** fourteen rows were not as `wolf fmt` writes
+  them: a `match` on one line, and a struct's last field without its comma. `wolf_fmt`'s corpus
+  identity test (`corpus_stability_formatting_is_identity`), which the gauntlet's test step runs
+  and the Mac checks did not, refused the first of them, `resolve/enum_variant_case_distinct.lu`.
+  The rows were wrong, not the formatter: the rest of the corpus passes the same test, and the
+  change is whitespace and commas only. They are formatted now (`5cffe5a2`, `71273d8d`,
+  `ae6d44da`), and their spans in the four-machine test (`e2f00d83`) and their lexer and parser
+  snapshots (`e3416967`, `4515ddd3`) moved with them. Red first: at the head before the fix
+  (`ac13525e`) the corpus walkers failed on both Macs, at that one test
+  (`m1-walkers-red-ac13525e.log`), and at `4515ddd3` they pass. The Mac checks now run them:
+  `wolf_fmt`'s properties and every test of `wolf_fmt`, `wolf_lex`, `wolf_parse` and `wolf_wir`
+  (`rig/checks.sh`, `rig/walkers.sh`).
 
 ## Rulings
 
@@ -204,6 +223,8 @@ Commits:
 - `a2fc76b9`, `cf501a14`: the rendered snapshots' tests. `2c122a38`, `65dad0a9`: formatting and a
   named type. `9d79c7e2`: the changelog. `e14ac506`, `959929e9`, `1b2ad006`, `f0fc5c37`: the
   snapshots and the lowering ledger. `d154492a`: the catalog regenerated.
+- `5cffe5a2`, `71273d8d`, `ae6d44da`: the rows as `wolf fmt` writes them; `e2f00d83`: their
+  spans; `e3416967`, `4515ddd3`: their snapshots.
 - This note and its evidence.
 
 Test targets:
@@ -223,6 +244,10 @@ Test targets:
 - [x] at the rebased head (`5fb13d74`, trunk `718fe47a`): the checks above, the lanes test, the
       corpus, conformance, and every corpus-walking snapshot suite with no update
       (`m1-rebased-5fb13d74.log`)
+- [x] the corpus walkers (`wolf_fmt`'s corpus identity and properties; every test of `wolf_fmt`,
+      `wolf_lex`, `wolf_parse` and `wolf_wir`): red at `ac13525e` on both Macs, at that one test,
+      and green at `4515ddd3` with the checks above and every snapshot suite
+      (`m1-walkers-red-ac13525e.log`, `m1-fixed-4515ddd3.log`)
 - [ ] the Linux gauntlet record at the final head, every `END … exit=0` (in the PR body)
 - [ ] the plant red by name (in the PR body)
 - [ ] the audit, once
