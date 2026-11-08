@@ -1,0 +1,17 @@
+//! check: run(exit=1)
+//! phase: run
+//! conforms: type.err.alias.union, gram.type.row.dup
+//!
+//! wolf-lang#1065: `x` spelled after an alias that brings it merges
+//! ([type.err.alias.union]), as `{x, A}` always did. The compiled tiers
+//! refused this order as E0601 at `x`; the clause's own example is this
+//! case, and an alias's tags are not spellings of the row
+//! ([gram.type.row.dup]).
+
+error A = {x}
+
+fn g(ok: bool) -> int ! {A, x} {
+    if ok { 1 } else { return x }
+}
+
+fn main() -> int { g(true) else 0 }
