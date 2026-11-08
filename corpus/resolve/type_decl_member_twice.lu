@@ -1,0 +1,13 @@
+//! check: fail(E0302)
+//! phase: parse
+//! conforms: gram.item.type.names
+//!
+//! The general spellings hold the same rule ([gram.item.type.names]):
+//! the second `A` of `type E = enum { … }` and the second `a` of
+//! `type P = struct { … }` are each E0302. Every machine accepted both.
+
+type E = enum { A, B, A }
+
+type P = struct { a: int, b: int, a: str }
+
+fn main() -> int { 0 }
