@@ -1,0 +1,20 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.pat.let, mem.tier0.move
+//!
+//! The trap the rule closes ([gram.pat.let]): `x = x + 1` reads as an
+//! update to `v`, but `x` holds its own copy, never a place in the
+//! scrutinee, so every machine answered 3 with only W1002's hint. It is
+//! E0410 at the assignment.
+
+enum E { A(int) }
+
+fn bump(mut v: E) {
+    match v { A(x) => { x = x + 1 } }
+}
+
+fn main() -> int {
+    var e = E.A(3)
+    bump(mut e)
+    match e { A(n) => n }
+}
