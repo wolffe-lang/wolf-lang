@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="12\n")
+//! phase: run
+//! conforms: type.min.zip, conf.resolve.ambient
+//!
+//! wolf-lang#708 (`[type.min.zip]`): the prelude's free `zip` has no
+//! meaning (`std.list`'s method `xs.zip(ys)` is the spelling), so a module
+//! that declares its own `zip` shadows nothing a program can use, and W0304
+//! exempts it. The file runs warning-clean. lupin 0.1.60 already exempts it.
+
+fn zip(a: int, b: int) -> int {
+    a * 10 + b
+}
+
+fn main() {
+    print("{zip(1, 2)}")
+}
