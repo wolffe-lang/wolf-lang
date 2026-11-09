@@ -55,10 +55,13 @@ fn sources(v: &str) -> Vec<DepSource> {
     ]
 }
 
+/// The package's own name as `wolf add` writes it, `local/<directory>`:
+/// never empty, which the schema refuses (E1502), whatever the directory.
 fn round_trips(v: &str) {
+    let name = format!("local/{v}");
     for source in sources(v) {
-        let m = added(v, &source).unwrap_or_else(|e| panic!("{v:?}: does not read back: {e}"));
-        assert_eq!(m.name, v, "the name {v:?}");
+        let m = added(&name, &source).unwrap_or_else(|e| panic!("{v:?}: does not read back: {e}"));
+        assert_eq!(m.name, name, "the name {v:?}");
         assert_eq!(m.deps.len(), 1, "{v:?}");
         assert_eq!(m.deps[0].source, source, "the source {v:?}");
     }
