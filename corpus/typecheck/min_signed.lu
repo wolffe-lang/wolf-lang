@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="3 -5 7\n-9223372036854775808 -9223372036854775808 0\n")
+//! phase: run
+//! conforms: type.min
+//!
+//! wolf-lang#708 (`[type.min]`): `min(a, b)` answers the smaller of two
+//! values of one integer type, compared signed for a signed type: literal
+//! operands, equal operands, and `i64`'s two ends in both orders. Until this
+//! row every compiled tier declined `min` as a prelude helper with no
+//! signature; lupin 0.1.60 prints these lines.
+
+fn main() {
+    print("{min(3, 4)} {min(-5, 2)} {min(7, 7)}")
+    let lo: i64 = -9223372036854775807 - 1
+    let hi: i64 = 9223372036854775807
+    print("{min(lo, hi)} {min(hi, lo)} {min(hi, 0)}")
+}
