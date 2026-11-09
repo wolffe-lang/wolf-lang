@@ -1,0 +1,18 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.tagident, gram.expr.variant
+//!
+//! wolf-lang#1085, the call form: `Bad(3)` as the tail of a function that
+//! returns `int`, with `Bad` declared nowhere. It reads as a tag with a
+//! payload, and `answer` cannot fail, so it is E0301 at `Bad` with the
+//! `-> !int` reading offered beside the constructor one. Declined as "an
+//! error-row tag outside `!T` context" until this row; lupin 0.1.60 exits
+//! 1 (`error: Bad`).
+
+fn answer() -> int {
+    Bad(3) // ERROR E0301: nothing named `Bad` is in scope
+}
+
+fn main() -> int {
+    answer()
+}
