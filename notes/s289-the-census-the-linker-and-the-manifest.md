@@ -107,7 +107,7 @@ Commits:
   - `22d9d262`, `d280aebd` (the census's answers).
 - `0656ab85`, `190f786b`: formatting. `bf9340de`: the round trip names the package as `wolf add`
   does.
-- `3c7f311d`: the changelog. This note and its evidence.
+- `3c7f311d`: the changelog. `3eda92f6`: the README's linker paragraph. This note and its evidence.
 
 Test targets:
 - [x] the rows red at their commit, by name (`m2-red-53c81254-air.log`)
@@ -120,4 +120,5 @@ Test targets:
       head on Linux x86-64
 - [ ] the plant red by name at `a_build_that_picks_lld_from_path_says_which_once`, its controls
       green
-- [x] README read, current: it states nothing these changes move
+- [x] README read: its linker paragraph said the default link path was unchanged and named no
+      lld; refreshed in a README-only commit (`3eda92f6`)
