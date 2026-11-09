@@ -1,0 +1,21 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.tagident, gram.expr.variant
+//!
+//! wolf-lang#1085: `return CANCEL` in a function that returns `int`, with
+//! `CANCEL` declared nowhere. The operand of `return` is a raise position,
+//! but `answer` cannot fail, so the note offers both readings: a constant
+//! to declare or import, or `-> !int` if an error was meant. Declined as
+//! "an error-row tag outside `!T` context" until this row; lupin 0.1.60
+//! exits 1.
+
+fn answer(c: int) -> int {
+    if c == 0 {
+        return CANCEL // ERROR E0301: nothing named `CANCEL` is in scope
+    }
+    c
+}
+
+fn main() -> int {
+    answer(1)
+}
