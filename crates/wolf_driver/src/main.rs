@@ -3274,16 +3274,7 @@ fn build(args: &[String]) {
                 "wolf build: note: ld.lld not found on PATH — linking with the system \
                  linker (lld ships with the toolchain; packaging is c13)"
             ),
-            Some(lld) => eprintln!(
-                "wolf build: note: linking through {} found on PATH ({}); WOLF_LD=cc \
-                 (or --linker cc) links with the system linker instead",
-                lld.path.display(),
-                if lld.version.is_empty() {
-                    "no version line"
-                } else {
-                    lld.version.as_str()
-                }
-            ),
+            Some(_) => {}
         }
     }
     let path = Path::new(&cli.file);
