@@ -471,8 +471,9 @@ impl<'a> Parser<'a> {
     }
 
     /// A string episode. Interpolation is refused: a manifest is data,
-    /// and data does not compute.
-    fn parse_string(&mut self, _kind: StrKind) -> Option<Value> {
+    /// and data does not compute. A raw string's body is its value; any
+    /// other string's fragments are cooked as wolf cooks them.
+    fn parse_string(&mut self, kind: StrKind) -> Option<Value> {
         let begin = self.bump().span;
         let mut out = String::new();
         loop {
@@ -480,7 +481,11 @@ impl<'a> Parser<'a> {
             match t.kind {
                 TokenKind::StrFragment => {
                     let raw = self.text(t.span);
-                    out.push_str(&unescape(&raw));
+                    if matches!(kind, StrKind::Raw { .. }) {
+                        out.push_str(&raw);
+                    } else {
+                        out.push_str(&unescape(&raw));
+                    }
                     self.bump();
                 }
                 TokenKind::InterpOpen => {
@@ -503,12 +508,21 @@ impl<'a> Parser<'a> {
     }
 }
 
-/// Minimal escape processing for manifest strings — the plain-string
-/// escapes a path or URL could carry; everything else stays literal.
+/// A plain string fragment's value: wolf's own escape set
+/// (`[gram.lex.str.escape]`: `\n \t \r \0 \\ \"`, `\xNN`, `\u{…}`) and
+/// `{{`/`}}` as one brace (`[gram.lex.str]`), exactly what the lexer let
+/// through (wolf-lang#175: the reader and [`quote`] agree on every
+/// character). A shape the lexer would have refused never reaches here; it
+/// is kept as written.
 fn unescape(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars();
+    let mut chars = raw.chars().peekable();
     while let Some(c) = chars.next() {
+        if (c == '{' || c == '}') && chars.peek() == Some(&c) {
+            chars.next();
+            out.push(c);
+            continue;
+        }
         if c != '\\' {
             out.push(c);
             continue;
@@ -520,8 +534,38 @@ fn unescape(raw: &str) -> String {
             Some('0') => out.push('\0'),
             Some('\\') => out.push('\\'),
             Some('"') => out.push('"'),
-            Some('{') => out.push('{'),
-            Some('}') => out.push('}'),
+            Some('x') => {
+                let hex: String = chars.clone().take(2).collect();
+                match u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                    Some(ch) if hex.len() == 2 => {
+                        chars.nth(1);
+                        out.push(ch);
+                    }
+                    _ => out.push_str("\\x"),
+                }
+            }
+            Some('u') => {
+                let rest: String = chars.clone().collect();
+                let cooked = rest
+                    .strip_prefix('{')
+                    .and_then(|r| r.split_once('}'))
+                    .filter(|(hex, _)| (1..=6).contains(&hex.len()))
+                    .and_then(|(hex, _)| {
+                        u32::from_str_radix(hex, 16)
+                            .ok()
+                            .and_then(char::from_u32)
+                            .map(|ch| (ch, hex.len() + 2))
+                    });
+                match cooked {
+                    Some((ch, used)) => {
+                        for _ in 0..used {
+                            chars.next();
+                        }
+                        out.push(ch);
+                    }
+                    None => out.push_str("\\u"),
+                }
+            }
             Some(other) => {
                 out.push('\\');
                 out.push(other);
@@ -529,6 +573,33 @@ fn unescape(raw: &str) -> String {
             None => out.push('\\'),
         }
     }
+    out
+}
+
+/// `value` as a wolf string literal that the manifest reader gives back
+/// unchanged (wolf-lang#175). Every manifest writer spells its strings
+/// through here: `\` and `"` escaped, `{` and `}` doubled (a manifest
+/// string never interpolates), the four control characters with short
+/// escapes written so, and every other control character, DEL included,
+/// as `\u{…}`. Everything else, non-ASCII included, is written as is.
+pub fn quote(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '{' => out.push_str("{{"),
+            '}' => out.push_str("}}"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
     out
 }
 
@@ -1140,13 +1211,15 @@ pub fn parse_opts(
 /// Render a dependency entry line for `wolf add`.
 pub fn render_dep(alias: &str, source: &DepSource) -> String {
     match source {
-        DepSource::Path { path } => format!("{alias}: {{ path: \"{path}\" }}"),
+        DepSource::Path { path } => format!("{alias}: {{ path: {} }}", quote(path)),
         DepSource::Git { url, tag } => {
-            format!("{alias}: {{ git: \"{url}\", tag: \"{tag}\" }}")
+            format!("{alias}: {{ git: {}, tag: {} }}", quote(url), quote(tag))
         }
-        DepSource::Registry { pkg, major, min } => {
-            format!("{alias}: {{ pkg: \"{pkg}\", major: {major}, min: \"{min}\" }}")
-        }
+        DepSource::Registry { pkg, major, min } => format!(
+            "{alias}: {{ pkg: {}, major: {major}, min: {} }}",
+            quote(pkg),
+            quote(&min.to_string())
+        ),
     }
 }
 
@@ -1204,5 +1277,8 @@ pub fn remove_dep(text: &str, m: &Manifest, alias: &str) -> Option<String> {
 
 /// A minimal manifest for `wolf add` in a project that has none yet.
 pub fn minimal_manifest(name: &str) -> String {
-    format!("pkg {{\n    name:    \"{name}\",\n    version: \"0.1.0\",\n    edition: \"1\",\n}}\n")
+    format!(
+        "pkg {{\n    name:    {},\n    version: \"0.1.0\",\n    edition: \"1\",\n}}\n",
+        quote(name)
+    )
 }
