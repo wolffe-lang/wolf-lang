@@ -26154,7 +26154,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .or_else(|| self.expr_sema_ty(a_node.span))
             .map(|t| sema_unsigned(self.table, t))
             .unwrap_or(false);
-        let cc = if unsigned { IntCc::Ule } else { IntCc::Sle };
+        let cc = if unsigned { IntCc::Sle } else { IntCc::Sle };
         // One value twice is its own minimum.
         if a == b {
             return Ok(Flow::Val(Some(a)));
