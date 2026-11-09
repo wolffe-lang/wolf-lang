@@ -1,0 +1,19 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.tagident, gram.expr.variant
+//!
+//! wolf-lang#1085: a field assigned a capitalized name that is declared
+//! nowhere. An assignment's right side is no raise position, so no error
+//! row could take a tag here in any function: E0301 at the name, with the
+//! constant's fix and no `!T` advice. Declined as "an error-row tag outside
+//! `!T` context" until this row; lupin 0.1.60 exits 1 (`error: INPUT`).
+
+struct Dialog {
+    kind: int,
+}
+
+fn main() -> int {
+    var d = Dialog { kind: 0 }
+    d.kind = INPUT // ERROR E0301: nothing named `INPUT` is in scope
+    d.kind
+}
