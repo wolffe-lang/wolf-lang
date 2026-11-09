@@ -76,7 +76,9 @@ linker or the release compiler's LLVM path. See `wolf build --help` and
 On native Linux, `--linker PATH` (or `WOLF_LD`) selects a cc-shaped
 linker such as ligature. CLI selection wins over the environment; a
 failed tool or invalid ELF output is not retried through cc. Without
-selection the platform's existing link path remains unchanged. Ligature
+selection the platform's existing link path remains unchanged: on Linux
+the cc link asks for lld whenever an `ld.lld` is on PATH, and the build
+names that ld.lld in a note; `WOLF_LD=cc` keeps the system linker. Ligature
 needs a matching musl runtime (`WOLF_RT_LIB`) and sysroot
 (`LIGATURE_SYSROOT`); the flag does not replace either. This does not
 add hosted Windows, Mach-O or foreign-target linking. See
