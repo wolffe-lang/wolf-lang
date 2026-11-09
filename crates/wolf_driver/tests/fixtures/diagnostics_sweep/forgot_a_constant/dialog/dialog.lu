@@ -1,0 +1,27 @@
+//! dialog: a question, as data. It forgot to declare `OPEN`, the answer
+//! `key` gives while the dialog stays open (wolf-lang#1085).
+
+/// No dialog is open.
+pub const NONE: int = 0
+
+/// `key`'s answer: accepted.
+pub const ACCEPT: int = 1
+
+/// One dialog.
+pub struct Dialog {
+    kind: int,
+}
+
+/// A closed dialog.
+pub fn closed() -> Dialog {
+    Dialog { kind: NONE }
+}
+
+/// Apply one key: Enter accepts, anything else leaves it open.
+pub fn key(mut d: Dialog, c: int) -> int {
+    if c == 13 {
+        d.kind = NONE
+        return ACCEPT
+    }
+    OPEN
+}

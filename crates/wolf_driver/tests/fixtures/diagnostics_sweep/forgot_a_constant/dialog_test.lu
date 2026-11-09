@@ -1,0 +1,10 @@
+//! dialog's test (wolf-lang#1085): `wolf test` met the module's missing
+//! constant and reported the file "unsupported", as if wolf lacked a
+//! feature.
+
+use dialog
+
+fn test_a_key_leaves_the_dialog_open() {
+    var d = dialog.closed()
+    assert(dialog.key(mut d, 97) == 0)
+}
