@@ -716,6 +716,11 @@ struct Checker<'a> {
     /// wolf-lang#348: the enum a checked position expects, while its
     /// expression is synthesized — the bare-variant fix-it leads with it.
     expect_enum: Option<String>,
+    /// wolf-lang#1085: the span of the expression being checked against
+    /// the enclosing function's result (a `return` operand or the body's
+    /// tail) while it is synthesized — the one position where an
+    /// undeclared capitalized name could have been meant as a raise.
+    raise_operand: Option<Span>,
     /// wolf-lang#347: `{integer}` var roots that defaulted to `i32`
     /// although a bound on them rejects `i32` — with the integer types
     /// that DO satisfy every bound (none, or more than one).
@@ -945,6 +950,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         expect_enum: None,
+        raise_operand: None,
         literal_default_miss: HashMap::new(),
         binding_lits: HashSet::new(),
         lit_pats: Vec::new(),
@@ -1136,6 +1142,7 @@ pub(crate) fn collect_body_rows(
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         expect_enum: None,
+        raise_operand: None,
         literal_default_miss: HashMap::new(),
         binding_lits: HashSet::new(),
         lit_pats: Vec::new(),
@@ -5064,8 +5071,11 @@ impl<'a> Checker<'a> {
                     _ => None,
                 };
                 let prev = std::mem::replace(&mut self.expect_enum, hint);
+                let raise = matches!(exp.reason, Reason::ReturnOfFn(_)).then_some(e.span);
+                let prev_raise = std::mem::replace(&mut self.raise_operand, raise);
                 let t = self.synth_expr(e);
                 self.expect_enum = prev;
+                self.raise_operand = prev_raise;
                 let t = t?;
                 if self.unit_discard(e.span, t, exp) {
                     return Ok(());
@@ -5550,6 +5560,168 @@ impl<'a> Checker<'a> {
         true
     }
 
+    /// wolf-lang#1085: a deferred tag (D30) that no error row takes where
+    /// it stands — the expected type carries none. Reports and returns
+    /// `true`, except for `[type.unit.discard]`'s recorded decline: a tag
+    /// the enclosing *fallible* function spells, in a unit position (or
+    /// any such tag inside a closure), stays the caller's `NotYet`.
+    ///
+    /// A tag the function spells, where it cannot fail, is E0604 — the
+    /// error would leave a function with no row, `?`'s case. A name no
+    /// row of the function spells names nothing: `[gram.expr.tagident]`'s
+    /// "a bare identifier no expected row declares … misses with E0301".
+    fn tag_without_row(&mut self, span: Span, name: &str, at_raise: bool) -> bool {
+        let ret = if self.in_closure {
+            None
+        } else {
+            self.ret.clone()
+        };
+        let fallible = ret
+            .as_ref()
+            .is_some_and(|(r, ..)| matches!(self.kind_of(*r), TyKind::ErrUnion(..)));
+        if self.row_tags.contains(name) {
+            let Some((_, fname, because)) = ret.filter(|_| !fallible) else {
+                return false;
+            };
+            self.report_tag_cannot_fail(span, name, &fname, because);
+            return true;
+        }
+        self.report_undeclared_tag(span, name, ret, fallible, at_raise);
+        true
+    }
+
+    /// E0604 at a tag the enclosing function spells in some row, where the
+    /// function's own signature has none: the fix `?` gets there.
+    fn report_tag_cannot_fail(&mut self, span: Span, name: &str, fname: &str, because: Span) {
+        let mut d = Diagnostic::error(
+            codes::E0604,
+            span,
+            format!("`{name}` is an error tag, and `{fname}` cannot fail"),
+        )
+        .with_label("an error here would have nowhere to go")
+        .with_secondary(because, "the signature declares no error row");
+        if let Some(RowFix::AddRow { insert_at }) = self.row_fix {
+            d = d.with_suggestion(Suggestion::new(
+                format!("make `{fname}` fallible: `! {{{name}}}`"),
+                vec![(insert_at, format!(" ! {{{name}}}"))],
+                Applicability::Maybe,
+            ));
+        }
+        d = d.with_note(
+            "errors travel in the declared row, never a side channel: make the \
+             function fallible (`-> !T`, or an explicit row), or handle the error \
+             where it arises with `else`.",
+        );
+        self.diags.push(d);
+    }
+
+    /// E0301 at a capitalized name that names nothing (wolf-lang#1085).
+    /// It reads as an error tag, and no row takes one here; the notes say
+    /// so, and name the fixes the position allows: the constant declared
+    /// or imported (the qualified spelling when an imported module
+    /// defines it), `-> !T` at a raise of a function that cannot fail,
+    /// `return Name` inside one that can.
+    fn report_undeclared_tag(
+        &mut self,
+        span: Span,
+        name: &str,
+        ret: Option<(TyId, String, Span)>,
+        fallible: bool,
+        at_raise: bool,
+    ) {
+        let mut d = Diagnostic::error(
+            codes::E0301,
+            span,
+            format!("nothing named `{name}` is in scope"),
+        )
+        .with_label("not found");
+        let homes = self.imported_item_homes(name);
+        if let Some(home) = homes.first() {
+            d = d
+                .with_note(format!(
+                    "`{home}.{name}` is defined: an imported module's items are reached \
+                     through the module's name"
+                ))
+                .with_suggestion(Suggestion::new(
+                    format!("write `{home}.{name}`"),
+                    vec![(Span::new(span.file, span.lo, span.lo), format!("{home}."))],
+                    if homes.len() == 1 {
+                        Applicability::MachineApplicable
+                    } else {
+                        Applicability::Maybe
+                    },
+                ));
+        }
+        d = d.with_note(
+            "a bare capitalized name that names nothing is read as an error tag, and a \
+             tag is a value only where an error row takes it: the operand of `return` \
+             or the tail of a function that can fail, a call argument, or an annotated \
+             `let`",
+        );
+        let constant = format!(
+            "if `{name}` is a constant, declare it, or import the module that defines it"
+        );
+        match ret {
+            Some((rt, fname, because)) if !fallible && at_raise => {
+                let ok = self.show(rt);
+                d = d
+                    .with_secondary(
+                        because,
+                        format!("`{fname}` cannot fail: its return type has no error row"),
+                    )
+                    .with_note(format!(
+                        "{constant}; if it is an error, make `{fname}` fallible: `-> !{ok}`"
+                    ));
+            }
+            Some(_) if fallible => {
+                d = d.with_note(format!(
+                    "{constant}; to raise it as an error here, write `return {name}`"
+                ));
+            }
+            _ => d = d.with_note(constant),
+        }
+        self.diags.push(d);
+    }
+
+    /// The import bindings of this file whose module defines a visible
+    /// item `name` — the homes a bare spelling of it may have meant.
+    fn imported_item_homes(&self, name: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for b in bindings_for(self.pkg(), self.module, self.file) {
+            if let BindTarget::PkgModule(m) = b.target
+                && self.pkg().tables[m]
+                    .get(name)
+                    .is_some_and(|item| item.vis != Vis::Private)
+                && !out.contains(&b.name)
+            {
+                out.push(b.name.clone());
+            }
+        }
+        out
+    }
+
+    /// E0301 at a provisional stand-in nothing defines (wolf-lang#1083).
+    fn report_undefined_stand_in(&mut self, span: Span, name: &str) {
+        let all: Vec<String> = prelude::PRELUDE_PROVISIONAL
+            .iter()
+            .map(|n| format!("`{n}`"))
+            .collect();
+        self.diags.push(
+            Diagnostic::error(codes::E0301, span, format!("nothing defines `{name}`"))
+                .with_label("a provisional prelude name with no definition")
+                .with_note(format!(
+                    "`{name}` is one of the prelude's provisional stand-ins ({}): each \
+                     resolves everywhere so that the oldest example programs can define \
+                     it, and none means anything until a program does",
+                    all.join(", ")
+                ))
+                .with_note(format!(
+                    "define `{name}` in this module, or import the module that defines it \
+                     and reach it through the module's name"
+                )),
+        );
+    }
+
     fn synth_path(&mut self, e: &GreenNode) -> R<TyId> {
         let Some(t) = PathExpr::cast(e).and_then(|p| p.ident()) else {
             return Ok(self.error_ty());
@@ -5624,6 +5796,13 @@ impl<'a> Checker<'a> {
             return Ok(self.lo.table.intern(TyKind::TypeTy));
         }
         if prelude::in_prelude(&name) {
+            // wolf-lang#1083: a provisional stand-in resolves so that the
+            // oldest corpus programs can define it; one nothing defines has
+            // nothing behind it, which is the program's error.
+            if prelude::PRELUDE_PROVISIONAL.contains(&name.as_str()) {
+                self.report_undefined_stand_in(e.span, &name);
+                return Ok(self.error_ty());
+            }
             return Err(NotYet {
                 construct: "a std/prelude stub without a signature",
                 span: e.span,
@@ -5635,6 +5814,10 @@ impl<'a> Checker<'a> {
         }
         if self.deferred_tag(e, None).is_some() {
             if self.bare_variant_value(t.span, &name) {
+                return Ok(self.error_ty());
+            }
+            let at_raise = self.raise_operand == Some(e.span);
+            if self.tag_without_row(t.span, &name, at_raise) {
                 return Ok(self.error_ty());
             }
             return Err(NotYet {
@@ -8659,7 +8842,10 @@ impl<'a> Checker<'a> {
                         return self.call_mutex_ctor(e, d.args());
                     }
                     if self.deferred_tag(callee, None).is_some() {
-                        if self.bare_variant_value(t.span, &name) {
+                        let at_raise = self.raise_operand == Some(e.span);
+                        if self.bare_variant_value(t.span, &name)
+                            || self.tag_without_row(t.span, &name, at_raise)
+                        {
                             for a in d.args().into_iter().flat_map(|a| a.args()) {
                                 if let Some(v) = Arg::value(a) {
                                     self.synth_expr(v)?;
