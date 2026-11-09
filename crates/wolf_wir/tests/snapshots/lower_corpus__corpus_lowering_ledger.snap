@@ -381,6 +381,7 @@ lints/shadow_prelude_local.lu: lowers
 lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
+lints/zip_own.lu: lowers
 membrane/export_called.lu: lowers
 membrane/export_child.lu: lowers
 membrane/extern_let_image.lu: lowers
@@ -1189,6 +1190,14 @@ typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/method_home_no_std.lu: not mem-clean (pre-wir rungs own it)
 typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
+typecheck/min_evaluates_once.lu: lowers
+typecheck/min_literal_fit.lu: not mem-clean (pre-wir rungs own it)
+typecheck/min_mixed_types.lu: not mem-clean (pre-wir rungs own it)
+typecheck/min_one_argument.lu: not mem-clean (pre-wir rungs own it)
+typecheck/min_signed.lu: lowers
+typecheck/min_str.lu: not mem-clean (pre-wir rungs own it)
+typecheck/min_three_arguments.lu: not mem-clean (pre-wir rungs own it)
+typecheck/min_unsigned.lu: lowers
 typecheck/nested_fn_capture.lu: not mem-clean (pre-wir rungs own it)
 typecheck/nested_fn_value.lu: lowers
 typecheck/nullary_arm_field_assign.lu: not mem-clean (pre-wir rungs own it)
