@@ -1,0 +1,7 @@
+//! member: true
+
+/// The dialog is still open.
+pub const OPEN: int = 0
+
+/// The dialog was accepted.
+pub const ACCEPT: int = 1

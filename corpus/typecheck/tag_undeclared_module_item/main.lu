@@ -1,0 +1,17 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.tagident, gram.expr.variant, mod.dir
+//!
+//! wolf-lang#1085: this file imports `dialog`, whose constants are reached
+//! as `dialog.OPEN`. The bare `OPEN` names nothing here, so it is read as
+//! an error tag that no row takes: E0301 at the name, and since the one
+//! module this file imports defines a public `OPEN`, the fix is the
+//! qualified spelling, offered as a machine-applicable edit. Declined as
+//! "an error-row tag outside `!T` context" until this row.
+
+use dialog
+
+fn main() -> int {
+    let k = OPEN // ERROR E0301: write `dialog.OPEN`
+    if k == dialog.ACCEPT { 1 } else { 0 }
+}
