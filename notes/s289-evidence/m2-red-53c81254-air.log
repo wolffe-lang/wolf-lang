@@ -1,0 +1,288 @@
+s289: warm target from build-72852da
+s289: Air at 53c81254 in $LANE/build-53c8125
+s289: last release 2s ago; waiting 58s for the turn
+s289: 14:14:14 mac build lock held by another lane; waiting
+s289: 14:14:44 mac build lock held by another lane; waiting
+s289: 14:15:14 mac build lock held by another lane; waiting
+s289: 14:15:44 mac build lock held by another lane; waiting
+s289: 14:16:14 mac build lock held by another lane; waiting
+s289: 14:16:44 mac build lock held by another lane; waiting
+s289: 14:17:14 mac build lock held by another lane; waiting
+s289: lock taken 14:17:44, 11038 MiB free, 87 GB disk; running: $LANE/rig/pr2-check.sh
+== STEP head 19:17:44
+53c81254f9d79dde1da20d002227a6faddc9be50
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+END head exit=0
+== STEP build 19:17:44
+   Compiling wolf_span v0.2.38 ($LANE/build-53c8125/crates/wolf_span)
+   Compiling wolf_rt v0.2.38 ($LANE/build-53c8125/crates/wolf_rt)
+   Compiling wolf_diag v0.2.38 ($LANE/build-53c8125/crates/wolf_diag)
+   Compiling wolf_ast v0.2.38 ($LANE/build-53c8125/crates/wolf_ast)
+   Compiling wolf_lex v0.2.38 ($LANE/build-53c8125/crates/wolf_lex)
+   Compiling wolf_parse v0.2.38 ($LANE/build-53c8125/crates/wolf_parse)
+   Compiling wolf_cimport v0.2.38 ($LANE/build-53c8125/crates/wolf_cimport)
+   Compiling wolf_sema v0.2.38 ($LANE/build-53c8125/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.38 ($LANE/build-53c8125/crates/wolf_fmt)
+   Compiling wolf_pkg v0.2.38 ($LANE/build-53c8125/crates/wolf_pkg)
+   Compiling wolf_mem v0.2.38 ($LANE/build-53c8125/crates/wolf_mem)
+   Compiling wolf_query v0.2.38 ($LANE/build-53c8125/crates/wolf_query)
+   Compiling wolf_lsp v0.2.38 ($LANE/build-53c8125/crates/wolf_lsp)
+   Compiling wolf_doc v0.2.38 ($LANE/build-53c8125/crates/wolf_doc)
+   Compiling wolf_wir v0.2.38 ($LANE/build-53c8125/crates/wolf_wir)
+   Compiling wolf_backend v0.2.38 ($LANE/build-53c8125/crates/wolf_backend)
+   Compiling wolf_codegen_clif v0.2.38 ($LANE/build-53c8125/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.38 ($LANE/build-53c8125/crates/wolf_codegen_llvm)
+   Compiling wolf_driver v0.2.38 ($LANE/build-53c8125/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.93s
+END build exit=0
+== STEP manifest-round-trip 19:17:57
+   Compiling wolf_pkg v0.2.38 ($LANE/build-53c8125/crates/wolf_pkg)
+
+running 3 tests
+test the_reader_cooks_what_the_lexer_accepts ... FAILED
+test fuzzed_values_round_trip ... FAILED
+test every_escaped_character_round_trips ... FAILED
+
+failures:
+
+---- the_reader_cooks_what_the_lexer_accepts stdout ----
+
+thread 'the_reader_cooks_what_the_lexer_accepts' (12542771) panicked at crates/wolf_pkg/tests/manifest_round_trip.rs:145:5:
+assertion `left == right` failed
+  left: "a{{b}}\\x41\\u{1F43A}"
+ right: "a{b}A🐺"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- fuzzed_values_round_trip stdout ----
+
+thread 'fuzzed_values_round_trip' (12542770) panicked at crates/wolf_pkg/tests/manifest_round_trip.rs:58:54:
+"pH]_\u{6}\u{18}aWu\u{17}n{`\u{19}-\t\u{1e}\u{19}}o@n<T2\u{2}Ei.\u{6}1tK": does not read back: ["E0107 the character ``` is not part of wolf syntax", "E0107 the character `\\u{1e}` is not part of wolf syntax"]
+--- manifest ---
+pkg {
+    name:    "pH]_aWun{`-	}o@n<T2Ei.1tK",
+    version: "0.1.0",
+    edition: "1",
+}
+
+
+---- every_escaped_character_round_trips stdout ----
+
+thread 'every_escaped_character_round_trips' (12542769) panicked at crates/wolf_pkg/tests/manifest_round_trip.rs:58:54:
+"\n": does not read back: ["E0102 this string never closes", "E0102 this string never closes"]
+--- manifest ---
+pkg {
+    name:    "
+",
+    version: "0.1.0",
+    edition: "1",
+}
+
+
+
+failures:
+    every_escaped_character_round_trips
+    fuzzed_values_round_trip
+    the_reader_cooks_what_the_lexer_accepts
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END manifest-round-trip exit=101
+== STEP pkg-add 19:17:58
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running tests/manifest_round_trip.rs (target/debug/deps/manifest_round_trip-5bde93303d1d459b)
+error: test failed, to rerun pass `-p wolf_pkg --test manifest_round_trip`
+   Compiling wolf_driver v0.2.38 ($LANE/build-53c8125/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+     Running tests/pkg.rs (target/debug/deps/pkg-c8b1862d92ec78eb)
+
+running 1 test
+test add_writes_a_manifest_that_reads_back ... FAILED
+
+failures:
+
+failures:
+    add_writes_a_manifest_that_reads_back
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.03s
+
+END pkg-add exit=101
+
+thread 'add_writes_a_manifest_that_reads_back' (12542842) panicked at crates/wolf_driver/tests/pkg.rs:191:9:
+assertion `left == right` failed: dep\q: stderr:
+wolf add: created app/wolf.pkg (minimal manifest)
+error[E0101]: there is no `\q` escape in wolf
+ --> wolf.pkg:6:30
+  |
+6 |         util: { path: "../dep\q" },
+  |                              ^^
+  |
+  = note: the escapes wolf understands are `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xNN`, and
+    `\u{…}`. For a literal backslash, write `\\`; for text with no escapes at all, use a raw
+    string `r"…"`.
+
+wolf add: `util` does not resolve; the manifest edit was rolled back
+
+  left: Some(1)
+ right: Some(0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p wolf_driver --test pkg`
+== STEP lld-note 19:17:58
+   Compiling wolf_driver v0.2.38 ($LANE/build-53c8125/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+
+running 4 tests
+test a_build_that_picks_lld_from_path_says_which_once ... ok
+test an_object_only_build_notes_nothing ... ok
+test wolf_ld_cc_links_without_the_note ... ok
+     Running tests/lld_note.rs (target/debug/deps/lld_note-a41089225fe31f90)
+SKIP lld_note: the lld routing is Linux's (macOS links through Apple ld, Windows its own)
+SKIP lld_note_obj: the lld routing is Linux's (macOS links through Apple ld, Windows its own)
+SKIP lld_note_wolf_ld: the lld routing is Linux's (macOS links through Apple ld, Windows its own)
+test build_help_names_the_lld_selection_and_its_override ... FAILED
+
+failures:
+
+failures:
+    build_help_names_the_lld_selection_and_its_override
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+END lld-note exit=101
+== STEP census 19:17:58
+
+thread 'build_help_names_the_lld_selection_and_its_override' (12542923) panicked at crates/wolf_driver/tests/lld_note.rs:85:9:
+`wolf build --help` lacks "ld.lld":
+wolf build — compile an entry file to a native executable.
+
+usage: wolf build <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]
+            [--verbose] [--checked] [-g] [--release] [--codegen-report]
+            [-q|--quiet] [--timings|--timings=json:<file>]
+            [--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]
+            [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]
+            [--error-limit=N] [--target x86_64-unknown-none] [--assembler PATH] [--linker PATH]
+
+The entry file's directory is the package (D32): every plain `.lu` file
+beside it is part of the same module. Two tiers compile the same source
+— the default is the compiler's own fast backend, and `--release` goes
+through LLVM. A construct the pipeline cannot yet handle is REFUSED by
+name, with the deepest phase that completed; nothing is silently
+interpreted instead.
+
+Native debug builds include source types and whole-function variable slots.
+`-g` additionally emits nonallocated `.debug_frame` information for debugger
+and profiler stack walks. Frame pointers remain enabled. This is not runtime
+unwinding: no loaded unwind tables, personality routines or landing pads are
+introduced. Unknown teardown forms are reported as CFI_GAP and left uncovered
+rather than described with a wrong rule. The release tier does not yet emit
+source debug information and refuses `-g`.
+
+`--assembler PATH` (or `--assembler=PATH`) overrides `WOLF_AS` for
+root-manifest assembly sources. The selected program receives `--64`
+(on x86-64), `-o OUTPUT SOURCE`; it is a path, not a shell command.
+Failure is final. Without either choice, assembly uses the existing
+CC/cc (hosted) or WOLF_CLANG/clang (freestanding) driver. This does not
+replace the linker or the release backend's clang IR compilation, and
+it does not enable hosted Windows assembly or foreign hosted targets.
+`--linker PATH` (or `--linker=PATH`) overrides nonempty `WOLF_LD`
+for native Linux ELF links. The selected tool receives the cc-shaped
+link line: `-o OUTPUT OBJECTS RUNTIME -lpthread -ldl -lm
+-Wl,--gc-sections` and trap aliases when needed. It is one executable
+path, not shell text or a raw ld command. Failure or malformed/foreign
+ELF output is final. Without either choice, the existing CC/cc, macOS
+and Windows link paths are unchanged. Explicit linkers do not enable
+hosted Windows, Mach-O or foreign targets, and are unused by object-only
+builds. Assembly and release clang IR compilation remain separate.
+For `wolf run`, put build flags before the entry file.
+
+A terminal gets a live unit/phase line; other stderr stays silent until
+30 seconds without output, then heartbeats every 60 seconds. TERM=dumb
+uses heartbeats, never cursor controls. WOLF_STATUS_AFTER=<seconds>
+overrides the first deadline (0..86400, decimals accepted; invalid uses
+30). `-q`/`--quiet` hides the reporter, never diagnostics. `--timings`
+prints scoped elapsed contributions on stderr; `--timings=json:<file>`
+writes wolf-build-timings/1 JSON (even under quiet). See docs/cli.md for
+the schema and overlapping parallel/nested scopes.
+
+`--target x86_64-unknown-none` (or `target: "x86_64-unknown-none"` in
+`wolf.pkg`) builds a freestanding object for a kernel: `--emit=obj`
+only, no `main` shim and no runtime library; the entry is an `export
+fn`, a trap calls the program's `wolf_trap`, and anything that needs the
+hosted runtime, allocates, or uses a float is refused by name.
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: test failed, to rerun pass `-p wolf_driver --test lld_note`
+   Compiling wolf_sema v0.2.38 ($LANE/build-53c8125/crates/wolf_sema)
+
+running 2 tests
+test each_class_answers_in_its_own_words ... FAILED
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running tests/prelude_census.rs (target/debug/deps/prelude_census-3092c50580b04b93)
+test no_ambient_name_answers_with_the_stub ... FAILED
+
+failures:
+
+---- each_class_answers_in_its_own_words stdout ----
+
+thread 'each_class_answers_in_its_own_words' (12543000) panicked at crates/wolf_sema/tests/prelude_census.rs:144:17:
+assertion `left == right` failed: the builtin eprint as a value
+  left: NotYet("a std/prelude stub without a signature")
+ right: NotYet("a builtin function used as a value (call it by name)")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- no_ambient_name_answers_with_the_stub stdout ----
+
+thread 'no_ambient_name_answers_with_the_stub' (12543001) panicked at crates/wolf_sema/tests/prelude_census.rs:95:5:
+413 of 687 uses answer "a std/prelude stub without a signature": eprint (value), eprint (member), eprint_raw (value), eprint_raw (member), read_line (value), read_line (member), List (value), List (call), List (member), Map (value), Map (call), Map (member), Pool (value), Pool (call), Pool (member), Mutex (value), Mutex (member), channel (value), channel (call), channel (member), fence (value), fence (member), Scope (value), Scope (call), Scope (member), Proc (value), Proc (call), Proc (member), range (value), range (call), range (member), va_start (value), va_start (member), va_arg (value), va_arg (member), va_copy (value), va_copy (member), va_end (value), va_end (member), min (value), min (call), min (member), zip (value), zip (call), zip (member), reflect (value), reflect (member), typeinfo (value), typeinfo (member), typebuild (value), typebuild (member), implements (value), implements (member), size_of (value), size_of (member), align_of (value), align_of (member), offset_of (value), offset_of (member), assert (value), assert (member), read_text (value), read_text (member), net_fetch (value), net_fetch (member), env_var (value), env_var (member), clock_ms (value), clock_ms (member), random_seed (value), random_seed (member), fs_read_text (value), fs_read_text (member), fs_write_text (value), fs_write_text (member), fs_open (value), fs_open (member), fs_create (value), fs_create (member), fs_read (value), fs_read (member), fs_write (value), fs_write (member), fs_close (value), fs_close (member), fs_remove (value), fs_remove (member), fs_exists (value), fs_exists (member), fs_open_mode (value), fs_open_mode (member), fs_read_bytes (value), fs_read_bytes (member), fs_write_bytes (value), fs_write_bytes (member), fs_read_chunk (value), fs_read_chunk (member), fs_write_chunk (value), fs_write_chunk (member), fs_read_dir (value), fs_read_dir (member), fs_create_dir (value), fs_create_dir (member), fs_create_dir_all (value), fs_create_dir_all (member), fs_remove_dir (value), fs_remove_dir (member), fs_remove_dir_all (value), fs_remove_dir_all (member), fs_rename (value), fs_rename (member), fs_is_file (value), fs_is_file (member), fs_is_dir (value), fs_is_dir (member), fs_size (value), fs_size (member), fs_modified_ms (value), fs_modified_ms (member), fs_fstat (value), fs_fstat (member), fs_stat (value), fs_stat (member), fs_lstat (value), fs_lstat (member), fs_statfs (value), fs_statfs (member), fs_read_link (value), fs_read_link (member), fs_read_dir_entries (value), fs_read_dir_entries (member), fs_set_mode (value), fs_set_mode (member), fs_open_perm (value), fs_open_perm (member), fs_create_dir_mode (value), fs_create_dir_mode (member), fs_symlink (value), fs_symlink (member), fs_link (value), fs_link (member), fs_set_times (value), fs_set_times (member), fs_truncate (value), fs_truncate (member), fs_set_owner (value), fs_set_owner (member), fs_set_owner_fd (value), fs_set_owner_fd (member), fs_sync (value), fs_sync (member), fs_sync_dir (value), fs_sync_dir (member), fs_realpath (value), fs_realpath (member), fs_access (value), fs_access (member), fs_lock (value), fs_lock (member), fs_unlock (value), fs_unlock (member), fs_fstat_record (value), fs_fstat_record (member), fs_mkfifo (value), fs_mkfifo (member), fs_set_nonblock (value), fs_set_nonblock (member), fs_write_some (value), fs_write_some (member), fs_open_at (value), fs_open_at (member), fs_stat_at (value), fs_stat_at (member), fs_lstat_at (value), fs_lstat_at (member), fs_remove_at (value), fs_remove_at (member), fs_remove_dir_at (value), fs_remove_dir_at (member), fs_create_dir_at (value), fs_create_dir_at (member), fs_symlink_at (value), fs_symlink_at (member), fs_link_at (value), fs_link_at (member), fs_read_dir_entries_at (value), fs_read_dir_entries_at (member), fs_set_mode_fd (value), fs_set_mode_fd (member), fs_seek (value), fs_seek (member), fs_tell (value), fs_tell (member), fs_read_at (value), fs_read_at (member), fs_copy_chunk (value), fs_copy_chunk (member), net_listen (value), net_listen (member), net_port (value), net_port (member), net_accept (value), net_accept (member), net_connect (value), net_connect (member), net_read (value), net_read (member), net_write (value), net_write (member), net_read_bytes (value), net_read_bytes (member), net_write_bytes (value), net_write_bytes (member), net_writev (value), net_writev (member), net_writev_head (value), net_writev_head (member), net_nodelay (value), net_nodelay (member), net_listen_unix (value), net_listen_unix (member), net_connect_unix (value), net_connect_unix (member), net_listen_with (value), net_listen_with (member), net_adopt_listener (value), net_adopt_listener (member), fs_adopt (value), fs_adopt (member), net_wait (value), net_wait (member), net_close (value), net_close (member), net_deadline (value), net_deadline (member), env_arg0 (value), env_arg0 (member), env_args (value), env_args (member), env_args_bytes (value), env_args_bytes (member), env_get (value), env_get (member), env_set (value), env_set (member), env_unset (value), env_unset (member), env_vars (value), env_vars (member), os_cwd (value), os_cwd (member), os_exe (value), os_exe (member), os_cpus (value), os_cpus (member), os_name (value), os_name (member), os_arch (value), os_arch (member), os_exit (value), os_exit (member), os_spawn (value), os_spawn (member), os_spawn_with (value), os_spawn_with (member), os_spawn_fds (value), os_spawn_fds (member), os_pipe (value), os_pipe (member), os_chdir (value), os_chdir (member), os_chroot (value), os_chroot (member), os_isatty (value), os_isatty (member), os_umask (value), os_umask (member), os_exec (value), os_exec (member), os_wait (value), os_wait (member), os_kill (value), os_kill (member), os_signal_listen (value), os_signal_listen (member), os_signal_wait (value), os_signal_wait (member), os_signal_raise (value), os_signal_raise (member), os_signal_ignore (value), os_signal_ignore (member), os_signal_default (value), os_signal_default (member), os_signal_ignore_one (value), os_signal_ignore_one (member), os_signal_default_one (value), os_signal_default_one (member), os_exit_signal (value), os_exit_signal (member), os_core_limit (value), os_core_limit (member), os_set_core_limit (value), os_set_core_limit (member), os_core_off (value), os_core_off (member), os_getpriority (value), os_getpriority (member), os_setpriority (value), os_setpriority (member), os_signal_poll (value), os_signal_poll (member), os_spawn_job (value), os_spawn_job (member), os_proc_pid (value), os_proc_pid (member), os_wait_status (value), os_wait_status (member), os_pgid (value), os_pgid (member), os_term_foreground (value), os_term_foreground (member), os_term_set_foreground (value), os_term_set_foreground (member), os_term_mode (value), os_term_mode (member), os_term_set_mode (value), os_term_set_mode (member), os_term_restore_at_exit (value), os_term_restore_at_exit (member), os_signal_ignored (value), os_signal_ignored (member), os_signal_action_one (value), os_signal_action_one (member), os_signal_send (value), os_signal_send (member), os_signal_number (value), os_signal_number (member), os_pid (value), os_pid (member), os_ppid (value), os_ppid (member), os_uid (value), os_uid (member), os_euid (value), os_euid (member), os_gid (value), os_gid (member), os_egid (value), os_egid (member), os_groups (value), os_groups (member), os_set_ids (value), os_set_ids (member), os_term_size (value), os_term_size (member), os_term_chars (value), os_term_chars (member), os_signal_wait_fd (value), os_signal_wait_fd (member), os_signal_wait_fds (value), os_signal_wait_fds (member), os_signal_send_group (value), os_signal_send_group (member), os_signal_send_all (value), os_signal_send_all (member), os_set_pgid (value), os_set_pgid (member), os_signal_last (value), os_signal_last (member), os_signal_realtime (value), os_signal_realtime (member), os_signal_text (value), os_signal_text (member), os_wait_poll (value), os_wait_poll (member), os_wait_status_core (value), os_wait_status_core (member), os_wait_poll_core (value), os_wait_poll_core (member), os_fork (value), os_fork (member), os_random (value), os_random (member), os_error (value), os_error (member), os_error_text (value), os_error_text (member), time_now_ms (value), time_now_ms (member), time_unix_ms (value), time_unix_ms (member), time_sleep_ms (value), time_sleep_ms (member), os_clock_ns (value), os_clock_ns (member), json_valid (value), json_valid (member), json_get (value), json_get (member), json_type (value), json_type (member), json_len (value), json_len (member), str_from_utf8 (value), str_from_utf8 (member), bytes_find (value), bytes_find (member), bytes_count (value), bytes_count (member), region_bytes (value), region_bytes (member), live_region_bytes (value), live_region_bytes (member)
+
+
+failures:
+    each_class_answers_in_its_own_words
+    no_ambient_name_answers_with_the_stub
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+END census exit=101
+== STEP sweep-lanes 19:17:58
+error: test failed, to rerun pass `-p wolf_sema --test prelude_census`
+   Compiling wolf_driver v0.2.38 ($LANE/build-53c8125/crates/wolf_driver)
+
+running 15 tests
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running tests/diagnostics_sweep_lanes.rs (target/debug/deps/diagnostics_sweep_lanes-827f0e3ff20b2010)
+test a_bare_variant_keeps_its_e0301 ... ok
+test a_bare_name_an_imported_module_defines_offers_the_qualified_spelling ... ok
+test an_undeclared_name_assigned_is_e0301_without_the_fallible_advice ... ok
+test an_undeclared_name_as_a_tail_is_e0301 ... ok
+test an_undeclared_name_in_a_fallible_functions_let_is_e0301 ... FAILED
+test an_undeclared_name_called_with_a_payload_is_e0301 ... ok
+test an_undeclared_name_in_a_let_is_e0301 ... ok
+test an_undeclared_name_returned_is_e0301 ... ok
+test an_undefined_stand_in_as_a_receiver_is_e0301 ... ok
+test an_unimported_module_is_e0301_with_its_use ... ok
+test the_unit_discard_decline_keeps_its_words ... ok
+test an_undefined_stand_in_called_is_e0301 ... ok
+test wolf_test_rejects_a_module_that_forgot_a_constant ... ok
+test an_unimported_module_named_like_a_stand_in_is_e0301_with_its_use ... ok
+test the_functions_own_tag_where_it_cannot_fail_is_e0604 ... ok
+
+failures:
+
+---- an_undeclared_name_in_a_fallible_functions_let_is_e0301 stdout ----
+
+thread 'an_undeclared_name_in_a_fallible_functions_let_is_e0301' (12543262) panicked at crates/wolf_driver/tests/diagnostics_sweep_lanes.rs:149:9:
+assertion `left == right` failed: --checked typecheck/tag_undeclared_fallible_let.lu: spans: {"commit":"unknown","diagnostics":[{"code":"E0301","severity":"error","span":[495,498]}],"file":"$LANE/build-53c8125/crates/wolf_driver/../../corpus/typecheck/tag_undeclared_fallible_let.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+  left: [("E0301", (495, 498))]
+ right: [("E0301", (484, 487))]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_undeclared_name_in_a_fallible_functions_let_is_e0301
+
+test result: FAILED. 14 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+END sweep-lanes exit=101
+== done 2026-11-09T19:17:59Z
+error: test failed, to rerun pass `-p wolf_driver --test diagnostics_sweep_lanes`
+s289: END exit=0 14:17:59

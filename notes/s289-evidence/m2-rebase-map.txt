@@ -1,0 +1,12 @@
+The second change's logs were taken before its rebases onto the first
+change's final head. Each logged commit, the first change's head it sat on,
+and the commit it is now; the second change's own patch is identical in each
+pair (git diff from its base, index lines aside):
+
+53c81254 on 72852da9 (the rows' red take)  -> 3fe71190 on 67bd054f  Census every ambient name three ways against the stub refusal
+934e36ac on d906116f (the checks)          -> bf9340de on 67bd054f  Name the round trip's package as wolf add does, never empty
+
+Between 72852da9 and 67bd054f the first change gained its corrections (the
+fallible let row's span, the offered use on its own line, formatting), its
+snapshots, catalog, evidence and note; between d906116f and 67bd054f, only
+its evidence and note.
