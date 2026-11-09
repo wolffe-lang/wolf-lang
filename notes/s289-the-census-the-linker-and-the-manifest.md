@@ -108,6 +108,8 @@ Commits:
 - `0656ab85`, `190f786b`: formatting. `bf9340de`: the round trip names the package as `wolf add`
   does.
 - `3c7f311d`: the changelog. `3eda92f6`: the README's linker paragraph. This note and its evidence.
+- `ab56e962`: the first change's evidence rig (`rig/air-at.sh`) named the second Mac's ssh host;
+  it now writes `SECOND_MAC` in its place, as the sanitizer does for the other hosts.
 
 Test targets:
 - [x] the rows red at their commit, by name (`m2-red-53c81254-air.log`)
