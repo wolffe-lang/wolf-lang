@@ -1,0 +1,20 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.tagident, gram.expr.variant
+//!
+//! wolf-lang#1085: `OPEN` is declared nowhere. A bare capitalized name that
+//! names nothing is read as an error tag, and `answer` returns `int`, which
+//! has no error row to raise one into, so no row takes it here. That is
+//! E0301 at the name (`[gram.expr.tagident]`: a bare identifier no
+//! expected row declares misses with E0301), with both fixes named: declare
+//! or import the constant, or make `answer` fallible (`-> !int`). Until
+//! this row every compiled tier declined it as "an error-row tag outside
+//! `!T` context", and lupin 0.1.60 runs it (exit 1, `error: OPEN`).
+
+fn answer() -> int {
+    OPEN // ERROR E0301: nothing named `OPEN` is in scope
+}
+
+fn main() -> int {
+    answer()
+}
