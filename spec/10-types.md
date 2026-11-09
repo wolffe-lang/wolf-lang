@@ -1805,3 +1805,43 @@ has promised `totals.pairs().sorted_by(…)` since bs00, and
   `typecheck/rec_by_value_errunion.lu`,
   `typecheck/rec_through_containers.lu`, with
   `typecheck/enum_union_tree.lu` as the legal counterpart.
+
+## §18 The prelude's `min` `[type.min]`
+
+(s289, wolf-lang#708. The prelude has named `min` and `zip` since the
+s02 corpus, and no clause typed either: every compiled tier declined a
+program that called `min`, a W0304 taxed a module's own `zip`, and the
+reference interpreter ran `min` over any number of integers of any
+widths.)
+
+- `[type.min]` **`min(a, b)` answers the smaller of two values of one
+  integer type.** Both operands have one of the ten integer types
+  (`int`, `uint`, `i8` to `i64`, `u8` to `u64`), the same one, and the
+  answer has that type. A literal operand takes the other operand's
+  type as it does beside `<`, so `min(x, 300)` with `x: u8` is the
+  literal that does not fit (**E0415**). Another number of operands is
+  **E0402**; an operand outside the integers, or a second integer type,
+  is **E0401** at that operand. `byte`, `char`, the floats, `str` and
+  `wrapping[T]` have no `min` in the prelude: `<` orders each that
+  orders, and `if` picks one. The operands are evaluated once each,
+  left to right, and then compared as `<=` compares that type (signed
+  for a signed type, unsigned for an unsigned one), so `min(a, b)` is
+  `a` when the two are equal. It never traps. **The cost, stated:** one
+  compare and one select. `min` is an ordinary prelude name: a module's
+  own `fn min` wins it (`[conf.resolve.ambient]`) and draws W0304, and
+  `min` used as a value is the builtin-as-value refusal every builtin
+  function answers. The smallest of three is `min(min(a, b), c)`; a
+  variadic `min` and a generic `min[T: Ord]` are not this edition's.
+  Files: `typecheck/min_signed.lu`, `typecheck/min_unsigned.lu`,
+  `typecheck/min_evaluates_once.lu`, `typecheck/min_one_argument.lu`,
+  `typecheck/min_three_arguments.lu`, `typecheck/min_mixed_types.lu`,
+  `typecheck/min_str.lu`, `typecheck/min_literal_fit.lu`.
+
+- `[type.min.zip]` **The free `zip` has no meaning.** No clause gives
+  the prelude's `zip` one, and `std.list`'s method is the spelling:
+  `xs.zip(ys)` (`[type.comb.set]`) pairs two lists and stops at the
+  shorter. A program that calls the free `zip`, or uses it as a value,
+  is declined with that reason on every tier, as the reference
+  interpreter declines it. Because the name reaches nothing a program
+  can use, a module's own `fn zip` shadows nothing, and W0304 exempts
+  it (`wolf prelude` lists it so). File: `lints/zip_own.lu`.
