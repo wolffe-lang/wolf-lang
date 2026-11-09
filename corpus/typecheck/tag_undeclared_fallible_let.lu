@@ -1,0 +1,18 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.tagident, gram.expr.variant
+//!
+//! wolf-lang#1085, inside a function that can fail: `let x = Bad` is no
+//! raise position, so the inferred row of `answer` never takes `Bad`, and
+//! the name misses with E0301. The note says how a tag is raised here
+//! (`return Bad`). Declined as "an error-row tag outside `!T` context"
+//! until this row; lupin 0.1.60 binds the tag and exits 0.
+
+fn answer() -> !int {
+    let x = Bad // ERROR E0301: nothing named `Bad` is in scope
+    x
+}
+
+fn main() -> int {
+    answer() else 1
+}
