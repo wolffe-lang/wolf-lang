@@ -131,11 +131,7 @@ fn each_class_answers_in_its_own_words() {
                 Answer::Errors(vec!["E0402".into()]),
                 "`min` called with no operands"
             );
-            assert_eq!(
-                value,
-                Answer::NotYet(BUILTIN_AS_VALUE),
-                "`min` as a value"
-            );
+            assert_eq!(value, Answer::NotYet(BUILTIN_AS_VALUE), "`min` as a value");
             continue;
         }
         if name == "zip" {
