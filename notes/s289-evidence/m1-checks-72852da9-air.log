@@ -1,0 +1,968 @@
+s289: warm target from build-c65efbe
+s289: Air at 72852da9 in $LANE/build-72852da
+s289: last release 22s ago; waiting 38s for the turn
+s289: lock taken 14:12:39, 10781 MiB free, 90 GB disk; running: env INSTA_UPDATE=always EXTRA_TESTS=-p wolf_sema $LANE/rig/check-head.sh
+== STEP head 19:12:39
+72852da9a3717d00f1a900dcf95a68fd7365f0db
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+END head exit=0
+== STEP build 19:12:39
+   Compiling wolf_span v0.2.38 ($LANE/build-72852da/crates/wolf_span)
+   Compiling cranelift-module v0.134.3
+   Compiling wolf_rt v0.2.38 ($LANE/build-72852da/crates/wolf_rt)
+   Compiling serde_repr v0.1.21
+   Compiling wolf_diag v0.2.38 ($LANE/build-72852da/crates/wolf_diag)
+   Compiling wolf_ast v0.2.38 ($LANE/build-72852da/crates/wolf_ast)
+   Compiling crossbeam-channel v0.5.16
+   Compiling wolf_lex v0.2.38 ($LANE/build-72852da/crates/wolf_lex)
+   Compiling wolf_parse v0.2.38 ($LANE/build-72852da/crates/wolf_parse)
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling lsp-server v0.10.0
+   Compiling wolf_sema v0.2.38 ($LANE/build-72852da/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.38 ($LANE/build-72852da/crates/wolf_fmt)
+   Compiling wolf_cimport v0.2.38 ($LANE/build-72852da/crates/wolf_cimport)
+   Compiling cranelift-object v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling wolf_pkg v0.2.38 ($LANE/build-72852da/crates/wolf_pkg)
+   Compiling wolf_mem v0.2.38 ($LANE/build-72852da/crates/wolf_mem)
+   Compiling wolf_query v0.2.38 ($LANE/build-72852da/crates/wolf_query)
+   Compiling wolf_lsp v0.2.38 ($LANE/build-72852da/crates/wolf_lsp)
+   Compiling wolf_doc v0.2.38 ($LANE/build-72852da/crates/wolf_doc)
+   Compiling wolf_wir v0.2.38 ($LANE/build-72852da/crates/wolf_wir)
+   Compiling wolf_backend v0.2.38 ($LANE/build-72852da/crates/wolf_backend)
+   Compiling wolf_codegen_clif v0.2.38 ($LANE/build-72852da/crates/wolf_codegen_clif)
+   Compiling wolf_codegen_llvm v0.2.38 ($LANE/build-72852da/crates/wolf_codegen_llvm)
+   Compiling wolf_driver v0.2.38 ($LANE/build-72852da/crates/wolf_driver)
+END build exit=0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 14.15s
+== STEP copy 19:12:53
+7267a07a11005375f7c07791d6120771da4f871eb77fbb498e5f3936e8f8f354  $LANE/bin-72852da9/wolf
+END copy exit=0
+== STEP lanes 19:12:53
+   Compiling wolf_driver v0.2.38 ($LANE/build-72852da/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running tests/diagnostics_sweep_lanes.rs (target/debug/deps/diagnostics_sweep_lanes-827f0e3ff20b2010)
+
+running 15 tests
+test a_bare_variant_keeps_its_e0301 ... ok
+test a_bare_name_an_imported_module_defines_offers_the_qualified_spelling ... ok
+test an_undeclared_name_assigned_is_e0301_without_the_fallible_advice ... ok
+test an_undeclared_name_as_a_tail_is_e0301 ... ok
+test an_undeclared_name_in_a_fallible_functions_let_is_e0301 ... FAILED
+test an_undeclared_name_called_with_a_payload_is_e0301 ... ok
+test an_undeclared_name_in_a_let_is_e0301 ... ok
+test an_undeclared_name_returned_is_e0301 ... ok
+test an_undefined_stand_in_as_a_receiver_is_e0301 ... ok
+test an_unimported_module_is_e0301_with_its_use ... ok
+test the_unit_discard_decline_keeps_its_words ... ok
+test an_undefined_stand_in_called_is_e0301 ... ok
+test wolf_test_rejects_a_module_that_forgot_a_constant ... ok
+test an_unimported_module_named_like_a_stand_in_is_e0301_with_its_use ... ok
+test the_functions_own_tag_where_it_cannot_fail_is_e0604 ... ok
+
+failures:
+
+---- an_undeclared_name_in_a_fallible_functions_let_is_e0301 stdout ----
+
+thread 'an_undeclared_name_in_a_fallible_functions_let_is_e0301' (12482982) panicked at crates/wolf_driver/tests/diagnostics_sweep_lanes.rs:149:9:
+assertion `left == right` failed: --checked typecheck/tag_undeclared_fallible_let.lu: spans: {"commit":"unknown","diagnostics":[{"code":"E0301","severity":"error","span":[495,498]}],"file":"$LANE/build-72852da/crates/wolf_driver/../../corpus/typecheck/tag_undeclared_fallible_let.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+  left: [("E0301", (495, 498))]
+ right: [("E0301", (484, 487))]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    an_undeclared_name_in_a_fallible_functions_let_is_e0301
+
+test result: FAILED. 14 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+END lanes exit=101
+== STEP test-extra 19:12:54
+error: test failed, to rerun pass `-p wolf_driver --test diagnostics_sweep_lanes`
+   Compiling wolf_sema v0.2.38 ($LANE/build-72852da/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.01s
+     Running unittests src/lib.rs (target/debug/deps/wolf_sema-bfed3e77b8bdde8d)
+
+running 108 tests
+test attrs::tests::a_predicate_names_a_triple_or_its_architecture ... ok
+test attrs::tests::an_unknown_string_is_not_a_target ... ok
+test attrs::tests::the_host_is_a_known_target_or_names_itself ... ok
+test attrs::tests::the_build_target_is_the_host_until_a_build_selects_one ... ok
+test check::char_literal_tests::cook_covers_the_ruled_escape_set ... ok
+test check::char_literal_tests::cook_refuses_malformed_text ... ok
+test binder::tests::snake_case_splits_words_and_acronyms ... ok
+test attrs::tests::a_failing_cfg_drops_its_item_and_a_holding_one_keeps_it ... ok
+test attrs::tests::a_failing_cfg_drops_a_statement ... ok
+test ctfe::norm::tests::the_witness_line_holds_exactly_where_documented ... ok
+test attrs::tests::an_undecidable_predicate_is_refused_and_keeps_its_node ... ok
+test ctfe::norm::tests::closed_expressions_compare_by_value ... ok
+test ctfe::norm::tests::ring_normalization_makes_commutation_invisible ... ok
+test ctfe::value::tests::nan_canonicalization_is_width_aware ... ok
+test ctfe::value::tests::interning_is_structural_and_hashes_are_content ... ok
+test ctfe::value::tests::sharing_is_not_allocation ... ok
+test ctfe::value::tests::va_list_type_hashes_do_not_alias_a_shadowing_nominal ... ok
+test exhaust::tests::bool_full_split_is_exhaustive ... ok
+test exhaust::tests::bool_missing_arm_witnesses_false ... ok
+test exhaust::tests::int_ranges_subsume_and_witness_past_them ... ok
+test exhaust::tests::int_literals_never_complete ... ok
+test exhaust::tests::enum_missing_variants_named ... ok
+test exhaust::tests::open_row_needs_rest ... ok
+test exhaust::tests::fallible_column_splits_both_halves ... ok
+test exhaust::tests::or_pattern_expands ... ok
+test exhaust::tests::redundant_arm_is_useless ... ok
+test exhaust::tests::sealed_row_closes ... ok
+test exhaust::tests::wildcard_closes_everything ... ok
+test exhaust::tests::tuple_nesting ... ok
+test fmtspec::tests::float_fixed_and_exp_match_decimal ... ok
+test fmtspec::tests::float_shortest_matches_decimal_to_str ... ok
+test fmtspec::tests::grammar_parses_every_field ... ok
+test fmtspec::tests::grammar_refuses_what_it_cannot_mean ... ok
+test fmtspec::tests::nonfinite_specs_stay_honest ... ok
+test fmtspec::tests::packing_round_trips_the_fields ... ok
+test fmtspec::tests::padding_matches_wolf_std ... ok
+test fmtspec::tests::mismatches_are_ruled_out ... ok
+test fmtspec::tests::sign_zero_and_bases_match_wolf_std ... ok
+test fmtspec::tests::str_precision_respects_boundaries ... ok
+test graph::tests::lazy_loading_skips_unimported_siblings ... ok
+test graph::tests::import_loads_and_orders_deps_first ... ok
+test graph::tests::duplicate_definitions_across_files_report_e0302 ... ok
+test graph::tests::item_and_group_imports_bind ... ok
+test graph::tests::cycle_reports_the_full_path ... ok
+test graph::tests::self_import_is_e0306 ... ok
+test graph::tests::private_item_import_is_e0304 ... ok
+test ctfe::norm::tests::property_beyond_forms_never_silently_unify ... ok
+test graph::tests::std_root_missing_module_is_e0301 ... ok
+test graph::tests::std_root_nested_modules_resolve ... ok
+test graph::tests::std_root_private_item_is_e0304 ... ok
+test graph::tests::std_root_item_import_binds ... ok
+test interface::tests::decode_rejects_garbage ... ok
+test graph::tests::std_root_resolves_real_std_modules ... ok
+test interface::tests::private_items_never_serialize ... ok
+test prelude::tests::conc_handle_types_are_prelude_names ... ok
+test graph::tests::without_std_root_stub_fences_unknown_std ... ok
+test layout::tests::scalars_are_their_size ... ok
+test graph::tests::std_use_binds_fs ... ok
+test interface::tests::round_trip_is_lossless ... ok
+test interface::tests::signatures_qualify_resolved_paths ... ok
+test prelude::tests::prelude_and_builtins_answer ... ok
+test prelude::tests::range_is_a_type_position_prelude_name ... ok
+test prelude::tests::std_lookup_by_segments ... ok
+test prelude::tests::provisional_rows_are_the_exempt_stand_ins ... ok
+test prelude::tests::names_are_unique_and_resolvable ... ok
+test prelude::tests::host_anchor_iff_host_signature ... ok
+test resolve::tests::a_trait_alias_rhs_marks_its_imports_used ... ok
+test resolve::tests::arg_position_defers_through_an_import ... ok
+test resolve::tests::clean_single_file_resolves ... ok
+test resolve::tests::capitalized_miss_defers_as_row_tag ... ok
+test resolve::tests::forward_references_across_files_resolve ... ok
+test prelude::tests::marks_come_from_host_rows ... ok
+test resolve::tests::private_member_access_is_e0304 ... ok
+test resolve::tests::std_root_keeps_prelude_ambient_and_checks_real_members ... ok
+test resolve::tests::pkg_visibility_is_enough_in_package ... ok
+test resolve::tests::suppression_keeps_wrecked_regions_quiet ... ok
+test rewrite::tests::cycles_are_rejected_not_chased ... ok
+test rewrite::tests::foreign_base_projections_are_opaque ... ok
+test resolve::tests::operator_trait_import_is_used_by_its_operator ... ok
+test resolve::tests::unused_import_is_machine_fixable ... ok
+test resolve::tests::single_thread_env_matches_parallel ... ok
+test rewrite::tests::normalization_is_confluent_under_rule_reordering ... ok
+test rewrite::tests::single_rule_normalizes_to_fixed_point ... ok
+test rewrite::tests::transitive_rules_resolve_through_each_other ... ok
+test resolve::tests::lowercase_miss_defers_only_when_a_row_spells_it ... ok
+test resolve::tests::typo_gets_a_suggestion ... ok
+test sig::tests::cross_module_types_are_nominal_and_shared ... ok
+test sig::tests::alias_expansion_and_cycle_guard ... ok
+test sig::tests::fn_signatures_elaborate_to_interned_types ... ok
+test sig::tests::missing_global_annotation_is_e0407_with_fixit ... ok
+test strlit::tests::every_literal_shape_cooks_to_its_value ... ok
+test sig::tests::wrapping_is_a_builtin_integer_constructor ... ok
+test sig::tests::prelude_containers_lower_as_builtins ... ok
+test types::tests::interning_respects_structural_equality ... ok
+test types::tests::rendering_reads_like_source ... ok
+test types::tests::diff_names_the_differing_part_only ... ok
+test resolve::tests::arg_position_defers_when_callee_row_spells_the_tag ... ok
+test unify::tests::err_unions_require_equal_rows_inside_the_unifier ... ok
+test sig::tests::generic_instantiations_elaborate ... ok
+test unify::tests::levels_keep_the_root_shallow_and_adjust_captures ... ok
+test unify::tests::join_prefers_the_non_diverging_branch ... ok
+test unify::tests::occurs_check_rejects_infinite_types ... ok
+test unify::tests::literals_check_against_context_kinds ... ok
+test unify::tests::row_tail_variable_absorbs_the_remainder ... ok
+test unify::tests::row_unification_rolls_back_bit_identical ... ok
+test unify::tests::snapshot_rollback_is_bit_identical ... ok
+test unify::tests::rows_unify_by_tag_sets_with_pointwise_payloads ... ok
+test ctfe::norm::tests::property_linear_equivalence_class_closed_under_shuffles ... ok
+
+test result: ok. 108 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/attr_diagnostics.rs (target/debug/deps/attr_diagnostics-a78b085cd1bb19d7)
+
+running 15 tests
+test a_dropped_item_is_never_defined ... ok
+test e0817_section_shapes ... ok
+test e0817_cfg_unknown_predicate ... ok
+test e0817_repr_arguments ... ok
+test e0817_unknown_attribute ... ok
+test e0817_contract_not_implemented ... ok
+test e0818_abi_string ... ok
+test e0817_cfg_unknown_target ... ok
+test e0817_misplaced ... ok
+test e0820_alignment_values ... ok
+test packed_and_aligned_reprs_are_accepted ... ok
+test e0820_combinations ... ok
+test the_implemented_set_is_silent ... ok
+test e0826_variadic_target_refusal ... ok
+test e0821_extern_let_shapes ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/audit_surface.rs (target/debug/deps/audit_surface-2774674b4b406aea)
+
+running 7 tests
+test manifest_stub_parser ... ok
+test declared_trusted_module_audits_clean ... ok
+test variadic_builtins_are_not_assembly_symbols ... ok
+test trusted_roster_rides_both_interface_hashes ... ok
+test e1303_undeclared_trusted_module_is_a_build_error ... ok
+test surface_inventory_snapshot ... ok
+test e1306_a_call_off_the_assembly_roster ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/binder_diagnostics.rs (target/debug/deps/binder_diagnostics-90136b02d07648d5)
+
+running 21 tests
+test an_enum_reached_through_its_module_is_not_in_scope ... ok
+test a_select_arm_that_spells_a_lowercase_variant_is_refused ... ok
+test a_lowercase_variant_binder_warns_and_renames_past_it ... ok
+test a_keyword_spelling_gets_an_underscore ... ok
+test a_variant_that_carries_values_tests_with_wildcards ... ok
+test a_struct_shorthand_spells_the_field_out ... ok
+test a_taken_lowercase_name_gets_an_underscore ... ok
+test the_name_before_at_offers_the_rename_alone ... ok
+test two_enums_make_each_test_a_maybe ... ok
+test the_rename_never_lands_on_a_variant_in_scope ... ok
+test names_that_read_as_no_test_stay_silent ... ok
+test the_select_refusal_renames_the_receive ... ok
+test the_rename_reaches_every_use_and_comes_first ... ok
+test e0806_select_arm ... ok
+test w0801_else_handler ... ok
+test w0801_for_header ... ok
+test w0801_let_tuple ... ok
+test w0801_at_name ... ok
+test w0801_imported_enum ... ok
+test w0801_let_struct_field ... ok
+test w0801_two_homes ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/conc_diagnostics.rs (target/debug/deps/conc_diagnostics-ac62253fe8d0efcf)
+
+running 17 tests
+test e1101_mut_lend_argument ... ok
+test conc_handle_bare_proc_arity ... ok
+test channel_in_signature_position_is_chan ... ok
+test conc_handle_completion_type_mismatch ... ok
+test e1101_clean_when_guarded ... ok
+test conc_handles_clean_in_signature ... ok
+test conc_handle_applied_scope_arity ... ok
+test e1101_clean_task_local_lend ... ok
+test e1101_task_capture_write ... ok
+test e1101_mut_lend_receiver ... ok
+test e1102_unsendable_payload ... ok
+test e1103_clean_sequential_whens ... ok
+test e1101_projection_write ... ok
+test e1102_clean_sendable_payloads ... ok
+test e1101_two_spawns_note_once ... ok
+test e1103_nested_through_closure ... ok
+test e1103_nested_when ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/ctfe_diagnostics.rs (target/debug/deps/ctfe_diagnostics-46b713f208737728)
+
+running 15 tests
+test e0701_sandbox_clock ... ok
+test e0705_runtime_argument ... ok
+test e0701_sandbox_exec ... ok
+test e0701_sandbox_ffi ... ok
+test e0701_sandbox_fs ... ok
+test e0704_depth_folded_frames ... ok
+test e0707_witness_line_note ... ok
+test e0709_budget_cannot_be_zero ... ok
+test e0706_overflow_at_declared_width ... ok
+test e0708_layout_unresolved ... ok
+test e0710_comptime_assert_failed ... ok
+test generated_impl_error_carries_provenance_chain ... ok
+test e0710_comptime_assert_failed_with_message ... ok
+test e0702_fuel_exhaustion_fixit ... ok
+test e0703_heap_exhaustion ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+
+running 10 tests
+test derive_eq_refuses_non_primitive_fields_with_provenance ... ok
+test derive_eq_generated_impl_passes_s14_checking ... ok
+test list_construction_at_comptime_is_a_named_gap ... ok
+test nan_results_canonicalize ... ok
+test two_arg_assert_passes_at_comptime ... ok
+test implements_answers_true_and_false ... ok
+test single_thread_and_parallel_checking_agree ... ok
+test typebuild_typeinfo_round_trip ... ok
+test evaluate_boundary_fib_memoizes ... ok
+test same_host_determinism_shuffled_call_orders ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ctfe_engine.rs (target/debug/deps/ctfe_engine-026a005ede0ef4f8)
+
+running 22 tests
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-d570c6357ebe8d3c)
+test e0301_no_such_module_teaches_formation ... ok
+test e0301_item_defined_in_standalone_file ... ok
+test e0301_std_group_and_deep_path_name_the_missing_std_root ... ok
+test e0301_missing_module_item ... ok
+test e0301_module_all_standalone ... ok
+test e0301_std_item_names_the_missing_std_root ... ok
+test e0301_standalone_sibling_defines_the_name ... ok
+test e0302_duplicate_definition_across_files ... ok
+test e0303_import_cycle_full_path ... ok
+test e0301_unresolved_name_with_typo_suggestion ... ok
+test e0305_unused_import_machine_applicable_fix ... ok
+test e0304_private_item_names_required_visibility ... ok
+test e0410_global_let_assign ... ok
+test e0306_duplicate_import ... ok
+test e0410_let_field_assign ... ok
+test e0410_let_compound_assign ... ok
+test e0410_non_cases_stay_clean ... ok
+test e0410_scope_shapes_stay_clean ... ok
+test e0410_let_reassign ... ok
+test e0301_unimported_module_offers_its_use ... ok
+test e0301_unimported_module_joins_the_imports ... ok
+test e0301_unimported_module_named_like_a_stand_in ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+updated snapshot $LANE/build-72852da/crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_module.snap
+updated snapshot $LANE/build-72852da/crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_module_after_use.snap
+updated snapshot $LANE/build-72852da/crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_stand_in_module.snap
+
+running 2 tests
+test a_non_host_prelude_name_has_no_host_signature ... ok
+test the_spec_host_table_is_the_checker_table ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test two_mod_interface_dump ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/host_table_spec.rs (target/debug/deps/host_table_spec-32c0a5ac484341bf)
+     Running tests/interface_pretty.rs (target/debug/deps/interface_pretty-4c618475ee7fbb7d)
+
+running 14 tests
+     Running tests/interface_props.rs (target/debug/deps/interface_props-93c4753ee601c9ee)
+test loader_round_trips_every_module ... ok
+test file_order_within_the_directory_changes_nothing ... ok
+test explicit_row_source_order_is_canonicalized ... ok
+test independent_rebuilds_are_byte_identical ... ok
+test body_edit_changes_neither_hash ... ok
+test item_reorder_within_a_file_changes_nothing ... ok
+test adding_a_private_item_changes_nothing ... ok
+test dep_signature_change_propagates_through_dep_hashes ... ok
+test variadic_marker_participates_in_interface_hashes ... ok
+test pkg_only_edit_changes_only_pkg_hash ... ok
+test pub_signature_edit_changes_both_hashes ... ok
+test private_inferred_row_churn_moves_no_hash ... ok
+test version_only_bump_moves_no_hash ... ok
+test whitespace_edit_changes_nothing ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/layout_diagnostics.rs (target/debug/deps/layout_diagnostics-1f300cfb12717017)
+
+running 8 tests
+test a_copied_packed_field_may_be_lent_and_a_scalar_read ... ok
+test the_queries_answer_the_c_layout ... ok
+test e0403_offset_of_a_field_the_struct_lacks ... ok
+test e0819_a_mut_claim_of_a_packed_field ... ok
+test e0820_an_aligned_struct_inside_a_packed_one ... ok
+test e0708_names_the_native_field ... ok
+test e0819_through_a_nested_field_and_a_read_aggregate ... ok
+test e0708_align_and_offset_of_a_native_layout_struct ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 1 test
+     Running tests/ledger_diagnostic.rs (target/debug/deps/ledger_diagnostic-3e1f2c064ef2e832)
+test lent_value_refusal_has_a_reviewed_source_site_and_fix_pattern ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 4 tests
+     Running tests/lint_diagnostics.rs (target/debug/deps/lint_diagnostics-0ad5d982d790ff52)
+test clean_files_scan_empty ... ok
+test allow_regions_cover_the_attributed_item ... ok
+test w0302_unknown_code_in_allow ... ok
+test w0303_allow_of_nothing ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 16 tests
+test e0803_two_trait_ambiguity ... ok
+test e0403_unknown_method_typo ... ok
+     Running tests/method_diagnostics.rs (target/debug/deps/method_diagnostics-725889eb9f88ac38)
+test e0804_wrong_mode ... ok
+test e0401_to_int_row_in_the_mismatch ... ok
+test e0804_bare_mut_receiver ... ok
+test e0004_float_exponent_member ... ok
+test e0804_builtin_list_push_bare_receiver ... ok
+test e0804_superfluous_mode ... ok
+test e0805_bool_to_int ... ok
+test e0805_str_to_int ... ok
+test e0807_out_of_scope_trait ... ok
+test e1307_volatile_pointee_not_one_access ... ok
+test e0811_dyn_cast_without_an_impl ... ok
+test e0810_dyn_cast_of_a_temporary ... ok
+test e1309_order_not_admitted ... ok
+test e1308_atomic_pointee_not_a_fixed_width_integer ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/methods_engine.rs (target/debug/deps/methods_engine-3464aea6ef400ff9)
+
+running 16 tests
+test dyn_receiver_dispatches_by_name ... ok
+test inherent_shadows_trait_method ... ok
+test associated_function_calls_on_the_type ... ok
+test inherent_method_call_types_and_dispatches ... ok
+test cast_set_recorded ... ok
+test archetype_receiver_resolves_through_bounds ... ok
+test a_str_method_outside_the_set_is_std_str_s ... ok
+test interpolation_holes_refuse_unrendered_kinds_by_name ... ok
+test moded_receivers_follow_the_declaration ... ok
+test open_row_admits_new_tags_and_rest_arm_consumes ... ok
+test trait_default_body_uses_self_methods ... ok
+test unreachable_arm_warns_but_body_checks ... ok
+test trait_method_in_scope_dispatches ... ok
+test enum_construction_and_match ... ok
+test interpolation_holes_accept_the_rendered_kinds ... ok
+test to_int_is_in_the_builtin_set ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+     Running tests/origin_diagnostics.rs (target/debug/deps/origin_diagnostics-2fe84074a3c6fce1)
+test origin_file_default_reaches_everything_and_marks_nothing_extra ... ok
+test origin_regions_innermost_wins_and_absence_is_zero ... ok
+test e0813_unknown_inner_attribute ... ok
+test e0813_origin_out_of_range ... ok
+test e0813_duplicate_marker ... ok
+test e0813_marker_without_an_origin ... ok
+test w0317_get_literal_in_one_origin_scope ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 32 tests
+     Running tests/pattern_diagnostics.rs (target/debug/deps/pattern_diagnostics-762a218770db81b3)
+test e0415_range_exclusive_end_past_the_maximum ... ok
+test e0410_let_written_through_a_nullary_arm ... ok
+test e0401_range_mixed_endpoints ... ok
+test e0415_literal_pattern_defaulted_to_i32 ... ok
+test e0410_match_binding_assigned ... ok
+test e0602_pattern_unknown_tag ... ok
+test e0415_literal_pattern_outside_its_type ... ok
+test e0401_or_pattern_name_at_two_types ... ok
+test e0801_enum_witnesses ... ok
+test e0801_fallible_value_half ... ok
+test e0801_fallible_missing_tag ... ok
+test e0801_fallible_value_witness ... ok
+test e0801_int_witness ... ok
+test e0801_row_missing_tag ... ok
+test e0802_unreachable_after_full_split ... ok
+test e0801_guard_non_contribution ... ok
+test e0802_duplicate_literal ... ok
+test e0802_literal_inside_earlier_range ... ok
+test e0806_range_in_let ... ok
+test e0801_witness_past_range ... ok
+test e0806_refutable_let ... ok
+test e0808_payload_arity ... ok
+test e0808_range_str_endpoints ... ok
+test e0815_empty_range_same_ends ... ok
+test e0809_single_tag_covers ... ok
+test e0808_variant_over_int ... ok
+test e0815_empty_range_backwards ... ok
+test e0827_parameter_declared_twice ... ok
+test e0816_tag_variant_collision ... ok
+test e0809_handler_uncovered ... ok
+test e0827_struct_pattern_binds_a_name_twice ... ok
+test e0828_or_pattern_alternative_lacks_a_name ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/prelude_names.rs (target/debug/deps/prelude_names-ba7732804e465d12)
+
+running 3 tests
+test the_list_by_kind ... ok
+test w0304_is_what_the_resolver_says ... ok
+test every_cited_anchor_is_a_spec_clause ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/row_diagnostics.rs (target/debug/deps/row_diagnostics-13aad69920333604)
+
+running 17 tests
+test e0603_try_on_infallible ... ok
+test e0601_duplicate_tag_in_row ... ok
+test e0601_error_set_alias_entry_takes_no_payload ... ok
+test e0604_try_in_infallible_fn ... ok
+test e0605_pub_inferred_row ... ok
+test e0606_payload_mismatch_on_shared_tag ... ok
+test e0602_large_rows_render_tags_only ... ok
+test e0602_missing_tag_with_fixit ... ok
+test e0607_errdefer_in_infallible_fn ... ok
+test e0609_nested_layer_payload_conflict ... ok
+test e0608_else_on_infallible ... ok
+test e0610_unused_alias_names_itself ... ok
+test e0609_payload_spelled_after_an_alias ... ok
+test e0610_error_set_alias_cycle ... ok
+test e0611_try_under_defer ... ok
+test error_set_aliases_are_transparent_both_ways ... ok
+test e0611_try_under_errdefer ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/rows_engine.rs (target/debug/deps/rows_engine-c312c6e7adba3d05)
+
+running 23 tests
+test let_annotation_row_types_bare_tag ... ok
+test errdefer_needs_a_fallible_function ... ok
+test else_on_infallible_value_is_e0608 ... ok
+test else_handler_binds_the_row_value ... ok
+test inferred_rows_seal_through_recursion_and_pointers ... ok
+test abstract_row_rejects_concrete_injection ... ok
+test hof_row_tail_polymorphism_via_row_variables ... ok
+test cleanups_and_trace_points_ride_the_typed_hir ... ok
+test param_row_accepts_tag_at_call_site ... ok
+test pub_inferred_row_that_cannot_fail_suggests_dropping_the_bang ... ok
+test raising_an_undeclared_tag_is_e0602 ... ok
+test lowercase_declared_tag_raises_and_matches ... ok
+test pub_inferred_row_is_e0605_with_state_the_row_fixit ... ok
+test mutual_recursion_reaches_the_fixpoint ... ok
+test propagation_widens_across_module_hops ... ok
+test tag_payload_arity_mismatch_is_e0606 ... ok
+test shared_tag_payload_conflict_is_e0606 ... ok
+test try_on_infallible_value_is_e0603 ... ok
+test return_boundary_also_widens ... ok
+test tag_payloads_check_pointwise ... ok
+test try_in_infallible_function_is_e0604_with_fixit ... ok
+test try_missing_tag_is_e0602_with_row_extending_fixit ... ok
+test try_widens_into_a_larger_row ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/sandbox_s215.rs (target/debug/deps/sandbox_s215-e2ed20fa0bfcf13a)
+
+running 3 tests
+test the_spawn_with_a_map_is_exec ... ok
+test the_reasons_a_refusal_prints ... ok
+test each_s215_builtin_has_its_ruled_category ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test the_reasons_a_refusal_prints ... ok
+test each_s225_builtin_has_its_category ... ok
+     Running tests/sandbox_s225.rs (target/debug/deps/sandbox_s225-b3f17b39e8a5608a)
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test each_s230_builtin_has_its_category ... ok
+     Running tests/sandbox_s230.rs (target/debug/deps/sandbox_s230-714216b0c22a567c)
+test each_s230_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test each_s232_builtin_has_its_category ... ok
+     Running tests/sandbox_s232.rs (target/debug/deps/sandbox_s232-77728b15fed2597b)
+test each_s232_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+     Running tests/sandbox_s234.rs (target/debug/deps/sandbox_s234-fcabfb395bd68588)
+test each_s234_builtin_has_its_category ... ok
+test each_s234_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test each_s236_builtin_has_its_category ... ok
+     Running tests/sandbox_s236.rs (target/debug/deps/sandbox_s236-ce9421ca0c26198b)
+test each_s236_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s241.rs (target/debug/deps/sandbox_s241-aee5514a4832db2b)
+
+running 2 tests
+test each_s241_builtin_has_its_category ... ok
+test each_s241_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test the_poll_is_exec_with_the_wait ... ok
+test the_poll_has_its_signature ... ok
+
+test result: ok     Running tests/sandbox_s242.rs (target/debug/deps/sandbox_s242-ec76a33d50410d65)
+. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s246.rs (target/debug/deps/sandbox_s246-3316948067dd16ca)
+
+running 2 tests
+test each_s246_builtin_has_its_category ... ok
+test each_s246_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test the_fork_has_its_category ... ok
+test the_fork_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+     Running tests/sandbox_s247.rs (target/debug/deps/sandbox_s247-713ffcc77985d8e0)
+     Running tests/sandbox_s248.rs (target/debug/deps/sandbox_s248-f6840a35e767c74d)
+test each_s248_builtin_has_its_category ... ok
+test each_s248_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s253.rs (target/debug/deps/sandbox_s253-d1d84b174a5459ea)
+
+running 2 tests
+test each_s253_builtin_has_its_category ... ok
+test each_s253_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s254.rs (target/debug/deps/sandbox_s254-2ffaced47fecbecc)
+
+running 2 tests
+test each_s254_builtin_has_its_category ... ok
+test each_s254_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s272.rs (target/debug/deps/sandbox_s272-5e5709cfdc4fec25)
+
+running 2 tests
+test each_s272_builtin_has_its_category ... ok
+test each_s272_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+     Running tests/sandbox_s277.rs (target/debug/deps/sandbox_s277-d91d3e4f3d077fae)
+test each_s277_builtin_is_fs ... ok
+test each_s277_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test e0814_empty_field_list ... ok
+test e0814_duplicate_field ... ok
+test e0814_missing_field_without_rest ... ok
+     Running tests/struct_pattern_diagnostics.rs (target/debug/deps/struct_pattern_diagnostics-e14611cb20186fd1)
+test clean_struct_patterns_bind ... ok
+test e0403_unknown_field_in_pattern ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 20 tests
+     Running tests/trait_diagnostics.rs (target/debug/deps/trait_diagnostics-925f62058022dde6)
+test e0503_alias_bound_cycle ... ok
+test e0503_bound_not_a_trait ... ok
+test e0502_operator_without_impl ... ok
+test e0501_operator_ord_and_neg ... ok
+test e0501_add_this_bound ... ok
+test e0502_unmet_bound_at_call_site ... ok
+test e0301_operator_trait_not_in_scope ... ok
+test e0501_operator_capability ... ok
+test e0505_uncovered_param ... ok
+test e0506_blanket_overlap ... ok
+test e0507_conformance_mismatch ... ok
+test e0504_orphan_impl ... ok
+test e0510_dyn_self_position ... ok
+test e0507_alias_bound_is_not_implemented ... ok
+test e0509_dyn_assoc_escape ... ok
+test e0511_no_hkp ... ok
+test e0512_no_gats ... ok
+test e0508_dyn_generic_method ... ok
+test e0513_rewrite_cycle ... ok
+test e0514_heterogeneous_operator_method ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/traits_engine.rs (target/debug/deps/traits_engine-a838cce2d7ab56df)
+
+running 28 tests
+test adapter_does_not_inherit_base_impls ... ok
+test associated_types_normalize_through_the_rewrite_engine ... ok
+test arithmetic_on_archetypes_is_definition_site_e0501 ... ok
+test adapter_types_are_their_own_nominals_with_free_casts ... ok
+test dyn_objects_satisfy_their_own_trait ... ok
+test associated_consts_reach_generic_bodies_through_bounds ... ok
+test dyn_safety_violations_have_their_own_codes ... ok
+test equality_on_archetypes_is_definition_site_e0501 ... ok
+test hkp_and_gats_are_catalog_rejections ... ok
+test impl_member_bodies_check_with_self_bound ... ok
+test impl_conformance_mismatches_are_e0507 ... ok
+test impl_addition_moves_hashes_generic_body_edits_do_not ... ok
+test alias_bound_means_every_trait_in_its_list ... ok
+test non_trait_bounds_are_e0503 ... ok
+test instantiation_errors_land_at_the_call_site_only ... ok
+test inherent_impl_bodies_and_self_receiver_check ... ok
+test overlapping_impls_are_e0506_including_blankets ... ok
+test rewrite_cycles_in_impls_are_e0513 ... ok
+test outputs_never_drive_input_inference ... ok
+test operators_on_user_types_record_their_dispatch ... ok
+test trait_default_bodies_check_against_archetype ... ok
+test qualified_call_on_concrete_type_selects_the_impl ... ok
+test orphan_impls_are_e0504 ... ok
+test satisfaction_is_cached_and_blanket_impls_match ... ok
+test isolated_namespaces_allow_method_name_collisions ... ok
+test uncovered_impl_params_are_e0505 ... ok
+test unstated_capability_errors_at_the_definition ... ok
+test trait_impl_and_bounded_generic_fully_check ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/typecheck.rs (target/debug/deps/typecheck-b9ee66d08f9875ea)
+
+running 61 tests
+test closures_record_their_capture_sets ... ok
+test closures_take_parameter_types_from_context ... ok
+test assert_takes_an_optional_message ... ok
+test calling_a_struct_is_e0406 ... ok
+test arithmetic_and_locals_infer_through_context ... ok
+test assert_wrong_arity_is_e0402 ... ok
+test container_brackets_keep_their_admitted_tuple_and_generic_types ... ok
+test a_moded_nested_fn_is_called_by_name_only ... ok
+test else_defaulting_and_try_check_since_s15 ... ok
+test declared_tag_resolves_at_argument_and_let ... ok
+test float_literals_default_f64 ... ok
+test container_brackets_name_only_the_shapes_still_declined ... ok
+test cross_module_calls_check_against_dependency_signatures ... ok
+test generic_identity_body_checks_with_rigid_vars ... ok
+test equality_on_structs_goes_through_eq ... ok
+test deferred_row_tag_returns_through_err_union ... ok
+test generic_instantiation_checks_since_s14 ... ok
+test in_target_must_be_a_region ... ok
+test infinite_type_is_e0404 ... ok
+test literal_defaulting_is_a_rule ... ok
+test logic_on_numbers_is_e0409 ... ok
+test a_moded_module_fn_is_called_by_name_only ... ok
+test hello_world_fully_checks ... ok
+test match_with_literal_patterns_checks ... ok
+test if_branch_mismatch_is_honest_both_ways ... ok
+test method_on_a_row_is_e0409_before_any_impl ... ok
+test method_on_a_row_still_types_its_arguments ... ok
+test inference_is_stable_under_statement_permutation ... ok
+test local_shadows_declared_tag_and_w0305_warns ... ok
+test nested_closure_captures_propagate ... ok
+test nested_fn_refusals_are_named ... ok
+test missing_struct_fields_are_e0408 ... ok
+test ok_injection_accepts_plain_value_at_err_union ... ok
+test missing_container_type_names_report_the_leaf_without_cascades ... ok
+test nested_row_payload_conflict_is_e0609 ... ok
+test return_type_mismatch_has_provenance_chain ... ok
+test nested_fn_checks_and_binds ... ok
+test str_compared_to_number_still_reports ... ok
+test str_relational_operators_type ... ok
+test parallel_and_sequential_agree ... ok
+test nested_row_flattens ... ok
+test regions_type_since_s19_freeze_since_s20 ... ok
+test str_methods_type_since_s37 ... ok
+test suppressed_regions_stay_quiet_in_typecheck ... ok
+test str_slicing_types_since_s37 ... ok
+test unannotated_global_walks_but_reports_e0407 ... ok
+test tuple_destructuring_is_irrefutable_and_checked ... ok
+test uninferable_closure_param_is_e0405 ... ok
+test struct_fields_on_nominal_values_check ... ok
+test variadic_arg_accepts_pointer_type_brackets ... ok
+test unsafe_blocks_typecheck_since_s22_but_asm_still_refuses ... ok
+test variadic_list_is_not_generic ... ok
+test unknown_field_is_e0403_with_typo_suggestion ... ok
+test variadic_list_layout_is_the_c_record_not_a_pointer ... ok
+test variadic_tail_rejects_non_c_values ... ok
+test variadic_list_builtins_allow_nonvariadic_consumers ... ok
+test variadic_start_in_nested_frame_is_rejected ... ok
+test wrong_arg_count_is_e0402_with_definition_site ... ok
+test wrapping_types_are_integer_family ... ok
+test variadic_call_checks_fixed_prefix_and_accepts_tail ... ok
+test variadic_arg_requires_promoted_type ... ok
+
+test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 69 tests
+test assert_false_diverges_in_fallback ... ok
+test closure_return_types_against_the_closure ... ok
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-2acd11733974fdf6)
+test e0301_container_type_argument_is_unresolved_not_declined ... ok
+test e0401_byte_narrowing_teach_note ... ok
+test e0301_bare_variant_value ... ok
+test closure_return_disagreeing_with_the_tail ... ok
+test e0401_argument_vs_return_confusion ... ok
+test e0301_bare_variant_two_homes ... ok
+test e0401_computed_assert_still_owes_t ... ok
+test e0401_byte_widening_teach_note ... ok
+test e0401_if_branch_mismatch ... ok
+test e0401_deep_fn_type_diff ... ok
+test e0401_let_annotation_provenance ... ok
+test e0401_condition_needs_bool ... ok
+test e0401_int_float_no_implicit_conversion ... ok
+test e0401_list_element_mismatch_blames_the_first_miss ... ok
+test e0401_return_mismatch_provenance ... ok
+test e0401_match_arms_disagree ... ok
+test e0402_assert_arity ... ok
+test e0403_range_has_only_start_and_end ... ok
+test e0401_range_outside_the_closed_family ... ok
+test e0402_wrong_arg_count ... ok
+test e0403_unknown_field_typo ... ok
+test e0404_infinite_type ... ok
+test e0405_uninferable_closure_param ... ok
+test e0406_struct_called_like_fn ... ok
+test e0404_struct_and_enum_contain_each_other_by_value ... ok
+test e0407_unannotated_global ... ok
+test e0408_missing_struct_field ... ok
+test e0409_logic_on_numbers ... ok
+test e0411_char_index_hint ... ok
+test e0411_from_end_single_position ... ok
+test e0412_malformed_spec ... ok
+test e0412_align_as_fill ... ok
+test e0412_zero_with_align ... ok
+test e0413_hex_on_str ... ok
+test e0414_generic_main ... ok
+test e0414_legal_shapes_are_silent ... ok
+test e0413_precision_on_int ... ok
+test e0414_main_with_params ... ok
+test e0414_non_root_main_is_ordinary ... ok
+test e0409_str_plus_mixes ... ok
+test e0414_str_main ... ok
+test e0415_annotated_narrow ... ok
+test e0415_fitting_stays_clean ... ok
+test e0415_default_i32_overflow ... ok
+test e0415_wrapping_literal ... ok
+test e0416_str_slice_assign ... ok
+test e0416_str_index_and_compound ... ok
+test e0409_row_on_either_side ... ok
+test e0415_negative_and_unsigned ... ok
+test e0419_empty_list_literal_without_a_context ... ok
+test e0409_row_member_and_method ... ok
+test e0417_map_compound_assign ... ok
+test e0502_literal_default_no_candidate ... ok
+test e0824_start_without_variadic_frame ... ok
+test e0825_second_start ... ok
+test e0418_map_key_outside_the_four ... ok
+test e0823_variadic_function_value ... ok
+test e0502_literal_default_two_candidates ... ok
+test e1607_malformed_argument_shapes ... ok
+test e1607_public_names_no_parameter ... ok
+test empty_list_literals_take_the_context_they_are_in ... ok
+test e1607_well_formed_stays_clean ... ok
+test str_plus_char_is_append ... ok
+test range_is_a_nameable_type_with_start_and_end ... ok
+test literal_default_follows_the_bound ... ok
+test map_admitted_keys_stay_clean ... ok
+test tuple_type_in_bracket_position ... ok
+
+test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 36 tests
+test package_shape_counterparts_stay_silent ... ok
+test provisional_standins_are_exempt_from_w0304 ... ok
+     Running tests/wave_diagnostics.rs (target/debug/deps/wave_diagnostics-734be3953776e815)
+test arbiter_clean_shapes_stay_silent ... ok
+test w0305_local_shadows_tag_at_argument ... ok
+test w0307_comparison_after_else ... ok
+test w0304_shadowed_intrinsic_binding ... ok
+test w0304_shadowed_prelude_fn ... ok
+test w0306_prefix_operator_statement ... ok
+test w0308_mut_argument_in_interpolation ... ok
+test w0305_tag_collides_with_item ... ok
+test w0309_raw_literal_interp_braces ... ok
+test w0312_as_view_consumes ... ok
+test w0311_predicate_not_bool ... ok
+test w0310_get_prefix ... ok
+test w0314_one_item_module ... ok
+test w0315_pkg_item_unused ... ok
+test w0313_pub_without_doc ... ok
+test w0316_ancestor_import ... ok
+test w0318_arithmetic_after_else ... ok
+test w0602_pub_anonymous_row ... ok
+test w0401_literal_does_not_fit_cast ... ok
+test w0402_zero_minus_negation ... ok
+test w0603_none_with_payload ... ok
+test w0604_get_without_row ... ok
+test w1002_fix_applicability_is_honest ... ok
+test w0601_unit_context_tail ... ok
+test w0603_tag_case_contradicts_payload ... ok
+test w0601_discarded_fallible_result ... ok
+test w1002_mut_param_never_written ... ok
+test w1101_task_writes_captured_copy ... ok
+test when_bodies_are_exempt_from_w1101 ... ok
+test writes_through_projections_stay_silent ... ok
+test w1003_take_returned_unchanged ... ok
+test w0801_capitalized_binder ... ok
+test w1102_capture_then_reassign ... ok
+test w1302_assume_operand_reassigned ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests wolf_sema
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+END test-extra exit=0
+== STEP diag-catalog 19:13:02
+diag-catalog: voice: 5516 reader-facing strings carry no internal ids
+diag-catalog: wrote docs/diagnostics.md (195 codes) and docs/warnings.md (34 warnings)
+END diag-catalog exit=0
+== STEP catalog-diff 19:13:14
+ M docs/diagnostics.md
+?? crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_module.snap
+?? crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_module_after_use.snap
+?? crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_stand_in_module.snap
+END catalog-diff exit=0
+== done 2026-11-09T19:13:14Z
+s289: END exit=0 14:13:14
