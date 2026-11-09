@@ -348,3 +348,56 @@ fn e0301_std_group_and_deep_path_name_the_missing_std_root() {
     )]);
     insta::assert_snapshot!("e0301_std_group_no_std_root", render(&res));
 }
+
+// ------------------------------------- wolf-lang#1083, unimported modules --
+// A name that is a module of the package, used with no `use`: the note
+// says the module is not imported, and the edit adds the `use` where the
+// file's imports end (or before its first item).
+
+fn unimported(module: &'static str, main: &'static str) -> Resolution {
+    resolve(&[
+        (&[], "main.lu", main),
+        (
+            &[module],
+            "m.lu",
+            "/// The count.\npub fn main(n: int) -> int {\n    n\n}\n\
+             /// The name.\npub fn name() -> str {\n    \"m\"\n}\n",
+        ),
+        (
+            &["other"],
+            "o.lu",
+            "/// One.\npub fn one() -> int {\n    1\n}\n\
+             /// Two.\npub fn two() -> int {\n    2\n}\n",
+        ),
+    ])
+}
+
+#[test]
+fn e0301_unimported_module_offers_its_use() {
+    let res = unimported(
+        "helper",
+        "fn main() -> int {\n    return helper.main(3)\n}\n",
+    );
+    insta::assert_snapshot!("e0301_unimported_module", render(&res));
+}
+
+/// `worker` is a provisional stand-in too (wolf-lang#1083): the module
+/// wins over it, so the miss reads as any other unimported module's.
+#[test]
+fn e0301_unimported_module_named_like_a_stand_in() {
+    let res = unimported(
+        "worker",
+        "fn main() -> int {\n    return worker.main(3)\n}\n",
+    );
+    insta::assert_snapshot!("e0301_unimported_stand_in_module", render(&res));
+}
+
+/// With imports present, the `use` joins them.
+#[test]
+fn e0301_unimported_module_joins_the_imports() {
+    let res = unimported(
+        "helper",
+        "use other\n\nfn main() -> int {\n    return helper.main(other.one())\n}\n",
+    );
+    insta::assert_snapshot!("e0301_unimported_module_after_use", render(&res));
+}
