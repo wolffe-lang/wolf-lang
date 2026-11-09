@@ -9,8 +9,10 @@
 //!   as a builtin type is, and calling one bare is E0406 naming it;
 //! - a builtin function or intrinsic used as a value is declined by name
 //!   ("call it by name"): lupin runs those, so it is the compiler's limit;
-//! - `min` and `zip`, the two helpers no clause types yet, are declined as
-//!   such;
+//! - `min` is typed by its own clause (`[type.min]`, the third change):
+//!   called with no operands it is E0402, and as a value it is a builtin;
+//! - the free `zip` has no meaning (`[type.min.zip]`): every use is
+//!   declined with that reason;
 //! - a provisional stand-in nothing defines is E0301.
 //!
 //! At the base 431 of the 687 uses answered with the stub.
@@ -23,9 +25,9 @@ use wolf_sema::{
 const STUB: &str = "a std/prelude stub without a signature";
 /// A builtin function or intrinsic used as a value.
 const BUILTIN_AS_VALUE: &str = "a builtin function used as a value (call it by name)";
-/// `min` and `zip`.
-const UNTYPED_HELPER: &str =
-    "a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)";
+/// The free `zip` (`[type.min.zip]`).
+const FREE_ZIP: &str = "the prelude's free `zip`, which no clause gives a meaning \
+                        (`std.list`'s method `xs.zip(ys)` is the spelling)";
 
 /// The program's resolve diagnostics' codes, and its typecheck when it
 /// resolves.
@@ -123,12 +125,27 @@ fn each_class_answers_in_its_own_words() {
             }
             continue;
         }
-        if name == "min" || name == "zip" {
+        if name == "min" {
             assert_eq!(
                 call,
-                Answer::NotYet(UNTYPED_HELPER),
-                "the helper {name}, called"
+                Answer::Errors(vec!["E0402".into()]),
+                "`min` called with no operands"
             );
+            assert_eq!(
+                value,
+                Answer::NotYet(BUILTIN_AS_VALUE),
+                "`min` as a value"
+            );
+            continue;
+        }
+        if name == "zip" {
+            for (use_, tmpl) in USES {
+                assert_eq!(
+                    answer(&tmpl.replace("NAME", name)),
+                    Answer::NotYet(FREE_ZIP),
+                    "the free zip ({use_})"
+                );
+            }
             continue;
         }
         match row.kind {
