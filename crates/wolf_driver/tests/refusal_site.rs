@@ -60,6 +60,18 @@ fn record(entry: &Path, lane: &str, std: Option<&Path>) -> Option<serde_json::Va
     Some(serde_json::from_slice(&out.stdout).expect("one JSON record"))
 }
 
+/// A build's stderr past its notes. On Linux a binary build first notes
+/// the linker it picked, `wolf build: note: …` (wolf-lang#1082); the
+/// refusal is what follows.
+fn after_notes(stderr: &[u8]) -> String {
+    String::from_utf8(stderr.to_vec())
+        .unwrap()
+        .lines()
+        .skip_while(|l| l.starts_with("wolf build: note: "))
+        .map(|l| format!("{l}\n"))
+        .collect()
+}
+
 fn build(entry: &Path, out: &Path, std: Option<&Path>) -> Output {
     let mut cmd = Command::new(wolf());
     cmd.arg("build").arg(entry).arg("-o").arg(out);
@@ -85,7 +97,7 @@ fn a_refusal_in_the_second_file_names_its_file_line_column_and_source() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let stderr = String::from_utf8(out.stderr).unwrap();
+    let stderr = after_notes(&out.stderr);
     assert!(
         stderr.starts_with(
             "wolf build: cannot compile this yet — methods on builtin types (the std surface)"
@@ -185,7 +197,7 @@ fn an_else_fallback_range_names_the_fallback_and_says_to_parenthesise() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let stderr = String::from_utf8(out.stderr).unwrap();
+    let stderr = after_notes(&out.stderr);
     assert!(
         stderr.starts_with(&format!(
             "wolf build: cannot compile this yet — {CONSTRUCT}"
@@ -226,7 +238,7 @@ fn an_else_fallback_range_names_the_fallback_and_says_to_parenthesise() {
         let file = sub.join("main.lu");
         std::fs::write(&file, format!("fn main() -> int {{\n{body}    0\n}}\n")).unwrap();
         let out = build(&file, &sub.join("out"), None);
-        let stderr = String::from_utf8(out.stderr).unwrap();
+        let stderr = after_notes(&out.stderr);
         assert_eq!(out.status.code(), Some(4), "{name}: {stderr}");
         assert!(
             stderr.starts_with(
