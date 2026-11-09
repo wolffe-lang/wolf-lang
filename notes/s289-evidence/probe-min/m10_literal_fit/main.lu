@@ -1,0 +1,4 @@
+fn main() {
+    let a: u8 = 3
+    print("{min(a, 300)}")
+}

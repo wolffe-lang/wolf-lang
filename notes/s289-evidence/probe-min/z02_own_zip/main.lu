@@ -1,0 +1,7 @@
+fn zip(a: int, b: int) -> int {
+    a * 10 + b
+}
+
+fn main() {
+    print("{zip(1, 2)}")
+}
