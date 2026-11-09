@@ -419,10 +419,7 @@ fn an_undefined_stand_in_called_is_e0301() {
         "E0301",
         (643, 649),
         Says {
-            has: &[
-                "error[E0301]: nothing defines `worker`",
-                "provisional",
-            ],
+            has: &["error[E0301]: nothing defines `worker`", "provisional"],
             lacks: DECLINES,
         },
         "unsupported",
@@ -451,7 +448,10 @@ fn an_undefined_stand_in_as_a_receiver_is_e0301() {
 fn a_bare_variant_keeps_its_e0301() {
     for (machine, record, stderr) in compiled("typecheck/variant_bare_value.lu") {
         assert_eq!(record["verdict"], "fail(E0301)", "{machine}: {record}");
-        assert!(stderr.contains("write `Ordering.Less`"), "{machine}:\n{stderr}");
+        assert!(
+            stderr.contains("write `Ordering.Less`"),
+            "{machine}:\n{stderr}"
+        );
     }
 }
 
@@ -459,8 +459,8 @@ fn a_bare_variant_keeps_its_e0301() {
 /// the fallible function's own, in a unit position.
 #[test]
 fn the_unit_discard_decline_keeps_its_words() {
-    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/unit_tail_if/bare_tag.lu");
+    let fixture =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/unit_tail_if/bare_tag.lu");
     let out = Command::new(env!("CARGO_BIN_EXE_wolf"))
         .args(["conform-run", "--json", "--checked"])
         .arg(&fixture)
@@ -469,8 +469,7 @@ fn the_unit_discard_decline_keeps_its_words() {
     let record = record_of(&out, "unit_tail_if/bare_tag.lu", "--checked");
     assert_eq!(record["verdict"], "unsupported", "{record}");
     assert_eq!(
-        record["x-unsupported-construct"],
-        "an error-row tag outside `!T` context",
+        record["x-unsupported-construct"], "an error-row tag outside `!T` context",
         "{record}"
     );
 }
