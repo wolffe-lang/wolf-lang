@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 48..72 name=OPEN pub init=LiteralExpr
+ConstDecl 102..128 name=ACCEPT pub init=LiteralExpr
