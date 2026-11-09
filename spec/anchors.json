@@ -699,6 +699,8 @@
     "type.method.resolve": "10-types.md",
     "type.method.root": "10-types.md",
     "type.method.take": "10-types.md",
+    "type.min": "10-types.md",
+    "type.min.zip": "10-types.md",
     "type.numlit": "10-types.md",
     "type.numlit.adopt": "10-types.md",
     "type.numlit.ambig": "10-types.md",
