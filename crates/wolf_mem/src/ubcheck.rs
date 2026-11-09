@@ -12545,6 +12545,32 @@ impl<'t> Machine<'t> {
             // operation whole — every fence is already in force here;
             // the operand is a mark, never evaluated.
             "fence" => return Ok(Flow::Val(Value::Unit)),
+            // `[type.min]` (s289, wolf-lang#708): two operands of one
+            // integer type, each evaluated once, left to right; the smaller
+            // is the answer, compared as `<=` compares them (a 64-bit
+            // unsigned operand by its bit pattern, the compiled tiers'
+            // `icmp ule`).
+            "min" => {
+                let ops: Vec<&GreenNode> = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .collect();
+                let &[a_node, b_node] = &ops[..] else {
+                    return self.refuse("`min` without exactly two operands", e.span);
+                };
+                let a = val!(self.eval(a_node));
+                let b = val!(self.eval(b_node));
+                let wide = self.wide_unsigned_at(a_node.span) || self.wide_unsigned_at(e.span);
+                return match (a, b) {
+                    (Value::Int(x), Value::Int(y)) => {
+                        let first = if wide { (x as u64) <= (y as u64) } else { x <= y };
+                        Ok(Flow::Val(Value::Int(if first { x } else { y })))
+                    }
+                    _ => self.refuse("`min` outside one integer type", e.span),
+                };
+            }
             "print" | "print_raw" | "eprint" | "eprint_raw" => {
                 let mut out = String::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
