@@ -8862,7 +8862,9 @@ impl<'a> Checker<'a> {
                             Diagnostic::error(
                                 codes::E0406,
                                 t.span,
-                                format!("`{name}` is a type, not a function, so it cannot be called"),
+                                format!(
+                                    "`{name}` is a type, not a function, so it cannot be called"
+                                ),
                             )
                             .with_label("called here")
                             .with_note(how),
@@ -14760,9 +14762,13 @@ fn chain_is_bare(n: &GreenNode) -> bool {
 fn prelude_type_call_note(name: &str) -> Option<&'static str> {
     Some(match name {
         "List" => "`List` takes its element type in brackets: `List[int]()` makes an empty list",
-        "Map" => "`Map` takes its key and value types in brackets: `Map[str, int]()` makes an empty map",
+        "Map" => {
+            "`Map` takes its key and value types in brackets: `Map[str, int]()` makes an empty map"
+        }
         "Pool" => "`Pool` takes its element type in brackets: `Pool[Node]()` makes an empty pool",
-        "channel" => "`channel` takes its element type in brackets: `channel[int](n)` makes a channel of capacity `n`",
+        "channel" => {
+            "`channel` takes its element type in brackets: `channel[int](n)` makes a channel of capacity `n`"
+        }
         "Scope" => "a `Scope` is the handle `scope name { … }` binds; it is written only as a type",
         "Proc" => "a `Proc` is what `spawn proc f(…)` returns; it is written only as a type",
         "range" => "`range` is the type of `a..b`; a range value is spelled `a..b`",
