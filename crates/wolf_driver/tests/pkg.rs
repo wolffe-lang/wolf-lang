@@ -168,6 +168,48 @@ fn declared_capability_builds_with_std_as_path_dep() {
 
 // -------------------------------------------------------------- verbs ----
 
+/// wolf-lang#175: `wolf add` writes a manifest that the next command,
+/// and `wolf add` itself, read back. A dependency directory whose name
+/// holds a backslash, a brace or a quote (made here: a Windows checkout
+/// cannot hold such names) used to write `path: "../dep\q"`, which the
+/// lexer refuses (E0101), and the add rolled back.
+#[cfg(unix)]
+#[test]
+fn add_writes_a_manifest_that_reads_back() {
+    for (case, dirname, spelled) in [
+        ("pkg_add_backslash", "dep\\q", r#""../dep\\q""#),
+        ("pkg_add_brace", "dep{1}", r#""../dep{{1}}""#),
+        ("pkg_add_quote", "dep\"q", r#""../dep\"q""#),
+        ("pkg_add_hex", "dep\\x", r#""../dep\\x""#),
+    ] {
+        let dir = stage(case, "dogfood");
+        std::fs::rename(dir.join("util"), dir.join(dirname)).expect("rename the dependency");
+        let app = dir.join("app");
+        std::fs::remove_file(app.join("wolf.pkg")).expect("rm manifest");
+        let path = format!("../{dirname}");
+        let out = run_wolf(&dir, &["add", "util", "--path", &path, "--dir", "app"], &[]);
+        assert_eq!(out.status.code(), Some(0), "{dirname}: stderr:\n{}", stderr(&out));
+        let manifest = std::fs::read_to_string(app.join("wolf.pkg")).expect("manifest exists");
+        let want = format!("util: {{ path: {spelled} }}");
+        assert!(manifest.contains(&want), "{dirname}: wants {want}:\n{manifest}");
+        let out = run_wolf(&dir, &["run", "app/main.lu"], &[]);
+        if env_skip(&out, "add-reads-back") {
+            continue;
+        }
+        assert_eq!(out.status.code(), Some(0), "{dirname}: stderr:\n{}", stderr(&out));
+        assert_eq!(stdout(&out), "twist(20) = 41\n", "{dirname}");
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn add_writes_a_manifest_that_reads_back() {
+    eprintln!(
+        "SKIP add-reads-back: a Windows directory name cannot hold a quote, and a backslash \
+         is its separator; the wolf_pkg round trip holds the same values on every host"
+    );
+}
+
 #[test]
 fn add_rm_round_trip_with_lockfile() {
     let dir = stage("pkg_add_rm", "dogfood");
