@@ -11087,6 +11087,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
                 "fence" => return self.lower_fence(d, e),
+                "min" => return self.lower_min(d, e),
                 "print" | "print_raw" | "eprint" | "eprint_raw" => {
                     let stream = if callee_text.starts_with('e') { 2 } else { 1 };
                     return self.lower_print(d, callee_text.ends_with("print"), stream);
@@ -26121,6 +26122,58 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// never the evaluation (wolf-lang#398 — this used to refuse any
     /// message that was not a literal or an interpolation by syntax
     /// kind, and dropped an interpolation's calls unevaluated).
+    /// `[type.min]` (s289, wolf-lang#708): `min(a, b)` over one integer
+    /// type. Each operand is lowered once, left to right; then an `icmp`
+    /// (`sle`, or `ule` for an unsigned type, as `<=` compares it), a
+    /// branch, and a join whose one parameter is the answer. Sema typed the
+    /// call (two operands of one integer type), so anything else here is a
+    /// refusal, never a guess.
+    fn lower_min(&mut self, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let ops: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .collect();
+        let &[a_node, b_node] = &ops[..] else {
+            return Err(refuse("`min` without exactly two operands", e.span));
+        };
+        let Some(a) = flow_val!(self.lower_expr(a_node)) else {
+            return Err(refuse("`min` of a valueless operand", a_node.span));
+        };
+        let Some(b) = flow_val!(self.lower_expr(b_node)) else {
+            return Err(refuse("`min` of a valueless operand", b_node.span));
+        };
+        let ty = self.b.func.value_ty(a);
+        if !types_is_int(ty) || self.b.func.value_ty(b) != ty {
+            return Err(refuse("`min` outside one integer type", e.span));
+        }
+        let unsigned = self
+            .expr_sema_ty(e.span)
+            .or_else(|| self.expr_sema_ty(a_node.span))
+            .map(|t| sema_unsigned(self.table, t))
+            .unwrap_or(false);
+        let cc = if unsigned { IntCc::Ule } else { IntCc::Sle };
+        let le = self
+            .b
+            .ins(Opcode::Icmp, &[a, b], &[types::BOOL], Aux::IntCc(cc))
+            .one();
+        let take_a = self.b.create_block();
+        let take_b = self.b.create_block();
+        let join = self.b.create_block();
+        let out = self.b.add_block_param(join, ty);
+        self.b.ins_br(le, take_a, &[], take_b, &[]);
+        self.b.seal_block(take_a);
+        self.b.seal_block(take_b);
+        self.b.switch_to_block(take_a);
+        self.b.ins_jmp(join, &[a]);
+        self.b.switch_to_block(take_b);
+        self.b.ins_jmp(join, &[b]);
+        self.b.seal_block(join);
+        self.b.switch_to_block(join);
+        Ok(Flow::Val(Some(out)))
+    }
+
     fn lower_assert(&mut self, d: CallExpr<'t>) -> R<Flow> {
         let mut args = d.args().into_iter().flat_map(|l| l.args());
         let Some(first) = args.next() else {
