@@ -893,7 +893,12 @@ impl Resolver<'_> {
             );
             return;
         }
-        if prelude::in_prelude(name) {
+        // wolf-lang#1083: a provisional stand-in yields to a module of
+        // the package with its name. Unimported, that module is a miss
+        // like any other (E0301 with the `use`), never the stand-in.
+        let stand_in_yields =
+            prelude::PRELUDE_PROVISIONAL.contains(&name) && self.pkg.importable.contains(name);
+        if prelude::in_prelude(name) && !stand_in_yields {
             self.record(span, RefTarget::Prelude(name.to_string()));
             return;
         }
@@ -930,7 +935,23 @@ impl Resolver<'_> {
         // but opted out of the module — say so instead of leaving the
         // reader hunting for a typo.
         let d = crate::graph::excluded_definer_notes(d, &self.pkg.modules[self.module], name);
+        let (at, line) = self.use_insertion(name);
+        let d = crate::graph::unimported_module_note(d, self.pkg, self.module, name, at, &line);
         self.sink.push(d);
+    }
+
+    /// Where `use name` goes in this file, and its text: after the last
+    /// import, or before the first item when the file has none.
+    fn use_insertion(&self, name: &str) -> (Span, String) {
+        if let Some(last) = self.bindings.iter().map(|b| b.decl_span).max_by_key(|s| s.hi) {
+            return (
+                Span::new(last.file, last.hi, last.hi),
+                format!("\nuse {name}"),
+            );
+        }
+        let root = &self.pkg.files[self.file].parse.root;
+        let at = root.nodes().next().map_or(root.span, |n| n.span);
+        (Span::new(at.file, at.lo, at.lo), format!("use {name}\n\n"))
     }
 
     /// Resolve the first segment of a `Path` node; segments after a
