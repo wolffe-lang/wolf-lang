@@ -153,9 +153,12 @@ pub const PRELUDE: &[Ambient] = &[
     fun("va_arg", Some("abi.c.variadic.builtins")),
     fun("va_copy", Some("abi.c.variadic.builtins")),
     fun("va_end", Some("abi.c.variadic.builtins")),
-    // small helpers the corpus leans on
-    fun("min", None),
-    fun("zip", None),
+    // small helpers the corpus leans on. `min` is typed by its own clause
+    // (`[type.min]`, s289, wolf-lang#708); the free `zip` has no meaning
+    // (`[type.min.zip]`: `std.list`'s method `xs.zip(ys)` is the spelling)
+    // and stays a name only so that a use is declined with that reason.
+    fun("min", Some("type.min")),
+    fun("zip", Some("type.min.zip")),
     // comptime reflection intrinsics (D29, s16 — the explicit
     // allowlist; `reflect` is the s02 corpus spelling of `typeinfo`)
     intrinsic("reflect", None),
@@ -677,12 +680,22 @@ pub const PRELUDE_PROVISIONAL: &[&str] = &[
 /// `os_random` witnesses spell it (the word is too ordinary to tax).
 pub const PRELUDE_TYPE_ONLY: &[&str] = &["range"];
 
+/// s289 (`[type.min.zip]`, wolf-lang#708): prelude names with no meaning
+/// at all. The free `zip` is declined wherever it is used, so a module's
+/// own `zip` shadows nothing a program can spell, and W0304 exempts it as
+/// it exempts `range` (lupin exempts it too).
+pub const PRELUDE_UNSPECIFIED: &[&str] = &["zip"];
+
 /// Would declaring `name` silently shadow an ambient name worth
 /// keeping (W0304)? True for every prelude name except the
-/// provisional stand-ins and the type-position-only names, and for
+/// provisional stand-ins, the type-position-only names and the names with
+/// no meaning (`zip`), and for
 /// every built-in type name.
 pub fn shadow_hazard(name: &str) -> bool {
-    (in_prelude(name) && !PRELUDE_PROVISIONAL.contains(&name) && !PRELUDE_TYPE_ONLY.contains(&name))
+    (in_prelude(name)
+        && !PRELUDE_PROVISIONAL.contains(&name)
+        && !PRELUDE_TYPE_ONLY.contains(&name)
+        && !PRELUDE_UNSPECIFIED.contains(&name))
         || (is_builtin_type(name) && !BUILTIN_TYPE_ONLY.contains(&name))
 }
 
