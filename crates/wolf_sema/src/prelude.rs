@@ -809,6 +809,17 @@ mod tests {
         assert!(!shadow_hazard("worker")); // provisional stand-in
     }
 
+    /// s289 (`[type.min.zip]`, wolf-lang#708): the free `zip` has no
+    /// meaning, so a module's own `zip` shadows nothing a program can use
+    /// and W0304 exempts it. `min` is typed by `[type.min]`, and shadowing
+    /// it is still the hazard.
+    #[test]
+    fn the_free_zip_is_no_shadow_hazard() {
+        assert!(in_prelude("zip"));
+        assert!(!shadow_hazard("zip"));
+        assert!(shadow_hazard("min"));
+    }
+
     /// s212: the stand-in list W0304 exempts and the rows of kind
     /// `Provisional` are one set, in one order.
     #[test]
