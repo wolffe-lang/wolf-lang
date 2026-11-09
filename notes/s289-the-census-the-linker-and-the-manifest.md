@@ -54,9 +54,20 @@ Linux gauntlet's rig sets `WOLF_LLD_NOTE_REQUIRE=1`, which turns a missing lld t
 
 ## Prediction
 
-`notes/s289-prediction.md` §3, "Second PR", held, with one correction. The round trip first named
-the package with the raw fuzzed value, and an empty name is the schema's E1502, not a lexical
-failure. The row now names the package as `wolf add` does, `local/<directory>` (`bf9340de`).
+`notes/s289-prediction.md` §3, "Second PR", held, with two corrections.
+- **The round trip's name.** The round trip first named the package with the raw fuzzed value,
+  and an empty name is the schema's E1502, not a lexical failure. The row now names the package
+  as `wolf add` does, `local/<directory>` (`bf9340de`).
+- **§4's first risk, met.** The first Linux record at `353ee08c` stopped in its `test` step on two
+  rows of `refusal_site.rs`:
+  - `a_refusal_in_the_second_file_names_its_file_line_column_and_source`;
+  - `an_else_fallback_range_names_the_fallback_and_says_to_parenthesise`.
+
+  Each asserts that `wolf build`'s stderr starts with the refusal. With an `ld.lld` on PATH, the
+  note naming it now comes first, as the absent-lld note always did on a host without one. The
+  macOS checks could not see it (no note there). The rows now read the refusal past the build's
+  `wolf build: note:` lines (`e03952a3`). The note's placement is as ruled, once at the start of a
+  binary build.
 
 | row | at the rows' commit | at the fix |
 |---|---|---|
@@ -108,6 +119,7 @@ Commits:
 - `0656ab85`, `190f786b`: formatting. `bf9340de`: the round trip names the package as `wolf add`
   does.
 - `3c7f311d`: the changelog. `3eda92f6`: the README's linker paragraph. This note and its evidence.
+- `e03952a3`: the refusal-site rows read the refusal past the linker note.
 - `ab56e962`: the first change's evidence rig (`rig/air-at.sh`) named the second Mac's ssh host;
   it now writes `SECOND_MAC` in its place, as the sanitizer does for the other hosts.
 
