@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="7 7\n1 1\n9\n")
+//! phase: run
+//! conforms: type.min
+//!
+//! wolf-lang#708 (`[type.min]`): an unsigned type compares unsigned, as `<`
+//! does. `u64`'s top value is the larger of the pair whichever side it is
+//! on, and `min` is the tail of a `u16` function, so its type is its
+//! operands'. lupin 0.1.60 prints these lines.
+
+fn smaller(a: u16, b: u16) -> u16 {
+    min(a, b)
+}
+
+fn main() {
+    let a: u8 = 200
+    let b: u8 = 7
+    print("{min(a, b)} {min(b, a)}")
+    let top: u64 = 18446744073709551615
+    let one: u64 = 1
+    print("{min(top, one)} {min(one, top)}")
+    let x: u16 = 65535
+    print("{smaller(x, 9)}")
+}
