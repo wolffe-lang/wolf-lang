@@ -158,9 +158,16 @@ const DECLINE: &str = "a prelude helper with no signature yet";
 /// warning-clean, and so does lupin.
 fn runs(row: &str, stdout: &str) {
     for (machine, record, stderr) in compiled(row) {
-        assert_eq!(record["verdict"], "exit(0)", "{machine} {row}: {record}\n{stderr}");
+        assert_eq!(
+            record["verdict"], "exit(0)",
+            "{machine} {row}: {record}\n{stderr}"
+        );
         assert_eq!(record["stdout_inline"], stdout, "{machine} {row}: {record}");
-        assert_eq!(warnings(&record), Vec::<String>::new(), "{machine} {row}: {record}");
+        assert_eq!(
+            warnings(&record),
+            Vec::<String>::new(),
+            "{machine} {row}: {record}"
+        );
         assert!(!stderr.contains(DECLINE), "{machine} {row}: {stderr}");
     }
     let Some(record) = lupin(row) else {
@@ -298,8 +305,15 @@ fn a_modules_own_min_keeps_its_w0304_and_runs() {
     let path = fixture("own_min/main.lu");
     for (machine, record, stderr) in compiled_at(&path, "own_min") {
         assert_eq!(record["verdict"], "exit(0)", "{machine} own_min: {record}");
-        assert_eq!(record["stdout_inline"], "4\n", "{machine} own_min: {record}");
-        assert_eq!(warnings(&record), vec!["W0304".to_string()], "{machine} own_min: {stderr}");
+        assert_eq!(
+            record["stdout_inline"], "4\n",
+            "{machine} own_min: {record}"
+        );
+        assert_eq!(
+            warnings(&record),
+            vec!["W0304".to_string()],
+            "{machine} own_min: {stderr}"
+        );
     }
 }
 
@@ -311,7 +325,10 @@ fn a_modules_own_min_keeps_its_w0304_and_runs() {
 fn the_free_zip_is_declined_with_its_reason() {
     let path = fixture("zip_call/main.lu");
     for (machine, record, stderr) in compiled_at(&path, "zip_call") {
-        assert_eq!(record["verdict"], "unsupported", "{machine} zip_call: {record}");
+        assert_eq!(
+            record["verdict"], "unsupported",
+            "{machine} zip_call: {record}"
+        );
         let construct = record["x-unsupported-construct"].as_str().unwrap_or("");
         assert!(
             construct.contains("`zip`") && construct.contains("xs.zip(ys)"),
