@@ -1,0 +1,12 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: type.min, type.numlit
+//!
+//! wolf-lang#708 (`[type.min]`): a literal operand takes the other
+//! operand's type, as it does beside `<`, so `300` beside a `u8` is a
+//! literal that does not fit (E0415 at `300`). lupin 0.1.60 prints `3`.
+
+fn main() {
+    let a: u8 = 3
+    print("{min(a, 300)}") // ERROR E0415: `300` does not fit `u8`
+}
