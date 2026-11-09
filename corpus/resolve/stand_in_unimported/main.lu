@@ -1,0 +1,18 @@
+//! check: fail(E0301)
+//! phase: parse
+//! conforms: mod.dir, gram.item.use, conf.resolve.ambient
+//!
+//! wolf-lang#1083: the package has a module `worker` (the directory beside
+//! this file), and this file calls it with no `use worker`. `worker` is
+//! also one of the prelude's provisional stand-ins, so until this row the
+//! name resolved to the stand-in and every compiled tier declined it as "a
+//! std/prelude stub without a signature", a refusal that blamed the
+//! compiler. An unimported module of a stand-in's name now misses as every
+//! unimported module does, E0301 at the name, with a note that the module
+//! is not imported and `use worker` as the edit. `module_unimported/` is
+//! the same program with the module named `helper`.
+
+fn main() -> int {
+    let args = env_args()
+    return worker.main(args) // ERROR E0301: add `use worker`
+}
