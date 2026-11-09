@@ -1,0 +1,27 @@
+//! check: fail(E0604)
+//! phase: resolve
+//! conforms: gram.expr.tagident, err.rows
+//!
+//! wolf-lang#1085's other half: `bad` IS a tag this function spells, in the
+//! annotation of `r`, but `answer` returns `int`, which has no error row.
+//! `return bad` would send an error out of a function that cannot fail,
+//! the case E0604 names for `?`, and it gets `?`'s fix: `! {bad}` on the
+//! signature. Declined as "an error-row tag outside `!T` context" until
+//! this row; lupin 0.1.60 refuses it as "`bad` does not resolve".
+
+fn g() -> int ! {bad} {
+    return bad
+}
+
+fn answer() -> int {
+    let r: int ! {bad} = g()
+    let n = r else 0
+    if n > 0 {
+        return bad // ERROR E0604: `bad` is an error tag, and `answer` cannot fail
+    }
+    n
+}
+
+fn main() -> int {
+    answer()
+}
