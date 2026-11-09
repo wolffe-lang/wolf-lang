@@ -70,6 +70,14 @@ pub trait ModuleLoader {
         Vec::new()
     }
 
+    /// The root's directories that hold wolf source — the modules a file
+    /// could import by one name (wolf-lang#1083: an E0301 for one of
+    /// these names says the module is not imported). The default is
+    /// [`root_module_names`](Self::root_module_names).
+    fn root_module_dirs(&mut self) -> Vec<String> {
+        self.root_module_names()
+    }
+
     /// Does this loader serve a real std tree? When true, `use std.…`
     /// resolves through [`load_module`](Self::load_module) with the
     /// `std`-prefixed path, exactly like any package module; when
@@ -369,6 +377,22 @@ impl ModuleLoader for DiskLoader<'_> {
             .collect();
         names.sort();
         names
+    }
+
+    fn root_module_dirs(&mut self) -> Vec<String> {
+        let holds_source = |dir: &Path| {
+            std::fs::read_dir(dir).is_ok_and(|entries| {
+                entries.flatten().any(|e| {
+                    let p = e.path();
+                    p.is_file() && p.extension().is_some_and(|x| x == "lu")
+                })
+            })
+        };
+        let root = self.root.clone();
+        self.root_module_names()
+            .into_iter()
+            .filter(|n| holds_source(&root.join(n)))
+            .collect()
     }
 
     fn has_std_root(&self) -> bool {
@@ -759,6 +783,10 @@ pub struct Package {
     /// A std root was configured (`[type.method.root]`): a method call
     /// that reaches a home module with none is E0301, not a stand-in.
     pub has_std_root: bool,
+    /// The names a file could import by one segment: the root's source
+    /// directories and the dependency aliases (wolf-lang#1083). An
+    /// unresolved name among them is a module the file did not import.
+    pub importable: BTreeSet<String>,
 }
 
 /// Load a package from its root module outward (pass A). Errors with a
@@ -787,6 +815,8 @@ pub fn load_package(
     if has_std_root {
         st.load_home_modules();
     }
+    let mut importable: BTreeSet<String> = st.loader.root_module_dirs().into_iter().collect();
+    importable.extend(st.aliases.names().map(str::to_string));
     // Dependency-first deterministic order (deps ascend by index).
     let mut topo = Vec::new();
     let mut seen = vec![false; st.modules.len()];
@@ -812,6 +842,7 @@ pub fn load_package(
         topo,
         diagnostics: st.diags,
         has_std_root,
+        importable,
     })
 }
 
@@ -1558,6 +1589,32 @@ pub(crate) fn excluded_definer_notes(d: Diagnostic, module: &ModuleData, name: &
             ),
         None => d,
     }
+}
+
+/// wolf-lang#1083: `name` missed, and it is a module this package has —
+/// a root directory of wolf source, or a dependency alias — that the file
+/// does not import. Say so, and offer the `use`, inserted where the file's
+/// imports end (`insert_at`, zero-width).
+pub(crate) fn unimported_module_note(
+    d: Diagnostic,
+    pkg: &Package,
+    module: usize,
+    name: &str,
+    insert_at: Span,
+    line: &str,
+) -> Diagnostic {
+    if !pkg.importable.contains(name) || pkg.modules[module].path == [name] {
+        return d;
+    }
+    d.with_note(format!(
+        "`{name}` is a module of this package, and this file does not import it: a \
+         module's items are reached as `{name}.item` once the file says `use {name}`"
+    ))
+    .with_suggestion(wolf_diag::Suggestion::new(
+        format!("add `use {name}`"),
+        vec![(insert_at, line.to_string())],
+        wolf_diag::Applicability::Maybe,
+    ))
 }
 
 fn no_such_item(span: Span, name: &str, module: &str, cands: &[String]) -> Diagnostic {
