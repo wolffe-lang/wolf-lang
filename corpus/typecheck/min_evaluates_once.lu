@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="tick 2\ntick 1\n1\n")
+//! phase: run
+//! conforms: type.min
+//!
+//! wolf-lang#708 (`[type.min]`): each operand is evaluated once, left to
+//! right, before the comparison; the smaller value is the answer and
+//! nothing is evaluated again to produce it.
+
+fn tick(n: int) -> int {
+    print("tick {n}")
+    n
+}
+
+fn main() {
+    print("{min(tick(2), tick(1))}")
+}
