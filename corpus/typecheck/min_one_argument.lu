@@ -1,0 +1,10 @@
+//! check: fail(E0402)
+//! phase: resolve
+//! conforms: type.min
+//!
+//! wolf-lang#708 (`[type.min]`): `min` takes exactly two operands. One is
+//! E0402 at the call. lupin 0.1.60's `min` takes any number and prints `5`.
+
+fn main() {
+    print("{min(5)}") // ERROR E0402: `min` takes 2 arguments
+}
