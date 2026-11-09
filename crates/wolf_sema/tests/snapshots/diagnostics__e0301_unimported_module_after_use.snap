@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: nothing named `helper` is in scope
+ --> mem:///main.lu:4:12
+  |
+4 |     return helper.main(other.one())
+  |            ^^^^^^ not found
+  |
+  = note: `helper` is a module of this package, and this file does not import it: a module's items
+    are reached as `helper.item` once the file says `use helper`
+help: add `use helper`
+  |
+2 | use helper
+  |

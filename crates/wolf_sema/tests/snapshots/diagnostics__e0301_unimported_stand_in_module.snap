@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: nothing named `worker` is in scope
+ --> mem:///main.lu:2:12
+  |
+2 |     return worker.main(3)
+  |            ^^^^^^ not found
+  |
+  = note: `worker` is a module of this package, and this file does not import it: a module's items
+    are reached as `worker.item` once the file says `use worker`
+help: add `use worker`
+  |
+1 | use worker
+  |
