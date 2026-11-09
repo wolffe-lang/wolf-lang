@@ -1,7 +1,7 @@
 # s289: the diagnostics sweep, third change: the prelude's `min` on every tier
 
 The third of the sweep's three changes (`notes/s289-prediction.md`), from the second's head
-`353ee08c` (`notes/s289-the-census-the-linker-and-the-manifest.md`). It covers wolf-lang#708 as
+`743c6770` (`notes/s289-the-census-the-linker-and-the-manifest.md`). It covers wolf-lang#708 as
 ruled (R-s289-7):
 
 - **`[type.min]`:** `min(a, b)` takes two values of one integer type and answers the smaller, as
@@ -43,8 +43,12 @@ What existing programs mean, by decision:
 
 ## Inputs, verified
 
-- **Base:** the second change's head `353ee08c`. Its code is identical to the second change's
-  checked commit `934e36ac` (nothing under `crates/`, `xtask/`, `spec/` or `corpus/` differs).
+- **Base:** the second change's head `743c6770`.
+  - The base was measured and the rows and fix were written on its earlier head `353ee08c`,
+    whose code is identical to the second change's checked commit `934e36ac`.
+  - The second change then gained one test fix (`e03952a3`, the refusal-site rows read past the
+    linker note) and its note, and this change was rebased onto it with the same patches
+    (`m3-rebase-map.txt`). The logs are named by the commits they ran at.
 - **lupin 0.1.60**, as in the first change.
 - **The spec:**
   - `[type.comb.set]` (`std.list`'s `zip`);
@@ -56,17 +60,25 @@ What existing programs mean, by decision:
 
 ## Prediction
 
-`notes/s289-min-prediction.md`, committed (`581d1cbc`) before the first row, with the base
-measured (`b8069f89`). It held, with one correction:
-- **A folded compare.** The first take of the lowering (`dce5441a`) branched on the compare
+`notes/s289-min-prediction.md`, committed (`c6635ed5`) before the first row, with the base
+measured (`feb3b5fc`). It held, with three corrections:
+- **A folded compare.** The first take of the lowering (`7753e3c4`) branched on the compare
   whatever it was. When both operands are known, the builder folds the compare to a constant and
   the branch to one arm, which left the other arm a block with no predecessor beside the join.
   - Native and release then panicked in SSA construction at the next use of a local (`min_signed`
     and `min_unsigned` red, `m3-check-292bc30a-air.log`).
-  - `c1084991` answers a folded compare with its operand directly, and one value twice with
+  - `54cc3875` answers a folded compare with its operand directly, and one value twice with
     itself.
+- **Two consequences the prediction did not name**, found by the full take
+  (`m3-full-71e97d82-air.log`):
+  - `wolf_sema`'s `prelude_names` pins the table's counts. With `min` and `zip` anchored and `zip`
+    off W0304, it reads 28 unanchored names (was 30) and 220 W0304 names (was 221)
+    (`868b0ef7`).
+  - The catalog lists every snapshot that quotes a code as that code's fixture, and the new rows'
+    lexer snapshots quote E0401, E0402 and E0415. `docs/diagnostics.md` was regenerated
+    (`62d4466e`).
 
-| row | at the rows' commit `c2e51c03` | at the fix | lupin 0.1.60 |
+| row | at the rows' commit `78511cf9` | at the fix | lupin 0.1.60 |
 |---|---|---|---|
 | `typecheck/min_signed.lu` | declined | `3 -5 7`, `i64`'s ends | equal |
 | `typecheck/min_unsigned.lu` | declined | `7 7`, `1 1`, `9` | equal |
@@ -105,6 +117,7 @@ W0304 exemption already agree.
 ## Evidence index
 
 `notes/s289-evidence/`:
+- `m3-rebase-map.txt`: the logged commits and the commits they are now, with the same patches.
 - `m3-base-353ee08c-air.log`: every probe under `probe-min/` on the four machines at the base.
 - `m3-red-c2e51c03-air.log`: the rows red at their commit.
   - The four-machine test: 10 FAILED by name, the own-`min` control ok.
@@ -116,8 +129,11 @@ W0304 exemption already agree.
 - `m3-check-9f16bfdb-air.log`: the take at the fold. Every row and control green; spec-extract
   and conformance; the corpus 1,351 files, 0 bad; fmt and clippy; the ledger written.
 - `m3-check-b53694c7-air.log`: the same checks at the ledger's commit, green, the tree clean.
-- `m3-full-*-air.log`: the full take at this change's code. `wolf_sema`'s suites, `wolf_wir`'s and
-  `wolf_mem`'s library tests, and the catalog check.
+- `m3-full-71e97d82-air.log`: the full take at the note's first commit.
+  - Every step of the checks above green, and `wolf_wir`'s and `wolf_mem`'s library tests.
+  - `wolf_sema`'s `prelude_names` and the catalog check red (the two consequences above).
+- `m3-full-62d4466e-air.log`: the full take at the fixes, every step green, the catalog in sync,
+  the tree clean.
 - `rig/m3-red.sh`, `rig/m3-check.sh`: the scripts that ran them.
 
 The Linux record of this head and the plant's record are cited in the PR.
@@ -125,23 +141,24 @@ The Linux record of this head and the plant's record are cited in the PR.
 ## Done-when
 
 Commits:
-- `b8069f89`: the base measured; `581d1cbc`: the prediction.
+- `feb3b5fc`: the base measured; `c6635ed5`: the prediction.
 - The rows:
-  - corpus: `9116b60c`, `88052b5b`, `f24873ea`, `c5767935`, `7648f2a4`, `a4b4d2c7`, `737855a5`,
-    `804daaeb`, `fd969d39`;
-  - `ffec2970` (four machines), `af1750fa` (the census), `c2e51c03` (the prelude table);
-  - snapshots: `a4486ef2`, `25bd1773`.
+  - corpus: `f1f757e1`, `1bbbc41e`, `df9e39b1`, `5b2c6168`, `3e14c08c`, `bdbb7fae`, `46000038`,
+    `1ca487a7`, `25e80248`;
+  - `c43a9e6e` (four machines), `c3328f15` (the census), `78511cf9` (the prelude table);
+  - snapshots: `e186314a`, `f2557e09`.
 - The fix:
-  - `574d5b10` (the clause);
-  - `991f2c2e` (the table's anchors and `zip`'s exemption);
-  - `823a67a0` (the checker);
-  - `dce5441a` and `c1084991` (WIR);
-  - `292bc30a` (the checked machine).
-- `283c2ced`: formatting. `9f16bfdb`: the anchors. `b53694c7`: the ledger. `71dd6a7a`: the
+  - `1f79b17c` (the clause);
+  - `3add1ff8` (the table's anchors and `zip`'s exemption);
+  - `24d747e5` (the checker);
+  - `7753e3c4` and `54cc3875` (WIR);
+  - `bc0f5376` (the checked machine).
+- `ad6a914b`: formatting. `c6def8db`: the anchors. `3a12f035`: the ledger. `3a8b25c6`: the
   changelog. This note and its evidence.
+- `868b0ef7`: the prelude's counts. `62d4466e`: the catalog.
 
 Test targets:
-- [x] the prediction committed before the first row (`581d1cbc`)
+- [x] the prediction committed before the first row (`c6635ed5`)
 - [x] the rows red at their commit, by name (`m3-red-c2e51c03-air.log`)
 - [x] the rows green at the fix on the checked machine, native and release, spans exact; lupin
       held to its present answers (`prelude_min_lanes`, 11 tests)
@@ -149,8 +166,8 @@ Test targets:
 - [x] spec-extract (two anchors added, none dropped), conformance, the corpus `0 bad` (1,351
       files), fmt, clippy (`wolf_sema`, `wolf_wir`, `wolf_mem`, `wolf_driver`, all targets,
       `-D warnings`)
-- [ ] the full take: `wolf_sema`'s suites, `wolf_wir`'s and `wolf_mem`'s library tests, the
-      catalog
+- [x] the full take: `wolf_sema`'s suites, `wolf_wir`'s and `wolf_mem`'s library tests, the
+      catalog (red at first, above; green at the fixes)
 - [ ] the gauntlet (`cargo xtask ci`, every step's `END`) at this head on Linux x86-64
 - [ ] the plant red by name, its controls green
 - [ ] tier full on CI (`full-matrix`)
