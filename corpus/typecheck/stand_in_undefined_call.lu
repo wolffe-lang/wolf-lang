@@ -1,0 +1,16 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: conf.resolve.ambient
+//!
+//! wolf-lang#1083's neighbour: `worker` is one of the prelude's provisional
+//! stand-ins (`acquire`, `release`, `build_config`, `build_batch`,
+//! `worker`, `sleeper`), names that resolve everywhere so that the oldest
+//! corpus programs can define them. Nothing defines it here, so the call
+//! has nothing behind it: E0301 at the name, with both fixes (define it,
+//! or import the module that does). Declined as "a std/prelude stub
+//! without a signature" until this row; lupin 0.1.60 declines it as having
+//! no pinned semantics.
+
+fn main() -> int {
+    worker() // ERROR E0301: nothing defines `worker`
+}
