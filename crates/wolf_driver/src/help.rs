@@ -110,7 +110,11 @@ link line: `-o OUTPUT OBJECTS RUNTIME -lpthread -ldl -lm
 -Wl,--gc-sections` and trap aliases when needed. It is one executable
 path, not shell text or a raw ld command. Failure or malformed/foreign
 ELF output is final. Without either choice, the existing CC/cc, macOS
-and Windows link paths are unchanged. Explicit linkers do not enable
+and Windows link paths are unchanged: on Linux the cc link asks for lld
+(`-fuse-ld=lld`) whenever an `ld.lld` is on PATH, and the build names
+that ld.lld and its version in a note, since the output's bytes depend
+on it; `WOLF_LD=cc` (or `--linker cc`) keeps the system linker. macOS
+always links through Apple's ld. Explicit linkers do not enable
 hosted Windows, Mach-O or foreign targets, and are unused by object-only
 builds. Assembly and release clang IR compilation remain separate.
 For `wolf run`, put build flags before the entry file.
