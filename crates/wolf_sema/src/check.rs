@@ -514,6 +514,11 @@ struct LoopCtx {
 /// The impl-search depth rail for blanket-impl chains.
 const SAT_DEPTH: u32 = 8;
 
+/// `[type.min.zip]` (s289, wolf-lang#708): every use of the free `zip`,
+/// declined with the clause's reason.
+const FREE_ZIP: &str = "the prelude's free `zip`, which no clause gives a meaning \
+                        (`std.list`'s method `xs.zip(ys)` is the spelling)";
+
 /// Why a type must satisfy a trait (s14 obligations, discharged at
 /// body end once inputs are solved).
 #[derive(Debug, Clone)]
@@ -5808,10 +5813,11 @@ impl<'a> Checker<'a> {
             if prelude::kind(&name) == Some(prelude::Kind::Type) {
                 return Ok(self.lo.table.intern(TyKind::TypeTy));
             }
-            if matches!(name.as_str(), "min" | "zip") {
+            // `[type.min.zip]`: the free `zip` has no meaning, wherever it
+            // is used. (`min` is `[type.min]`'s; as a value it is a builtin.)
+            if name == "zip" {
                 return Err(NotYet {
-                    construct: "a prelude helper with no signature yet (`min`, `zip`: write \
-                                the comparison or the loop)",
+                    construct: FREE_ZIP,
                     span: e.span,
                 });
             }
@@ -8630,6 +8636,59 @@ impl<'a> Checker<'a> {
     /// kw11 (`[conc.mm.fence]`): `fence(o)` — a builtin, unit-typed;
     /// every order but `relaxed` (E1309). wolf_mem rings every order
     /// but `seq_cst` (E1301).
+    /// `[type.min]` (s289, wolf-lang#708): `min(a, b)` takes two values of
+    /// one integer type and answers the smaller, as that type. The arity is
+    /// E0402; an operand outside the integers is E0401 at that operand; the
+    /// second operand is checked against the first's type, so a second
+    /// integer type is E0401 there and a literal that does not fit is E0415.
+    fn call_min(&mut self, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        let values: Vec<&GreenNode> = arg_nodes.iter().filter_map(|a| Arg::value(*a)).collect();
+        if arg_nodes.len() != 2 || values.len() != 2 {
+            self.wrong_arg_count("min", e.span, None, 2, arg_nodes.len());
+            for v in values {
+                self.synth_expr(v)?;
+            }
+            return Ok(self.error_ty());
+        }
+        let (a, b) = (values[0], values[1]);
+        let at = self.synth_expr(a)?;
+        let probe = self.fresh(NumKind::Integer, a.span);
+        if unify(&mut self.lo.table, &mut self.vars, at, probe).is_err() {
+            self.report_min_operand(a.span, at);
+            self.synth_expr(b)?;
+            return Ok(self.error_ty());
+        }
+        let exp = Expect {
+            ty: at,
+            reason: Reason::ArgOfCall {
+                callee: "min".to_string(),
+                index: 1,
+            },
+            because: Some(a.span),
+        };
+        self.check_expr(b, &exp)?;
+        Ok(at)
+    }
+
+    /// E0401, `[type.min]`: an operand of `min` outside the integer family.
+    fn report_min_operand(&mut self, span: Span, found: TyId) {
+        let f = self.show(found);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0401,
+                span,
+                format!("`min` takes integers, and this is `{f}`"),
+            )
+            .with_label(format!("this is `{f}`"))
+            .with_note(
+                "`min(a, b)` answers the smaller of two values of one integer type \
+                 ([type.min]); for any other ordered type, compare with `<` and pick one \
+                 with `if`.",
+            ),
+        );
+    }
+
     fn call_fence(&mut self, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
         let unit = self.lo.table.unit();
         let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
@@ -8840,6 +8899,11 @@ impl<'a> Checker<'a> {
                         "print" | "print_raw" | "eprint" | "eprint_raw"
                     ) {
                         return self.call_print(&name, e, d.args());
+                    }
+                    // `[type.min]` (s289, wolf-lang#708): two operands of one
+                    // integer type, the smaller one answered.
+                    if name == "min" {
+                        return self.call_min(e, d.args());
                     }
                     // Ambient host surfaces (s16): typed here, callable
                     // at runtime, categorically refused at comptime by
