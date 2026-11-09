@@ -1,0 +1,8 @@
+fn answer() -> !int {
+    let x = Bad
+    0
+}
+
+fn main() -> int {
+    answer() else 1
+}

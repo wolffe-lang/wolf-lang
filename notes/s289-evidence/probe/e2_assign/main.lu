@@ -1,0 +1,9 @@
+struct Dialog {
+    kind: int,
+}
+
+fn main() -> int {
+    var d = Dialog { kind: 0 }
+    d.kind = INPUT
+    d.kind
+}

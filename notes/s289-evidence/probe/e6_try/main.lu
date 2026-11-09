@@ -1,0 +1,11 @@
+fn g() -> !int {
+    return Bad
+}
+
+fn answer() -> int {
+    g()?
+}
+
+fn main() -> int {
+    answer()
+}

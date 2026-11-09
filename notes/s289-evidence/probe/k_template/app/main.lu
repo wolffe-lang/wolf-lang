@@ -1,0 +1,7 @@
+use util
+
+fn main() -> !int {
+    let t = util.twist(20)
+    print("twist(20) = {t}")
+    0
+}

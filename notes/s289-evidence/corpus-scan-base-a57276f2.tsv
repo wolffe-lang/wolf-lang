@@ -1,0 +1,1264 @@
+corpus/comptime.lu	exit(0)	run	
+corpus/comptime/align_of_layout.lu	fail(E0708)	typecheck	E0708
+corpus/comptime/assert_static.lu	fail(E0710)	typecheck	E0710
+corpus/comptime/budget_zero.lu	fail(E0709)	typecheck	E0709
+corpus/comptime/depth_spiral.lu	fail(E0704)	typecheck	E0704
+corpus/comptime/derive_eq.lu	exit(0)	run	
+corpus/comptime/fold_reaches_lane.lu	exit(0)	run	
+corpus/comptime/fuel_loop.lu	fail(E0702)	typecheck	E0702
+corpus/comptime/heap_flood.lu	fail(E0703)	typecheck	E0703
+corpus/comptime/layout_query_repr_c.lu	exit(0)	run	
+corpus/comptime/norm_linear.lu	exit(0)	run	
+corpus/comptime/norm_witness.lu	fail(E0707)	typecheck	E0707
+corpus/comptime/offset_of_layout.lu	fail(E0708)	typecheck	E0708
+corpus/comptime/overflow_i32.lu	fail(E0706)	typecheck	E0706
+corpus/comptime/reflect_fields.lu	exit(0)	run	
+corpus/comptime/runtime_arg.lu	fail(E0705)	typecheck	E0705
+corpus/comptime/sandbox_chdir.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_clock.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_env.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_env_unset.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_exec.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_ffi.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_fs.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_io.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_isatty.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_net.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_net_socket.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_os_exec.lu	unsupported	resolve	`List` construction at comptime (the engine's values are hash-consed and immutable — scalars, `str`, tuples and comptime slices; no container with identity yet, so a builtin whose argument is a `List` is unreachable here whatever the D33 sandbox says about it)
+corpus/comptime/sandbox_os_random.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_pipe.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_random.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_set_mode.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/sandbox_spawn_fds.lu	unsupported	resolve	`List` construction at comptime (the engine's values are hash-consed and immutable — scalars, `str`, tuples and comptime slices; no container with identity yet, so a builtin whose argument is a `List` is unreachable here whatever the D33 sandbox says about it)
+corpus/comptime/sandbox_umask.lu	fail(E0701)	typecheck	E0701
+corpus/comptime/shift_overflow.lu	fail(E0706)	typecheck	E0706
+corpus/comptime/shift_value.lu	exit(0)	run	
+corpus/comptime/size_of_layout.lu	fail(E0708)	typecheck	E0708
+corpus/conc/atomic_counter.lu	exit(0)	run	
+corpus/conc/atomic_fence.lu	exit(0)	run	
+corpus/conc/atomic_order_misuse.lu	fail(E1309)	typecheck	E1309,E1309,E1309,E1309,E1309,E1309,E1309,E1309
+corpus/conc/atomic_orders.lu	exit(0)	run	
+corpus/conc/atomic_outside_unsafe.lu	fail(E1301)	mem	E1301,E1301
+corpus/conc/atomic_pointee.lu	fail(E1308)	typecheck	E1308,E1308,E1308,E1308
+corpus/conc/atomic_race_plain.lu	trap(race)	run	
+corpus/conc/atomic_ub_misaligned.lu	ub(mem.ub)	run	E1401
+corpus/conc/atomic_ub_uaf.lu	ub(mem.ub)	run	E1401
+corpus/conc/atomic_widths.lu	exit(0)	run	
+corpus/conc/cancel_sibling.lu	exit(0)	run	
+corpus/conc/capture_mut_arg.lu	fail(E1101)	typecheck	E1101,E1101
+corpus/conc/capture_mut_lend.lu	fail(E1101)	typecheck	E1101,E1101
+corpus/conc/capture_write_assign.lu	fail(E1101)	typecheck	E1101,E1101
+corpus/conc/chan_closed_row.lu	exit(0)	run	
+corpus/conc/chan_default_rendezvous.lu	exit(0)	run	
+corpus/conc/chan_drain_after_inclusive_loop.lu	exit(0)	run	
+corpus/conc/chan_param_for.lu	exit(0)	run	
+corpus/conc/chan_payload_escape.lu	fail(E1010)	mem	E1010,E1010
+corpus/conc/chan_payload_escape_proc.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_payload_proc_param.lu	exit(0)	run	
+corpus/conc/chan_root_task.lu	exit(0)	run	
+corpus/conc/chan_send_closed_row.lu	exit(0)	run	
+corpus/conc/chan_sent_arg_bound.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_enum.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_for.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_legal.lu	exit(0)	run	
+corpus/conc/chan_sent_arg_legal_tasks.lu	exit(0)	run	
+corpus/conc/chan_sent_arg_nested.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_proc.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_proc_site.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_scope.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_select.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_spawn.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_struct.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_sent_arg_tuple.lu	fail(E1010)	mem	E1010
+corpus/conc/chan_struct_payload.lu	exit(0)	run	
+corpus/conc/chan_unsendable.lu	fail(E1102)	typecheck	E1102
+corpus/conc/freeze_proc_snapshot.lu	exit(0)	run	
+corpus/conc/freeze_publish.lu	exit(0)	run	
+corpus/conc/message_passing.lu	exit(0)	run	
+corpus/conc/par_capture_write.lu	fail(E1101)	typecheck	E1101
+corpus/conc/par_fail_reraises.lu	exit(0)	run	
+corpus/conc/par_order.lu	exit(0)	run	
+corpus/conc/proc_cancel_defers.lu	exit(0)	run	
+corpus/conc/proc_cap_fault_join.lu	exit(0)	run	
+corpus/conc/proc_cross_module/main.lu	exit(0)	run	
+corpus/conc/proc_join_param.lu	exit(0)	run	
+corpus/conc/proc_join_value.lu	exit(0)	run	
+corpus/conc/proc_kill_defers.lu	exit(0)	run	
+corpus/conc/proc_link.lu	exit(0)	run	
+corpus/conc/proc_link_root.lu	exit(0)	run	
+corpus/conc/proc_link_root_death.lu	exit(121)	run	
+corpus/conc/proc_must_join_legal.lu	exit(0)	run	
+corpus/conc/proc_spawn_loop.lu	exit(0)	run	
+corpus/conc/reason_interp.lu	exit(0)	run	
+corpus/conc/select_arm_bare_variant.lu	fail(E0806)	resolve	E0806
+corpus/conc/select_arm_lowercase_binds.lu	exit(0)	run	
+corpus/conc/select_arm_lowercase_variant.lu	fail(E0806)	resolve	E0806
+corpus/conc/select_seeded.lu	exit(0)	run	
+corpus/conc/select_single_arm_loop.lu	exit(0)	run	
+corpus/conc/select_two_timeouts.lu	exit(0)	run	
+corpus/conc/spawn_cluster_split.lu	exit(0)	run	
+corpus/conc/spawn_fanout_loop.lu	exit(0)	run	
+corpus/conc/spawn_tail_send_raised_row.lu	exit(0)	run	
+corpus/conc/store_buffer.lu	fail(E1101)	typecheck	E1101,E1101,E1101,E1101
+corpus/conc/when_multi.lu	exit(0)	run	
+corpus/conc/when_nested.lu	fail(E1103)	typecheck	E1103
+corpus/ct/branch_secret.lu	fail(E1601)	wir	E1601
+corpus/ct/callind_secret.lu	fail(E1603)	wir	E1603
+corpus/ct/checked_secret.lu	fail(E1606)	wir	E1606
+corpus/ct/divmod_secret.lu	fail(E1604)	wir	E1604
+corpus/ct/index_secret.lu	fail(E1602)	wir	E1602,E1602
+corpus/ct/membrane.lu	fail(E1605)	wir	E1605
+corpus/ct/public_len.lu	exit(0)	run	
+corpus/ct/public_typo.lu	fail(E1607)	typecheck	E1607
+corpus/entry_no_return.lu	exit(0)	run	
+corpus/errors.lu	unsupported	resolve	a std/prelude stub without a signature
+corpus/faults/assert_fails.lu	trap(assert)	run	
+corpus/faults/assert_msg_effect_fails.lu	trap(assert)	run	
+corpus/faults/assert_msg_holds.lu	exit(0)	run	
+corpus/faults/assert_msg_name.lu	exit(0)	run	
+corpus/faults/assert_msg_name_fails.lu	trap(assert)	run	
+corpus/faults/assert_msg_try.lu	exit(0)	run	
+corpus/faults/bounds_slice.lu	trap(bounds)	run	
+corpus/faults/byte_view_slice_reversed.lu	trap(bounds)	run	
+corpus/faults/cast_float_nan_trap.lu	trap(overflow)	run	
+corpus/faults/cast_float_overflow_trap.lu	trap(overflow)	run	
+corpus/faults/cast_float_to_int_truncate.lu	exit(0)	run	
+corpus/faults/cast_narrow_sign_trap.lu	trap(overflow)	run	
+corpus/faults/cast_narrow_unsigned_to_signed_trap.lu	trap(overflow)	run	
+corpus/faults/cast_narrow_width_trap.lu	trap(overflow)	run	
+corpus/faults/char_cast_negative_trap.lu	trap(overflow)	run	
+corpus/faults/char_cast_range_trap.lu	trap(overflow)	run	
+corpus/faults/char_cast_surrogate_trap.lu	trap(overflow)	run	
+corpus/faults/div_zero_rem.lu	trap(div-zero)	run	
+corpus/faults/exclusivity_nested_path.lu	fail(E1002)	mem	E1002
+corpus/faults/index_origin_min_overflow.lu	trap(overflow)	run	
+corpus/faults/index_origin_zero.lu	trap(bounds)	run	
+corpus/faults/int_shift_count_negative.lu	trap(overflow)	run	
+corpus/faults/int_shift_left_overflow.lu	trap(overflow)	run	
+corpus/faults/int_shift_left_past_width.lu	trap(overflow)	run	
+corpus/faults/int_shift_left_sign_bit.lu	trap(overflow)	run	
+corpus/faults/int_truth_neg_u64_trap.lu	trap(overflow)	run	
+corpus/faults/int_truth_neg_u8_trap.lu	trap(overflow)	run	
+corpus/faults/int_truth_u64_add_trap.lu	trap(overflow)	run	
+corpus/faults/int_truth_u64_cast_trap.lu	trap(overflow)	run	
+corpus/faults/int_truth_uint_sub_trap.lu	trap(overflow)	run	
+corpus/faults/int_truth_wrap_div_zero.lu	trap(div-zero)	run	
+corpus/faults/int_truth_wrap_rem_zero_signed.lu	trap(div-zero)	run	
+corpus/faults/list_slice_oob.lu	trap(bounds)	run	
+corpus/faults/list_slice_reversed.lu	trap(bounds)	run	
+corpus/faults/overflow_add.lu	trap(overflow)	run	
+corpus/faults/overflow_call_result.lu	trap(overflow)	run	
+corpus/faults/overflow_elem_read.lu	trap(overflow)	run	
+corpus/faults/overflow_elem_write.lu	trap(overflow)	run	
+corpus/faults/overflow_field_read.lu	trap(overflow)	run	
+corpus/faults/overflow_interp_operand.lu	trap(overflow)	run	
+corpus/faults/overflow_list_pop_i32.lu	trap(overflow)	run	
+corpus/faults/overflow_list_pop_i64.lu	trap(overflow)	run	
+corpus/faults/region_cap_breach.lu	trap(alloc-contract)	run	
+corpus/faults/repeat_negative.lu	trap(assert)	run	
+corpus/faults/stack_overflow.lu	trap(bounds)	run	
+corpus/faults/trap_skips_root_defers.lu	trap(assert)	run	
+corpus/faults/use_after_move_field.lu	fail(E1001)	mem	E1001
+corpus/faults/wrap_high_as_i32.lu	trap(overflow)	run	
+corpus/faults/wrap_top_bit_as_int.lu	trap(overflow)	run	
+corpus/ffi.lu	unsupported	resolve	inline C / asm typing
+corpus/fs/at_rows.lu	exit(0)	run	
+corpus/fs/bytes_dirs.lu	exit(0)	run	
+corpus/fs/change_rows.lu	exit(0)	run	
+corpus/fs/copy_chunk.lu	exit(0)	run	
+corpus/fs/copy_chunk_dev_full.lu	exit(0)	run	
+corpus/fs/copy_chunk_failed_write.lu	exit(0)	run	
+corpus/fs/error_row.lu	exit(1)	run	
+corpus/fs/fstat.lu	exit(0)	run	
+corpus/fs/hard_link.lu	exit(0)	run	
+corpus/fs/link_at.lu	exit(0)	run	
+corpus/fs/mkdir_at.lu	exit(0)	run	
+corpus/fs/mode_fd.lu	exit(0)	run	
+corpus/fs/mode_symlink.lu	exit(0)	run	
+corpus/fs/open_directory.lu	exit(0)	run	
+corpus/fs/open_nonblock.lu	exit(0)	run	
+corpus/fs/os_error.lu	exit(0)	run	
+corpus/fs/read_at.lu	exit(0)	run	
+corpus/fs/remove_dir_refused.lu	exit(0)	run	
+corpus/fs/roundtrip.lu	exit(0)	run	
+corpus/fs/seek_tell.lu	exit(0)	run	
+corpus/fs/set_times.lu	exit(0)	run	
+corpus/fs/statfs_rows.lu	exit(0)	run	
+corpus/fs/std_write_bytes.lu	exit(0)	run	
+corpus/fs/symlink_at.lu	exit(0)	run	
+corpus/fs/truncate.lu	exit(0)	run	
+corpus/generics/box_method.lu	exit(0)	run	
+corpus/generics/explicit_apply.lu	exit(0)	run	
+corpus/generics/explicit_apply_arity.lu	fail(E0812)	typecheck	E0812
+corpus/generics/first_of_list.lu	exit(0)	run	
+corpus/generics/hundred_shapes.lu	exit(0)	run	
+corpus/generics/list_imported_elem/main.lu	exit(0)	run	
+corpus/generics/list_struct_elem.lu	exit(0)	run	
+corpus/generics/list_wrapping_elem.lu	exit(0)	run	
+corpus/generics/pair_of.lu	exit(0)	run	
+corpus/generics/two_instances.lu	exit(0)	run	
+corpus/generics/two_level_raise.lu	exit(0)	run	
+corpus/grammar/attr_contract_unimplemented.lu	fail(E0817)	typecheck	E0817
+corpus/grammar/attr_implemented_set.lu	exit(0)	run	
+corpus/grammar/attr_misplaced.lu	fail(E0817)	typecheck	E0817,E0817
+corpus/grammar/attr_repr_bogus.lu	fail(E0817)	typecheck	E0817,E0817,E0817
+corpus/grammar/attr_repr_unimplemented.lu	fail(E0817)	typecheck	E0817
+corpus/grammar/attr_repr_unlayable.lu	fail(E0820)	typecheck	E0820,E0820,E0820,E0820
+corpus/grammar/attr_section.lu	fail(E0817)	typecheck	E0817,E0817
+corpus/grammar/attr_thread_local.lu	fail(E0817)	typecheck	E0817
+corpus/grammar/attr_unknown.lu	fail(E0817)	typecheck	E0817
+corpus/grammar/bang_errunion.lu	exit(0)	run	
+corpus/grammar/bang_not.lu	exit(0)	run	
+corpus/grammar/bom_at_start.lu	exit(0)	run	
+corpus/grammar/brackets_generic_call.lu	exit(0)	run	
+corpus/grammar/brackets_index.lu	fail(E0409)	typecheck	E0409
+corpus/grammar/cfg_predicate_unknown.lu	fail(E0817)	typecheck	E0817
+corpus/grammar/cfg_target_arch.lu	exit(0)	run	
+corpus/grammar/cfg_target_freestanding.lu	exit(0)	run	
+corpus/grammar/cfg_target_unknown.lu	fail(E0817)	typecheck	E0817
+corpus/grammar/char_uni_seven_digits.lu	fail(E0101)	lex	E0101
+corpus/grammar/closure_extent.lu	unsupported	resolve	member access on a value whose type is still being inferred
+corpus/grammar/closure_params_no_separator.lu	fail(E0201)	parse	E0201
+corpus/grammar/defer_loop_turn.lu	exit(0)	run	
+corpus/grammar/else_chain.lu	exit(0)	run	
+corpus/grammar/else_default.lu	exit(0)	run	
+corpus/grammar/else_default_newline.lu	exit(0)	run	
+corpus/grammar/extern_abi_interrupt.lu	fail(E0818)	typecheck	E0818
+corpus/grammar/if_brace_next_line.lu	fail(E0201)	parse	E0201
+corpus/grammar/if_then_arm.lu	exit(0)	run	
+corpus/grammar/if_then_block.lu	exit(0)	run	
+corpus/grammar/if_then_chain.lu	exit(0)	run	
+corpus/grammar/if_then_ident.lu	exit(0)	run	
+corpus/grammar/if_then_let.lu	exit(0)	run	
+corpus/grammar/if_then_let_body.lu	fail(E0201)	parse	E0201
+corpus/grammar/if_then_member.lu	exit(0)	run	
+corpus/grammar/if_then_missing.lu	fail(E0201)	parse	E0201
+corpus/grammar/if_then_mixed.lu	fail(E0201)	parse	E0201
+corpus/grammar/if_then_paren_default.lu	exit(0)	run	
+corpus/grammar/if_then_stmt.lu	exit(0)	run	
+corpus/grammar/if_then_width.lu	exit(0)	run	
+corpus/grammar/index_origin_bad.lu	fail(E0813)	typecheck	E0813
+corpus/grammar/index_origin_closure.lu	exit(0)	run	
+corpus/grammar/index_origin_file.lu	exit(0)	run	
+corpus/grammar/index_origin_misplaced.lu	fail(E0211)	parse	E0211
+corpus/grammar/index_origin_scopes.lu	exit(0)	run	
+corpus/grammar/intdot_exponent.lu	fail(E0004)	typecheck	E0004
+corpus/grammar/intdot_member.lu	unsupported	resolve	methods on builtin types (the std surface)
+corpus/grammar/intdot_range.lu	exit(0)	run	
+corpus/grammar/interp_fmtcolon.lu	unsupported	mem	a computed format spec
+corpus/grammar/interp_nested.lu	exit(0)	run	
+corpus/grammar/let_group.lu	exit(0)	run	
+corpus/grammar/let_group_bare_tuple.lu	fail(E0201)	parse	E0201
+corpus/grammar/let_group_destructure.lu	exit(0)	run	
+corpus/grammar/let_group_one_init.lu	fail(E0201)	parse	E0201
+corpus/grammar/list_lit_arg.lu	exit(0)	run	
+corpus/grammar/list_lit_empty.lu	exit(0)	run	
+corpus/grammar/list_lit_index.lu	exit(0)	run	
+corpus/grammar/list_lit_let.lu	exit(0)	run	
+corpus/grammar/list_lit_mixed.lu	fail(E0401)	typecheck	E0401
+corpus/grammar/list_lit_multiline.lu	exit(0)	run	
+corpus/grammar/list_lit_nested.lu	exit(0)	run	
+corpus/grammar/list_lit_untyped_empty.lu	fail(E0419)	typecheck	E0419
+corpus/grammar/match_arm_at_binding.lu	exit(0)	run	
+corpus/grammar/match_arm_deep_tree.lu	exit(0)	run	
+corpus/grammar/match_arm_or_inside_product.lu	exit(0)	run	
+corpus/grammar/match_arm_or_over_product.lu	unsupported	mem	or-patterns with bindings in checked execution
+corpus/grammar/match_arm_product_nested.lu	exit(0)	run	
+corpus/grammar/match_arm_str_in_product.lu	exit(0)	run	
+corpus/grammar/match_nested_bare_variant.lu	exit(0)	run	
+corpus/grammar/match_nested_bare_variant_deep.lu	exit(0)	run	
+corpus/grammar/match_nested_bare_variant_fields.lu	exit(0)	run	
+corpus/grammar/match_nested_bare_variant_guard.lu	exit(0)	run	
+corpus/grammar/match_nested_bare_variant_or.lu	exit(0)	run	
+corpus/grammar/match_nested_name_binds.lu	exit(0)	run	
+corpus/grammar/match_nested_qualified_variant.lu	exit(0)	run	
+corpus/grammar/match_nested_struct_field_variant.lu	exit(0)	run	
+corpus/grammar/match_nullary_variant.lu	exit(0)	run	
+corpus/grammar/match_pattern_signed_literal.lu	fail(E0207)	parse	E0207,E0207,E0207,E0207
+corpus/grammar/match_range.lu	exit(0)	run	
+corpus/grammar/match_range_char.lu	exit(0)	run	
+corpus/grammar/match_range_open.lu	fail(E0201)	parse	E0201
+corpus/grammar/match_switch.lu	exit(0)	run	
+corpus/grammar/multiline_bad_escape.lu	fail(E0101)	lex	E0101
+corpus/grammar/multiline_close_shares_line.lu	fail(E0103)	lex	E0103
+corpus/grammar/multiline_mixed_margin.lu	fail(E0105)	lex	E0105
+corpus/grammar/multiline_open_shares_line.lu	fail(E0103)	lex	E0103
+corpus/grammar/multiline_short_margin.lu	fail(E0104)	lex	E0104
+corpus/grammar/newline_leading.lu	fail(E0001)	parse	E0001
+corpus/grammar/newline_trailing.lu	exit(0)	run	
+corpus/grammar/range_bare.lu	fail(E0201)	parse	E0201
+corpus/grammar/range_header_inclusive_max.lu	exit(0)	run	
+corpus/grammar/range_type_char.lu	exit(0)	run	
+corpus/grammar/range_type_inclusive.lu	exit(0)	run	
+corpus/grammar/range_type_overflow.lu	trap(overflow)	run	
+corpus/grammar/range_type_param.lu	exit(0)	run	
+corpus/grammar/range_type_return.lu	exit(0)	run	
+corpus/grammar/range_value_wide_iter.lu	exit(0)	run	
+corpus/grammar/receiver_moded.lu	fail(E0210)	parse	E0210
+corpus/grammar/semicolon.lu	fail(E0002)	parse	E0002
+corpus/grammar/shebang.lu	exit(0)	run	
+corpus/grammar/str_bare_brace.lu	fail(E0102)	lex	E0102
+corpus/grammar/str_dollar_brace.lu	fail(E0102)	lex	E0102
+corpus/grammar/str_uni_seven_digits.lu	fail(E0101)	lex	E0101
+corpus/grammar/struct_literal_no_separator.lu	fail(E0201)	parse	E0201
+corpus/grammar/struct_pattern_match_arm.lu	exit(0)	run	
+corpus/grammar/struct_pattern_missing_field.lu	fail(E0814)	typecheck	E0814
+corpus/grammar/struct_pattern_no_separator.lu	fail(E0201)	parse	E0201
+corpus/grammar/struct_pattern_rest_bare.lu	fail(E0201)	parse	E0201
+corpus/grammar/struct_pattern_unknown_field.lu	fail(E0403)	typecheck	E0403
+corpus/grammar/structlit_cond.lu	fail(E0006)	parse	E0006
+corpus/grammar/structlit_paren.lu	exit(0)	run	
+corpus/grammar/tuple_pattern_match_arm.lu	exit(0)	run	
+corpus/grammar/tuple_pattern_no_separator.lu	fail(E0201)	parse	E0201
+corpus/grammar/type_position_keyword.lu	fail(E0206)	parse	E0206
+corpus/grammar/when_reserved.lu	fail(E0008)	parse	E0008
+corpus/hello.lu	exit(0)	run	
+corpus/io/eprint.lu	exit(0)	run	
+corpus/json/dup_count_distinct.lu	exit(0)	run	
+corpus/json/dup_kind.lu	exit(0)	run	
+corpus/json/dup_last_wins.lu	exit(0)	run	
+corpus/json/dup_nested.lu	exit(0)	run	
+corpus/json/dup_path.lu	exit(0)	run	
+corpus/json/dup_render.lu	exit(0)	run	
+corpus/json/dup_thrice.lu	exit(0)	run	
+corpus/json/query.lu	exit(0)	run	
+corpus/json/rows.lu	exit(0)	run	
+corpus/kernels/churn_b3.lu	exit(0)	run	
+corpus/kernels/ct_cswap.lu	exit(0)	run	
+corpus/kernels/ct_tag_compare.lu	exit(0)	run	
+corpus/kernels/guarded_stencil.lu	exit(12)	run	
+corpus/kernels/hot_counter.lu	exit(0)	run	
+corpus/kernels/hot_header.lu	exit(62)	run	
+corpus/kernels/hot_header_alias.lu	exit(9)	run	
+corpus/kernels/hot_scale_versioned.lu	exit(0)	run	
+corpus/kernels/hot_sum_reduce.lu	exit(0)	run	
+corpus/kernels/lshr_top_bits.lu	exit(0)	run	
+corpus/kernels/sha256_block.lu	exit(0)	run	
+corpus/kernels/walk_twice.lu	exit(0)	run	
+corpus/kernels/wrap_lshr_fold.lu	exit(0)	run	
+corpus/link/module_c.lu	exit(0)	run	
+corpus/lints/allow_item.lu	exit(0)	run	
+corpus/lints/allow_nothing.lu	exit(0)	run	
+corpus/lints/allow_unknown_code.lu	exit(0)	run	
+corpus/lints/ancestor_import/main.lu	exit(0)	run	
+corpus/lints/as_view_consuming.lu	exit(0)	run	
+corpus/lints/assume_reassigned.lu	exit(0)	run	
+corpus/lints/binder_capitalized.lu	exit(0)	run	
+corpus/lints/binder_variant_controls.lu	exit(0)	run	
+corpus/lints/binder_variant_else.lu	exit(0)	run	
+corpus/lints/binder_variant_for.lu	exit(0)	run	
+corpus/lints/binder_variant_imported/main.lu	exit(0)	run	
+corpus/lints/binder_variant_let.lu	exit(0)	run	
+corpus/lints/binder_variant_lowercase.lu	exit(0)	run	
+corpus/lints/discarded_result.lu	exit(0)	run	
+corpus/lints/else_arithmetic.lu	exit(0)	run	
+corpus/lints/else_comparison.lu	exit(0)	run	
+corpus/lints/float_zero_minus.lu	exit(0)	run	
+corpus/lints/get_prefix.lu	exit(0)	run	
+corpus/lints/get_without_row.lu	exit(0)	run	
+corpus/lints/index_origin_get.lu	exit(0)	run	
+corpus/lints/match_str_arm_unreachable.lu	exit(0)	run	
+corpus/lints/mut_in_interp.lu	exit(0)	run	
+corpus/lints/mut_param_unwritten.lu	exit(0)	run	
+corpus/lints/narrowing_literal.lu	exit(0)	run	
+corpus/lints/one_item_module/main.lu	exit(0)	run	
+corpus/lints/pkg_item_unused/main.lu	exit(0)	run	
+corpus/lints/predicate_shape.lu	exit(0)	run	
+corpus/lints/prefix_statement.lu	exit(0)	run	
+corpus/lints/pub_undocumented.lu	exit(0)	run	
+corpus/lints/raw_interp_braces.lu	exit(0)	run	
+corpus/lints/region_call_allocates.lu	exit(0)	run	
+corpus/lints/region_never_allocates.lu	exit(0)	run	
+corpus/lints/safety_comment_missing.lu	exit(0)	run	
+corpus/lints/shadow_prelude.lu	exit(0)	run	
+corpus/lints/shadow_prelude_call.lu	exit(0)	run	
+corpus/lints/shadow_prelude_local.lu	exit(0)	run	
+corpus/lints/tag_case_payload.lu	exit(0)	run	
+corpus/lints/tag_name_collision.lu	exit(0)	run	
+corpus/lints/take_returned.lu	exit(0)	run	
+corpus/membrane/export_called.lu	exit(0)	run	
+corpus/membrane/export_child.lu	exit(0)	run	
+corpus/membrane/extern_let_image.lu	unsupported	mem	a link-time symbol (`extern "c" let`)
+corpus/membrane/extern_let_not_ptr.lu	fail(E0821)	typecheck	E0821
+corpus/membrane/extern_libc.lu	unsupported	mem	a call into C through a hand-declared `extern "c" fn` (the checked machine has no C membrane)
+corpus/membrane/variadic_declarations.lu	unsupported	mem	checked execution without a `main` entry
+corpus/membrane/variadic_position.lu	fail(E0822)	parse	E0822
+corpus/memory/borrow_escape.lu	unsupported	resolve	borrow expressions
+corpus/memory/byte_list_ledger.lu	exit(0)	run	
+corpus/memory/byte_producers_ledger.lu	exit(0)	run	
+corpus/memory/byte_view_escape.lu	fail(E1002)	mem	E1002
+corpus/memory/bytes_scan.lu	exit(0)	run	
+corpus/memory/carried_quotient_nested.lu	exit(0)	run	
+corpus/memory/carried_quotient_pair.lu	exit(0)	run	
+corpus/memory/checked_unsigned.lu	exit(0)	run	
+corpus/memory/closure_borrow_write.lu	fail(E1002)	mem	E1002
+corpus/memory/closure_capture_mut.lu	exit(0)	run	
+corpus/memory/closure_capture_write.lu	exit(0)	run	
+corpus/memory/closure_cluster_split.lu	exit(0)	run	
+corpus/memory/closure_escape_refused.lu	exit(0)	run	
+corpus/memory/closure_kill_list.lu	exit(0)	run	
+corpus/memory/closure_region_capture.lu	exit(0)	run	
+corpus/memory/closure_value_paths.lu	unsupported	mem	calls into unresolvable bodies
+corpus/memory/consumed_walk_charges_nothing.lu	exit(0)	run	
+corpus/memory/copy_independent.lu	exit(0)	run	
+corpus/memory/ctl_index_else_once.lu	exit(0)	run	
+corpus/memory/ctl_index_return_break_once.lu	exit(0)	run	
+corpus/memory/ctl_index_try_once.lu	exit(0)	run	
+corpus/memory/ctl_index_try_once_receivers.lu	exit(0)	run	
+corpus/memory/ctl_nested_index_try_once.lu	exit(0)	run	
+corpus/memory/ctl_slice_endpoints.lu	exit(0)	run	
+corpus/memory/ctl_slice_endpoints_call.lu	exit(0)	run	
+corpus/memory/ctl_slice_endpoints_indexed_base.lu	exit(0)	run	
+corpus/memory/ctl_slice_endpoints_nested.lu	exit(0)	run	
+corpus/memory/ctl_slice_endpoints_str.lu	exit(0)	run	
+corpus/memory/ctl_slice_try_once.lu	exit(0)	run	
+corpus/memory/ctl_store_index_try_once.lu	exit(0)	run	
+corpus/memory/ctl_store_order.lu	exit(0)	run	
+corpus/memory/ctl_store_order_captured.lu	exit(0)	run	
+corpus/memory/ctl_store_order_compound.lu	exit(0)	run	
+corpus/memory/ctl_store_order_map.lu	exit(0)	run	
+corpus/memory/ctl_store_order_nested.lu	exit(0)	run	
+corpus/memory/ctl_store_order_nested_index.lu	exit(0)	run	
+corpus/memory/ctl_store_order_raw.lu	exit(0)	run	
+corpus/memory/defer_order.lu	exit(0)	run	
+corpus/memory/destructure_bind.lu	exit(0)	run	
+corpus/memory/destructure_partial_live.lu	exit(0)	run	
+corpus/memory/destructure_partial_move.lu	fail(E1001)	mem	E1001
+corpus/memory/distinct_container_moves.lu	fail(E1001)	mem	E1001
+corpus/memory/distinct_copy_scalar.lu	exit(0)	run	
+corpus/memory/div_zero.lu	trap(div-zero)	run	
+corpus/memory/elem_char_bool_key_revive.lu	exit(0)	run	
+corpus/memory/elem_claim_whole_read.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_const_dyn_loan.lu	exit(0)	run	
+corpus/memory/elem_const_field_mut_pair.lu	exit(0)	run	
+corpus/memory/elem_const_field_of_elem.lu	exit(0)	run	
+corpus/memory/elem_const_iter_mut.lu	exit(0)	run	
+corpus/memory/elem_const_move_heap.lu	exit(0)	run	
+corpus/memory/elem_const_mut_pair.lu	exit(0)	run	
+corpus/memory/elem_const_nested_call.lu	exit(0)	run	
+corpus/memory/elem_const_nested_mut.lu	exit(0)	run	
+corpus/memory/elem_const_read_after_mut.lu	exit(0)	run	
+corpus/memory/elem_const_read_while_take.lu	exit(0)	run	
+corpus/memory/elem_const_store_no_revive_heap.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_const_store_no_revive_int.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_const_store_revives.lu	exit(0)	run	
+corpus/memory/elem_const_swap.lu	exit(0)	run	
+corpus/memory/elem_const_swap_heap.lu	exit(0)	run	
+corpus/memory/elem_const_take_while_mut.lu	exit(0)	run	
+corpus/memory/elem_dyn_dyn_loan.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_dyn_iter_mut.lu	fail(E1013)	mem	E1013
+corpus/memory/elem_dyn_move_const_read.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_dyn_mut_pair.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_dyn_nested_call.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_dyn_proofs_legs.lu	exit(0)	run	
+corpus/memory/elem_dyn_read_after_mut.lu	exit(0)	run	
+corpus/memory/elem_dyn_store_no_revive_heap.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_dyn_store_no_revive_int.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_dyn_take_while_mut.lu	fail(E1001)	mem	E1001,E1002
+corpus/memory/elem_header_methods_after_move.lu	exit(0)	run	
+corpus/memory/elem_header_methods_after_move_map.lu	exit(0)	run	
+corpus/memory/elem_header_methods_after_move_pool.lu	exit(0)	run	
+corpus/memory/elem_header_methods_under_claim.lu	exit(0)	run	
+corpus/memory/elem_key_move_map.lu	exit(0)	run	
+corpus/memory/elem_key_reassigned_no_revive.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_len_after_move.lu	exit(0)	run	
+corpus/memory/elem_loop_covers_const.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_loop_inclusive_covers_const.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_loop_induction_mut.lu	exit(0)	run	
+corpus/memory/elem_loop_induction_written_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_loop_nonliteral_range_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_member_read_after_mut.lu	exit(0)	run	
+corpus/memory/elem_member_read_under_claims.lu	exit(0)	run	
+corpus/memory/elem_move_one_place.lu	exit(0)	run	
+corpus/memory/elem_move_same_const_read.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_offset_mut_pair.lu	exit(0)	run	
+corpus/memory/elem_offset_negative_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_offset_nonliteral_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_offset_other_local.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_offset_rebound_call_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_offset_rebound_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_offset_vs_literal_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_offset_zero_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_pool_handle_revive.lu	exit(0)	run	
+corpus/memory/elem_pool_handles_one_place.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_prefix_mut_pair.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_same_const_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/elem_same_index_revive.lu	exit(0)	run	
+corpus/memory/elem_str_key_revive.lu	exit(0)	run	
+corpus/memory/elem_sym_reassigned_no_revive.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/elem_tuple_pos_move.lu	exit(0)	run	
+corpus/memory/elem_tuple_pos_mut.lu	exit(0)	run	
+corpus/memory/elem_whole_read_get_after_move.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_whole_read_named_count_after_move.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/elem_whole_read_pop_after_move.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_whole_read_push_after_move.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_whole_read_self_after_move.lu	fail(E1001)	mem	E1001
+corpus/memory/elem_whole_read_slice_after_move.lu	fail(E1001)	mem	E1001
+corpus/memory/enum_union_copy.lu	exit(0)	run	
+corpus/memory/enum_union_str_escape.lu	fail(E1004)	mem	E1004
+corpus/memory/enum_union_take.lu	exit(0)	run	
+corpus/memory/excl_disjoint_ok.lu	exit(0)	run	
+corpus/memory/excl_overlap.lu	fail(E1002)	mem	E1002
+corpus/memory/exclusivity.lu	exit(0)	run	
+corpus/memory/extern_c_outside_unsafe.lu	fail(E1301)	mem	E1301
+corpus/memory/field_shorthand_closure.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/field_shorthand_closure_borrow.lu	fail(E1002)	mem	E1002
+corpus/memory/field_shorthand_copy.lu	exit(0)	run	
+corpus/memory/field_shorthand_mixed.lu	fail(E1001)	mem	E1001
+corpus/memory/field_shorthand_mixed_runs.lu	exit(0)	run	
+corpus/memory/field_shorthand_moves.lu	fail(E1001)	mem	E1001
+corpus/memory/field_shorthand_nested.lu	fail(E1001)	mem	E1001
+corpus/memory/field_shorthand_nested_bound.lu	fail(E1001)	mem	E1001
+corpus/memory/field_shorthand_nested_runs.lu	exit(0)	run	
+corpus/memory/field_shorthand_return_mut.lu	fail(E1001)	mem	E1001
+corpus/memory/field_shorthand_return_take.lu	exit(0)	run	
+corpus/memory/field_shorthand_task.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/foreign_root_aliasing.lu	exit(0)	run	
+corpus/memory/handle_stale.lu	trap(stale-handle)	run	
+corpus/memory/index_store_copies_list.lu	exit(0)	run	
+corpus/memory/index_store_copies_map.lu	exit(0)	run	
+corpus/memory/index_store_copy_elem.lu	exit(0)	run	
+corpus/memory/index_store_read_param.lu	exit(0)	run	
+corpus/memory/index_store_take_list.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/index_store_take_map.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/index_store_take_read_param.lu	fail(E1014)	mem	E1014
+corpus/memory/list_elem_assign.lu	exit(0)	run	
+corpus/memory/list_elem_copy_loop.lu	exit(0)	run	
+corpus/memory/list_mixed_width_struct.lu	exit(0)	run	
+corpus/memory/list_mutate_while_iter.lu	fail(E1013)	mem	E1013
+corpus/memory/list_pop_empty.lu	exit(0)	run	
+corpus/memory/list_reserve.lu	exit(0)	run	
+corpus/memory/list_reset.lu	exit(0)	run	
+corpus/memory/list_reset_reuse_ledger.lu	exit(0)	run	
+corpus/memory/list_session_struct.lu	exit(0)	run	
+corpus/memory/list_slice.lu	exit(0)	run	
+corpus/memory/list_slice_edges.lu	exit(0)	run	
+corpus/memory/list_slice_inline_owned.lu	exit(0)	run	
+corpus/memory/list_slice_owned_call.lu	exit(0)	run	
+corpus/memory/map_absent_else.lu	exit(0)	run	
+corpus/memory/map_char_bool_keys.lu	exit(0)	run	
+corpus/memory/map_count.lu	exit(0)	run	
+corpus/memory/map_int_keys.lu	exit(0)	run	
+corpus/memory/map_pairs_walk_snapshot.lu	exit(0)	run	
+corpus/memory/map_pairs_walk_view.lu	exit(0)	run	
+corpus/memory/map_remove.lu	exit(0)	run	
+corpus/memory/map_set_generic.lu	exit(0)	run	
+corpus/memory/map_std_keys.lu	exit(0)	run	
+corpus/memory/match_arm_whole_move.lu	fail(E1001)	mem	E1001
+corpus/memory/mode_missing_mut.lu	fail(E1007)	mem	E1007
+corpus/memory/move_field_siblings_ok.lu	exit(0)	run	
+corpus/memory/move_field_use_after.lu	fail(E1001)	mem	E1001
+corpus/memory/move_ok.lu	exit(0)	run	
+corpus/memory/move_use_after.lu	fail(E1001)	mem	E1001
+corpus/memory/mut_arg_element.lu	exit(0)	run	
+corpus/memory/mut_arg_temporary.lu	fail(E1009)	mem	E1009
+corpus/memory/mut_claim_arg_block_move.lu	fail(E1002)	mem	E1002,E1002
+corpus/memory/mut_claim_arg_block_write.lu	fail(E1002)	mem	E1002
+corpus/memory/mut_claim_cond_write.lu	exit(0)	run	
+corpus/memory/mut_claim_if_else.lu	exit(0)	run	
+corpus/memory/mut_claim_if_no_else.lu	exit(0)	run	
+corpus/memory/mut_claim_match_arms.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_copy_read.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_disjoint_reads.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_get.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_header.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_map.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_read_elem.lu	exit(0)	run	
+corpus/memory/mut_claim_nested_read_whole.lu	exit(0)	run	
+corpus/memory/mut_claim_operand_read.lu	exit(0)	run	
+corpus/memory/mut_claim_two_phase_reads.lu	exit(0)	run	
+corpus/memory/mut_elem_excl.lu	exit(0)	run	
+corpus/memory/mut_elem_nested_call.lu	fail(E1002)	mem	E1002
+corpus/memory/mut_param_aggregate_store.lu	exit(0)	run	
+corpus/memory/mut_param_field_lend.lu	exit(0)	run	
+corpus/memory/mut_param_moveout_elem.lu	fail(E1001)	mem	E1001
+corpus/memory/mut_param_moveout_field.lu	fail(E1001)	mem	E1001
+corpus/memory/mut_param_moveout_map.lu	fail(E1001)	mem	E1001
+corpus/memory/mut_param_moveout_one_path.lu	fail(E1001)	mem	E1001
+corpus/memory/mut_param_moveout_whole.lu	fail(E1001)	mem	E1001
+corpus/memory/mut_param_replaced.lu	exit(0)	run	
+corpus/memory/mut_param_restore_elem.lu	exit(0)	run	
+corpus/memory/mut_param_restore_field.lu	exit(0)	run	
+corpus/memory/mut_param_restore_map.lu	exit(0)	run	
+corpus/memory/mut_param_restore_whole.lu	exit(0)	run	
+corpus/memory/mut_place_nested.lu	exit(0)	run	
+corpus/memory/mut_read_overlap.lu	exit(0)	run	
+corpus/memory/mut_relay_push.lu	exit(0)	run	
+corpus/memory/mut_two_fields_one_region.lu	exit(0)	run	
+corpus/memory/nested_fn_mut_moveout.lu	fail(E1001)	mem	E1001
+corpus/memory/nested_fn_mut_omitted.lu	fail(E1007)	mem	E1007
+corpus/memory/nested_fn_mut_param.lu	unsupported	mem	a nested fn in checked execution
+corpus/memory/nested_fn_read_param_return.lu	fail(E1002)	mem	E1002
+corpus/memory/nested_fn_read_param_write.lu	fail(E1014)	mem	E1014
+corpus/memory/oob_bounds.lu	trap(bounds)	run	
+corpus/memory/packed_field_lend.lu	fail(E0819)	typecheck	E0819
+corpus/memory/packed_field_raw_read.lu	exit(0)	run	
+corpus/memory/packed_fields_at_offset_of.lu	exit(0)	run	
+corpus/memory/pool_accessors.lu	exit(0)	run	
+corpus/memory/pool_place_write.lu	exit(0)	run	
+corpus/memory/prov_addr_with_addr.lu	exit(0)	run	
+corpus/memory/prov_cast_round_trip.lu	exit(0)	run	
+corpus/memory/prov_expose_round_trip.lu	exit(0)	run	
+corpus/memory/prov_holy_grail.lu	exit(0)	run	
+corpus/memory/prov_is_null.lu	exit(0)	run	
+corpus/memory/prov_narrow_cast.lu	exit(0)	run	
+corpus/memory/prov_narrow_cast_trap.lu	trap(overflow)	run	
+corpus/memory/prov_two_phase.lu	exit(0)	run	
+corpus/memory/push_copies_element.lu	exit(0)	run	
+corpus/memory/push_grow_guarded_index.lu	exit(240)	run	
+corpus/memory/push_grow_nested_guarded_index.lu	exit(0)	run	
+corpus/memory/push_take_moves.lu	fail(E1001)	mem	E1001,E1001
+corpus/memory/raw_aligned_control.lu	exit(0)	run	
+corpus/memory/raw_compound_assign.lu	exit(0)	run	
+corpus/memory/raw_deref.lu	exit(0)	run	
+corpus/memory/raw_deref_signed.lu	exit(0)	run	
+corpus/memory/raw_field_store.lu	exit(0)	run	
+corpus/memory/raw_field_store_compound.lu	exit(0)	run	
+corpus/memory/raw_field_store_nested.lu	exit(0)	run	
+corpus/memory/raw_field_store_outside_unsafe.lu	fail(E1301)	mem	E1301
+corpus/memory/raw_field_store_packed.lu	exit(0)	run	
+corpus/memory/raw_lshr_top_bits.lu	exit(0)	run	
+corpus/memory/raw_ptr_mut_param.lu	exit(0)	run	
+corpus/memory/raw_ptr_private_sig.lu	exit(0)	run	
+corpus/memory/raw_repr_align_layout.lu	unsupported	mem	raw write of a non-scalar
+corpus/memory/raw_repr_c_layout.lu	unsupported	mem	raw write of a non-scalar
+corpus/memory/raw_repr_packed_layout.lu	unsupported	mem	raw write of a non-scalar
+corpus/memory/raw_store_call_writes.lu	exit(0)	run	
+corpus/memory/raw_ub_misaligned_repr_c_field.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_repr_c_field_store.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_u16_read.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_u16_write.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_u32_read.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_u32_write.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_u64_read.lu	ub(mem.ub)	run	E1401
+corpus/memory/raw_ub_misaligned_u64_write.lu	ub(mem.ub)	run	E1401
+corpus/memory/read_lend_frame.lu	exit(0)	run	
+corpus/memory/read_lend_value_semantics.lu	exit(0)	run	
+corpus/memory/read_param_escape_field.lu	fail(E1002)	mem	E1002
+corpus/memory/read_param_escape_generic.lu	fail(E1002)	mem	E1002
+corpus/memory/read_param_escape_local.lu	fail(E1002)	mem	E1002
+corpus/memory/read_param_escape_mut.lu	fail(E1002)	mem	E1002
+corpus/memory/read_param_escape_static.lu	fail(E1002)	mem	E1002,E1301,E1301
+corpus/memory/read_param_field_rebound.lu	fail(E1001)	mem	E1001
+corpus/memory/read_param_indexed_caller.lu	exit(0)	run	
+corpus/memory/read_param_move_legal.lu	exit(0)	run	
+corpus/memory/read_param_rebind_take.lu	fail(E1014)	mem	E1014
+corpus/memory/read_param_rebind_write.lu	fail(E1014)	mem	E1014
+corpus/memory/read_param_return.lu	fail(E1002)	mem	E1002
+corpus/memory/read_param_take.lu	fail(E1014)	mem	E1014
+corpus/memory/read_param_write.lu	fail(E1014)	mem	E1014
+corpus/memory/recv_claim_arg_closure.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_elem_move.lu	fail(E1002)	mem	E1002,E1002
+corpus/memory/recv_claim_arg_elem_whole_write.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_elem_write.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_field_move.lu	fail(E1002)	mem	E1002,E1002
+corpus/memory/recv_claim_arg_field_prefix_write.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_field_write.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_lend.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_move.lu	fail(E1002)	mem	E1002,E1002
+corpus/memory/recv_claim_arg_reads.lu	exit(0)	run	
+corpus/memory/recv_claim_arg_reclaim.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_reclaim_call.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_reclaim_nested.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_view_write.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_claim_arg_write.lu	fail(E1002)	mem	E1002
+corpus/memory/recv_view_arg_callee_view_write.lu	exit(0)	run	
+corpus/memory/recv_view_arg_elem.lu	exit(0)	run	
+corpus/memory/recv_view_arg_field_recv.lu	exit(0)	run	
+corpus/memory/recv_view_arg_list_field.lu	exit(0)	run	
+corpus/memory/recv_view_arg_nested_field.lu	exit(0)	run	
+corpus/memory/recv_view_arg_outside_write.lu	exit(0)	run	
+corpus/memory/recv_view_arg_relend.lu	exit(0)	run	
+corpus/memory/recv_view_arg_two_fields.lu	exit(0)	run	
+corpus/memory/recv_view_arg_two_view_third.lu	exit(0)	run	
+corpus/memory/region_ambient_ok.lu	exit(0)	run	
+corpus/memory/region_bytes_query.lu	exit(0)	run	
+corpus/memory/region_bytes_value.lu	exit(0)	run	
+corpus/memory/region_cap_boundary.lu	exit(0)	run	
+corpus/memory/region_conflict_params.lu	fail(E1004)	mem	E1004,E1010
+corpus/memory/region_container_freeze_ok.lu	exit(0)	run	
+corpus/memory/region_container_reclaim.lu	exit(0)	run	
+corpus/memory/region_copy_index_store.lu	fail(E1010)	mem	E1010
+corpus/memory/region_copy_shares_str.lu	exit(0)	run	
+corpus/memory/region_copyout_binding.lu	fail(E1010)	mem	E1010
+corpus/memory/region_copyout_closure.lu	fail(E1010)	mem	E1010
+corpus/memory/region_copyout_exits.lu	exit(0)	run	
+corpus/memory/region_copyout_handle.lu	fail(E1010)	mem	E1010
+corpus/memory/region_copyout_loop.lu	exit(0)	run	
+corpus/memory/region_copyout_map.lu	exit(0)	run	
+corpus/memory/region_copyout_raw_ub.lu	ub(mem.ub)	run	E1401
+corpus/memory/region_copyout_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_copyout_struct.lu	exit(0)	run	
+corpus/memory/region_escape_container.lu	fail(E1010)	mem	E1010
+corpus/memory/region_escape_local.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_freeze_ok.lu	exit(0)	run	
+corpus/memory/region_freeze_open.lu	fail(E1005)	mem	E1005
+corpus/memory/region_freeze_write.lu	fail(E1012)	mem	E1012
+corpus/memory/region_infer_list_builder.lu	exit(0)	run	
+corpus/memory/region_infer_request_handler.lu	exit(0)	run	
+corpus/memory/region_infer_tree_transform.lu	exit(0)	run	
+corpus/memory/region_iso_edge_ok.lu	unsupported	resolve	methods on builtin types (the std surface)
+corpus/memory/region_kept_arg_closure.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_field.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_generic.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_legal.lu	exit(0)	run	
+corpus/memory/region_kept_arg_map.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_method.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_module/main.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_read_struct.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_recv.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_take.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_arg_two_mut.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_result_method.lu	fail(E1010)	mem	E1010
+corpus/memory/region_kept_result_read.lu	fail(E1010)	mem	E1010
+corpus/memory/region_move_while_open.lu	fail(E1005)	mem	E1005
+corpus/memory/region_multiopen_ok.lu	exit(0)	run	
+corpus/memory/region_multiopen_swap.lu	exit(0)	run	
+corpus/memory/region_multiopen_values_ok.lu	exit(0)	run	
+corpus/memory/region_net_read_charged.lu	exit(0)	run	
+corpus/memory/region_net_read_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_open_ancestor.lu	fail(E1011)	mem	E1011
+corpus/memory/region_os_cwd_charged.lu	exit(0)	run	
+corpus/memory/region_os_cwd_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_outer_write_call.lu	exit(0)	run	
+corpus/memory/region_outer_write_call_refused.lu	fail(E1010)	mem	E1010
+corpus/memory/region_outer_write_charged.lu	exit(0)	run	
+corpus/memory/region_outer_write_field.lu	exit(0)	run	
+corpus/memory/region_outer_write_index.lu	exit(0)	run	
+corpus/memory/region_outer_write_map.lu	exit(0)	run	
+corpus/memory/region_outer_write_push_copy_call.lu	exit(0)	run	
+corpus/memory/region_outer_write_push_copy_control.lu	exit(0)	run	
+corpus/memory/region_outer_write_push_copy_over.lu	exit(0)	run	
+corpus/memory/region_outer_write_push_copy_under.lu	exit(0)	run	
+corpus/memory/region_outer_write_push_heap.lu	fail(E1010)	mem	E1010
+corpus/memory/region_outer_write_push_heap_call.lu	fail(E1010)	mem	E1010
+corpus/memory/region_outer_write_push_plain_copy.lu	fail(E1010)	mem	E1010
+corpus/memory/region_outer_write_refused.lu	fail(E1010)	mem	E1010
+corpus/memory/region_outer_write_refused_field.lu	fail(E1004)	mem	E1004
+corpus/memory/region_outer_write_reset.lu	exit(0)	run	
+corpus/memory/region_outer_write_scalar.lu	exit(0)	run	
+corpus/memory/region_outer_write_str_push.lu	exit(0)	run	
+corpus/memory/region_outer_write_struct.lu	exit(0)	run	
+corpus/memory/region_scalar_freeze.lu	exit(0)	run	
+corpus/memory/region_scalar_list_mut.lu	fail(E1010)	mem	E1010
+corpus/memory/region_scalar_list_store.lu	fail(E1004)	mem	E1004
+corpus/memory/region_scalar_mut.lu	exit(0)	run	
+corpus/memory/region_scalar_store.lu	exit(0)	run	
+corpus/memory/region_scalar_str_escape.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_scalar_value.lu	exit(0)	run	
+corpus/memory/region_str_call_block_value.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_call_held.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_call_index_store.lu	exit(0)	run	
+corpus/memory/region_str_call_inside.lu	exit(0)	run	
+corpus/memory/region_str_call_static.lu	exit(0)	run	
+corpus/memory/region_str_call_view.lu	fail(E1010)	mem	E1010,E1010,E1010
+corpus/memory/region_str_charged.lu	exit(0)	run	
+corpus/memory/region_str_concat_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_concat_send.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_copy_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_elem_call_held.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_field_return.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_from_utf8_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_list_for_held.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_producers_charged.lu	exit(0)	run	
+corpus/memory/region_str_repeat_return.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_view_for_copy.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_held.lu	fail(E1010)	mem	E1010
+corpus/memory/region_str_view_for_inside.lu	exit(0)	run	
+corpus/memory/region_str_view_for_lines.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_nested.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_place.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_return.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_split.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_value.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_for_words.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_str_view_inside.lu	exit(0)	run	
+corpus/memory/region_str_view_return.lu	fail(E1010)	mem	E1010,E1010
+corpus/memory/region_transfer_open.lu	fail(E1005)	mem	E1005
+corpus/memory/region_unit_tail_call.lu	exit(0)	run	
+corpus/memory/region_value_container.lu	exit(0)	run	
+corpus/memory/region_value_elem.lu	exit(0)	run	
+corpus/memory/region_value_pass.lu	exit(0)	run	
+corpus/memory/region_value_return.lu	exit(0)	run	
+corpus/memory/shared_cycle.lu	fail(E1006)	mem	E1006
+corpus/memory/shared_ok.lu	exit(0)	run	
+corpus/memory/static_const_let.lu	exit(0)	run	
+corpus/memory/static_init_cycle.lu	fail(E0705)	typecheck	E0705,E0705
+corpus/memory/static_init_not_comptime.lu	fail(E0705)	typecheck	E0705
+corpus/memory/static_list_let.lu	unsupported	mem	module state of a type that is not static data ([mem.static.3])
+corpus/memory/static_qualified/main.lu	exit(0)	run	
+corpus/memory/static_qualified_let/main.lu	exit(0)	run	
+corpus/memory/static_qualified_var/main.lu	exit(0)	run	
+corpus/memory/static_qualified_var_outside_unsafe/main.lu	fail(E1301)	mem	E1301
+corpus/memory/static_str_literals.lu	exit(0)	run	
+corpus/memory/static_var.lu	exit(0)	run	
+corpus/memory/static_var_call_deep.lu	exit(0)	run	
+corpus/memory/static_var_call_writes.lu	exit(0)	run	
+corpus/memory/static_var_outside_unsafe.lu	fail(E1301)	mem	E1301,E1301,E1301
+corpus/memory/static_wrapping.lu	exit(0)	run	
+corpus/memory/store_rhs_first_list.lu	exit(0)	run	
+corpus/memory/store_rhs_first_map.lu	exit(0)	run	
+corpus/memory/store_rhs_first_pool.lu	exit(0)	run	
+corpus/memory/struct_destructure_partial_live.lu	exit(0)	run	
+corpus/memory/struct_destructure_partial_move.lu	fail(E1001)	mem	E1001
+corpus/memory/struct_pattern_binder.lu	exit(0)	run	
+corpus/memory/unsafe_assume_malformed.lu	fail(E1304)	mem	E1304,E1304
+corpus/memory/unsafe_c_alloc_native.lu	exit(0)	run	
+corpus/memory/unsafe_creation_not_use.lu	exit(0)	run	
+corpus/memory/unsafe_door_borrow.lu	exit(0)	run	
+corpus/memory/unsafe_door_misuse.lu	fail(E1305)	mem	E1305,E1305
+corpus/memory/unsafe_noalias.lu	exit(0)	run	
+corpus/memory/unsafe_raw_outside.lu	fail(E1301)	mem	E1301,E1301,E1301
+corpus/memory/unsafe_sig.lu	fail(E1302)	mem	E1302
+corpus/memory/unsafe_trusted.lu	exit(0)	run	
+corpus/memory/unsafe_ub_uaf.lu	ub(mem.ub)	run	E1401
+corpus/memory/versioned_loop_cross_module/main.lu	exit(0)	run	
+corpus/memory/versioned_loop_inlined_root.lu	exit(0)	run	
+corpus/memory/view_set_norm.lu	exit(0)	run	
+corpus/memory/view_set_violation.lu	fail(E1008)	mem	E1008
+corpus/memory/volatile_outside_unsafe.lu	fail(E1301)	mem	E1301
+corpus/memory/volatile_pointee_bool.lu	fail(E1307)	typecheck	E1307
+corpus/memory/volatile_pointee_int.lu	fail(E1307)	typecheck	E1307
+corpus/memory/volatile_ub_misaligned.lu	ub(mem.ub)	run	E1401
+corpus/memory/volatile_ub_uaf.lu	ub(mem.ub)	run	E1401
+corpus/memory/volatile_widths.lu	exit(0)	run	
+corpus/methods/comb_map_filter_fold.lu	fail(E0301)	typecheck	E0301,E0301,E0301,E0301
+corpus/methods/comb_sort_enumerate_zip.lu	fail(E0301)	typecheck	E0301,E0301,E0301,E0301
+corpus/methods/comb_sorted_ord.lu	fail(E0301)	typecheck	E0301
+corpus/methods/home_range_str_map.lu	fail(E0301)	typecheck	E0301,E0301,E0301
+corpus/methods/method_is_free_call.lu	fail(E0301)	resolve	E0301
+corpus/methods/method_non_std_receiver.lu	fail(E0403)	typecheck	E0403
+corpus/methods/method_take.lu	fail(E0403)	typecheck	E0403
+corpus/methods/method_unknown.lu	fail(E0301)	typecheck	E0301
+corpus/methods/method_wrong_arity.lu	fail(E0301)	typecheck	E0301
+corpus/methods/method_wrong_receiver.lu	fail(E0301)	typecheck	E0301
+corpus/methods/wordcount_par.lu	fail(E0301)	typecheck	E0301
+corpus/methods/wordcount_serial.lu	fail(E0301)	typecheck	E0301,E0301
+corpus/net/accept_posture.lu	exit(0)	run	
+corpus/net/accept_race.lu	unsupported	mem	fd inheritance across os_spawn_with in checked execution
+corpus/net/byte_roundtrip.lu	exit(0)	run	
+corpus/net/echo_bytes.lu	exit(0)	run	
+corpus/net/echo_roundtrip.lu	exit(0)	run	
+corpus/net/inherit_listener.lu	unsupported	mem	fd inheritance across os_spawn_with in checked execution
+corpus/net/line_reader_bytes.lu	exit(0)	run	
+corpus/net/nodelay.lu	exit(0)	run	
+corpus/net/peer_close_after_serve.lu	exit(0)	run	
+corpus/net/read_deadline.lu	exit(1)	run	
+corpus/net/refused_row.lu	exit(1)	run	
+corpus/net/reuse_port.lu	exit(0)	run	
+corpus/net/spawn_accept.lu	exit(0)	run	
+corpus/net/syscall_first.lu	exit(0)	run	
+corpus/net/unix_echo.lu	exit(0)	run	
+corpus/net/wait_readiness.lu	exit(0)	run	
+corpus/net/writev_gather.lu	exit(0)	run	
+corpus/net/writev_head_gather.lu	exit(0)	run	
+corpus/os/arg0.lu	exit(0)	run	
+corpus/os/args_bytes.lu	exit(0)	run	
+corpus/os/args_cwd.lu	exit(0)	run	
+corpus/os/chdir_relative.lu	exit(0)	run	
+corpus/os/chroot_rows.lu	exit(0)	run	
+corpus/os/core_limit_rows.lu	exit(0)	run	
+corpus/os/cpus.lu	exit(0)	run	
+corpus/os/env_roundtrip.lu	exit(0)	run	
+corpus/os/env_unset.lu	exit(0)	run	
+corpus/os/exec_rows.lu	exit(0)	run	
+corpus/os/exit_code.lu	exit(7)	run	
+corpus/os/group_rows.lu	exit(0)	run	
+corpus/os/ids_read.lu	exit(0)	run	
+corpus/os/ids_rows.lu	exit(0)	run	
+corpus/os/job_poll_rows.lu	exit(0)	run	
+corpus/os/job_rows.lu	exit(0)	run	
+corpus/os/pipe_round_trip.lu	exit(0)	run	
+corpus/os/priority_rows.lu	exit(0)	run	
+corpus/os/random_differs.lu	exit(0)	run	
+corpus/os/random_edges.lu	exit(0)	run	
+corpus/os/random_negative_trap.lu	trap(assert)	run	
+corpus/os/signal_action_rows.lu	exit(0)	run	
+corpus/os/signal_loopback.lu	exit(0)	run	
+corpus/os/signal_one_rows.lu	exit(0)	run	
+corpus/os/signal_reserved_rows.lu	exit(0)	run	
+corpus/os/signal_shell_rows.lu	exit(0)	run	
+corpus/os/signal_supervisor.lu	exit(0)	run	
+corpus/os/spawn_fds_rows.lu	exit(0)	run	
+corpus/os/spawn_rows.lu	exit(0)	run	
+corpus/os/term_editor_rows.lu	exit(0)	run	
+corpus/os/term_lf_rows.lu	exit(0)	run	
+corpus/os/umask.lu	exit(0)	run	
+corpus/overflow.lu	trap(overflow)	run	
+corpus/procs.lu	exit(0)	run	
+corpus/projects/count.lu	exit(0)	run	
+corpus/projects/count_dir.lu	exit(0)	run	
+corpus/projects/rpn.lu	exit(0)	run	
+corpus/projects/wordtree.lu	exit(0)	run	
+corpus/regions.lu	exit(0)	run	
+corpus/resolve/bare_sibling/pair.lu	exit(0)	run	
+corpus/resolve/broken_sibling/entry.lu	fail(E0202)	resolve	E0202,E0202,E0301
+corpus/resolve/cycle/main.lu	fail(E0303)	resolve	E0303
+corpus/resolve/dup_bare/clash.lu	fail(E0302)	resolve	E0302
+corpus/resolve/dupdef/main.lu	fail(E0302)	resolve	E0302
+corpus/resolve/enum_variant_case_distinct.lu	exit(2)	run	
+corpus/resolve/enum_variant_twice.lu	fail(E0302)	resolve	E0302
+corpus/resolve/enum_variant_twice_payload.lu	fail(E0302)	resolve	E0302
+corpus/resolve/forward/main.lu	exit(0)	run	
+corpus/resolve/leaf_twins/main.lu	exit(0)	run	
+corpus/resolve/pkgvis/main.lu	exit(0)	run	
+corpus/resolve/plain_subdir/main.lu	exit(0)	run	
+corpus/resolve/private/main.lu	fail(E0304)	resolve	E0304
+corpus/resolve/same_name/main.lu	exit(0)	run	
+corpus/resolve/sibling_diag/main.lu	fail(E0302)	resolve	E0302
+corpus/resolve/standalone_pair/left.lu	exit(0)	run	
+corpus/resolve/standalone_pair/right.lu	exit(0)	run	
+corpus/resolve/struct_field_twice.lu	fail(E0302)	resolve	E0302
+corpus/resolve/two_mod/main.lu	exit(0)	run	
+corpus/resolve/type_decl_member_twice.lu	fail(E0302)	resolve	E0302,E0302
+corpus/resolve/unused/main.lu	fail(E0305)	resolve	E0305
+corpus/rows/coarsen.lu	exit(0)	run	
+corpus/rows/cross_module_arms/main.lu	exit(0)	run	
+corpus/rows/ctor_arg_qualified/main.lu	fail(E0301)	resolve	E0301
+corpus/rows/defer_else_handles.lu	exit(0)	run	
+corpus/rows/else_fallback_bound_slice.lu	exit(0)	run	
+corpus/rows/else_fallback_paren_slice.lu	exit(0)	run	
+corpus/rows/else_fallback_range_refused.lu	unsupported	resolve	an open-ended or end-relative range as an `else` fallback (slicing)
+corpus/rows/else_own_failure.lu	exit(0)	run	
+corpus/rows/else_return_tag.lu	exit(0)	run	
+corpus/rows/else_tag_payload.lu	exit(0)	run	
+corpus/rows/else_try_block.lu	exit(0)	run	
+corpus/rows/else_try_call_arg.lu	exit(0)	run	
+corpus/rows/else_try_handler.lu	exit(0)	run	
+corpus/rows/else_try_index.lu	exit(0)	run	
+corpus/rows/else_try_nested_else.lu	exit(0)	run	
+corpus/rows/errdefer_block_loop_break.lu	exit(0)	run	
+corpus/rows/errdefer_block_nested.lu	exit(0)	run	
+corpus/rows/errdefer_block_row.lu	exit(0)	run	
+corpus/rows/errdefer_fn_tail_control.lu	exit(0)	run	
+corpus/rows/error_alias_ident.lu	exit(0)	run	
+corpus/rows/error_alias_qualified/main.lu	exit(0)	run	
+corpus/rows/error_alias_row.lu	exit(0)	run	
+corpus/rows/error_alias_transparent.lu	exit(0)	run	
+corpus/rows/error_alias_union.lu	exit(0)	run	
+corpus/rows/error_alias_union_own_after.lu	exit(1)	run	
+corpus/rows/eu_bind_empty_row.lu	exit(0)	run	
+corpus/rows/eu_bind_empty_row_handled.lu	exit(0)	run	
+corpus/rows/eu_bind_empty_row_unit.lu	exit(0)	run	
+corpus/rows/eu_main_err_exit.lu	exit(1)	run	
+corpus/rows/first_list_literal_sum.lu	exit(0)	run	
+corpus/rows/handler_diverge_call.lu	exit(0)	run	
+corpus/rows/handler_diverge_trap.lu	trap(assert)	run	
+corpus/rows/handler_match_tags.lu	exit(0)	run	
+corpus/rows/hof_tail.lu	exit(0)	run	
+corpus/rows/inferred_private.lu	exit(0)	run	
+corpus/rows/iter_diverging_else_bound.lu	exit(0)	run	
+corpus/rows/match_literal_pattern_edges.lu	exit(0)	run	
+corpus/rows/match_range_empty.lu	fail(E0815)	typecheck	E0815,E0815
+corpus/rows/match_row_bare_tag.lu	exit(0)	run	
+corpus/rows/match_row_else_control.lu	exit(0)	run	
+corpus/rows/match_row_nested.lu	exit(0)	run	
+corpus/rows/match_row_nested_bare_variant.lu	exit(0)	run	
+corpus/rows/match_row_payload_tag.lu	exit(0)	run	
+corpus/rows/match_row_try_scrutinee.lu	exit(0)	run	
+corpus/rows/match_row_wild_each_half.lu	exit(0)	run	
+corpus/rows/mixed_payload_display.lu	exit(0)	run	
+corpus/rows/negative/ctor_arg_unresolved.lu	fail(E0301)	typecheck	E0301
+corpus/rows/negative/dup_tags.lu	fail(E0601)	typecheck	E0601
+corpus/rows/negative/errdefer_infallible.lu	fail(E0607)	typecheck	E0607
+corpus/rows/negative/error_alias_cycle.lu	fail(E0610)	typecheck	E0610
+corpus/rows/negative/error_alias_cycle_pair_unused.lu	fail(E0610)	typecheck	E0610
+corpus/rows/negative/error_alias_cycle_unused.lu	fail(E0610)	typecheck	E0610
+corpus/rows/negative/error_alias_open.lu	fail(E0201)	parse	E0201
+corpus/rows/negative/error_alias_own_dup_unused.lu	fail(E0601)	typecheck	E0601
+corpus/rows/negative/error_alias_private/main.lu	fail(E0304)	typecheck	E0304
+corpus/rows/negative/error_alias_union_own_after_payload.lu	fail(E0609)	typecheck	E0609
+corpus/rows/negative/error_alias_union_own_twice.lu	fail(E0601)	typecheck	E0601
+corpus/rows/negative/error_alias_union_two_aliases_payload.lu	fail(E0609)	typecheck	E0609
+corpus/rows/negative/error_row_own_dup_bare.lu	fail(E0601)	typecheck	E0601
+corpus/rows/negative/first_boundary_before_lex.lu	fail(E0202)	parse	E0202,E0102,E0201
+corpus/rows/negative/first_keyword_pattern.lu	fail(E0207)	parse	E0207
+corpus/rows/negative/first_parse_before_lex.lu	fail(E0207)	parse	E0207,E0202,E0102,E0201
+corpus/rows/negative/first_parse_before_resolve.lu	fail(E0207)	parse	E0207
+corpus/rows/negative/first_same_offset_lex.lu	fail(E0102)	lex	E0102
+corpus/rows/negative/first_stray_backtick.lu	fail(E0107)	lex	E0107
+corpus/rows/negative/handler_uncovered.lu	fail(E0809)	typecheck	E0809
+corpus/rows/negative/match_row_missing_tag.lu	fail(E0801)	typecheck	E0801
+corpus/rows/negative/match_row_missing_value.lu	fail(E0801)	typecheck	E0801
+corpus/rows/negative/match_row_tag_variant_collision.lu	fail(E0816)	typecheck	E0816
+corpus/rows/negative/missing_tag.lu	fail(E0602)	typecheck	E0602
+corpus/rows/negative/nested_row_conflict.lu	fail(E0609)	typecheck	E0609
+corpus/rows/negative/open_into_closed.lu	fail(E0602)	typecheck	E0602
+corpus/rows/negative/payload_mismatch.lu	fail(E0606)	typecheck	E0606
+corpus/rows/negative/pub_inferred.lu	fail(E0605)	typecheck	E0605
+corpus/rows/negative/row_operand_add.lu	fail(E0409)	typecheck	E0409
+corpus/rows/negative/row_operand_compare.lu	fail(E0409)	typecheck	E0409
+corpus/rows/negative/row_operand_member.lu	fail(E0409)	typecheck	E0409
+corpus/rows/negative/row_operand_method.lu	fail(E0409)	typecheck	E0409
+corpus/rows/negative/row_operand_rhs.lu	fail(E0409)	typecheck	E0409
+corpus/rows/negative/tag_undeclared_arg.lu	fail(E0301)	resolve	E0301
+corpus/rows/negative/try_in_defer.lu	fail(E0611)	typecheck	E0611
+corpus/rows/negative/try_in_defer_block.lu	fail(E0611)	typecheck	E0611
+corpus/rows/negative/try_in_errdefer.lu	fail(E0611)	typecheck	E0611
+corpus/rows/nested_row_merge_payload.lu	exit(0)	run	
+corpus/rows/nested_row_param.lu	exit(0)	run	
+corpus/rows/nested_row_return.lu	exit(0)	run	
+corpus/rows/open_row_growth.lu	exit(0)	run	
+corpus/rows/propagate/main.lu	exit(0)	run	
+corpus/rows/qmark_defer.lu	exit(0)	run	
+corpus/rows/raised_call_arg_position.lu	exit(0)	run	
+corpus/rows/row_member_handled.lu	exit(0)	run	
+corpus/rows/row_union_payloads.lu	exit(0)	run	
+corpus/rows/tag_arg_position.lu	exit(0)	run	
+corpus/rows/tag_let_position.lu	exit(0)	run	
+corpus/rows/tag_shadow_local.lu	exit(0)	run	
+corpus/rows/to_int_parse.lu	exit(1)	run	
+corpus/rows/unit_discard_fallible_body_stmt.lu	exit(0)	run	
+corpus/rows/unit_discard_if_value.lu	exit(0)	run	
+corpus/rows/unit_discard_raise_stmts.lu	exit(0)	run	
+corpus/rows/unit_discard_raise_unit_fn.lu	exit(0)	run	
+corpus/rows/unit_discard_return_operand.lu	exit(0)	run	
+corpus/rows/unit_discard_tail_if.lu	exit(0)	run	
+corpus/rows/unit_discard_tail_if_chain.lu	exit(0)	run	
+corpus/rows/unit_discard_tail_if_closure.lu	exit(0)	run	
+corpus/rows/unit_discard_tail_if_leaves.lu	exit(0)	run	
+corpus/rows/unit_discard_tail_if_value_row.lu	exit(0)	run	
+corpus/rows/unit_discard_try_leaves.lu	exit(0)	run	
+corpus/rows/unit_discard_unit_main.lu	exit(0)	run	
+corpus/strings.lu	fail(E0301)	typecheck	E0301
+corpus/strings/boundary_battery.lu	exit(0)	run	
+corpus/strings/builtin_methods.lu	exit(0)	run	
+corpus/strings/byte_view.lu	exit(0)	run	
+corpus/strings/byte_view_lend.lu	exit(0)	run	
+corpus/strings/byte_view_slice_lent.lu	exit(0)	run	
+corpus/strings/bytes_roundtrip.lu	exit(0)	run	
+corpus/strings/bytes_view_walk.lu	exit(0)	run	
+corpus/strings/char_battery.lu	exit(0)	run	
+corpus/strings/char_index_fail.lu	fail(E0411)	typecheck	E0411
+corpus/strings/char_interp.lu	exit(0)	run	
+corpus/strings/char_order.lu	exit(0)	run	
+corpus/strings/chars_walk.lu	exit(0)	run	
+corpus/strings/concat_int_str.lu	fail(E0409)	typecheck	E0409
+corpus/strings/concat_mix_char.lu	exit(0)	run	
+corpus/strings/concat_mix_int.lu	fail(E0409)	typecheck	E0409
+corpus/strings/concat_plus.lu	exit(0)	run	
+corpus/strings/dollar_brace_escape.lu	exit(0)	run	
+corpus/strings/empty_needle.lu	exit(0)	run	
+corpus/strings/end_relative_get.lu	exit(0)	run	
+corpus/strings/equality_lanes.lu	exit(0)	run	
+corpus/strings/float_format.lu	exit(0)	run	
+corpus/strings/format_spec_full.lu	exit(0)	run	
+corpus/strings/format_spec_malformed.lu	fail(E0412)	typecheck	E0412
+corpus/strings/format_spec_mismatch.lu	fail(E0413)	typecheck	E0413
+corpus/strings/format_spec_width.lu	exit(0)	run	
+corpus/strings/from_utf8_border.lu	exit(0)	run	
+corpus/strings/interp_value_position.lu	exit(0)	run	
+corpus/strings/interp_values.lu	exit(0)	run	
+corpus/strings/match_str_const_scrutinee.lu	exit(0)	run	
+corpus/strings/match_str_dispatch.lu	exit(0)	run	
+corpus/strings/multiline_escapes.lu	exit(0)	run	
+corpus/strings/raw_fences.lu	exit(0)	run	
+corpus/strings/slice_boundary_sweep.lu	exit(0)	run	
+corpus/strings/slice_oob_trap.lu	trap(bounds)	run	
+corpus/strings/split_clause.lu	exit(0)	run	
+corpus/strings/str_uni_leading_zeros.lu	exit(0)	run	
+corpus/strings/to_int.lu	exit(0)	run	
+corpus/strings/trim_cutset_refused.lu	fail(E0402)	typecheck	E0402
+corpus/test/assert_test.lu	unsupported	mem	checked execution without a `main` entry
+corpus/test/conc_schedules_test.lu	exit(0)	run	
+corpus/time/monotonic.lu	exit(0)	run	
+corpus/traits/adapter_distinct/main.lu	exit(0)	run	
+corpus/traits/assoc_rewrite.lu	exit(7)	run	
+corpus/traits/bound_literal_default.lu	exit(0)	run	
+corpus/traits/call_unmet_bound.lu	fail(E0502)	typecheck	E0502
+corpus/traits/coherence_orphan/main.lu	fail(E0504)	typecheck	E0504
+corpus/traits/coherence_overlap.lu	fail(E0506)	typecheck	E0506
+corpus/traits/coherence_uncovered.lu	fail(E0505)	typecheck	E0505
+corpus/traits/dyn_assoc_escape.lu	fail(E0509)	typecheck	E0509
+corpus/traits/dyn_generic_method.lu	fail(E0508)	typecheck	E0508
+corpus/traits/dyn_ok.lu	exit(0)	run	
+corpus/traits/dyn_self_position.lu	fail(E0510)	typecheck	E0510
+corpus/traits/dyn_temp_refused.lu	fail(E0810)	typecheck	E0810
+corpus/traits/golden_arith.lu	fail(E0501)	typecheck	E0501
+corpus/traits/golden_eq.lu	fail(E0501)	typecheck	E0501
+corpus/traits/golden_missing_bound.lu	fail(E0501)	typecheck	E0501
+corpus/traits/op_eq_imported/main.lu	exit(0)	run	
+corpus/traits/op_eq_inverting.lu	exit(0)	run	
+corpus/traits/op_eq_item_import/main.lu	exit(0)	run	
+corpus/traits/op_eq_no_trait.lu	fail(E0301)	typecheck	E0301
+corpus/traits/op_hetero_add.lu	fail(E0514)	typecheck	E0514
+corpus/traits/op_missing_impl.lu	fail(E0502)	typecheck	E0502
+corpus/traits/op_money.lu	exit(0)	run	
+corpus/traits/op_ord_struct.lu	exit(0)	run	
+corpus/traits/op_total_num.lu	exit(0)	run	
+corpus/traits/prim_impl.lu	exit(0)	run	
+corpus/traits/prim_impl_orphan/main.lu	fail(E0504)	typecheck	E0504
+corpus/traits/show_bound.lu	exit(0)	run	
+corpus/typecheck/ambiguous.lu	fail(E0405)	typecheck	E0405
+corpus/typecheck/arg_count.lu	fail(E0402)	typecheck	E0402
+corpus/typecheck/arg_vs_return.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/bool_cmp.lu	exit(0)	run	
+corpus/typecheck/byte_casts.lu	exit(0)	run	
+corpus/typecheck/byte_elem_arith_fail.lu	fail(E0401)	typecheck	E0401,E0401,E0401
+corpus/typecheck/byte_narrow_fail.lu	fail(E0401)	typecheck	E0401,E0401
+corpus/typecheck/byte_shapes.lu	exit(0)	run	
+corpus/typecheck/cast_bad.lu	fail(E0805)	typecheck	E0805
+corpus/typecheck/cast_int_to_float.lu	exit(0)	run	
+corpus/typecheck/cast_narrow_in_range.lu	exit(0)	run	
+corpus/typecheck/cast_narrow_wrapping_truncates.lu	exit(0)	run	
+corpus/typecheck/cast_set.lu	exit(0)	run	
+corpus/typecheck/closure_captured_closure/main.lu	exit(0)	run	
+corpus/typecheck/closure_entry_to_module/main.lu	exit(0)	run	
+corpus/typecheck/closure_inlined_one_liner/main.lu	exit(0)	run	
+corpus/typecheck/closure_module_to_entry/main.lu	exit(0)	run	
+corpus/typecheck/closure_module_to_module/main.lu	exit(0)	run	
+corpus/typecheck/closure_param_call.lu	unsupported	mem	calls into unresolvable bodies
+corpus/typecheck/closure_return.lu	unsupported	mem	a nested fn in checked execution
+corpus/typecheck/coerce_no_widening.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/else_binding_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/enum_str_bare_choice.lu	exit(0)	run	
+corpus/typecheck/enum_union_three.lu	exit(0)	run	
+corpus/typecheck/enum_union_tree.lu	exit(0)	run	
+corpus/typecheck/enum_union_two.lu	exit(0)	run	
+corpus/typecheck/field_typo.lu	fail(E0403)	typecheck	E0403
+corpus/typecheck/float_nan_cmp.lu	exit(0)	run	
+corpus/typecheck/float_rem.lu	exit(0)	run	
+corpus/typecheck/fn_never_extern.lu	exit(0)	run	
+corpus/typecheck/fn_never_handler_arm.lu	exit(0)	run	
+corpus/typecheck/fn_never_reaches_end.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/fn_never_return.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/fn_never_trap.lu	trap(assert)	run	
+corpus/typecheck/fn_param_shadows_import/main.lu	exit(0)	run	
+corpus/typecheck/fn_param_shadows_item.lu	exit(0)	run	
+corpus/typecheck/fn_value_captured_int.lu	exit(0)	run	
+corpus/typecheck/fn_value_captured_var_write.lu	fail(E1002)	mem	E1002
+corpus/typecheck/fn_value_capturing.lu	exit(0)	run	
+corpus/typecheck/fn_value_import/main.lu	exit(0)	run	
+corpus/typecheck/fn_value_two_file_module/main.lu	exit(0)	run	
+corpus/typecheck/for_binding_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/generic_bind_once.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/generic_bind_scalar.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/if_branch.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/int_not_byte.lu	exit(0)	run	
+corpus/typecheck/int_not_float.lu	fail(E0409)	typecheck	E0409
+corpus/typecheck/int_not_mask.lu	exit(0)	run	
+corpus/typecheck/int_not_signed.lu	exit(0)	run	
+corpus/typecheck/int_not_tilde.lu	fail(E0107)	lex	E0107
+corpus/typecheck/int_shift_value.lu	exit(0)	run	
+corpus/typecheck/int_truth_signed_print.lu	exit(0)	run	
+corpus/typecheck/int_truth_u64_arith.lu	exit(0)	run	
+corpus/typecheck/int_truth_u64_cast.lu	exit(0)	run	
+corpus/typecheck/int_truth_u64_not.lu	exit(0)	run	
+corpus/typecheck/int_truth_unsigned_print.lu	exit(0)	run	
+corpus/typecheck/int_truth_wrap_div_signed.lu	exit(0)	run	
+corpus/typecheck/int_truth_wrap_div_unsigned.lu	exit(0)	run	
+corpus/typecheck/int_truth_wrap_mul_wide.lu	exit(0)	run	
+corpus/typecheck/int_truth_wrap_neg.lu	exit(0)	run	
+corpus/typecheck/int_truth_wrap_signed.lu	exit(0)	run	
+corpus/typecheck/int_truth_wrap_unsigned.lu	exit(0)	run	
+corpus/typecheck/interp_spec_on_union.lu	fail(E0413)	typecheck	E0413,E0413
+corpus/typecheck/let_compound_assign.lu	fail(E0410)	resolve	E0410
+corpus/typecheck/let_field_assign.lu	fail(E0410)	resolve	E0410
+corpus/typecheck/let_group_shadow.lu	exit(2)	run	
+corpus/typecheck/let_reassign.lu	fail(E0410)	resolve	E0410
+corpus/typecheck/let_shadow_var_ok.lu	exit(0)	run	
+corpus/typecheck/list_lit_elem_i32.lu	exit(0)	run	
+corpus/typecheck/list_lit_elem_unfit.lu	fail(E0415)	typecheck	E0415
+corpus/typecheck/list_tuple_elem.lu	exit(0)	run	
+corpus/typecheck/main_returns_str.lu	fail(E0414)	typecheck	E0414
+corpus/typecheck/main_unit_row.lu	exit(0)	run	
+corpus/typecheck/map_compound_absent.lu	fail(E0417)	typecheck	E0417
+corpus/typecheck/map_struct_key.lu	fail(E0418)	typecheck	E0418,E0418
+corpus/typecheck/match_arm_product_nonexhaustive.lu	fail(E0801)	typecheck	E0801
+corpus/typecheck/match_arm_product_unreachable.lu	exit(0)	run	
+corpus/typecheck/match_binding_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/match_binding_at_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/match_binding_field_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/match_binding_mut_param.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/match_binding_var_shadow.lu	exit(4)	run	
+corpus/typecheck/match_chain_reuse.lu	exit(0)	run	
+corpus/typecheck/match_exhaustive.lu	exit(0)	run	
+corpus/typecheck/match_guard_const.lu	exit(0)	run	
+corpus/typecheck/match_missing.lu	fail(E0801)	typecheck	E0801
+corpus/typecheck/match_narrow_scrutinee.lu	exit(0)	run	
+corpus/typecheck/match_str_nonexhaustive.lu	fail(E0801)	typecheck	E0801
+corpus/typecheck/match_unreachable.lu	exit(0)	run	
+corpus/typecheck/method_ambiguous.lu	fail(E0803)	typecheck	E0803
+corpus/typecheck/method_home_no_std.lu	fail(E0301)	typecheck	E0301
+corpus/typecheck/method_inherent.lu	exit(0)	run	
+corpus/typecheck/method_scope/main.lu	fail(E0807)	typecheck	E0807
+corpus/typecheck/nested_fn_capture.lu	unsupported	resolve	a nested fn capturing enclosing locals (bind a closure instead)
+corpus/typecheck/nested_fn_value.lu	unsupported	mem	a nested fn in checked execution
+corpus/typecheck/nullary_arm_field_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/nullary_arm_let_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/nullary_arm_tag_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/nullary_arm_var_assign.lu	exit(9)	run	
+corpus/typecheck/numlit_ambiguity_named.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/numlit_annotation_float.lu	exit(0)	run	
+corpus/typecheck/numlit_arith_through.lu	exit(0)	run	
+corpus/typecheck/numlit_binding_literal.lu	fail(E0415)	typecheck	E0415
+corpus/typecheck/numlit_binding_literal_call.lu	fail(E0415)	typecheck	E0415
+corpus/typecheck/numlit_binding_literal_term.lu	fail(E0415)	typecheck	E0415,E0415,E0415
+corpus/typecheck/numlit_binding_value_later_use.lu	exit(0)	run	
+corpus/typecheck/numlit_c2f.lu	exit(0)	run	
+corpus/typecheck/numlit_compare_adopts.lu	exit(0)	run	
+corpus/typecheck/numlit_div_float.lu	exit(0)	run	
+corpus/typecheck/numlit_div_int.lu	exit(0)	run	
+corpus/typecheck/numlit_extremes.lu	exit(0)	run	
+corpus/typecheck/numlit_fit.lu	fail(E0415)	typecheck	E0415
+corpus/typecheck/numlit_float_to_int_refused.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/numlit_list_element_width.lu	exit(0)	run	
+corpus/typecheck/numlit_pattern_default.lu	fail(E0415)	typecheck	E0415,E0415
+corpus/typecheck/numlit_pattern_edges.lu	fail(E0415)	typecheck	E0415,E0415,E0415,E0415,E0415,E0415,E0415,E0415,E0415,E0415,E0415,E0415
+corpus/typecheck/numlit_pattern_positions.lu	fail(E0415)	typecheck	E0415,E0415,E0415,E0415,E0415,E0415,E0415,E0415
+corpus/typecheck/numlit_pattern_range.lu	fail(E0415)	typecheck	E0415,E0415,E0415,E0415,E0415
+corpus/typecheck/numlit_pattern_wraps.lu	fail(E0415)	typecheck	E0415
+corpus/typecheck/numlit_radix.lu	exit(0)	run	
+corpus/typecheck/numlit_u64_edge.lu	exit(0)	run	
+corpus/typecheck/numlit_value_refused.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/numlit_wrapping_countdown.lu	exit(0)	run	
+corpus/typecheck/or_pattern_binds.lu	unsupported	mem	or-patterns with bindings in checked execution
+corpus/typecheck/or_pattern_binds_at.lu	unsupported	mem	or-patterns with bindings in checked execution
+corpus/typecheck/or_pattern_binds_missing.lu	fail(E0828)	typecheck	E0828
+corpus/typecheck/or_pattern_binds_missing_left.lu	fail(E0828)	typecheck	E0828
+corpus/typecheck/or_pattern_binds_nested.lu	unsupported	mem	or-patterns with bindings in checked execution
+corpus/typecheck/or_pattern_binds_types.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/param_name_twice.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/param_name_twice_closure.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_name_twice_at.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_name_twice_for.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_name_twice_let.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_name_twice_nested.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_name_twice_struct.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_name_twice_types.lu	fail(E0827)	typecheck	E0827
+corpus/typecheck/pattern_shape.lu	fail(E0808)	typecheck	E0808
+corpus/typecheck/pattern_variant_tests_twice.lu	exit(4)	run	
+corpus/typecheck/rec_by_value_enum.lu	fail(E0404)	typecheck	E0404
+corpus/typecheck/rec_by_value_errunion.lu	fail(E0404)	typecheck	E0404
+corpus/typecheck/rec_by_value_generic.lu	fail(E0404)	typecheck	E0404
+corpus/typecheck/rec_by_value_mutual.lu	fail(E0404)	typecheck	E0404
+corpus/typecheck/rec_by_value_tuple.lu	fail(E0404)	typecheck	E0404
+corpus/typecheck/rec_by_value_unused.lu	fail(E0404)	typecheck	E0404
+corpus/typecheck/rec_through_containers.lu	exit(6)	run	
+corpus/typecheck/receiver_bare_mut.lu	fail(E0804)	typecheck	E0804
+corpus/typecheck/receiver_bare_mut_param.lu	fail(E0804)	typecheck	E0804
+corpus/typecheck/receiver_modes.lu	exit(0)	run	
+corpus/typecheck/refutable_let.lu	fail(E0806)	typecheck	E0806
+corpus/typecheck/select_binding_assign.lu	fail(E0410)	typecheck	E0410
+corpus/typecheck/str_slice_assign.lu	fail(E0416)	typecheck	E0416
+corpus/typecheck/straight_line_as_char.lu	exit(0)	run	
+corpus/typecheck/straight_line_as_narrow.lu	exit(0)	run	
+corpus/typecheck/straight_line_as_sign.lu	exit(0)	run	
+corpus/typecheck/straight_line_shl_assign.lu	exit(0)	run	
+corpus/typecheck/straight_line_shl_const.lu	exit(0)	run	
+corpus/typecheck/straight_line_shr_var.lu	exit(0)	run	
+corpus/typecheck/straight_line_str_eq.lu	exit(0)	run	
+corpus/typecheck/straight_line_str_order.lu	exit(0)	run	
+corpus/typecheck/straight_line_wrap_div.lu	exit(0)	run	
+corpus/typecheck/straight_line_wrap_rem.lu	exit(0)	run	
+corpus/typecheck/tail_declared_str.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/tail_declared_union.lu	fail(E0401)	typecheck	E0401
+corpus/typecheck/trait_default.lu	exit(0)	run	
+corpus/typecheck/unit_context_discard.lu	exit(0)	run	
+corpus/typecheck/unit_tail_value_discard.lu	exit(0)	run	
+corpus/typecheck/variant_bare_value.lu	fail(E0301)	typecheck	E0301
+corpus/typecheck/variant_value/main.lu	exit(0)	run	
+corpus/typecheck/wrap_as_int_in_range.lu	exit(0)	run	
+corpus/typecheck/wrap_narrow_cast.lu	exit(0)	run	
+corpus/wordcount.lu	unsupported	resolve	member access on a value whose type is still being inferred

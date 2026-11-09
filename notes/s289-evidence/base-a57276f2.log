@@ -1,0 +1,891 @@
+s289: last release 24s ago; waiting 36s for the turn
+s289: lock taken 13:06:44, 12871 MiB free, 81 GB disk; running: rig/probes.sh $LANE/bin-a57276f2/wolf base-a57276f2
+== s289 probes, label base-a57276f2, 2026-11-09T18:06:44Z
+dedaa6d8994724eaa35a85f0067f467a3edccb5a9cf78e566f8341ac8895971e  $LANE/bin-a57276f2/wolf
+bab126fc5deb515bc057e5706d185eac30584ab95a9733f33f5f49aa6fdd2d36  $LANE/inputs/lupin060/x/lupin
+wolf 0.2.38+dev.unknown (wolfgang)
+lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+
+######## e1_tail
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:2:5
+      |
+    2 |     OPEN
+      |     ^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":5,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[25,29]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     OPEN
+      |     ^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     OPEN
+      |     ^^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 1
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_sha256":"8460f352a3c871cf0e70aaef402f39b704fd33a0c94fbcfcf44a285690a03d4f","stdout_inline":"error: OPEN\n"}
+
+######## e2_assign
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:7:14
+      |
+    7 |     d.kind = INPUT
+      |              ^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":14,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":7,"x-unsupported-span":[97,102]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:7:14
+      |
+    7 |     d.kind = INPUT
+      |              ^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:7:14
+      |
+    7 |     d.kind = INPUT
+      |              ^^^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 1
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_sha256":"e88dc57d245940b89be1b0718739ac80760cd3211b13dfec0cac5dfbaff0d84e","stdout_inline":"error: INPUT\n"}
+
+######## e3_return
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:3:16
+      |
+    3 |         return CANCEL
+      |                ^^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":16,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":3,"x-unsupported-span":[58,64]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:3:16
+      |
+    3 |         return CANCEL
+      |                ^^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:3:16
+      |
+    3 |         return CANCEL
+      |                ^^^^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 1
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_sha256":null,"stdout_inline":null}
+
+######## e4_let
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:2:13
+      |
+    2 |     let x = OPEN
+      |             ^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[31,35]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let x = OPEN
+      |             ^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let x = OPEN
+      |             ^^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 1
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_sha256":"8460f352a3c871cf0e70aaef402f39b704fd33a0c94fbcfcf44a285690a03d4f","stdout_inline":"error: OPEN\n"}
+
+######## e5_payload
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:2:5
+      |
+    2 |     Bad(3)
+      |     ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":5,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[25,28]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     Bad(3)
+      |     ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     Bad(3)
+      |     ^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 1
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_sha256":"3639c2bc3ab83ca3c4871d866f5b8ab287a0d60d1a2a29b3016f383d5b9d811b","stdout_inline":"error: Bad\n"}
+
+######## e6_try
+--- checked: conform-run --json --checked
+    error[E0604]: `?` propagates an error, but `answer` cannot fail
+     --> ./main.lu:6:5
+      |
+    5 | fn answer() -> int {
+      |             ------ the signature declares no error row
+    6 |     g()?
+      |     ^^^^ the error would have nowhere to go
+      |
+      = note: errors travel in the declared row, never a side channel: make the function fallible (`->
+        !T`, or an explicit row), or handle the error here with `else`.
+    help: make `answer` fallible: `! {Bad}`
+      |
+    5 | fn answer() -> int ! {Bad} {
+      |
+    
+    {"commit":"unknown","diagnostics":[{"code":"E0604","severity":"error","span":[60,64]}],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0604)","warnings":[]}
+--- native: wolf build
+    error[E0604]: `?` propagates an error, but `answer` cannot fail
+     --> ./main.lu:6:5
+      |
+    5 | fn answer() -> int {
+      |             ------ the signature declares no error row
+    6 |     g()?
+      |     ^^^^ the error would have nowhere to go
+      |
+      = note: errors travel in the declared row, never a side channel: make the function fallible (`->
+        !T`, or an explicit row), or handle the error here with `else`.
+    help: make `answer` fallible: `! {Bad}`
+      |
+    5 | fn answer() -> int ! {Bad} {
+      |
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0604` explains this code, or any other, by name)
+    build exit 2
+--- release: wolf build --release
+    error[E0604]: `?` propagates an error, but `answer` cannot fail
+     --> ./main.lu:6:5
+      |
+    5 | fn answer() -> int {
+      |             ------ the signature declares no error row
+    6 |     g()?
+      |     ^^^^ the error would have nowhere to go
+      |
+      = note: errors travel in the declared row, never a side channel: make the function fallible (`->
+        !T`, or an explicit row), or handle the error here with `else`.
+    help: make `answer` fallible: `! {Bad}`
+      |
+    5 | fn answer() -> int ! {Bad} {
+      |
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0604` explains this code, or any other, by name)
+    build exit 2
+--- lupin run
+    lupin exit 1
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_sha256":"3639c2bc3ab83ca3c4871d866f5b8ab287a0d60d1a2a29b3016f383d5b9d811b","stdout_inline":"error: Bad\n"}
+
+######## e7_fallible_let
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:2:13
+      |
+    2 |     let x = Bad
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[34,37]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let x = Bad
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let x = Bad
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(0)","stdout_sha256":null,"stdout_inline":null}
+
+######## e8_rowtag_nonfallible
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:7:5
+      |
+    7 |     bad
+      |     ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":5,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":7,"x-unsupported-span":[96,99]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:7:5
+      |
+    7 |     bad
+      |     ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:7:5
+      |
+    7 |     bad
+      |     ^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `bad` does not resolve
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`bad` does not resolve","x-unsupported-at":"run"}
+
+######## e9_unit_discard
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — an error-row tag outside `!T` context
+     --> ./main.lu:2:12
+      |
+    2 |     if c { bad }
+      |            ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":12,"x-unsupported-construct":"an error-row tag outside `!T` context","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[41,44]}
+--- native: wolf build
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:12
+      |
+    2 |     if c { bad }
+      |            ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — an error-row tag outside `!T` context (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:12
+      |
+    2 |     if c { bad }
+      |            ^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(0)","stdout_sha256":"5db55706ce3bf95be27505082e9b5716433823d55d86d1d3707929c026da10b2","stdout_inline":"g false\n"}
+
+######## e10_raise_ok
+--- checked: conform-run --json --checked
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(7)","warnings":[]}
+--- native: wolf build
+    build exit 0
+    run exit 7
+--- release: wolf build --release
+    build exit 0
+    run exit 7
+--- lupin run
+    lupin exit 7
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(7)","stdout_sha256":null,"stdout_inline":null}
+
+######## e11_variant
+--- checked: conform-run --json --checked
+    error[E0301]: `Open` is a variant of `Answer`, and a variant value is spelled with its enum
+     --> ./main.lu:7:5
+      |
+    2 |     Open,
+      |     ---- `Open` is declared here, in `Answer`
+    ...
+    7 |     Open
+      |     ^^^^ write `Answer.Open`
+      |
+      = note: a variant belongs to its enum, so a value names both: `Answer.Open`. A bare capitalized
+        name is how an error-row tag is spelled, which is why this one did not resolve. In a
+        `match` arm the bare name is fine: the scrutinee's type already says which enum.
+    help: write `Answer.Open`
+      |
+    7 |     Answer.Open
+      |
+    
+    {"commit":"unknown","diagnostics":[{"code":"E0301","severity":"error","span":[67,71]}],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"typecheck","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+--- native: wolf build
+    error[E0301]: `Open` is a variant of `Answer`, and a variant value is spelled with its enum
+     --> ./main.lu:7:5
+      |
+    2 |     Open,
+      |     ---- `Open` is declared here, in `Answer`
+    ...
+    7 |     Open
+      |     ^^^^ write `Answer.Open`
+      |
+      = note: a variant belongs to its enum, so a value names both: `Answer.Open`. A bare capitalized
+        name is how an error-row tag is spelled, which is why this one did not resolve. In a
+        `match` arm the bare name is fine: the scrutinee's type already says which enum.
+    help: write `Answer.Open`
+      |
+    7 |     Answer.Open
+      |
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+--- release: wolf build --release
+    error[E0301]: `Open` is a variant of `Answer`, and a variant value is spelled with its enum
+     --> ./main.lu:7:5
+      |
+    2 |     Open,
+      |     ---- `Open` is declared here, in `Answer`
+    ...
+    7 |     Open
+      |     ^^^^ write `Answer.Open`
+      |
+      = note: a variant belongs to its enum, so a value names both: `Answer.Open`. A bare capitalized
+        name is how an error-row tag is spelled, which is why this one did not resolve. In a
+        `match` arm the bare name is fine: the scrutinee's type already says which enum.
+    help: write `Answer.Open`
+      |
+    7 |     Answer.Open
+      |
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(0)","stdout_sha256":null,"stdout_inline":null}
+
+######## p1_worker_unimported
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:5:12
+      |
+    5 |     return worker.main(args)
+      |            ^^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":12,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":5,"x-unsupported-span":[75,81]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:5:12
+      |
+    5 |     return worker.main(args)
+      |            ^^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:5:12
+      |
+    5 |     return worker.main(args)
+      |            ^^^^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `worker.main` does not resolve
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`worker.main` does not resolve","x-unsupported-at":"run"}
+
+######## p2_helper_unimported
+--- checked: conform-run --json --checked
+    error[E0301]: nothing named `helper` is in scope
+     --> ./main.lu:5:12
+      |
+    5 |     return helper.main(args)
+      |            ^^^^^^ not found
+      |
+    
+    {"commit":"unknown","diagnostics":[{"code":"E0301","severity":"error","span":[75,81]}],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+--- native: wolf build
+    error[E0301]: nothing named `helper` is in scope
+     --> ./main.lu:5:12
+      |
+    5 |     return helper.main(args)
+      |            ^^^^^^ not found
+      |
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+--- release: wolf build --release
+    error[E0301]: nothing named `helper` is in scope
+     --> ./main.lu:5:12
+      |
+    5 |     return helper.main(args)
+      |            ^^^^^^ not found
+      |
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+--- lupin run
+    main.lu: unsupported: `helper.main` does not resolve
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`helper.main` does not resolve","x-unsupported-at":"run"}
+
+######## p3_worker_imported
+--- checked: conform-run --json --checked
+    warning[W0313]: this `pub` item has no doc comment
+     --> ./worker/worker.lu:2:1
+      |
+    2 | pub fn main(args: List[str]) -> int {
+      | ^^^ exported, but undocumented
+      |
+      = note: an exported item carries a `///` contract: what it computes, what each row tag means,
+        when it traps. If it is not worth documenting, it is rarely worth exporting.
+    
+    warning[W0314]: `worker` holds exactly one item
+     --> ./worker/worker.lu:2:8
+      |
+    2 | pub fn main(args: List[str]) -> int {
+      |        ^^^^ a directory of ceremony around it
+      |
+      = note: fold the item into the module that uses it, or grow the module into the family its name
+        promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+    
+    {"commit":"unknown","diagnostics":[{"code":"W0313","file":1,"severity":"warning","span":[11,14]},{"code":"W0314","file":1,"severity":"warning","span":[18,22]}],"file":"./main.lu","files":["main.lu","worker/worker.lu"],"impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"exit(0)","warnings":[{"code":"W0313","span":[11,14]},{"code":"W0314","span":[18,22]}]}
+--- native: wolf build
+    warning[W0313]: this `pub` item has no doc comment
+     --> ./worker/worker.lu:2:1
+      |
+    2 | pub fn main(args: List[str]) -> int {
+      | ^^^ exported, but undocumented
+      |
+      = note: an exported item carries a `///` contract: what it computes, what each row tag means,
+        when it traps. If it is not worth documenting, it is rarely worth exporting.
+    
+    warning[W0314]: `worker` holds exactly one item
+     --> ./worker/worker.lu:2:8
+      |
+    2 | pub fn main(args: List[str]) -> int {
+      |        ^^^^ a directory of ceremony around it
+      |
+      = note: fold the item into the module that uses it, or grow the module into the family its name
+        promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+    
+    build exit 0
+    run exit 0
+--- release: wolf build --release
+    warning[W0313]: this `pub` item has no doc comment
+     --> ./worker/worker.lu:2:1
+      |
+    2 | pub fn main(args: List[str]) -> int {
+      | ^^^ exported, but undocumented
+      |
+      = note: an exported item carries a `///` contract: what it computes, what each row tag means,
+        when it traps. If it is not worth documenting, it is rarely worth exporting.
+    
+    warning[W0314]: `worker` holds exactly one item
+     --> ./worker/worker.lu:2:8
+      |
+    2 | pub fn main(args: List[str]) -> int {
+      |        ^^^^ a directory of ceremony around it
+      |
+      = note: fold the item into the module that uses it, or grow the module into the family its name
+        promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.
+    
+    build exit 0
+    run exit 0
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"files":["main.lu","worker/worker.lu"],"diagnostics":[{"code":"W0313","span":[11,14],"severity":"warning","file":1},{"code":"W0314","span":[18,22],"severity":"warning","file":1}],"warnings":[{"code":"W0313","span":[11,14]},{"code":"W0314","span":[18,22]}],"verdict":"exit(0)","stdout_sha256":null,"stdout_inline":null}
+
+######## p4_worker_nomodule
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:3:12
+      |
+    3 |     return worker.main(args)
+      |            ^^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":12,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":3,"x-unsupported-span":[56,62]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:3:12
+      |
+    3 |     return worker.main(args)
+      |            ^^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:3:12
+      |
+    3 |     return worker.main(args)
+      |            ^^^^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `worker.main` does not resolve
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`worker.main` does not resolve","x-unsupported-at":"run"}
+
+######## p5_worker_call
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:2:5
+      |
+    2 |     worker()
+      |     ^^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":5,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[23,29]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     worker()
+      |     ^^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     worker()
+      |     ^^^^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `worker` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`worker` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison","x-unsupported-at":"run"}
+
+######## p6_min
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(3, 4)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(3, 4)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(3, 4)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(0)","stdout_sha256":"1121cfccd5913f0a63fec40a6ffd44ea64f9dc135c66634ba001d10bcf4302a2","stdout_inline":"3\n"}
+
+######## p7_min_shadow
+--- checked: conform-run --json --checked
+    warning[W0304]: this function shadows the prelude name `min`
+     --> ./main.lu:1:4
+      |
+    1 | fn min(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `min` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    {"commit":"unknown","diagnostics":[{"code":"W0304","severity":"warning","span":[3,6]}],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"3\n","stdout_sha256":"1121cfccd5913f0a63fec40a6ffd44ea64f9dc135c66634ba001d10bcf4302a2","verdict":"exit(0)","warnings":[{"code":"W0304","span":[3,6]}]}
+--- native: wolf build
+    warning[W0304]: this function shadows the prelude name `min`
+     --> ./main.lu:1:4
+      |
+    1 | fn min(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `min` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    build exit 0
+    run exit 0
+--- release: wolf build --release
+    warning[W0304]: this function shadows the prelude name `min`
+     --> ./main.lu:1:4
+      |
+    1 | fn min(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `min` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    build exit 0
+    run exit 0
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[{"code":"W0304","span":[3,6],"severity":"warning"}],"warnings":[{"code":"W0304","span":[3,6]}],"verdict":"exit(0)","stdout_sha256":"1121cfccd5913f0a63fec40a6ffd44ea64f9dc135c66634ba001d10bcf4302a2","stdout_inline":"3\n"}
+
+######## p8_zip
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:4:13
+      |
+    4 |     let z = zip(xs, ys)
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":4,"x-unsupported-span":[71,74]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     let z = zip(xs, ys)
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     let z = zip(xs, ys)
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `zip` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`zip` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison","x-unsupported-at":"run"}
+
+######## p9_host_value
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:2:13
+      |
+    2 |     let f = env_args
+      |             ^^^^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[31,39]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let f = env_args
+      |             ^^^^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let f = env_args
+      |             ^^^^^^^^
+      |
+    build exit 4
+--- lupin run
+    lupin exit 0
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(0)","stdout_sha256":null,"stdout_inline":null}
+
+######## p10_acquire
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a std/prelude stub without a signature
+     --> ./main.lu:2:13
+      |
+    2 |     var r = acquire()
+      |             ^^^^^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a std/prelude stub without a signature","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[31,38]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     var r = acquire()
+      |             ^^^^^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a std/prelude stub without a signature (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     var r = acquire()
+      |             ^^^^^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `acquire` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison
+    lupin exit 4
+--- lupin conform-run --json
+    {"protocol":1,"impl":"lupin","impl_version":"0.1.60","commit":"17bd522","file":"main.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`acquire` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison","x-unsupported-at":"run"}
+
+######## e12_wolf_test (wolf test dialog_test.lu)
+    test dialog_test.lu ... unsupported (an error-row tag outside `!T` context)
+    wolf test: 0 passed; 0 failed; 0 rejected; 1 unsupported; 0 filtered out
+    wolf test exit 1
+--- lupin run dialog_test.lu
+    dialog_test.lu: unsupported: the program has no `main` in its root module (D32: directory = module)
+
+######## k1_backslash (wolf add util --path '../dep\q')
+    wolf add: created app/wolf.pkg (minimal manifest)
+    error[E0101]: there is no `\q` escape in wolf
+     --> wolf.pkg:6:30
+      |
+    6 |         util: { path: "../dep\q" },
+      |                              ^^
+      |
+      = note: the escapes wolf understands are `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xNN`, and
+        `\u{…}`. For a literal backslash, write `\\`; for text with no escapes at all, use a raw
+        string `r"…"`.
+    
+    wolf add: `util` does not resolve; the manifest edit was rolled back
+    wolf add exit 1
+--- app/wolf.pkg
+    pkg {
+        name:    "local/app",
+        version: "0.1.0",
+        edition: "1",
+    }
+--- wolf build app/main.lu (reads the manifest back)
+    error[E0301]: there is no module named `util` to import
+     --> app/main.lu:1:5
+      |
+    1 | use util
+      |     ^^^^ cannot be resolved
+      |
+      = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+        one (D32), and `std.…` or a package alias also resolves here.
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+
+######## k2_brace (wolf add util --path '../dep{1}')
+    wolf add: created app/wolf.pkg (minimal manifest)
+    error[E1501]: manifest strings never interpolate — a manifest is data (D33)
+     --> wolf.pkg:6:30
+      |
+    6 |         util: { path: "../dep{1}" },
+      |                              ^
+      |
+      = note: wolf.pkg is declarative data (D33): one `pkg { }` block of `key: value` entries —
+        strings, integers, bare capability words, `[ ]` lists, `{ }` maps.
+    
+    wolf add: `util` does not resolve; the manifest edit was rolled back
+    wolf add exit 1
+--- app/wolf.pkg
+    pkg {
+        name:    "local/app",
+        version: "0.1.0",
+        edition: "1",
+    }
+--- wolf build app/main.lu (reads the manifest back)
+    error[E0301]: there is no module named `util` to import
+     --> app/main.lu:1:5
+      |
+    1 | use util
+      |     ^^^^ cannot be resolved
+      |
+      = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+        one (D32), and `std.…` or a package alias also resolves here.
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+
+######## k3_quote (wolf add util --path '../dep"q')
+    wolf add: created app/wolf.pkg (minimal manifest)
+    error[E0109]: this generalized literal never closes
+     --> wolf.pkg:6:31
+      |
+    6 |         util: { path: "../dep"q" },
+      |                               ^^^^^ it opens here and must close with `"` before the line ends
+      |
+    help: close the literal before the line ends
+      |
+    6 |         util: { path: "../dep"q" },"
+      |
+    
+    wolf add: `util` does not resolve; the manifest edit was rolled back
+    wolf add exit 1
+--- app/wolf.pkg
+    pkg {
+        name:    "local/app",
+        version: "0.1.0",
+        edition: "1",
+    }
+--- wolf build app/main.lu (reads the manifest back)
+    error[E0301]: there is no module named `util` to import
+     --> app/main.lu:1:5
+      |
+    1 | use util
+      |     ^^^^ cannot be resolved
+      |
+      = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+        one (D32), and `std.…` or a package alias also resolves here.
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+
+######## k4_hex (wolf add util --path '../dep\x')
+    wolf add: created app/wolf.pkg (minimal manifest)
+    error[E0101]: a `\x` escape needs exactly two hex digits, like `\x7f`
+     --> wolf.pkg:6:30
+      |
+    6 |         util: { path: "../dep\x" },
+      |                              ^^
+      |
+      = note: the escapes wolf understands are `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xNN`, and
+        `\u{…}`. For a literal backslash, write `\\`; for text with no escapes at all, use a raw
+        string `r"…"`.
+    
+    wolf add: `util` does not resolve; the manifest edit was rolled back
+    wolf add exit 1
+--- app/wolf.pkg
+    pkg {
+        name:    "local/app",
+        version: "0.1.0",
+        edition: "1",
+    }
+--- wolf build app/main.lu (reads the manifest back)
+    error[E0301]: there is no module named `util` to import
+     --> app/main.lu:1:5
+      |
+    1 | use util
+      |     ^^^^ cannot be resolved
+      |
+      = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+        one (D32), and `std.…` or a package alias also resolves here.
+    
+    wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+    build exit 2
+
+== done 2026-11-09T18:06:48Z
+s289: END exit=0 13:06:48

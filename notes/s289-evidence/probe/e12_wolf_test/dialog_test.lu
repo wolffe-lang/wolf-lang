@@ -1,0 +1,8 @@
+//! dialog's tests.
+
+use dialog
+
+fn test_a_key_leaves_the_dialog_open() {
+    var d = dialog.closed()
+    assert(dialog.key(mut d, 97) == 0)
+}

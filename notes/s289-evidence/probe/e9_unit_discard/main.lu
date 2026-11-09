@@ -1,0 +1,10 @@
+fn g(c: bool) -> () ! {bad} {
+    if c { bad }
+}
+
+fn main() -> !int {
+    var raised = false
+    g(true) else |_| { raised = true }
+    print("g {raised}")
+    0
+}

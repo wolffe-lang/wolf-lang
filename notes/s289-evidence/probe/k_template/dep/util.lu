@@ -1,0 +1,12 @@
+/// The second fixture package (s51 dogfood): a dependency with a
+/// manifest, consumed by `app` through a `path:` source.
+
+/// Twice the input plus one — dull on purpose; the wiring is the test.
+pub fn twist(x: int) -> int {
+    2 * x + 1
+}
+
+/// The inverse of `twist`, for the module to be a family (W0314).
+pub fn untwist(x: int) -> int {
+    (x - 1) / 2
+}

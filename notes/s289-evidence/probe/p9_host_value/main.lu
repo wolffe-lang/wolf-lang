@@ -1,0 +1,4 @@
+fn main() -> int {
+    let f = env_args
+    f().len
+}

@@ -1,0 +1,7 @@
+fn min(a: int, b: int) -> int {
+    if a < b then a else b
+}
+
+fn main() {
+    print("{min(3, 4)}")
+}

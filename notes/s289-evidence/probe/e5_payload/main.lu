@@ -1,0 +1,7 @@
+fn answer() -> int {
+    Bad(3)
+}
+
+fn main() -> int {
+    answer()
+}

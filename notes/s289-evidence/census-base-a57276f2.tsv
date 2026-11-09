@@ -1,0 +1,693 @@
+s289: lock taken 13:36:53, 12210 MiB free, 81 GB disk; running: python3 -I rig/census.py $LANE/bin-a57276f2/wolf $LANE/runs/census-base
+print	function	value	unsupported	module items in checked execution
+print	function	call	fail(E0402)	E0402
+print	function	member	unsupported	methods on builtin types (the std surface)
+print_raw	function	value	unsupported	module items in checked execution
+print_raw	function	call	fail(E0402)	E0402
+print_raw	function	member	unsupported	methods on builtin types (the std surface)
+eprint	function	value	unsupported	a std/prelude stub without a signature
+eprint	function	call	fail(E0402)	E0402
+eprint	function	member	unsupported	a std/prelude stub without a signature
+eprint_raw	function	value	unsupported	a std/prelude stub without a signature
+eprint_raw	function	call	fail(E0402)	E0402
+eprint_raw	function	member	unsupported	a std/prelude stub without a signature
+read_line	function	value	unsupported	a std/prelude stub without a signature
+read_line	function	call	exit(0)	
+read_line	function	member	unsupported	a std/prelude stub without a signature
+List	type	value	unsupported	a std/prelude stub without a signature
+List	type	call	unsupported	a std/prelude stub without a signature
+List	type	member	unsupported	a std/prelude stub without a signature
+Map	type	value	unsupported	a std/prelude stub without a signature
+Map	type	call	unsupported	a std/prelude stub without a signature
+Map	type	member	unsupported	a std/prelude stub without a signature
+Pool	type	value	unsupported	a std/prelude stub without a signature
+Pool	type	call	unsupported	a std/prelude stub without a signature
+Pool	type	member	unsupported	a std/prelude stub without a signature
+Mutex	type	value	unsupported	a std/prelude stub without a signature
+Mutex	type	call	fail(E0402)	E0402
+Mutex	type	member	unsupported	a std/prelude stub without a signature
+channel	type	value	unsupported	a std/prelude stub without a signature
+channel	type	call	unsupported	a std/prelude stub without a signature
+channel	type	member	unsupported	a std/prelude stub without a signature
+fence	function	value	unsupported	a std/prelude stub without a signature
+fence	function	call	fail(E0402)	E0402
+fence	function	member	unsupported	a std/prelude stub without a signature
+Scope	type	value	unsupported	a std/prelude stub without a signature
+Scope	type	call	unsupported	a std/prelude stub without a signature
+Scope	type	member	unsupported	a std/prelude stub without a signature
+Proc	type	value	unsupported	a std/prelude stub without a signature
+Proc	type	call	unsupported	a std/prelude stub without a signature
+Proc	type	member	unsupported	a std/prelude stub without a signature
+range	type	value	unsupported	a std/prelude stub without a signature
+range	type	call	unsupported	a std/prelude stub without a signature
+range	type	member	unsupported	a std/prelude stub without a signature
+VaList	type	value	fail(E0826)	E0826
+VaList	type	call	fail(E0406)	E0406,E0826
+VaList	type	member	unsupported	methods on builtin types (the std surface)
+va_start	function	value	unsupported	a std/prelude stub without a signature
+va_start	function	call	fail(E0824)	E0824,E0826
+va_start	function	member	unsupported	a std/prelude stub without a signature
+va_arg	function	value	unsupported	a std/prelude stub without a signature
+va_arg	function	call	fail(E0812)	E0812,E0826
+va_arg	function	member	unsupported	a std/prelude stub without a signature
+va_copy	function	value	unsupported	a std/prelude stub without a signature
+va_copy	function	call	fail(E0402)	E0402,E0826
+va_copy	function	member	unsupported	a std/prelude stub without a signature
+va_end	function	value	unsupported	a std/prelude stub without a signature
+va_end	function	call	fail(E0402)	E0402,E0826
+va_end	function	member	unsupported	a std/prelude stub without a signature
+min	function	value	unsupported	a std/prelude stub without a signature
+min	function	call	unsupported	a std/prelude stub without a signature
+min	function	member	unsupported	a std/prelude stub without a signature
+zip	function	value	unsupported	a std/prelude stub without a signature
+zip	function	call	unsupported	a std/prelude stub without a signature
+zip	function	member	unsupported	a std/prelude stub without a signature
+reflect	intrinsic	value	unsupported	a std/prelude stub without a signature
+reflect	intrinsic	call	fail(E0402)	E0402
+reflect	intrinsic	member	unsupported	a std/prelude stub without a signature
+typeinfo	intrinsic	value	unsupported	a std/prelude stub without a signature
+typeinfo	intrinsic	call	fail(E0402)	E0402
+typeinfo	intrinsic	member	unsupported	a std/prelude stub without a signature
+typebuild	intrinsic	value	unsupported	a std/prelude stub without a signature
+typebuild	intrinsic	call	unsupported	`typebuild` without a descriptor
+typebuild	intrinsic	member	unsupported	a std/prelude stub without a signature
+implements	intrinsic	value	unsupported	a std/prelude stub without a signature
+implements	intrinsic	call	fail(E0402)	E0402
+implements	intrinsic	member	unsupported	a std/prelude stub without a signature
+size_of	intrinsic	value	unsupported	a std/prelude stub without a signature
+size_of	intrinsic	call	fail(E0402)	E0402
+size_of	intrinsic	member	unsupported	a std/prelude stub without a signature
+align_of	intrinsic	value	unsupported	a std/prelude stub without a signature
+align_of	intrinsic	call	fail(E0402)	E0402
+align_of	intrinsic	member	unsupported	a std/prelude stub without a signature
+offset_of	intrinsic	value	unsupported	a std/prelude stub without a signature
+offset_of	intrinsic	call	fail(E0402)	E0402
+offset_of	intrinsic	member	unsupported	a std/prelude stub without a signature
+assert	intrinsic	value	unsupported	a std/prelude stub without a signature
+assert	intrinsic	call	fail(E0402)	E0402
+assert	intrinsic	member	unsupported	a std/prelude stub without a signature
+read_text	function	value	unsupported	a std/prelude stub without a signature
+read_text	function	call	fail(E0402)	E0402
+read_text	function	member	unsupported	a std/prelude stub without a signature
+net_fetch	function	value	unsupported	a std/prelude stub without a signature
+net_fetch	function	call	fail(E0402)	E0402
+net_fetch	function	member	unsupported	a std/prelude stub without a signature
+env_var	function	value	unsupported	a std/prelude stub without a signature
+env_var	function	call	fail(E0402)	E0402
+env_var	function	member	unsupported	a std/prelude stub without a signature
+clock_ms	function	value	unsupported	a std/prelude stub without a signature
+clock_ms	function	call	unsupported	calls outside the modelled surface
+clock_ms	function	member	unsupported	a std/prelude stub without a signature
+random_seed	function	value	unsupported	a std/prelude stub without a signature
+random_seed	function	call	unsupported	calls outside the modelled surface
+random_seed	function	member	unsupported	a std/prelude stub without a signature
+fs_read_text	function	value	unsupported	a std/prelude stub without a signature
+fs_read_text	function	call	fail(E0402)	E0402
+fs_read_text	function	member	unsupported	a std/prelude stub without a signature
+fs_write_text	function	value	unsupported	a std/prelude stub without a signature
+fs_write_text	function	call	fail(E0402)	E0402
+fs_write_text	function	member	unsupported	a std/prelude stub without a signature
+fs_open	function	value	unsupported	a std/prelude stub without a signature
+fs_open	function	call	fail(E0402)	E0402
+fs_open	function	member	unsupported	a std/prelude stub without a signature
+fs_create	function	value	unsupported	a std/prelude stub without a signature
+fs_create	function	call	fail(E0402)	E0402
+fs_create	function	member	unsupported	a std/prelude stub without a signature
+fs_read	function	value	unsupported	a std/prelude stub without a signature
+fs_read	function	call	fail(E0402)	E0402
+fs_read	function	member	unsupported	a std/prelude stub without a signature
+fs_write	function	value	unsupported	a std/prelude stub without a signature
+fs_write	function	call	fail(E0402)	E0402
+fs_write	function	member	unsupported	a std/prelude stub without a signature
+fs_close	function	value	unsupported	a std/prelude stub without a signature
+fs_close	function	call	fail(E0402)	E0402
+fs_close	function	member	unsupported	a std/prelude stub without a signature
+fs_remove	function	value	unsupported	a std/prelude stub without a signature
+fs_remove	function	call	fail(E0402)	E0402
+fs_remove	function	member	unsupported	a std/prelude stub without a signature
+fs_exists	function	value	unsupported	a std/prelude stub without a signature
+fs_exists	function	call	fail(E0402)	E0402
+fs_exists	function	member	unsupported	a std/prelude stub without a signature
+fs_open_mode	function	value	unsupported	a std/prelude stub without a signature
+fs_open_mode	function	call	fail(E0402)	E0402
+fs_open_mode	function	member	unsupported	a std/prelude stub without a signature
+fs_read_bytes	function	value	unsupported	a std/prelude stub without a signature
+fs_read_bytes	function	call	fail(E0402)	E0402
+fs_read_bytes	function	member	unsupported	a std/prelude stub without a signature
+fs_write_bytes	function	value	unsupported	a std/prelude stub without a signature
+fs_write_bytes	function	call	fail(E0402)	E0402
+fs_write_bytes	function	member	unsupported	a std/prelude stub without a signature
+fs_read_chunk	function	value	unsupported	a std/prelude stub without a signature
+fs_read_chunk	function	call	fail(E0402)	E0402
+fs_read_chunk	function	member	unsupported	a std/prelude stub without a signature
+fs_write_chunk	function	value	unsupported	a std/prelude stub without a signature
+fs_write_chunk	function	call	fail(E0402)	E0402
+fs_write_chunk	function	member	unsupported	a std/prelude stub without a signature
+fs_read_dir	function	value	unsupported	a std/prelude stub without a signature
+fs_read_dir	function	call	fail(E0402)	E0402
+fs_read_dir	function	member	unsupported	a std/prelude stub without a signature
+fs_create_dir	function	value	unsupported	a std/prelude stub without a signature
+fs_create_dir	function	call	fail(E0402)	E0402
+fs_create_dir	function	member	unsupported	a std/prelude stub without a signature
+fs_create_dir_all	function	value	unsupported	a std/prelude stub without a signature
+fs_create_dir_all	function	call	fail(E0402)	E0402
+fs_create_dir_all	function	member	unsupported	a std/prelude stub without a signature
+fs_remove_dir	function	value	unsupported	a std/prelude stub without a signature
+fs_remove_dir	function	call	fail(E0402)	E0402
+fs_remove_dir	function	member	unsupported	a std/prelude stub without a signature
+fs_remove_dir_all	function	value	unsupported	a std/prelude stub without a signature
+fs_remove_dir_all	function	call	fail(E0402)	E0402
+fs_remove_dir_all	function	member	unsupported	a std/prelude stub without a signature
+fs_rename	function	value	unsupported	a std/prelude stub without a signature
+fs_rename	function	call	fail(E0402)	E0402
+fs_rename	function	member	unsupported	a std/prelude stub without a signature
+fs_is_file	function	value	unsupported	a std/prelude stub without a signature
+fs_is_file	function	call	fail(E0402)	E0402
+fs_is_file	function	member	unsupported	a std/prelude stub without a signature
+fs_is_dir	function	value	unsupported	a std/prelude stub without a signature
+fs_is_dir	function	call	fail(E0402)	E0402
+fs_is_dir	function	member	unsupported	a std/prelude stub without a signature
+fs_size	function	value	unsupported	a std/prelude stub without a signature
+fs_size	function	call	fail(E0402)	E0402
+fs_size	function	member	unsupported	a std/prelude stub without a signature
+fs_modified_ms	function	value	unsupported	a std/prelude stub without a signature
+fs_modified_ms	function	call	fail(E0402)	E0402
+fs_modified_ms	function	member	unsupported	a std/prelude stub without a signature
+fs_fstat	function	value	unsupported	a std/prelude stub without a signature
+fs_fstat	function	call	fail(E0402)	E0402
+fs_fstat	function	member	unsupported	a std/prelude stub without a signature
+fs_stat	function	value	unsupported	a std/prelude stub without a signature
+fs_stat	function	call	fail(E0402)	E0402
+fs_stat	function	member	unsupported	a std/prelude stub without a signature
+fs_lstat	function	value	unsupported	a std/prelude stub without a signature
+fs_lstat	function	call	fail(E0402)	E0402
+fs_lstat	function	member	unsupported	a std/prelude stub without a signature
+fs_statfs	function	value	unsupported	a std/prelude stub without a signature
+fs_statfs	function	call	fail(E0402)	E0402
+fs_statfs	function	member	unsupported	a std/prelude stub without a signature
+fs_read_link	function	value	unsupported	a std/prelude stub without a signature
+fs_read_link	function	call	fail(E0402)	E0402
+fs_read_link	function	member	unsupported	a std/prelude stub without a signature
+fs_read_dir_entries	function	value	unsupported	a std/prelude stub without a signature
+fs_read_dir_entries	function	call	fail(E0402)	E0402
+fs_read_dir_entries	function	member	unsupported	a std/prelude stub without a signature
+fs_set_mode	function	value	unsupported	a std/prelude stub without a signature
+fs_set_mode	function	call	fail(E0402)	E0402
+fs_set_mode	function	member	unsupported	a std/prelude stub without a signature
+fs_open_perm	function	value	unsupported	a std/prelude stub without a signature
+fs_open_perm	function	call	fail(E0402)	E0402
+fs_open_perm	function	member	unsupported	a std/prelude stub without a signature
+fs_create_dir_mode	function	value	unsupported	a std/prelude stub without a signature
+fs_create_dir_mode	function	call	fail(E0402)	E0402
+fs_create_dir_mode	function	member	unsupported	a std/prelude stub without a signature
+fs_symlink	function	value	unsupported	a std/prelude stub without a signature
+fs_symlink	function	call	fail(E0402)	E0402
+fs_symlink	function	member	unsupported	a std/prelude stub without a signature
+fs_link	function	value	unsupported	a std/prelude stub without a signature
+fs_link	function	call	fail(E0402)	E0402
+fs_link	function	member	unsupported	a std/prelude stub without a signature
+fs_set_times	function	value	unsupported	a std/prelude stub without a signature
+fs_set_times	function	call	fail(E0402)	E0402
+fs_set_times	function	member	unsupported	a std/prelude stub without a signature
+fs_truncate	function	value	unsupported	a std/prelude stub without a signature
+fs_truncate	function	call	fail(E0402)	E0402
+fs_truncate	function	member	unsupported	a std/prelude stub without a signature
+fs_set_owner	function	value	unsupported	a std/prelude stub without a signature
+fs_set_owner	function	call	fail(E0402)	E0402
+fs_set_owner	function	member	unsupported	a std/prelude stub without a signature
+fs_set_owner_fd	function	value	unsupported	a std/prelude stub without a signature
+fs_set_owner_fd	function	call	fail(E0402)	E0402
+fs_set_owner_fd	function	member	unsupported	a std/prelude stub without a signature
+fs_sync	function	value	unsupported	a std/prelude stub without a signature
+fs_sync	function	call	fail(E0402)	E0402
+fs_sync	function	member	unsupported	a std/prelude stub without a signature
+fs_sync_dir	function	value	unsupported	a std/prelude stub without a signature
+fs_sync_dir	function	call	fail(E0402)	E0402
+fs_sync_dir	function	member	unsupported	a std/prelude stub without a signature
+fs_realpath	function	value	unsupported	a std/prelude stub without a signature
+fs_realpath	function	call	fail(E0402)	E0402
+fs_realpath	function	member	unsupported	a std/prelude stub without a signature
+fs_access	function	value	unsupported	a std/prelude stub without a signature
+fs_access	function	call	fail(E0402)	E0402
+fs_access	function	member	unsupported	a std/prelude stub without a signature
+fs_lock	function	value	unsupported	a std/prelude stub without a signature
+fs_lock	function	call	fail(E0402)	E0402
+fs_lock	function	member	unsupported	a std/prelude stub without a signature
+fs_unlock	function	value	unsupported	a std/prelude stub without a signature
+fs_unlock	function	call	fail(E0402)	E0402
+fs_unlock	function	member	unsupported	a std/prelude stub without a signature
+fs_fstat_record	function	value	unsupported	a std/prelude stub without a signature
+fs_fstat_record	function	call	fail(E0402)	E0402
+fs_fstat_record	function	member	unsupported	a std/prelude stub without a signature
+fs_mkfifo	function	value	unsupported	a std/prelude stub without a signature
+fs_mkfifo	function	call	fail(E0402)	E0402
+fs_mkfifo	function	member	unsupported	a std/prelude stub without a signature
+fs_set_nonblock	function	value	unsupported	a std/prelude stub without a signature
+fs_set_nonblock	function	call	fail(E0402)	E0402
+fs_set_nonblock	function	member	unsupported	a std/prelude stub without a signature
+fs_write_some	function	value	unsupported	a std/prelude stub without a signature
+fs_write_some	function	call	fail(E0402)	E0402
+fs_write_some	function	member	unsupported	a std/prelude stub without a signature
+fs_open_at	function	value	unsupported	a std/prelude stub without a signature
+fs_open_at	function	call	fail(E0402)	E0402
+fs_open_at	function	member	unsupported	a std/prelude stub without a signature
+fs_stat_at	function	value	unsupported	a std/prelude stub without a signature
+fs_stat_at	function	call	fail(E0402)	E0402
+fs_stat_at	function	member	unsupported	a std/prelude stub without a signature
+fs_lstat_at	function	value	unsupported	a std/prelude stub without a signature
+fs_lstat_at	function	call	fail(E0402)	E0402
+fs_lstat_at	function	member	unsupported	a std/prelude stub without a signature
+fs_remove_at	function	value	unsupported	a std/prelude stub without a signature
+fs_remove_at	function	call	fail(E0402)	E0402
+fs_remove_at	function	member	unsupported	a std/prelude stub without a signature
+fs_remove_dir_at	function	value	unsupported	a std/prelude stub without a signature
+fs_remove_dir_at	function	call	fail(E0402)	E0402
+fs_remove_dir_at	function	member	unsupported	a std/prelude stub without a signature
+fs_create_dir_at	function	value	unsupported	a std/prelude stub without a signature
+fs_create_dir_at	function	call	fail(E0402)	E0402
+fs_create_dir_at	function	member	unsupported	a std/prelude stub without a signature
+fs_symlink_at	function	value	unsupported	a std/prelude stub without a signature
+fs_symlink_at	function	call	fail(E0402)	E0402
+fs_symlink_at	function	member	unsupported	a std/prelude stub without a signature
+fs_link_at	function	value	unsupported	a std/prelude stub without a signature
+fs_link_at	function	call	fail(E0402)	E0402
+fs_link_at	function	member	unsupported	a std/prelude stub without a signature
+fs_read_dir_entries_at	function	value	unsupported	a std/prelude stub without a signature
+fs_read_dir_entries_at	function	call	fail(E0402)	E0402
+fs_read_dir_entries_at	function	member	unsupported	a std/prelude stub without a signature
+fs_set_mode_fd	function	value	unsupported	a std/prelude stub without a signature
+fs_set_mode_fd	function	call	fail(E0402)	E0402
+fs_set_mode_fd	function	member	unsupported	a std/prelude stub without a signature
+fs_seek	function	value	unsupported	a std/prelude stub without a signature
+fs_seek	function	call	fail(E0402)	E0402
+fs_seek	function	member	unsupported	a std/prelude stub without a signature
+fs_tell	function	value	unsupported	a std/prelude stub without a signature
+fs_tell	function	call	fail(E0402)	E0402
+fs_tell	function	member	unsupported	a std/prelude stub without a signature
+fs_read_at	function	value	unsupported	a std/prelude stub without a signature
+fs_read_at	function	call	fail(E0402)	E0402
+fs_read_at	function	member	unsupported	a std/prelude stub without a signature
+fs_copy_chunk	function	value	unsupported	a std/prelude stub without a signature
+fs_copy_chunk	function	call	fail(E0402)	E0402
+fs_copy_chunk	function	member	unsupported	a std/prelude stub without a signature
+net_listen	function	value	unsupported	a std/prelude stub without a signature
+net_listen	function	call	fail(E0402)	E0402
+net_listen	function	member	unsupported	a std/prelude stub without a signature
+net_port	function	value	unsupported	a std/prelude stub without a signature
+net_port	function	call	fail(E0402)	E0402
+net_port	function	member	unsupported	a std/prelude stub without a signature
+net_accept	function	value	unsupported	a std/prelude stub without a signature
+net_accept	function	call	fail(E0402)	E0402
+net_accept	function	member	unsupported	a std/prelude stub without a signature
+net_connect	function	value	unsupported	a std/prelude stub without a signature
+net_connect	function	call	fail(E0402)	E0402
+net_connect	function	member	unsupported	a std/prelude stub without a signature
+net_read	function	value	unsupported	a std/prelude stub without a signature
+net_read	function	call	fail(E0402)	E0402
+net_read	function	member	unsupported	a std/prelude stub without a signature
+net_write	function	value	unsupported	a std/prelude stub without a signature
+net_write	function	call	fail(E0402)	E0402
+net_write	function	member	unsupported	a std/prelude stub without a signature
+net_read_bytes	function	value	unsupported	a std/prelude stub without a signature
+net_read_bytes	function	call	fail(E0402)	E0402
+net_read_bytes	function	member	unsupported	a std/prelude stub without a signature
+net_write_bytes	function	value	unsupported	a std/prelude stub without a signature
+net_write_bytes	function	call	fail(E0402)	E0402
+net_write_bytes	function	member	unsupported	a std/prelude stub without a signature
+net_writev	function	value	unsupported	a std/prelude stub without a signature
+net_writev	function	call	fail(E0402)	E0402
+net_writev	function	member	unsupported	a std/prelude stub without a signature
+net_writev_head	function	value	unsupported	a std/prelude stub without a signature
+net_writev_head	function	call	fail(E0402)	E0402
+net_writev_head	function	member	unsupported	a std/prelude stub without a signature
+net_nodelay	function	value	unsupported	a std/prelude stub without a signature
+net_nodelay	function	call	fail(E0402)	E0402
+net_nodelay	function	member	unsupported	a std/prelude stub without a signature
+net_listen_unix	function	value	unsupported	a std/prelude stub without a signature
+net_listen_unix	function	call	fail(E0402)	E0402
+net_listen_unix	function	member	unsupported	a std/prelude stub without a signature
+net_connect_unix	function	value	unsupported	a std/prelude stub without a signature
+net_connect_unix	function	call	fail(E0402)	E0402
+net_connect_unix	function	member	unsupported	a std/prelude stub without a signature
+net_listen_with	function	value	unsupported	a std/prelude stub without a signature
+net_listen_with	function	call	fail(E0402)	E0402
+net_listen_with	function	member	unsupported	a std/prelude stub without a signature
+net_adopt_listener	function	value	unsupported	a std/prelude stub without a signature
+net_adopt_listener	function	call	fail(E0402)	E0402
+net_adopt_listener	function	member	unsupported	a std/prelude stub without a signature
+fs_adopt	function	value	unsupported	a std/prelude stub without a signature
+fs_adopt	function	call	fail(E0402)	E0402
+fs_adopt	function	member	unsupported	a std/prelude stub without a signature
+net_wait	function	value	unsupported	a std/prelude stub without a signature
+net_wait	function	call	fail(E0402)	E0402
+net_wait	function	member	unsupported	a std/prelude stub without a signature
+net_close	function	value	unsupported	a std/prelude stub without a signature
+net_close	function	call	fail(E0402)	E0402
+net_close	function	member	unsupported	a std/prelude stub without a signature
+net_deadline	function	value	unsupported	a std/prelude stub without a signature
+net_deadline	function	call	fail(E0402)	E0402
+net_deadline	function	member	unsupported	a std/prelude stub without a signature
+env_arg0	function	value	unsupported	a std/prelude stub without a signature
+env_arg0	function	call	exit(0)	
+env_arg0	function	member	unsupported	a std/prelude stub without a signature
+env_args	function	value	unsupported	a std/prelude stub without a signature
+env_args	function	call	exit(0)	
+env_args	function	member	unsupported	a std/prelude stub without a signature
+env_args_bytes	function	value	unsupported	a std/prelude stub without a signature
+env_args_bytes	function	call	exit(0)	
+env_args_bytes	function	member	unsupported	a std/prelude stub without a signature
+env_get	function	value	unsupported	a std/prelude stub without a signature
+env_get	function	call	fail(E0402)	E0402
+env_get	function	member	unsupported	a std/prelude stub without a signature
+env_set	function	value	unsupported	a std/prelude stub without a signature
+env_set	function	call	fail(E0402)	E0402
+env_set	function	member	unsupported	a std/prelude stub without a signature
+env_unset	function	value	unsupported	a std/prelude stub without a signature
+env_unset	function	call	fail(E0402)	E0402
+env_unset	function	member	unsupported	a std/prelude stub without a signature
+env_vars	function	value	unsupported	a std/prelude stub without a signature
+env_vars	function	call	exit(0)	
+env_vars	function	member	unsupported	a std/prelude stub without a signature
+os_cwd	function	value	unsupported	a std/prelude stub without a signature
+os_cwd	function	call	exit(0)	
+os_cwd	function	member	unsupported	a std/prelude stub without a signature
+os_exe	function	value	unsupported	a std/prelude stub without a signature
+os_exe	function	call	exit(0)	
+os_exe	function	member	unsupported	a std/prelude stub without a signature
+os_cpus	function	value	unsupported	a std/prelude stub without a signature
+os_cpus	function	call	exit(0)	
+os_cpus	function	member	unsupported	a std/prelude stub without a signature
+os_name	function	value	unsupported	a std/prelude stub without a signature
+os_name	function	call	exit(0)	
+os_name	function	member	unsupported	a std/prelude stub without a signature
+os_arch	function	value	unsupported	a std/prelude stub without a signature
+os_arch	function	call	exit(0)	
+os_arch	function	member	unsupported	a std/prelude stub without a signature
+os_exit	function	value	unsupported	a std/prelude stub without a signature
+os_exit	function	call	fail(E0402)	E0402
+os_exit	function	member	unsupported	a std/prelude stub without a signature
+os_spawn	function	value	unsupported	a std/prelude stub without a signature
+os_spawn	function	call	fail(E0402)	E0402
+os_spawn	function	member	unsupported	a std/prelude stub without a signature
+os_spawn_with	function	value	unsupported	a std/prelude stub without a signature
+os_spawn_with	function	call	fail(E0402)	E0402
+os_spawn_with	function	member	unsupported	a std/prelude stub without a signature
+os_spawn_fds	function	value	unsupported	a std/prelude stub without a signature
+os_spawn_fds	function	call	fail(E0402)	E0402
+os_spawn_fds	function	member	unsupported	a std/prelude stub without a signature
+os_pipe	function	value	unsupported	a std/prelude stub without a signature
+os_pipe	function	call	exit(0)	
+os_pipe	function	member	unsupported	a std/prelude stub without a signature
+os_chdir	function	value	unsupported	a std/prelude stub without a signature
+os_chdir	function	call	fail(E0402)	E0402
+os_chdir	function	member	unsupported	a std/prelude stub without a signature
+os_chroot	function	value	unsupported	a std/prelude stub without a signature
+os_chroot	function	call	fail(E0402)	E0402
+os_chroot	function	member	unsupported	a std/prelude stub without a signature
+os_isatty	function	value	unsupported	a std/prelude stub without a signature
+os_isatty	function	call	fail(E0402)	E0402
+os_isatty	function	member	unsupported	a std/prelude stub without a signature
+os_umask	function	value	unsupported	a std/prelude stub without a signature
+os_umask	function	call	fail(E0402)	E0402
+os_umask	function	member	unsupported	a std/prelude stub without a signature
+os_exec	function	value	unsupported	a std/prelude stub without a signature
+os_exec	function	call	fail(E0402)	E0402
+os_exec	function	member	unsupported	a std/prelude stub without a signature
+os_wait	function	value	unsupported	a std/prelude stub without a signature
+os_wait	function	call	fail(E0402)	E0402
+os_wait	function	member	unsupported	a std/prelude stub without a signature
+os_kill	function	value	unsupported	a std/prelude stub without a signature
+os_kill	function	call	fail(E0402)	E0402
+os_kill	function	member	unsupported	a std/prelude stub without a signature
+os_signal_listen	function	value	unsupported	a std/prelude stub without a signature
+os_signal_listen	function	call	fail(E0402)	E0402
+os_signal_listen	function	member	unsupported	a std/prelude stub without a signature
+os_signal_wait	function	value	unsupported	a std/prelude stub without a signature
+os_signal_wait	function	call	fail(E0402)	E0402
+os_signal_wait	function	member	unsupported	a std/prelude stub without a signature
+os_signal_raise	function	value	unsupported	a std/prelude stub without a signature
+os_signal_raise	function	call	fail(E0402)	E0402
+os_signal_raise	function	member	unsupported	a std/prelude stub without a signature
+os_signal_ignore	function	value	unsupported	a std/prelude stub without a signature
+os_signal_ignore	function	call	fail(E0402)	E0402
+os_signal_ignore	function	member	unsupported	a std/prelude stub without a signature
+os_signal_default	function	value	unsupported	a std/prelude stub without a signature
+os_signal_default	function	call	fail(E0402)	E0402
+os_signal_default	function	member	unsupported	a std/prelude stub without a signature
+os_signal_ignore_one	function	value	unsupported	a std/prelude stub without a signature
+os_signal_ignore_one	function	call	fail(E0402)	E0402
+os_signal_ignore_one	function	member	unsupported	a std/prelude stub without a signature
+os_signal_default_one	function	value	unsupported	a std/prelude stub without a signature
+os_signal_default_one	function	call	fail(E0402)	E0402
+os_signal_default_one	function	member	unsupported	a std/prelude stub without a signature
+os_exit_signal	function	value	unsupported	a std/prelude stub without a signature
+os_exit_signal	function	call	fail(E0402)	E0402
+os_exit_signal	function	member	unsupported	a std/prelude stub without a signature
+os_core_limit	function	value	unsupported	a std/prelude stub without a signature
+os_core_limit	function	call	exit(0)	
+os_core_limit	function	member	unsupported	a std/prelude stub without a signature
+os_set_core_limit	function	value	unsupported	a std/prelude stub without a signature
+os_set_core_limit	function	call	fail(E0402)	E0402
+os_set_core_limit	function	member	unsupported	a std/prelude stub without a signature
+os_core_off	function	value	unsupported	a std/prelude stub without a signature
+os_core_off	function	call	exit(0)	
+os_core_off	function	member	unsupported	a std/prelude stub without a signature
+os_getpriority	function	value	unsupported	a std/prelude stub without a signature
+os_getpriority	function	call	exit(0)	
+os_getpriority	function	member	unsupported	a std/prelude stub without a signature
+os_setpriority	function	value	unsupported	a std/prelude stub without a signature
+os_setpriority	function	call	fail(E0402)	E0402
+os_setpriority	function	member	unsupported	a std/prelude stub without a signature
+os_signal_poll	function	value	unsupported	a std/prelude stub without a signature
+os_signal_poll	function	call	fail(E0402)	E0402
+os_signal_poll	function	member	unsupported	a std/prelude stub without a signature
+os_spawn_job	function	value	unsupported	a std/prelude stub without a signature
+os_spawn_job	function	call	fail(E0402)	E0402
+os_spawn_job	function	member	unsupported	a std/prelude stub without a signature
+os_proc_pid	function	value	unsupported	a std/prelude stub without a signature
+os_proc_pid	function	call	fail(E0402)	E0402
+os_proc_pid	function	member	unsupported	a std/prelude stub without a signature
+os_wait_status	function	value	unsupported	a std/prelude stub without a signature
+os_wait_status	function	call	fail(E0402)	E0402
+os_wait_status	function	member	unsupported	a std/prelude stub without a signature
+os_pgid	function	value	unsupported	a std/prelude stub without a signature
+os_pgid	function	call	exit(0)	
+os_pgid	function	member	unsupported	a std/prelude stub without a signature
+os_term_foreground	function	value	unsupported	a std/prelude stub without a signature
+os_term_foreground	function	call	fail(E0402)	E0402
+os_term_foreground	function	member	unsupported	a std/prelude stub without a signature
+os_term_set_foreground	function	value	unsupported	a std/prelude stub without a signature
+os_term_set_foreground	function	call	fail(E0402)	E0402
+os_term_set_foreground	function	member	unsupported	a std/prelude stub without a signature
+os_term_mode	function	value	unsupported	a std/prelude stub without a signature
+os_term_mode	function	call	fail(E0402)	E0402
+os_term_mode	function	member	unsupported	a std/prelude stub without a signature
+os_term_set_mode	function	value	unsupported	a std/prelude stub without a signature
+os_term_set_mode	function	call	fail(E0402)	E0402
+os_term_set_mode	function	member	unsupported	a std/prelude stub without a signature
+os_term_restore_at_exit	function	value	unsupported	a std/prelude stub without a signature
+os_term_restore_at_exit	function	call	fail(E0402)	E0402
+os_term_restore_at_exit	function	member	unsupported	a std/prelude stub without a signature
+os_signal_ignored	function	value	unsupported	a std/prelude stub without a signature
+os_signal_ignored	function	call	exit(0)	
+os_signal_ignored	function	member	unsupported	a std/prelude stub without a signature
+os_signal_action_one	function	value	unsupported	a std/prelude stub without a signature
+os_signal_action_one	function	call	fail(E0402)	E0402
+os_signal_action_one	function	member	unsupported	a std/prelude stub without a signature
+os_signal_send	function	value	unsupported	a std/prelude stub without a signature
+os_signal_send	function	call	fail(E0402)	E0402
+os_signal_send	function	member	unsupported	a std/prelude stub without a signature
+os_signal_number	function	value	unsupported	a std/prelude stub without a signature
+os_signal_number	function	call	fail(E0402)	E0402
+os_signal_number	function	member	unsupported	a std/prelude stub without a signature
+os_pid	function	value	unsupported	a std/prelude stub without a signature
+os_pid	function	call	exit(0)	
+os_pid	function	member	unsupported	a std/prelude stub without a signature
+os_ppid	function	value	unsupported	a std/prelude stub without a signature
+os_ppid	function	call	exit(0)	
+os_ppid	function	member	unsupported	a std/prelude stub without a signature
+os_uid	function	value	unsupported	a std/prelude stub without a signature
+os_uid	function	call	exit(0)	
+os_uid	function	member	unsupported	a std/prelude stub without a signature
+os_euid	function	value	unsupported	a std/prelude stub without a signature
+os_euid	function	call	exit(0)	
+os_euid	function	member	unsupported	a std/prelude stub without a signature
+os_gid	function	value	unsupported	a std/prelude stub without a signature
+os_gid	function	call	exit(0)	
+os_gid	function	member	unsupported	a std/prelude stub without a signature
+os_egid	function	value	unsupported	a std/prelude stub without a signature
+os_egid	function	call	exit(0)	
+os_egid	function	member	unsupported	a std/prelude stub without a signature
+os_groups	function	value	unsupported	a std/prelude stub without a signature
+os_groups	function	call	exit(0)	
+os_groups	function	member	unsupported	a std/prelude stub without a signature
+os_set_ids	function	value	unsupported	a std/prelude stub without a signature
+os_set_ids	function	call	fail(E0402)	E0402
+os_set_ids	function	member	unsupported	a std/prelude stub without a signature
+os_term_size	function	value	unsupported	a std/prelude stub without a signature
+os_term_size	function	call	fail(E0402)	E0402
+os_term_size	function	member	unsupported	a std/prelude stub without a signature
+os_term_chars	function	value	unsupported	a std/prelude stub without a signature
+os_term_chars	function	call	fail(E0402)	E0402
+os_term_chars	function	member	unsupported	a std/prelude stub without a signature
+os_signal_wait_fd	function	value	unsupported	a std/prelude stub without a signature
+os_signal_wait_fd	function	call	fail(E0402)	E0402
+os_signal_wait_fd	function	member	unsupported	a std/prelude stub without a signature
+os_signal_wait_fds	function	value	unsupported	a std/prelude stub without a signature
+os_signal_wait_fds	function	call	fail(E0402)	E0402
+os_signal_wait_fds	function	member	unsupported	a std/prelude stub without a signature
+os_signal_send_group	function	value	unsupported	a std/prelude stub without a signature
+os_signal_send_group	function	call	fail(E0402)	E0402
+os_signal_send_group	function	member	unsupported	a std/prelude stub without a signature
+os_signal_send_all	function	value	unsupported	a std/prelude stub without a signature
+os_signal_send_all	function	call	fail(E0402)	E0402
+os_signal_send_all	function	member	unsupported	a std/prelude stub without a signature
+os_set_pgid	function	value	unsupported	a std/prelude stub without a signature
+os_set_pgid	function	call	fail(E0402)	E0402
+os_set_pgid	function	member	unsupported	a std/prelude stub without a signature
+os_signal_last	function	value	unsupported	a std/prelude stub without a signature
+os_signal_last	function	call	exit(0)	
+os_signal_last	function	member	unsupported	a std/prelude stub without a signature
+os_signal_realtime	function	value	unsupported	a std/prelude stub without a signature
+os_signal_realtime	function	call	exit(0)	
+os_signal_realtime	function	member	unsupported	a std/prelude stub without a signature
+os_signal_text	function	value	unsupported	a std/prelude stub without a signature
+os_signal_text	function	call	fail(E0402)	E0402
+os_signal_text	function	member	unsupported	a std/prelude stub without a signature
+os_wait_poll	function	value	unsupported	a std/prelude stub without a signature
+os_wait_poll	function	call	exit(0)	
+os_wait_poll	function	member	unsupported	a std/prelude stub without a signature
+os_wait_status_core	function	value	unsupported	a std/prelude stub without a signature
+os_wait_status_core	function	call	fail(E0402)	E0402
+os_wait_status_core	function	member	unsupported	a std/prelude stub without a signature
+os_wait_poll_core	function	value	unsupported	a std/prelude stub without a signature
+os_wait_poll_core	function	call	exit(0)	
+os_wait_poll_core	function	member	unsupported	a std/prelude stub without a signature
+os_fork	function	value	unsupported	a std/prelude stub without a signature
+os_fork	function	call	exit(0)	
+os_fork	function	member	unsupported	a std/prelude stub without a signature
+os_random	function	value	unsupported	a std/prelude stub without a signature
+os_random	function	call	fail(E0402)	E0402
+os_random	function	member	unsupported	a std/prelude stub without a signature
+os_error	function	value	unsupported	a std/prelude stub without a signature
+os_error	function	call	exit(0)	
+os_error	function	member	unsupported	a std/prelude stub without a signature
+os_error_text	function	value	unsupported	a std/prelude stub without a signature
+os_error_text	function	call	fail(E0402)	E0402
+os_error_text	function	member	unsupported	a std/prelude stub without a signature
+time_now_ms	function	value	unsupported	a std/prelude stub without a signature
+time_now_ms	function	call	exit(0)	
+time_now_ms	function	member	unsupported	a std/prelude stub without a signature
+time_unix_ms	function	value	unsupported	a std/prelude stub without a signature
+time_unix_ms	function	call	exit(0)	
+time_unix_ms	function	member	unsupported	a std/prelude stub without a signature
+time_sleep_ms	function	value	unsupported	a std/prelude stub without a signature
+time_sleep_ms	function	call	fail(E0402)	E0402
+time_sleep_ms	function	member	unsupported	a std/prelude stub without a signature
+os_clock_ns	function	value	unsupported	a std/prelude stub without a signature
+os_clock_ns	function	call	exit(0)	
+os_clock_ns	function	member	unsupported	a std/prelude stub without a signature
+json_valid	function	value	unsupported	a std/prelude stub without a signature
+json_valid	function	call	fail(E0402)	E0402
+json_valid	function	member	unsupported	a std/prelude stub without a signature
+json_get	function	value	unsupported	a std/prelude stub without a signature
+json_get	function	call	fail(E0402)	E0402
+json_get	function	member	unsupported	a std/prelude stub without a signature
+json_type	function	value	unsupported	a std/prelude stub without a signature
+json_type	function	call	fail(E0402)	E0402
+json_type	function	member	unsupported	a std/prelude stub without a signature
+json_len	function	value	unsupported	a std/prelude stub without a signature
+json_len	function	call	fail(E0402)	E0402
+json_len	function	member	unsupported	a std/prelude stub without a signature
+str_from_utf8	function	value	unsupported	a std/prelude stub without a signature
+str_from_utf8	function	call	fail(E0402)	E0402
+str_from_utf8	function	member	unsupported	a std/prelude stub without a signature
+bytes_find	function	value	unsupported	a std/prelude stub without a signature
+bytes_find	function	call	fail(E0402)	E0402
+bytes_find	function	member	unsupported	a std/prelude stub without a signature
+bytes_count	function	value	unsupported	a std/prelude stub without a signature
+bytes_count	function	call	fail(E0402)	E0402
+bytes_count	function	member	unsupported	a std/prelude stub without a signature
+region_bytes	function	value	unsupported	a std/prelude stub without a signature
+region_bytes	function	call	fail(E0402)	E0402
+region_bytes	function	member	unsupported	a std/prelude stub without a signature
+live_region_bytes	function	value	unsupported	a std/prelude stub without a signature
+live_region_bytes	function	call	exit(0)	
+live_region_bytes	function	member	unsupported	a std/prelude stub without a signature
+acquire	provisional	value	unsupported	a std/prelude stub without a signature
+acquire	provisional	call	unsupported	a std/prelude stub without a signature
+acquire	provisional	member	unsupported	a std/prelude stub without a signature
+release	provisional	value	unsupported	a std/prelude stub without a signature
+release	provisional	call	unsupported	a std/prelude stub without a signature
+release	provisional	member	unsupported	a std/prelude stub without a signature
+build_config	provisional	value	unsupported	a std/prelude stub without a signature
+build_config	provisional	call	unsupported	a std/prelude stub without a signature
+build_config	provisional	member	unsupported	a std/prelude stub without a signature
+build_batch	provisional	value	unsupported	a std/prelude stub without a signature
+build_batch	provisional	call	unsupported	a std/prelude stub without a signature
+build_batch	provisional	member	unsupported	a std/prelude stub without a signature
+worker	provisional	value	unsupported	a std/prelude stub without a signature
+worker	provisional	call	unsupported	a std/prelude stub without a signature
+worker	provisional	member	unsupported	a std/prelude stub without a signature
+sleeper	provisional	value	unsupported	a std/prelude stub without a signature
+sleeper	provisional	call	unsupported	a std/prelude stub without a signature
+sleeper	provisional	member	unsupported	a std/prelude stub without a signature
+bool	builtin_type	value	unsupported	module items in checked execution
+bool	builtin_type	call	fail(E0406)	E0406
+bool	builtin_type	member	unsupported	methods on builtin types (the std surface)
+str	builtin_type	value	unsupported	module items in checked execution
+str	builtin_type	call	fail(E0406)	E0406
+str	builtin_type	member	unsupported	methods on builtin types (the std surface)
+byte	builtin_type	value	unsupported	module items in checked execution
+byte	builtin_type	call	fail(E0406)	E0406
+byte	builtin_type	member	unsupported	methods on builtin types (the std surface)
+char	builtin_type	value	unsupported	module items in checked execution
+char	builtin_type	call	fail(E0406)	E0406
+char	builtin_type	member	unsupported	methods on builtin types (the std surface)
+int	builtin_type	value	unsupported	module items in checked execution
+int	builtin_type	call	fail(E0406)	E0406
+int	builtin_type	member	unsupported	methods on builtin types (the std surface)
+uint	builtin_type	value	unsupported	module items in checked execution
+uint	builtin_type	call	fail(E0406)	E0406
+uint	builtin_type	member	unsupported	methods on builtin types (the std surface)
+i8	builtin_type	value	unsupported	module items in checked execution
+i8	builtin_type	call	fail(E0406)	E0406
+i8	builtin_type	member	unsupported	methods on builtin types (the std surface)
+i16	builtin_type	value	unsupported	module items in checked execution
+i16	builtin_type	call	fail(E0406)	E0406
+i16	builtin_type	member	unsupported	methods on builtin types (the std surface)
+i32	builtin_type	value	unsupported	module items in checked execution
+i32	builtin_type	call	fail(E0406)	E0406
+i32	builtin_type	member	unsupported	methods on builtin types (the std surface)
+i64	builtin_type	value	unsupported	module items in checked execution
+i64	builtin_type	call	fail(E0406)	E0406
+i64	builtin_type	member	unsupported	methods on builtin types (the std surface)
+u8	builtin_type	value	unsupported	module items in checked execution
+u8	builtin_type	call	fail(E0406)	E0406
+u8	builtin_type	member	unsupported	methods on builtin types (the std surface)
+u16	builtin_type	value	unsupported	module items in checked execution
+u16	builtin_type	call	fail(E0406)	E0406
+u16	builtin_type	member	unsupported	methods on builtin types (the std surface)
+u32	builtin_type	value	unsupported	module items in checked execution
+u32	builtin_type	call	fail(E0406)	E0406
+u32	builtin_type	member	unsupported	methods on builtin types (the std surface)
+u64	builtin_type	value	unsupported	module items in checked execution
+u64	builtin_type	call	fail(E0406)	E0406
+u64	builtin_type	member	unsupported	methods on builtin types (the std surface)
+f32	builtin_type	value	unsupported	module items in checked execution
+f32	builtin_type	call	fail(E0406)	E0406
+f32	builtin_type	member	unsupported	methods on builtin types (the std surface)
+f64	builtin_type	value	unsupported	module items in checked execution
+f64	builtin_type	call	fail(E0406)	E0406
+f64	builtin_type	member	unsupported	methods on builtin types (the std surface)
+wrapping	builtin_type	value	unsupported	module items in checked execution
+wrapping	builtin_type	call	fail(E0406)	E0406
+wrapping	builtin_type	member	unsupported	methods on builtin types (the std surface)
+never	builtin_type	value	unsupported	module items in checked execution
+never	builtin_type	call	fail(E0406)	E0406
+never	builtin_type	member	unsupported	methods on builtin types (the std surface)
+# census: 229 names, 687 uses, 431 answer "a std/prelude stub without a signature"
+# stub value: 208: eprint eprint_raw read_line List Map Pool Mutex channel fence Scope Proc range va_start va_arg va_copy va_end min zip reflect typeinfo typebuild implements size_of align_of offset_of assert read_text net_fetch env_var clock_ms random_seed fs_read_text fs_write_text fs_open fs_create fs_read fs_write fs_close fs_remove fs_exists fs_open_mode fs_read_bytes fs_write_bytes fs_read_chunk fs_write_chunk fs_read_dir fs_create_dir fs_create_dir_all fs_remove_dir fs_remove_dir_all fs_rename fs_is_file fs_is_dir fs_size fs_modified_ms fs_fstat fs_stat fs_lstat fs_statfs fs_read_link fs_read_dir_entries fs_set_mode fs_open_perm fs_create_dir_mode fs_symlink fs_link fs_set_times fs_truncate fs_set_owner fs_set_owner_fd fs_sync fs_sync_dir fs_realpath fs_access fs_lock fs_unlock fs_fstat_record fs_mkfifo fs_set_nonblock fs_write_some fs_open_at fs_stat_at fs_lstat_at fs_remove_at fs_remove_dir_at fs_create_dir_at fs_symlink_at fs_link_at fs_read_dir_entries_at fs_set_mode_fd fs_seek fs_tell fs_read_at fs_copy_chunk net_listen net_port net_accept net_connect net_read net_write net_read_bytes net_write_bytes net_writev net_writev_head net_nodelay net_listen_unix net_connect_unix net_listen_with net_adopt_listener fs_adopt net_wait net_close net_deadline env_arg0 env_args env_args_bytes env_get env_set env_unset env_vars os_cwd os_exe os_cpus os_name os_arch os_exit os_spawn os_spawn_with os_spawn_fds os_pipe os_chdir os_chroot os_isatty os_umask os_exec os_wait os_kill os_signal_listen os_signal_wait os_signal_raise os_signal_ignore os_signal_default os_signal_ignore_one os_signal_default_one os_exit_signal os_core_limit os_set_core_limit os_core_off os_getpriority os_setpriority os_signal_poll os_spawn_job os_proc_pid os_wait_status os_pgid os_term_foreground os_term_set_foreground os_term_mode os_term_set_mode os_term_restore_at_exit os_signal_ignored os_signal_action_one os_signal_send os_signal_number os_pid os_ppid os_uid os_euid os_gid os_egid os_groups os_set_ids os_term_size os_term_chars os_signal_wait_fd os_signal_wait_fds os_signal_send_group os_signal_send_all os_set_pgid os_signal_last os_signal_realtime os_signal_text os_wait_poll os_wait_status_core os_wait_poll_core os_fork os_random os_error os_error_text time_now_ms time_unix_ms time_sleep_ms os_clock_ns json_valid json_get json_type json_len str_from_utf8 bytes_find bytes_count region_bytes live_region_bytes acquire release build_config build_batch worker sleeper
+# stub member: 208: eprint eprint_raw read_line List Map Pool Mutex channel fence Scope Proc range va_start va_arg va_copy va_end min zip reflect typeinfo typebuild implements size_of align_of offset_of assert read_text net_fetch env_var clock_ms random_seed fs_read_text fs_write_text fs_open fs_create fs_read fs_write fs_close fs_remove fs_exists fs_open_mode fs_read_bytes fs_write_bytes fs_read_chunk fs_write_chunk fs_read_dir fs_create_dir fs_create_dir_all fs_remove_dir fs_remove_dir_all fs_rename fs_is_file fs_is_dir fs_size fs_modified_ms fs_fstat fs_stat fs_lstat fs_statfs fs_read_link fs_read_dir_entries fs_set_mode fs_open_perm fs_create_dir_mode fs_symlink fs_link fs_set_times fs_truncate fs_set_owner fs_set_owner_fd fs_sync fs_sync_dir fs_realpath fs_access fs_lock fs_unlock fs_fstat_record fs_mkfifo fs_set_nonblock fs_write_some fs_open_at fs_stat_at fs_lstat_at fs_remove_at fs_remove_dir_at fs_create_dir_at fs_symlink_at fs_link_at fs_read_dir_entries_at fs_set_mode_fd fs_seek fs_tell fs_read_at fs_copy_chunk net_listen net_port net_accept net_connect net_read net_write net_read_bytes net_write_bytes net_writev net_writev_head net_nodelay net_listen_unix net_connect_unix net_listen_with net_adopt_listener fs_adopt net_wait net_close net_deadline env_arg0 env_args env_args_bytes env_get env_set env_unset env_vars os_cwd os_exe os_cpus os_name os_arch os_exit os_spawn os_spawn_with os_spawn_fds os_pipe os_chdir os_chroot os_isatty os_umask os_exec os_wait os_kill os_signal_listen os_signal_wait os_signal_raise os_signal_ignore os_signal_default os_signal_ignore_one os_signal_default_one os_exit_signal os_core_limit os_set_core_limit os_core_off os_getpriority os_setpriority os_signal_poll os_spawn_job os_proc_pid os_wait_status os_pgid os_term_foreground os_term_set_foreground os_term_mode os_term_set_mode os_term_restore_at_exit os_signal_ignored os_signal_action_one os_signal_send os_signal_number os_pid os_ppid os_uid os_euid os_gid os_egid os_groups os_set_ids os_term_size os_term_chars os_signal_wait_fd os_signal_wait_fds os_signal_send_group os_signal_send_all os_set_pgid os_signal_last os_signal_realtime os_signal_text os_wait_poll os_wait_status_core os_wait_poll_core os_fork os_random os_error os_error_text time_now_ms time_unix_ms time_sleep_ms os_clock_ns json_valid json_get json_type json_len str_from_utf8 bytes_find bytes_count region_bytes live_region_bytes acquire release build_config build_batch worker sleeper
+# stub call: 15: List Map Pool channel Scope Proc range min zip acquire release build_config build_batch worker sleeper
+s289: END exit=0 13:36:57

@@ -1,0 +1,4 @@
+//! helper
+pub fn main(args: List[str]) -> int {
+    args.len
+}

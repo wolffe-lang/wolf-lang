@@ -1,0 +1,12 @@
+fn g() -> int ! {bad} {
+    return bad
+}
+
+fn answer() -> int {
+    let r: int ! {bad} = g()
+    bad
+}
+
+fn main() -> int {
+    answer()
+}

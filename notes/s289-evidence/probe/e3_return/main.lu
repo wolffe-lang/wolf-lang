@@ -1,0 +1,10 @@
+fn answer(c: int) -> int {
+    if c == 0 {
+        return CANCEL
+    }
+    c
+}
+
+fn main() -> int {
+    answer(1)
+}

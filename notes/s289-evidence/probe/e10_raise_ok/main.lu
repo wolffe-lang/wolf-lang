@@ -1,0 +1,10 @@
+fn answer(c: int) -> !int {
+    if c == 0 {
+        return Cancel
+    }
+    c
+}
+
+fn main() -> int {
+    answer(0) else 7
+}

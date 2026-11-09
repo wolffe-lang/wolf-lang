@@ -1,0 +1,15 @@
+enum Answer {
+    Open,
+    Accept,
+}
+
+fn answer() -> Answer {
+    Open
+}
+
+fn main() -> int {
+    match answer() {
+        Open => 0,
+        Accept => 1,
+    }
+}

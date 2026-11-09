@@ -1,0 +1,8 @@
+//! member: false
+
+use worker
+
+fn main() -> int {
+    let args = env_args()
+    return worker.main(args)
+}

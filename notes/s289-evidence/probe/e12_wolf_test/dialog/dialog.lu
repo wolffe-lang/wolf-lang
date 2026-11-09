@@ -1,0 +1,20 @@
+//! dialog: a question, as data.
+
+pub const NONE: int = 0
+
+pub const ACCEPT: int = 1
+
+pub struct Dialog {
+    kind: int,
+}
+
+pub fn closed() -> Dialog {
+    Dialog { kind: NONE }
+}
+
+pub fn key(mut d: Dialog, c: int) -> int {
+    if c == 13 {
+        return ACCEPT
+    }
+    OPEN
+}

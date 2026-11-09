@@ -1,0 +1,7 @@
+fn answer() -> int {
+    OPEN
+}
+
+fn main() -> int {
+    answer()
+}
