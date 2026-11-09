@@ -279,7 +279,7 @@ fn an_undeclared_name_in_a_fallible_functions_let_is_e0301() {
     refused(
         "typecheck/tag_undeclared_fallible_let.lu",
         "E0301",
-        (484, 487),
+        (495, 498),
         Says {
             has: &[
                 "error[E0301]: nothing named `Bad` is in scope",
