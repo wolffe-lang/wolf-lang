@@ -188,15 +188,28 @@ fn add_writes_a_manifest_that_reads_back() {
         std::fs::remove_file(app.join("wolf.pkg")).expect("rm manifest");
         let path = format!("../{dirname}");
         let out = run_wolf(&dir, &["add", "util", "--path", &path, "--dir", "app"], &[]);
-        assert_eq!(out.status.code(), Some(0), "{dirname}: stderr:\n{}", stderr(&out));
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{dirname}: stderr:\n{}",
+            stderr(&out)
+        );
         let manifest = std::fs::read_to_string(app.join("wolf.pkg")).expect("manifest exists");
         let want = format!("util: {{ path: {spelled} }}");
-        assert!(manifest.contains(&want), "{dirname}: wants {want}:\n{manifest}");
+        assert!(
+            manifest.contains(&want),
+            "{dirname}: wants {want}:\n{manifest}"
+        );
         let out = run_wolf(&dir, &["run", "app/main.lu"], &[]);
         if env_skip(&out, "add-reads-back") {
             continue;
         }
-        assert_eq!(out.status.code(), Some(0), "{dirname}: stderr:\n{}", stderr(&out));
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{dirname}: stderr:\n{}",
+            stderr(&out)
+        );
         assert_eq!(stdout(&out), "twist(20) = 41\n", "{dirname}");
     }
 }

@@ -16,7 +16,9 @@
 //! At the base 431 of the 687 uses answered with the stub.
 
 use wolf_sema::prelude::{self, Kind};
-use wolf_sema::{AliasTable, MemoryLoader, Typecheck, resolve_package_with, typecheck_package_with};
+use wolf_sema::{
+    AliasTable, MemoryLoader, Typecheck, resolve_package_with, typecheck_package_with,
+};
 
 const STUB: &str = "a std/prelude stub without a signature";
 /// A builtin function or intrinsic used as a value.
@@ -75,7 +77,10 @@ fn answer(src: &str) -> Answer {
 const USES: [(&str, &str); 3] = [
     ("value", "fn main() -> int {\n    let f = NAME\n    0\n}\n"),
     ("call", "fn main() -> int {\n    NAME()\n    0\n}\n"),
-    ("member", "fn main() -> int {\n    NAME.member()\n    0\n}\n"),
+    (
+        "member",
+        "fn main() -> int {\n    NAME.member()\n    0\n}\n",
+    ),
 ];
 
 /// Every ambient name, three ways: none answers with the stub.

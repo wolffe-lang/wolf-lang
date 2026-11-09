@@ -40,7 +40,9 @@ fn added(name: &str, source: &DepSource) -> Result<manifest::Manifest, String> {
 /// registry minimum is a version, never free text).
 fn sources(v: &str) -> Vec<DepSource> {
     vec![
-        DepSource::Path { path: v.to_string() },
+        DepSource::Path {
+            path: v.to_string(),
+        },
         DepSource::Git {
             url: v.to_string(),
             tag: v.to_string(),

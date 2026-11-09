@@ -35,7 +35,9 @@ fn lld_on_path() -> Option<PathBuf> {
 /// row cannot run.
 fn staged(case: &str) -> Option<PathBuf> {
     if !cfg!(target_os = "linux") {
-        eprintln!("SKIP {case}: the lld routing is Linux's (macOS links through Apple ld, Windows its own)");
+        eprintln!(
+            "SKIP {case}: the lld routing is Linux's (macOS links through Apple ld, Windows its own)"
+        );
         return None;
     }
     if lld_on_path().is_none() {
@@ -82,7 +84,10 @@ fn build_help_names_the_lld_selection_and_its_override() {
     let out = wolf().args(["build", "--help"]).output().expect("run wolf");
     let text = String::from_utf8_lossy(&out.stdout);
     for want in ["ld.lld", "-fuse-ld=lld", "WOLF_LD=cc"] {
-        assert!(text.contains(want), "`wolf build --help` lacks {want:?}:\n{text}");
+        assert!(
+            text.contains(want),
+            "`wolf build --help` lacks {want:?}:\n{text}"
+        );
     }
 }
 
@@ -116,7 +121,10 @@ fn a_build_that_picks_lld_from_path_says_which_once() {
         .unwrap_or("")
         .trim()
         .to_string();
-    assert!(notes[0].contains(&line), "the note carries {line:?}:\n{err}");
+    assert!(
+        notes[0].contains(&line),
+        "the note carries {line:?}:\n{err}"
+    );
     assert!(notes[0].contains("WOLF_LD=cc"), "{err}");
 }
 
