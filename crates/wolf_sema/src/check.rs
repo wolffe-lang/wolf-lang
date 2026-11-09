@@ -5802,8 +5802,23 @@ impl<'a> Checker<'a> {
                 self.report_undefined_stand_in(e.span, &name);
                 return Ok(self.error_ty());
             }
+            // The census (wolf-lang#708): every other ambient name answers
+            // by its class. A prelude type is a `type`-kinded value, as a
+            // builtin type is (D29).
+            if prelude::kind(&name) == Some(prelude::Kind::Type) {
+                return Ok(self.lo.table.intern(TyKind::TypeTy));
+            }
+            if matches!(name.as_str(), "min" | "zip") {
+                return Err(NotYet {
+                    construct: "a prelude helper with no signature yet (`min`, `zip`: write \
+                                the comparison or the loop)",
+                    span: e.span,
+                });
+            }
+            // A builtin function or intrinsic used as a value: lupin runs
+            // it, so this is the compiler's limit, named.
             return Err(NotYet {
-                construct: "a std/prelude stub without a signature",
+                construct: "a builtin function used as a value (call it by name)",
                 span: e.span,
             });
         }
@@ -8839,6 +8854,23 @@ impl<'a> Checker<'a> {
                     // `Mutex(v)` — the sync-cell ctor (spec 03, D14).
                     if name == "Mutex" {
                         return self.call_mutex_ctor(e, d.args());
+                    }
+                    // A prelude type called bare (the census, wolf-lang#708):
+                    // E0406 naming the type and how its values are made.
+                    if let Some(how) = prelude_type_call_note(&name) {
+                        self.diags.push(
+                            Diagnostic::error(
+                                codes::E0406,
+                                t.span,
+                                format!("`{name}` is a type, not a function, so it cannot be called"),
+                            )
+                            .with_label("called here")
+                            .with_note(how),
+                        );
+                        if let Some(a) = d.args() {
+                            self.synth_args_loosely(a)?;
+                        }
+                        return Ok(self.error_ty());
                     }
                     if self.deferred_tag(callee, None).is_some() {
                         let at_raise = self.raise_operand == Some(e.span);
@@ -14721,6 +14753,23 @@ fn chain_is_bare(n: &GreenNode) -> bool {
 /// other name. Pure over the type table, so the spec annex's pin test
 /// (`tests/host_table_spec.rs`) reads the same table the checker does —
 /// the annex cannot describe a signature this function does not return.
+/// How a prelude type's values are made, for E0406 when one is called
+/// bare (`List()`): the census's answer for the seven prelude types a
+/// call can name (`Mutex(v)` is a constructor and `VaList` the variadic
+/// cursor's own).
+fn prelude_type_call_note(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "List" => "`List` takes its element type in brackets: `List[int]()` makes an empty list",
+        "Map" => "`Map` takes its key and value types in brackets: `Map[str, int]()` makes an empty map",
+        "Pool" => "`Pool` takes its element type in brackets: `Pool[Node]()` makes an empty pool",
+        "channel" => "`channel` takes its element type in brackets: `channel[int](n)` makes a channel of capacity `n`",
+        "Scope" => "a `Scope` is the handle `scope name { … }` binds; it is written only as a type",
+        "Proc" => "a `Proc` is what `spawn proc f(…)` returns; it is written only as a type",
+        "range" => "`range` is the type of `a..b`; a range value is spelled `a..b`",
+        _ => return None,
+    })
+}
+
 pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>, TyId)> {
     let str_ = table.prim(Prim::Str);
     let int_ = table.prim(Prim::Int);
