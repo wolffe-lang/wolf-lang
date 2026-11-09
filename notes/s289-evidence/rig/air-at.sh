@@ -13,7 +13,8 @@ RSH="ssh -o BatchMode=yes -o UserKnownHostsFile=$HOME/lanes/orch-wollf/known_hos
 branch=$1; sha=$2; shift 2
 cmd=""
 for w in "$@"; do case "$w" in rig/*) w="$LANE/$w" ;; esac; cmd="$cmd $(printf %q "$w")"; done
-rsync -a -e "$RSH" "$L/rig/" matthews-macbook-air:lanes/s289/rig/ || exit 1
+# SECOND_MAC stands for the second Mac's ssh host; the evidence does not carry its name.
+rsync -a -e "$RSH" "$L/rig/" SECOND_MAC:lanes/s289/rig/ || exit 1
 "$A" bash -s <<EOF2
 set -u
 export LANE=\$HOME/lanes/s289
