@@ -944,10 +944,13 @@ impl Resolver<'_> {
     /// import, or before the first item when the file has none.
     fn use_insertion(&self, name: &str) -> (Span, String) {
         if let Some(last) = self.bindings.iter().map(|b| b.decl_span).max_by_key(|s| s.hi) {
-            return (
-                Span::new(last.file, last.hi, last.hi),
-                format!("\nuse {name}"),
-            );
+            // A declaration's span may end past its own newline.
+            let line = if self.src().get(last.hi as usize - 1) == Some(&b'\n') {
+                format!("use {name}\n")
+            } else {
+                format!("\nuse {name}")
+            };
+            return (Span::new(last.file, last.hi, last.hi), line);
         }
         let root = &self.pkg.files[self.file].parse.root;
         let at = root.nodes().next().map_or(root.span, |n| n.span);
