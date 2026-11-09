@@ -906,11 +906,13 @@ resolve/enum_variant_twice.lu: not mem-clean (pre-wir rungs own it)
 resolve/enum_variant_twice_payload.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
 resolve/leaf_twins/main.lu: lowers
+resolve/module_unimported/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/pkgvis/main.lu: lowers
 resolve/plain_subdir/main.lu: lowers
 resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers
 resolve/sibling_diag/main.lu: not mem-clean (pre-wir rungs own it)
+resolve/stand_in_unimported/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/standalone_pair/left.lu: lowers
 resolve/standalone_pair/right.lu: lowers
 resolve/struct_field_twice.lu: not mem-clean (pre-wir rungs own it)
@@ -1245,6 +1247,8 @@ typecheck/receiver_bare_mut_param.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
 typecheck/select_binding_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/stand_in_undefined_call.lu: not mem-clean (pre-wir rungs own it)
+typecheck/stand_in_undefined_receiver.lu: not mem-clean (pre-wir rungs own it)
 typecheck/str_slice_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/straight_line_as_char.lu: lowers
 typecheck/straight_line_as_narrow.lu: lowers
@@ -1256,6 +1260,14 @@ typecheck/straight_line_str_eq.lu: lowers
 typecheck/straight_line_str_order.lu: lowers
 typecheck/straight_line_wrap_div.lu: lowers
 typecheck/straight_line_wrap_rem.lu: lowers
+typecheck/tag_known_cannot_fail.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_fallible_let.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_let.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_module_item/main.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_payload.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_return.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tag_undeclared_tail.lu: not mem-clean (pre-wir rungs own it)
 typecheck/tail_declared_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/tail_declared_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
