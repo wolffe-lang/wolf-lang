@@ -1,0 +1,14 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: conf.resolve.ambient
+//!
+//! wolf-lang#1083's neighbour, as a receiver: `worker.main(args)` where
+//! the package has no module `worker` and nothing defines the stand-in.
+//! E0301 at `worker`, as for the call. Declined as "a std/prelude stub
+//! without a signature" until this row; lupin 0.1.60 declines it as "does
+//! not resolve".
+
+fn main() -> int {
+    let args = env_args()
+    return worker.main(args) // ERROR E0301: nothing defines `worker`
+}
