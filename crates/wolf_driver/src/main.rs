@@ -2406,20 +2406,48 @@ fn compile_unit(
 /// (lld does not sign by default), which stays unbuilt until a sprint
 /// needs it.
 fn lld_fuse_flag() -> Option<&'static str> {
+    path_lld().map(|_| "-fuse-ld=lld")
+}
+
+/// The `ld.lld` the probe found on PATH (wolf-lang#1082): where PATH
+/// resolves it, and the first line of its `--version`, which `wolf build`
+/// names in a note so a binary's bytes never depend on an unannounced
+/// linker.
+struct PathLld {
+    path: PathBuf,
+    version: String,
+}
+
+fn path_lld() -> Option<&'static PathLld> {
     if cfg!(target_os = "macos") {
         return None;
     }
     use std::sync::OnceLock;
-    static PROBE: OnceLock<bool> = OnceLock::new();
-    let have = *PROBE.get_or_init(|| {
-        std::process::Command::new("ld.lld")
-            .arg("--version")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok()
-    });
-    have.then_some("-fuse-ld=lld")
+    static PROBE: OnceLock<Option<PathLld>> = OnceLock::new();
+    PROBE
+        .get_or_init(|| {
+            let out = std::process::Command::new("ld.lld")
+                .arg("--version")
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .output()
+                .ok()?;
+            let version = String::from_utf8_lossy(&out.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let path = std::env::var_os("PATH")
+                .and_then(|p| {
+                    std::env::split_paths(&p)
+                        .map(|d| d.join("ld.lld"))
+                        .find(|c| c.is_file())
+                })
+                .unwrap_or_else(|| PathBuf::from("ld.lld"));
+            Some(PathLld { path, version })
+        })
+        .as_ref()
 }
 
 /// Link the module objects + the runtime staticlib into an executable.
@@ -3235,15 +3263,28 @@ fn build(args: &[String]) {
     // note; windows chooses its linker by `windows_linker`'s own order
     // (`--verbose` names the choice); elsewhere a missing lld is worth
     // a heads-up.
+    // Where lld IS found it is used, and the build says which one, once
+    // (wolf-lang#1082): the binary's bytes depend on it.
     if !cfg!(any(target_os = "macos", windows))
         && link::selection(cli.opts.linker.as_deref(), std::env::var_os("WOLF_LD")).is_none()
-        && lld_fuse_flag().is_none()
         && cli.opts.emit == Emit::Bin
     {
-        eprintln!(
-            "wolf build: note: ld.lld not found on PATH — linking with the system \
-             linker (lld ships with the toolchain; packaging is c13)"
-        );
+        match path_lld() {
+            None => eprintln!(
+                "wolf build: note: ld.lld not found on PATH — linking with the system \
+                 linker (lld ships with the toolchain; packaging is c13)"
+            ),
+            Some(lld) => eprintln!(
+                "wolf build: note: linking through {} found on PATH ({}); WOLF_LD=cc \
+                 (or --linker cc) links with the system linker instead",
+                lld.path.display(),
+                if lld.version.is_empty() {
+                    "no version line"
+                } else {
+                    lld.version.as_str()
+                }
+            ),
+        }
     }
     let path = Path::new(&cli.file);
     let out = cli.out.clone().unwrap_or_else(|| {
