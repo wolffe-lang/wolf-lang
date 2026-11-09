@@ -646,6 +646,11 @@ pub fn in_prelude(name: &str) -> bool {
     PRELUDE.iter().any(|a| a.name == name)
 }
 
+/// The kind of the ambient prelude name `name`, if it is one.
+pub fn kind(name: &str) -> Option<Kind> {
+    PRELUDE.iter().find(|a| a.name == name).map(|a| a.kind)
+}
+
 /// The provisional corpus stand-ins at the tail of [`PRELUDE`]: names
 /// that exist precisely so early corpus programs can define them, and
 /// that retire with the real std surface. Shadowing one is expected,
