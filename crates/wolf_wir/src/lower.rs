@@ -26125,7 +26125,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// `[type.min]` (s289, wolf-lang#708): `min(a, b)` over one integer
     /// type. Each operand is lowered once, left to right; then an `icmp`
     /// (`sle`, or `ule` for an unsigned type, as `<=` compares it), a
-    /// branch, and a join whose one parameter is the answer. Sema typed the
+    /// branch, and a join whose one parameter is the answer; a compare the
+    /// builder folds answers its operand directly. Sema typed the
     /// call (two operands of one integer type), so anything else here is a
     /// refusal, never a guess.
     fn lower_min(&mut self, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
@@ -26154,10 +26155,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .map(|t| sema_unsigned(self.table, t))
             .unwrap_or(false);
         let cc = if unsigned { IntCc::Ule } else { IntCc::Sle };
+        // One value twice is its own minimum.
+        if a == b {
+            return Ok(Flow::Val(Some(a)));
+        }
         let le = self
             .b
             .ins(Opcode::Icmp, &[a, b], &[types::BOOL], Aux::IntCc(cc))
             .one();
+        // Two known operands fold the compare: the answer is one of them,
+        // and no branch is built (a branch to one arm would leave the other
+        // arm a block with no predecessor beside the join).
+        if let Some(first) = self.b.as_bool_const(le) {
+            return Ok(Flow::Val(Some(if first { a } else { b })));
+        }
         let take_a = self.b.create_block();
         let take_b = self.b.create_block();
         let join = self.b.create_block();
