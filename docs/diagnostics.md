@@ -416,7 +416,28 @@ when the name is an enum's VARIANT used as a bare value: `Less` under
 arm the bare variant name is fine — the scrutinee's type says which
 enum.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__align_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__offset_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__ctor_arg_unresolved.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_resolve.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_home_no_std.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__variant_bare_value.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_two_homes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_value.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_container_type_argument.snap
+The type checker also reports this code when such a name stands where no
+error row can take a tag ([gram.expr.tagident]): a tag is a value only
+as the operand of `return` or the tail of a function that can fail, as a
+call argument whose parameter declares a row, or as an annotated `let`.
+Anywhere else a capitalized name that nothing declares is simply a name
+that is not there — most often a constant the module forgot to declare,
+or one that lives in an imported module and is spelled `module.NAME`
+(the message offers that edit when an import defines it). At a `return`
+or tail of a function that cannot fail, the message also offers the
+other reading: if the name was meant as an error, make the function
+fallible with `-> !T`.
+
+A module of the package (a sibling directory of `.lu` files, or a
+dependency alias) that this file does not import is a miss too; the
+message says so and offers `use name`. That holds for the prelude's
+provisional stand-ins as well (`acquire`, `release`, `build_config`,
+`build_batch`, `worker`, `sleeper`): they resolve everywhere so that the
+oldest example programs can define them, and one that nothing defines,
+or that names an unimported module, is reported here rather than
+declined.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__align_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__offset_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__module_unimported__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__stand_in_unimported__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__ctor_arg_unresolved.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_resolve.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_home_no_std.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__stand_in_undefined_call.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__stand_in_undefined_receiver.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_fallible_let.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_let.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_module_item__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_undeclared_tail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__variant_bare_value.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_module_after_use.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_unimported_stand_in_module.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_two_homes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_value.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_container_type_argument.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -1129,9 +1150,11 @@ row, never an invisible side channel, so the signature must admit the
 failure. Make the function fallible: write `-> !T` (private functions
 infer their row from the body) or state the row explicitly with
 `-> T ! {Tag, …}`; or handle the error here instead — `else` with a
-default, or `else |err| …` — so nothing needs to escape.
+default, or `else |err| …` — so nothing needs to escape. A bare tag
+counts as an error-tag return when the function spells it in some row
+(a `let` annotation, a parameter's type) but its own signature has none.
 
-Fixtures: crates/wolf_sema/tests/snapshots/row_diagnostics__e0604_nonfallible_caller.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_known_cannot_fail.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0604_nonfallible_caller.snap
 
 ## E0605 — an exported function must state its error row
 
