@@ -5658,9 +5658,8 @@ impl<'a> Checker<'a> {
              or the tail of a function that can fail, a call argument, or an annotated \
              `let`",
         );
-        let constant = format!(
-            "if `{name}` is a constant, declare it, or import the module that defines it"
-        );
+        let constant =
+            format!("if `{name}` is a constant, declare it, or import the module that defines it");
         match ret {
             Some((rt, fname, because)) if !fallible && at_raise => {
                 let ok = self.show(rt);

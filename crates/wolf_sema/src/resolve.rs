@@ -943,7 +943,12 @@ impl Resolver<'_> {
     /// Where `use name` goes in this file, and its text: after the last
     /// import, or before the first item when the file has none.
     fn use_insertion(&self, name: &str) -> (Span, String) {
-        if let Some(last) = self.bindings.iter().map(|b| b.decl_span).max_by_key(|s| s.hi) {
+        if let Some(last) = self
+            .bindings
+            .iter()
+            .map(|b| b.decl_span)
+            .max_by_key(|s| s.hi)
+        {
             // A declaration's span may end past its own newline.
             let line = if self.src().get(last.hi as usize - 1) == Some(&b'\n') {
                 format!("use {name}\n")
