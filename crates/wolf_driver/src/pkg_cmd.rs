@@ -209,16 +209,21 @@ pub fn init(args: &[String]) {
         .unwrap_or_else(|| "app".to_string());
     // The manifest: the frontmatter's own entries, plus the identity a
     // package needs and a script does not have.
+    // Every string goes through the manifest's own quoting, so the file
+    // reads back whatever the names hold (wolf-lang#175).
     let mut manifest = format!(
-        "pkg {{\n    name:    \"local/{stem}\",\n    version: \"0.1.0\",\n    edition: \"{}\",\n",
-        read.manifest
-            .as_ref()
-            .map(|m| m.edition.as_str())
-            .unwrap_or("1")
+        "pkg {{\n    name:    {},\n    version: \"0.1.0\",\n    edition: {},\n",
+        manifest::quote(&format!("local/{stem}")),
+        manifest::quote(
+            read.manifest
+                .as_ref()
+                .map(|m| m.edition.as_str())
+                .unwrap_or("1")
+        )
     );
     if let Some(m) = &read.manifest {
         if let Some(w) = &m.wolf_min {
-            manifest.push_str(&format!("    wolf:    \"{w}\",\n"));
+            manifest.push_str(&format!("    wolf:    {},\n", manifest::quote(w)));
         }
         if !m.deps.is_empty() {
             manifest.push_str("\n    deps: {\n");
