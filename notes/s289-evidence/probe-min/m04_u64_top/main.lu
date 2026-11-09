@@ -1,0 +1,5 @@
+fn main() {
+    let top: u64 = 18446744073709551615
+    let one: u64 = 1
+    print("{min(top, one)} {min(one, top)}")
+}

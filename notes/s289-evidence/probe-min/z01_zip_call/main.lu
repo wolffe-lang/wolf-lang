@@ -1,0 +1,5 @@
+fn main() {
+    let xs = [1, 2]
+    let ys = [3, 4]
+    let zs = zip(xs, ys)
+}

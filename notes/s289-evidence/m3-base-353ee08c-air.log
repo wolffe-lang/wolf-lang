@@ -1,0 +1,546 @@
+s289: warm target from build-934e36a
+s289: Air at 353ee08c in $LANE/build-wolf-lang-353ee08
+s289: lock taken 16:31:36, 11012 MiB free, 80 GB disk; running: $LANE/rig/min-base.sh
+== STEP head 21:31:36
+353ee08ca3fd05ee3bd8e5bbdd4bb538bba01b0d
+       0
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+END head exit=0
+== STEP build 21:31:36
+   Compiling wolf_span v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_span)
+   Compiling wolf_rt v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_rt)
+   Compiling wolf_diag v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_diag)
+   Compiling wolf_ast v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_ast)
+   Compiling wolf_lex v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_lex)
+   Compiling wolf_parse v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_parse)
+   Compiling wolf_cimport v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_cimport)
+   Compiling wolf_sema v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_sema)
+   Compiling wolf_fmt v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_fmt)
+   Compiling wolf_pkg v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_pkg)
+   Compiling wolf_mem v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_mem)
+   Compiling wolf_query v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_query)
+   Compiling wolf_doc v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_lsp)
+   Compiling wolf_wir v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_wir)
+   Compiling wolf_backend v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_backend)
+   Compiling wolf_codegen_llvm v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_codegen_llvm)
+   Compiling wolf_codegen_clif v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.38 ($LANE/build-wolf-lang-353ee08/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.04s
+END build exit=0
+== STEP copy 21:31:49
+f9c2f10ac6161d9acb72d00e20bf56429dad4099ce460e8fdb7990ac4d61597a  target/debug/wolf
+f9c2f10ac6161d9acb72d00e20bf56429dad4099ce460e8fdb7990ac4d61597a  $LANE/bin-353ee08c/wolf
+597cd83ff10b245e4238fb6e4d041e28a2d70bca04ce9d06ca3727553bbca60c  target/debug/libwolf_rt.a
+597cd83ff10b245e4238fb6e4d041e28a2d70bca04ce9d06ca3727553bbca60c  $LANE/bin-353ee08c/libwolf_rt.a
+END copy exit=0
+== done 2026-11-09T21:31:50Z
+== s289 min probes, label min-base-353ee08c, 2026-11-09T21:31:50Z
+f9c2f10ac6161d9acb72d00e20bf56429dad4099ce460e8fdb7990ac4d61597a  $LANE/bin-353ee08c/wolf
+bab126fc5deb515bc057e5706d185eac30584ab95a9733f33f5f49aa6fdd2d36  $LANE/inputs/lupin060/x/lupin
+wolf 0.2.38+dev.unknown (wolfgang)
+lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+
+######## m01_int
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(3, 4)} {min(-5, 2)} {min(7, 7)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(3, 4)} {min(-5, 2)} {min(7, 7)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(3, 4)} {min(-5, 2)} {min(7, 7)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    3 -5 7
+    lupin exit 0
+
+######## m02_u8
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(a, b)} {min(b, a)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":4,"x-unsupported-span":[62,65]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(a, b)} {min(b, a)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(a, b)} {min(b, a)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    7 7
+    lupin exit 0
+
+######## m03_i64_edges
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(lo, hi)} {min(hi, lo)} {min(hi, 0)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":4,"x-unsupported-span":[105,108]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(lo, hi)} {min(hi, lo)} {min(hi, 0)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(lo, hi)} {min(hi, lo)} {min(hi, 0)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    -9223372036854775808 -9223372036854775808 0
+    lupin exit 0
+
+######## m04_u64_top
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(top, one)} {min(one, top)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":4,"x-unsupported-span":[85,88]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(top, one)} {min(one, top)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(top, one)} {min(one, top)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    1 1
+    lupin exit 0
+
+######## m05_one_arg
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(5)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(5)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(5)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    5
+    lupin exit 0
+
+######## m06_three_args
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(1, 2, 3)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(1, 2, 3)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(1, 2, 3)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    1
+    lupin exit 0
+
+######## m07_mixed
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(a, b)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":4,"x-unsupported-span":[61,64]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(a, b)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:13
+      |
+    4 |     print("{min(a, b)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    3
+    lupin exit 0
+
+######## m08_str
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min("b", "a")}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min("b", "a")}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min("b", "a")}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `min` takes integers, got str
+    lupin exit 4
+
+######## m09_float
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(1.5, 2.0)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(1.5, 2.0)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     print("{min(1.5, 2.0)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `min` takes integers, got f64
+    lupin exit 4
+
+######## m10_literal_fit
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:3:13
+      |
+    3 |     print("{min(a, 300)}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":3,"x-unsupported-span":[42,45]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:3:13
+      |
+    3 |     print("{min(a, 300)}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:3:13
+      |
+    3 |     print("{min(a, 300)}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    3
+    lupin exit 0
+
+######## m11_value
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:13
+      |
+    2 |     let f = min
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[24,27]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let f = min
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:13
+      |
+    2 |     let f = min
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    1
+    lupin exit 0
+
+######## m12_own_min
+--- checked: conform-run --json --checked
+    warning[W0304]: this function shadows the prelude name `min`
+     --> ./main.lu:1:4
+      |
+    1 | fn min(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `min` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    {"commit":"unknown","diagnostics":[{"code":"W0304","severity":"warning","span":[3,6]}],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"4\n","stdout_sha256":"7de1555df0c2700329e815b93b32c571c3ea54dc967b89e81ab73b9972b72d1d","verdict":"exit(0)","warnings":[{"code":"W0304","span":[3,6]}]}
+--- native: wolf build
+    warning[W0304]: this function shadows the prelude name `min`
+     --> ./main.lu:1:4
+      |
+    1 | fn min(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `min` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    build exit 0
+    4
+    run exit 0
+--- release: wolf build --release
+    warning[W0304]: this function shadows the prelude name `min`
+     --> ./main.lu:1:4
+      |
+    1 | fn min(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `min` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    build exit 0
+    4
+    run exit 0
+--- lupin run
+    4
+    lupin exit 0
+
+######## m13_typed_result
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:2:5
+      |
+    2 |     min(a, b)
+      |     ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":5,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":2,"x-unsupported-span":[40,43]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     min(a, b)
+      |     ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:2:5
+      |
+    2 |     min(a, b)
+      |     ^^^
+      |
+    build exit 4
+--- lupin run
+    9
+    lupin exit 0
+
+######## m14_effects_once
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:7:13
+      |
+    7 |     print("{min(tick(2), tick(1))}")
+      |             ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":13,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":7,"x-unsupported-span":[80,83]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:7:13
+      |
+    7 |     print("{min(tick(2), tick(1))}")
+      |             ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:7:13
+      |
+    7 |     print("{min(tick(2), tick(1))}")
+      |             ^^^
+      |
+    build exit 4
+--- lupin run
+    tick 2
+    tick 1
+    1
+    lupin exit 0
+
+######## z01_zip_call
+--- checked: conform-run --json --checked
+    wolf conform-run: unsupported — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)
+     --> ./main.lu:4:14
+      |
+    4 |     let zs = zip(xs, ys)
+      |              ^^^
+      |
+    {"commit":"unknown","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"unsupported","warnings":[],"x-unsupported-col":14,"x-unsupported-construct":"a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop)","x-unsupported-file":"./main.lu","x-unsupported-line":4,"x-unsupported-span":[65,68]}
+--- native: wolf build
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:14
+      |
+    4 |     let zs = zip(xs, ys)
+      |              ^^^
+      |
+    build exit 4
+--- release: wolf build --release
+    wolf build: cannot compile this yet — a prelude helper with no signature yet (`min`, `zip`: write the comparison or the loop) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+     --> ./main.lu:4:14
+      |
+    4 |     let zs = zip(xs, ys)
+      |              ^^^
+      |
+    build exit 4
+--- lupin run
+    main.lu: unsupported: `zip` is in the ambient std stub but has no pinned semantics; the real std surface is not specified yet, and guessing it would put invented behavior into a differential comparison
+    lupin exit 4
+
+######## z02_own_zip
+--- checked: conform-run --json --checked
+    warning[W0304]: this function shadows the prelude name `zip`
+     --> ./main.lu:1:4
+      |
+    1 | fn zip(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `zip` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    {"commit":"unknown","diagnostics":[{"code":"W0304","severity":"warning","span":[3,6]}],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"12\n","stdout_sha256":"a1fb50e6c86fae1679ef3351296fd6713411a08cf8dd1790a4fd05fae8688164","verdict":"exit(0)","warnings":[{"code":"W0304","span":[3,6]}]}
+--- native: wolf build
+    warning[W0304]: this function shadows the prelude name `zip`
+     --> ./main.lu:1:4
+      |
+    1 | fn zip(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `zip` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    build exit 0
+    12
+    run exit 0
+--- release: wolf build --release
+    warning[W0304]: this function shadows the prelude name `zip`
+     --> ./main.lu:1:4
+      |
+    1 | fn zip(a: int, b: int) -> int {
+      |    ^^^ shadows an ambient name
+      |
+      = note: `zip` resolves without an import in every file; this declaration silently wins over it
+        for the whole module (file boundaries create no scopes). Pick another name so both stay
+        reachable.
+    
+    build exit 0
+    12
+    run exit 0
+--- lupin run
+    12
+    lupin exit 0
+
+== wolf prelude: min and zip
+    min                  function      -                    yes
+    zip                  function      -                    yes
+== done 2026-11-09T21:31:51Z
+s289: END exit=0 16:31:51

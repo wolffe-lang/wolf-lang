@@ -1,0 +1,8 @@
+fn tick(n: int) -> int {
+    print("tick {n}")
+    n
+}
+
+fn main() {
+    print("{min(tick(2), tick(1))}")
+}

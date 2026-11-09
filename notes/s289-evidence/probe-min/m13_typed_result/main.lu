@@ -1,0 +1,8 @@
+fn smaller(a: u16, b: u16) -> u16 {
+    min(a, b)
+}
+
+fn main() {
+    let x: u16 = 65535
+    print("{smaller(x, 9)}")
+}

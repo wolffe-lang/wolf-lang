@@ -1,0 +1,5 @@
+fn main() {
+    let lo: i64 = -9223372036854775807 - 1
+    let hi: i64 = 9223372036854775807
+    print("{min(lo, hi)} {min(hi, lo)} {min(hi, 0)}")
+}
