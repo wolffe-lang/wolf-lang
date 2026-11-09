@@ -1,0 +1,11 @@
+//! member: true
+
+/// The helper's entry: how many arguments it was given.
+pub fn main(args: List[str]) -> int {
+    args.len
+}
+
+/// The helper's name, for its log lines.
+pub fn name() -> str {
+    "helper"
+}

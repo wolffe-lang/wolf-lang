@@ -1,0 +1,15 @@
+//! check: fail(E0301)
+//! phase: parse
+//! conforms: mod.dir, gram.item.use
+//!
+//! wolf-lang#1083's control: the package has a module `helper` (the
+//! directory beside this file), and this file calls it with no `use
+//! helper`. That was already E0301 at the name; it now also says that
+//! `helper` is a module of this package the file does not import, and
+//! offers `use helper`. `stand_in_unimported/` is the same program with the
+//! module named like a prelude stand-in.
+
+fn main() -> int {
+    let args = env_args()
+    return helper.main(args) // ERROR E0301: add `use helper`
+}
