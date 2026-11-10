@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+s290 — a new session: a child started in one, and this process into one (`[os.proc.session]`, `[os.term.session]`).
+
+- **`os_spawn_session(exe, args, map, defaults)` starts a child that leads a new session** (`[os.proc.session]`). It is `os_spawn_job` with the child calling `setsid` first, in place of the group and the terminal: the child's session, group and process ids are one number, it has no controlling terminal (`/dev/tty` fails with `ENXIO` in it), and no key, hangup or background stop of this process's terminal reaches it. `defaults` and the descriptor map are placed as `os_spawn_job` places them. There is no `tty` parameter. Rows `{denied, invalid, io, not_found, unsupported}` in `os_spawn_job`'s order; windows `unsupported` after the shape. `os_spawn_job`'s released answers are unchanged.
+- **`os_setsid()` moves this process into a session of its own, and `os_sid()` reads its session id** (`[os.term.session]`). `os_setsid` is `denied` (`EPERM`, with 1 in `os_error()`) for a process that leads a group, a session leader included, and nothing moves; a process started in its parent's group, a forked child, or one that starts itself again with `os_spawn_session` may call it, from any thread. After it the old terminal's foreground is `io` and a registered terminal restore still restores. windows answers `unsupported` for both.
+- The runtime's opens pass no `O_NOCTTY`, so a session leader with no controlling terminal that opens a terminal no session holds takes it, on Linux and on macOS (measured on 26.4.1).
+- Host table 177 to 180 lines, prelude 191 functions, anchors 738. The pinned lupin 0.1.60 does not resolve the three names; its mirror is wolf-interp's own change, which answers the shape rows and refuses each well-formed call by name.
+
 s289 — the diagnostics sweep, third change: the prelude's `min` on every tier (#708).
 
 - **`min(a, b)` compiles on every tier** (#708, `[type.min]`). The prelude has named `min` since the first corpus programs, and no clause typed it, so the checked machine, native and release all declined a program that called it. It now takes two values of one integer type and answers the smaller, as that type: compared signed for a signed type and unsigned for an unsigned one, as `<` compares them, each operand evaluated once, left to right. On native and release it is one compare and one branch (folded when both operands are known); it never traps. One operand or three is E0402; an operand outside the integers, or a second integer type, is E0401 at that operand; a literal beside a `u8` that does not fit is E0415. `min` used as a value is the builtin-as-value refusal, and a module's own `fn min` still wins the name and still draws W0304.
