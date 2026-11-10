@@ -1,0 +1,7 @@
+# s292 second probe, macOS 26.4.1 arm64, ptyhold.c at db9d8b9f
+K1 set on a held slave, read on a second open: VINTR 9, size 42 134
+K2 the child kept the inherited slave until after its own open: /dev/tty ok; VINTR 9, size 42 134
+K3 the child closed the inherited slave first: /dev/tty ok; VINTR 3, size 0 0
+K4 a session leader's O_NOCTTY open: slave ok, /dev/tty ENXIO; then an open without it: slave ok, /dev/tty ok
+END
+END exit=0
