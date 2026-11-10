@@ -101,12 +101,10 @@ fn run_lanes(entry: &Path, dir: &Path, checked: bool) -> Vec<(String, String)> {
     for (tier, release) in [("native", false), ("release", true)] {
         let bin = build(entry, dir, release);
         let mut argvs = vec![(tier.to_string(), vec![bin.to_string_lossy().into_owned()])];
-        if !release {
-            if let Some(pin) = test_cpus::pin(4, module_path!()) {
-                let mut argv = pin.argv();
-                argv.push(bin.to_string_lossy().into_owned());
-                argvs.push((format!("{tier} {}", pin.label()), argv));
-            }
+        if !release && let Some(pin) = test_cpus::pin(4, module_path!()) {
+            let mut argv = pin.argv();
+            argv.push(bin.to_string_lossy().into_owned());
+            argvs.push((format!("{tier} {}", pin.label()), argv));
         }
         for (name, argv) in argvs {
             let o = Command::new(&argv[0])
