@@ -1,0 +1,165 @@
+//! member: false
+//! s292's PAX fixture, built static with the head's own wolf and run by
+//! the kernel's `/etc/pax-run` (`/bin/ptyrows /bin/ptyhelper`): the pair,
+//! the name's form, a second slave by name, the size on either end, every
+//! RFC 4254 opcode on the slave (each round-trips or is refused by name;
+//! the static linux binary's table lacks 11, 15 and 17), the name of a
+//! slave refused, then the documented order through a spawn in a new
+//! session (the helper is `crates/wolf_driver/tests/fixtures/pty/helper.lu`
+//! built the same way), and the name gone after the master's close. Every
+//! line starts `pax: `.
+
+fn count(hay: str, needle: str) -> int {
+    let h = hay.bytes()
+    let n = needle.bytes()
+    var found = 0
+    var i = 0
+    while i + n.len <= h.len {
+        var j = 0
+        while j < n.len && h[i + j] == n[j] {
+            j = j + 1
+        }
+        if j == n.len {
+            found = found + 1
+        }
+        i = i + 1
+    }
+    found
+}
+
+fn starts(hay: str, pre: str) -> bool {
+    let h = hay.bytes()
+    let p = pre.bytes()
+    if p.len > h.len {
+        return false
+    }
+    var i = 0
+    while i < p.len {
+        if h[i] != p[i] {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+// Reads the master until `needle` has shown `times` times or `ms` pass.
+fn read_until(m: int, text: str, needle: str, times: int, ms: int) -> !str {
+    var t = text
+    var left = ms
+    while count(t, needle) < times && left > 0 {
+        let (i, _mm) = os_signal_wait_fds([m], 16, 100)?
+        if i == 0 {
+            let b = fs_read_chunk(m, 4096) else |_| List[byte]()
+            t = "{t}{str_from_utf8(b) else ""}"
+        }
+        left = left - 100
+    }
+    t
+}
+
+fn ops() -> List[int] {
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+     30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
+     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+     70, 71, 72, 73, 74, 75, 90, 91, 92, 93, 128, 129]
+}
+
+fn other(op: int, v: int) -> int {
+    if op <= 18 {
+        return if v == 7 { 8 } else { 7 }
+    }
+    if op == 90 || op == 91 {
+        return 1
+    }
+    if op >= 128 {
+        return if v == 9600 { 19200 } else { 9600 }
+    }
+    1 - v
+}
+
+fn row(s: int, op: int) -> str {
+    let v = os_term_attr(s, op) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "lacks",
+        }
+    }
+    let want = other(op, v)
+    var set = "ok"
+    os_term_set_attr(s, op, want) else |e| {
+        set = match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    let got = os_term_attr(s, op) else |_| -1000
+    os_term_set_attr(s, op, v) else |_| {}
+    if set == "ok" {
+        return if got == want { "kept" } else { "MISMATCH {v} {want} {got}" }
+    }
+    if set == "unsupported" {
+        return if got == v { "not kept" } else { "MOVED {v} {want} {got}" }
+    }
+    "set {set}"
+}
+
+fn main() -> !int {
+    let args = env_args()
+    let helper = if args.len > 0 { args[0] } else { "/bin/ptyhelper" }
+    let (m, s) = os_term_open_pty()?
+    let name = os_term_pty_name(m)?
+    print("pax: pair handles {m >= 3 && s >= 3}, master a terminal {os_isatty(m)?}, slave a terminal {os_isatty(s)?}")
+    print("pax: name form {starts(name, "/dev/pts/")}")
+    let s2 = fs_open_mode(name, 3)?
+    print("pax: by name a terminal {os_isatty(s2)?}")
+    os_term_set_size(m, 40, 132, 0, 0)?
+    let (r1, c1) = os_term_size(s2)?
+    os_term_set_size(s, 50, 100, 640, 480)?
+    let (r2, c2) = os_term_size(m)?
+    print("pax: size master to slave {r1} {c1}, slave to master {r2} {c2}")
+    var every = true
+    for op in ops() {
+        let r = row(s2, op)
+        print("pax: op {op}: {r}")
+        let lacking = op == 11 || op == 15 || op == 17
+        if lacking && r != "lacks" {
+            every = false
+        }
+        if !lacking && r != "kept" && r != "not kept" {
+            every = false
+        }
+    }
+    print("pax: every op round-trips or is refused by name {every}")
+    let of_slave = os_term_pty_name(s) else |e| {
+        match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    print("pax: name of a slave {of_slave}")
+    fs_close(s2)?
+    os_term_set_size(m, 24, 80, 0, 0)?
+    os_term_set_attr(s, 1, 7)?
+    let h = os_spawn_session(helper, [name], [0, s, 1, s, 2, s], 0)?
+    fs_close(s)?
+    var t = read_until(m, "", "ready 24 80", 1, 5000)?
+    print("pax: spawned: the child ready at the size set before it {count(t, "ready 24 80 foreground true") == 1}")
+    os_term_set_size(m, 40, 132, 0, 0)?
+    t = read_until(m, t, "resize 40 132", 1, 3000)?
+    os_term_set_size(m, 40, 132, 0, 0)?
+    t = read_until(m, t, "resize", 2, 500)?
+    print("pax: spawned: a new size heard {count(t, "resize 40 132")}, the same size again heard {count(t, "resize") - 1}")
+    os_term_set_size(m, 40, 132, 8, 16)?
+    t = read_until(m, t, "resize", 2, 3000)?
+    print("pax: spawned: a pixel-only change heard {count(t, "resize") == 2}")
+    fs_write_chunk(m, [7 as byte])?
+    t = read_until(m, t, "interrupted after 2", 1, 3000)?
+    let st = os_wait_status(h)?
+    print("pax: spawned: Ctrl-G interrupts {count(t, "interrupted after 2") == 1}, status {st}")
+    fs_close(m)?
+    print("pax: gone {!fs_exists(name)}")
+    0
+}
