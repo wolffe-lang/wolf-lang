@@ -15,6 +15,8 @@
 //!   leads a session on the slave reads the size set before it, hears a
 //!   new size and a pixel-only change but not the same size again, and is
 //!   interrupted by the Ctrl-G its VINTR was set to before the fork.
+//! - `the_checked_table_is_the_runtimes`: the checked machine's
+//!   transcription of the op table equals the runtime's on this host.
 //!
 //! At the base every fixture is E0301 at `wolf build` (exit 2): a red,
 //! never a skip.
@@ -53,7 +55,11 @@ fn build(entry: &Path, dir: &Path, release: bool) -> PathBuf {
     let stem = entry.file_stem().unwrap().to_string_lossy().into_owned();
     let bin = dir.join(format!("{stem}{}", if release { "-release" } else { "" }));
     let mut cmd = Command::new(wolf());
-    cmd.arg("build").arg(entry).arg("--no-cache").arg("-o").arg(&bin);
+    cmd.arg("build")
+        .arg(entry)
+        .arg("--no-cache")
+        .arg("-o")
+        .arg(&bin);
     if release {
         cmd.arg("--release");
     }
@@ -193,4 +199,15 @@ fn the_documented_order_resize_and_interrupt() {
     for (lane, got) in run_lanes(&fixture("winch.lu"), &dir, false) {
         expect_lines(&lane, &got, &want);
     }
+}
+
+/// `[os.term.attr]`: the checked machine performs the calls in the `wolf`
+/// process with the runtime's op table transcribed (the runtime is not a
+/// dependency of the compiler's crates); on each host the two tables are
+/// one, op for op, speed for speed, and the disabled byte.
+#[test]
+fn the_checked_table_is_the_runtimes() {
+    let rt = wolf_rt::term::attr_table();
+    assert_eq!(rt.len(), 56 + 19 + 1, "{rt:#?}");
+    assert_eq!(wolf_mem::ubcheck::pty_attr_table(), rt);
 }
