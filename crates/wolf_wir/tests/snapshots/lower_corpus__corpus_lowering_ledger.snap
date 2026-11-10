@@ -876,6 +876,7 @@ os/job_poll_rows.lu: lowers
 os/job_rows.lu: lowers
 os/pipe_round_trip.lu: lowers
 os/priority_rows.lu: lowers
+os/pty_rows.lu: lowers
 os/random_differs.lu: lowers
 os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
