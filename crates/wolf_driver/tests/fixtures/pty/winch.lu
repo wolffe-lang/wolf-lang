@@ -1,0 +1,96 @@
+//! member: false
+//! s292 (`[os.term.pty]`, `[os.term.size.set]`, `[os.term.attr]`) — native
+//! and release (the checked machine has no fork): the documented order. The
+//! pair is sized and VINTR set to Ctrl-G before the fork; the child leaves
+//! its session, opens the slave by name (its controlling terminal), listens
+//! for INTERRUPT and RESIZE and reports on the slave; the parent closes its
+//! slave, resizes on the master (heard), sets the same size (not heard), a
+//! pixel-only change (heard), then writes 0x07, which interrupts the child.
+
+fn count(hay: str, needle: str) -> int {
+    let h = hay.bytes()
+    let n = needle.bytes()
+    var found = 0
+    var i = 0
+    while i + n.len <= h.len {
+        var j = 0
+        while j < n.len && h[i + j] == n[j] {
+            j = j + 1
+        }
+        if j == n.len {
+            found = found + 1
+        }
+        i = i + 1
+    }
+    found
+}
+
+// Reads the master until `needle` has shown `times` times or `ms` pass.
+fn read_until(m: int, text: str, needle: str, times: int, ms: int) -> !str {
+    var t = text
+    var left = ms
+    while count(t, needle) < times && left > 0 {
+        let (i, _mm) = os_signal_wait_fds([m], 0, 100)?
+        if i == 0 {
+            let b = fs_read_chunk(m, 4096) else |_| List[byte]()
+            t = "{t}{str_from_utf8(b) else ""}"
+        }
+        left = left - 100
+    }
+    t
+}
+
+fn child(m: int, s: int, name: str) -> !int {
+    fs_close(m)?
+    os_setsid()?
+    let t = fs_open_mode(name, 3)?
+    fs_close(s)?
+    os_signal_listen(16 + 16384)?
+    let (r0, c0) = os_term_size(t)?
+    fs_write_chunk(t, "ready {r0} {c0}\n".bytes())?
+    var resizes = 0
+    loop {
+        let (_i, mm) = os_signal_wait_fds(List[int](), 16 + 16384, 5000)?
+        if mm == 0 {
+            os_exit(3)
+        }
+        if mm == 16384 {
+            resizes = resizes + 1
+            let (r, c) = os_term_size(t)?
+            fs_write_chunk(t, "resize {r} {c}\n".bytes())?
+        }
+        if mm == 16 {
+            fs_write_chunk(t, "interrupted after {resizes}\n".bytes())?
+            os_exit(7)
+        }
+    }
+    0
+}
+
+fn main() -> !int {
+    let (m, s) = os_term_open_pty()?
+    let name = os_term_pty_name(m)?
+    os_term_set_size(m, 24, 80, 0, 0)?
+    os_term_set_attr(s, 1, 7)?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        return child(m, s, name)
+    }
+    fs_close(s)?
+    var t = read_until(m, "", "ready 24 80", 1, 5000)?
+    print("winch: the child ready at the size set before it {count(t, "ready 24 80") == 1}")
+    os_term_set_size(m, 40, 132, 0, 0)?
+    t = read_until(m, t, "resize 40 132", 1, 3000)?
+    os_term_set_size(m, 40, 132, 0, 0)?
+    t = read_until(m, t, "resize", 2, 500)?
+    print("winch: a new size heard {count(t, "resize 40 132")}, the same size again heard {count(t, "resize") - 1}")
+    os_term_set_size(m, 40, 132, 8, 16)?
+    t = read_until(m, t, "resize", 2, 3000)?
+    print("winch: a pixel-only change heard {count(t, "resize") == 2}")
+    fs_write_chunk(m, [7 as byte])?
+    t = read_until(m, t, "interrupted after 2", 1, 3000)?
+    let st = os_wait_status(h)?
+    print("winch: Ctrl-G interrupts {count(t, "interrupted after 2") == 1}, status {st}")
+    fs_close(m)?
+    0
+}

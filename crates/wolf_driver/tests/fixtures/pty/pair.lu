@@ -1,0 +1,84 @@
+//! member: false
+//! s292 (`[os.term.pty]`, `[os.term.size.set]`, `[os.term.attr]`) — on
+//! every machine (no fork): the pair, the slave's name, a second slave
+//! opened by name, the size set on each end read on the other, every RFC
+//! 4254 opcode on the slave (set to a value it does not have, read back,
+//! set back), the name of a slave refused, and the name gone after every
+//! descriptor is closed. `pty_lanes.rs` holds each line to the host.
+
+fn ops() -> List[int] {
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+     30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
+     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+     70, 71, 72, 73, 74, 75, 90, 91, 92, 93, 128, 129]
+}
+
+fn other(op: int, v: int) -> int {
+    if op <= 18 {
+        return if v == 7 { 8 } else { 7 }
+    }
+    if op == 90 || op == 91 {
+        return 1
+    }
+    if op >= 128 {
+        return if v == 9600 { 19200 } else { 9600 }
+    }
+    1 - v
+}
+
+fn row(s: int, op: int) -> str {
+    let v = os_term_attr(s, op) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "lacks",
+        }
+    }
+    let want = other(op, v)
+    var set = "ok"
+    os_term_set_attr(s, op, want) else |e| {
+        set = match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    let got = os_term_attr(s, op) else |_| -1000
+    os_term_set_attr(s, op, v) else |_| {}
+    if set == "ok" {
+        return if got == want { "kept" } else { "MISMATCH {v} {want} {got}" }
+    }
+    if set == "unsupported" {
+        return if got == v { "not kept" } else { "MOVED {v} {want} {got}" }
+    }
+    "set {set}"
+}
+
+fn main() -> !int {
+    let (m, s) = os_term_open_pty()?
+    let name = os_term_pty_name(m)?
+    print("pair: handles {m >= 3 && s >= 3}, master a terminal {os_isatty(m)?}, slave a terminal {os_isatty(s)?}")
+    print("name: {name}")
+    let s2 = fs_open_mode(name, 3)?
+    print("by name: a terminal {os_isatty(s2)?}")
+    os_term_set_size(m, 40, 132, 0, 0)?
+    let (r1, c1) = os_term_size(s2)?
+    os_term_set_size(s, 50, 100, 640, 480)?
+    let (r2, c2) = os_term_size(m)?
+    print("size: master to slave {r1} {c1}, slave to master {r2} {c2}")
+    for op in ops() {
+        print("op {op}: {row(s2, op)}")
+    }
+    let of_slave = os_term_pty_name(s) else |e| {
+        match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    print("name of a slave: {of_slave}")
+    fs_close(s2)?
+    fs_close(s)?
+    fs_close(m)?
+    print("gone: {!fs_exists(name)}")
+    0
+}
