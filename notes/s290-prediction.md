@@ -66,9 +66,9 @@ loop in the boot script that pid 1's shell runs), is in pid 1's process group an
 its own `setsid` succeeds; that placement follows POSIX's rule for a shell without job control and
 is not measured on PAX.
 
-## 4. The shapes (R1 to R9, each with its recommendation)
+## 4. The shapes (Q1 to Q9, each with its recommendation)
 
-- **R1, a child started in a new session.** (A) a new value of `os_spawn_job`'s `group`: -2, "the
+- **Q1, a child started in a new session.** (A) a new value of `os_spawn_job`'s `group`: -2, "the
   child leads a new session" (and so a new group, both ids its pid), done first in the child, before
   the defaults and the map; `tty` must be -1 beside it (`invalid` otherwise), and `invalid` moves to
   -3 and below. No new name and no new table line. But a released answer changes: -2 has been
@@ -83,10 +83,10 @@ is not measured on PAX.
   foreground, as a login does) is a later call's, so the exclusion is in the signature rather than a
   row. Released answers stay as they are, as they did when `os_wait_status` kept its answers and
   `os_wait_status_core` carried the new one (`[os.proc.status]`). One more builtin, through the same
-  files R2 and R3 touch anyway. (C) a new parameter on `os_spawn_job`: a released builtin's arity
+  files Q2 and Q3 touch anyway. (C) a new parameter on `os_spawn_job`: a released builtin's arity
   changes and every caller breaks. **Recommend B.** A is the cheaper compiler change and is
   acceptable if a new name is the greater cost; its two witness moves are listed above.
-- **R2, this process into a session of its own.** (A) **`os_setsid() -> () ! {denied, io,
+- **Q2, this process into a session of its own.** (A) **`os_setsid() -> () ! {denied, io,
   unsupported}`**: `setsid(2)` on the caller. `denied` is EPERM, a caller that leads a group (a
   session leader included), and nothing has changed; `io` any other host answer (none seen);
   `unsupported` on windows. The host's number goes to `os_error()` (`[os.fs.error]`), as the
@@ -98,12 +98,12 @@ is not measured on PAX.
   program did not write, under `os_fork`'s rule. **Recommend A.** The name: `os_setsid` keeps the
   C name, as `os_setpriority`, `os_chroot` and `os_umask` do; `os_set_sid` would follow
   `os_set_pgid`'s split but reads as setting an id it does not take.
-- **R3, the session id.** (A) **`os_sid() -> int ! {unsupported}`**: `getsid(0)`, this process's
+- **Q3, the session id.** (A) **`os_sid() -> int ! {unsupported}`**: `getsid(0)`, this process's
   session id, `os_pgid`'s shape (equal to `os_pid()` for a session leader). (B) `getsid(pid)` of
   any process: measured portable on Linux and macOS, so a parent could witness a child that is
   not a wolf program, but no table call takes a host pid for a read today. (C) none: a witness
   would read `/proc/self/stat`, which macOS has not. **Recommend A.**
-- **R4, threads.** `setsid` is one system call on state that belongs to the process (its session,
+- **Q4, threads.** `setsid` is one system call on state that belongs to the process (its session,
   its group, its controlling terminal), measured from a second thread on both hosts. Unlike a
   fork, it copies nothing and no lock of the runtime's is held across it, so the runtime needs no
   protocol: `os_setsid` may be called from any thread, `main` or a task, at any time. What it
@@ -112,31 +112,31 @@ is not measured on PAX.
   job of a shell without job control: burrowd at boot); (2) `os_fork` from `main` with no task
   live, the child calling it (a fork's child never leads a group: POSIX keeps a pid while a group
   of that id lives), the classic daemon order, on the native tiers; (3) the process starts itself
-  again with R1 and ends, on every machine R1 serves, from a task too. What moves for the caller:
+  again with Q1 and ends, on every machine Q1 serves, from a task too. What moves for the caller:
   the old terminal is no longer its controlling terminal, so `os_term_set_foreground` on it
   answers `io` after; `os_term_restore_at_exit` keeps its duplicate and still restores (predicted;
   a row in phase 2). **Recommend as stated.**
-- **R5, the std surface (wolf-std).** `process.start_session(c: Command, defaults: int) -> Child !
-  {unsupported, invalid, not_found, denied, io}` (R1; `start_job`'s shape without the group),
-  `process.lead_session() -> () ! {denied, io, unsupported}` (R2; `lead_group`'s twin) and
-  `process.own_session() -> int ! {unsupported}` (R3; an int, since no call takes a session).
+- **Q5, the std surface (wolf-std).** `process.start_session(c: Command, defaults: int) -> Child !
+  {unsupported, invalid, not_found, denied, io}` (Q1; `start_job`'s shape without the group),
+  `process.lead_session() -> () ! {denied, io, unsupported}` (Q2; `lead_group`'s twin) and
+  `process.own_session() -> int ! {unsupported}` (Q3; an int, since no call takes a session).
   wolf-std consumes released binaries only, so it lands at the pin of the release that carries
-  R1 to R3. **Recommend as listed.**
-- **R6, capabilities.** `os_spawn_session` and `os_setsid` `exec` (process control, with
+  Q1 to Q3. **Recommend as listed.**
+- **Q6, capabilities.** `os_spawn_session` and `os_setsid` `exec` (process control, with
   `os_spawn_job` and `os_set_pgid`); `os_sid` `env` (a read of this process, with `os_pgid`). All
   three refused at comptime; the freestanding target refuses them by name. **Recommend as listed.**
-- **R7, the checked machine.** It serves `os_spawn_session` through its own spawn path (the same
+- **Q7, the checked machine.** It serves `os_spawn_session` through its own spawn path (the same
   call first in the child's hook), and `os_setsid` and `os_sid` act on the `wolf` process it runs as,
-  as `os_set_pgid` does. Its `os_fork` is `unsupported`, so R1 is the checked machine's only way to
+  as `os_set_pgid` does. Its `os_fork` is `unsupported`, so Q1 is the checked machine's only way to
   start a child in a new session. **Recommend as listed.**
-- **R8, lupin.** lupin links no C library and admits no `unsafe`, and Rust's standard library at
+- **Q8, lupin.** lupin links no C library and admits no `unsafe`, and Rust's standard library at
   1.97.1 has neither a stable new-session spawn nor `getsid` (measured, §2). (A) it answers the
   shape rows and refuses each well-formed call by name, as it refuses `os_set_pgid`; (B) a safe
   system-call crate, which would change what lupin links. **Recommend A**, in a mirror lane of
   wolf-interp's own (small: three names resolved, their rows, three refusals, its rows), paired
   in the release that carries this lane. Until then lupin 0.1.60 does not resolve the three
   names, and the rows pin that by version.
-- **R9, the other hosts.** windows: `unsupported` by name for all three, after the shape (it has no
+- **Q9, the other hosts.** windows: `unsupported` by name for all three, after the shape (it has no
   sessions of this kind); freebsd: served through its C library, cross-built only (unmeasured);
   PAX: §3. **Recommend as listed.**
 
@@ -170,10 +170,10 @@ is not measured on PAX.
 
 ## 6. What would move
 
-With R1 = B (with A instead, the numbers in brackets):
+With Q1 = B (with A instead, the numbers in brackets):
 
 - `spec/11-os.md`: three new anchors, `[os.proc.session]` (the spawn, after `[os.proc.job]`),
-  `[os.proc.session.note]` (R1 to R9 as ruled) and `[os.term.session]` (`os_setsid` and `os_sid`,
+  `[os.proc.session.note]` (Q1 to Q9 as decided) and `[os.term.session]` (`os_setsid` and `os_sid`,
   after `[os.term.group]`) [A: two, the spawn's text inside `[os.proc.job]`]. Text moves in
   `[os.host.sigs]` (three lines [two] and its count), `[os.proc.job]` (a pointer to the sibling
   [A: the value, its order and its `invalid` move]), `[os.proc.poll]` and `[os.env.unset]` (the
@@ -202,7 +202,7 @@ partial dispatch (`-f jobs=lint-test`, and `-f jobs=build-test` for macOS) on a 
 
 ## 8. Out of this repository
 
-lupin's mirror (R8) is wolf-interp's lane. wolf-std's surface (R5) lands at the pin of the
-release that carries R1 to R3. burrowd's use (its listener calling `process.lead_session()` at
+lupin's mirror (Q8) is wolf-interp's lane. wolf-std's surface (Q5) lands at the pin of the
+release that carries Q1 to Q3. burrowd's use (its listener calling `process.lead_session()` at
 start, and each connection's command calling it in the forked child before `os_exec`, so a
 command's `kill 0` reaches only its own session) is burrow's. The release itself is a separate step.
