@@ -1541,6 +1541,8 @@ mod builtin_cap_tests {
             ("os_spawn_session", Cap::Exec),
             ("os_setsid", Cap::Exec),
             ("os_sid", Cap::Env),
+            // s292: the pty open charges `exec`, with `os_pipe`.
+            ("os_term_open_pty", Cap::Exec),
             // s242 (#680; ruling owed): the poll of the children reaps as
             // `os_wait_status` does — `exec`.
             ("os_wait_poll", Cap::Exec),
@@ -1609,6 +1611,12 @@ mod builtin_cap_tests {
             "os_term_chars",
             // s248 (#794): the restore at exit, `io` with the set.
             "os_term_restore_at_exit",
+            // s292: the name, the size set and the settings, `io` with
+            // `os_term_set_mode`.
+            "os_term_pty_name",
+            "os_term_set_size",
+            "os_term_attr",
+            "os_term_set_attr",
             "left",
         ] {
             assert_eq!(builtin_cap(name), None, "{name}");
