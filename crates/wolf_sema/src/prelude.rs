@@ -470,6 +470,15 @@ pub const PRELUDE: &[Ambient] = &[
     // (`exec`, with `os_set_pgid`) and its id (`env`, with `os_pgid`).
     host("os_setsid"),
     host("os_sid"),
+    // s292 (`[os.term.pty]`, `[os.term.size.set]`, `[os.term.attr]`): a
+    // pseudo-terminal's pair (`exec`, with `os_pipe`), its name, its size
+    // set and its settings by RFC 4254 opcode (`io`, with
+    // `os_term_set_mode`).
+    host("os_term_open_pty"),
+    host("os_term_pty_name"),
+    host("os_term_set_size"),
+    host("os_term_attr"),
+    host("os_term_set_attr"),
     host("os_signal_last"),
     host("os_signal_realtime"),
     host("os_signal_text"),

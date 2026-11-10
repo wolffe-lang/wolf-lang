@@ -317,6 +317,14 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // this process, `env` with `os_pgid`.
         "os_spawn_session" | "os_setsid" => SandboxCategory::Exec,
         "os_sid" => SandboxCategory::Env,
+        // s292: a pseudo-terminal is made to run a program on, `exec` with
+        // `os_pipe`; its name, its size set and its settings act on a
+        // descriptor the program holds and start nothing, `io` with
+        // `os_term_set_mode`.
+        "os_term_open_pty" => SandboxCategory::Exec,
+        "os_term_pty_name" | "os_term_set_size" | "os_term_attr" | "os_term_set_attr" => {
+            SandboxCategory::Io
+        }
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).

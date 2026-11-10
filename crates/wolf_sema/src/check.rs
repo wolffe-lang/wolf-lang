@@ -15886,6 +15886,31 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             rowed(table, unit, &["denied", "unsupported", "io"]),
         ),
         "os_sid" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        // s292 (`[os.term.pty]`): a pseudo-terminal's (master, slave), both
+        // close-on-exec handles, `os_pipe`'s pair shape; and the slave's
+        // name for a master.
+        "os_term_open_pty" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (Vec::new(), rowed(table, pair, &["unsupported", "io"]))
+        }
+        "os_term_pty_name" => (vec![int_], rowed(table, str_, &["unsupported", "io"])),
+        // s292 (`[os.term.size.set]`): the window's rows, columns and the
+        // two pixel sizes, each 0..65535 (`invalid` otherwise).
+        "os_term_set_size" => (
+            vec![int_, int_, int_, int_, int_],
+            rowed(table, unit, &["invalid", "unsupported", "io"]),
+        ),
+        // s292 (`[os.term.attr]`): one setting by RFC 4254's opcode, read
+        // and set (`invalid` an op outside the vocabulary or a value
+        // outside its op's range).
+        "os_term_attr" => (
+            vec![int_, int_],
+            rowed(table, int_, &["invalid", "unsupported", "io"]),
+        ),
+        "os_term_set_attr" => (
+            vec![int_, int_, int_],
+            rowed(table, unit, &["invalid", "unsupported", "io"]),
+        ),
         "os_term_foreground" | "os_term_mode" => {
             (vec![int_], rowed(table, int_, &["unsupported", "io"]))
         }
