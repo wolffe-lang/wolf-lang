@@ -665,8 +665,8 @@ mod sys {
     }
 
     /// The host's speed for each of [`super::attr::SPEEDS`], index for
-    /// index: the `libc` crate's constants, which match the speed calls it
-    /// links (on glibc, the versions before 2.42's).
+    /// index: the `libc` crate's constants, the kernel's codes on linux
+    /// (what `c_cflag` holds) and the rates on macOS.
     pub const SPEED_CODES: [libc::speed_t; 19] = [
         libc::B0,
         libc::B50,
@@ -688,6 +688,52 @@ mod sys {
         libc::B115200,
         libc::B230400,
     ];
+
+    /// A speed's code in `t`. On linux the kernel keeps it in `c_cflag`
+    /// (`CBAUD` with `CBAUDEX`), one speed for input and output, as musl
+    /// and glibc before 2.42 keep it; the runtime reads and writes those bits
+    /// itself, so it names no C library's speed calls there (glibc 2.42
+    /// versions them, and a static link against `libc.a` resolves no
+    /// versioned name).
+    #[cfg(target_os = "linux")]
+    fn speed_of(t: &libc::termios, _input: bool) -> libc::speed_t {
+        t.c_cflag & (libc::CBAUD | libc::CBAUDEX)
+    }
+    /// macOS: `speed_t` is the rate itself, and its calls are unversioned.
+    #[cfg(not(target_os = "linux"))]
+    fn speed_of(t: &libc::termios, input: bool) -> libc::speed_t {
+        // SAFETY: a termios tcgetattr filled.
+        unsafe {
+            if input {
+                libc::cfgetispeed(t)
+            } else {
+                libc::cfgetospeed(t)
+            }
+        }
+    }
+
+    /// `code` written as the input or output speed, every other field as
+    /// found. On linux an input speed of 0 means "the output's" and sets
+    /// nothing (as musl's `cfsetispeed`); its read-back then names the
+    /// output's speed.
+    #[cfg(target_os = "linux")]
+    fn put_speed(t: &mut libc::termios, input: bool, code: libc::speed_t) {
+        if input && code == libc::B0 {
+            return;
+        }
+        t.c_cflag = (t.c_cflag & !(libc::CBAUD | libc::CBAUDEX)) | code;
+    }
+    #[cfg(not(target_os = "linux"))]
+    fn put_speed(t: &mut libc::termios, input: bool, code: libc::speed_t) {
+        // SAFETY: a termios tcgetattr filled and a code from the table.
+        unsafe {
+            if input {
+                libc::cfsetispeed(t, code);
+            } else {
+                libc::cfsetospeed(t, code);
+            }
+        }
+    }
 
     fn speed_code(rate: i64) -> Option<libc::speed_t> {
         let i = super::attr::SPEEDS.iter().position(|&r| r == rate)?;
@@ -713,14 +759,8 @@ mod sys {
             Field::Lflag(m) => on(t.c_lflag, m),
             Field::Cflag(m) => on(t.c_cflag, m),
             Field::Csize(cs) => i64::from(t.c_cflag & libc::CSIZE == cs),
-            // SAFETY: a termios tcgetattr filled.
-            Field::Ispeed => {
-                speed_rate(unsafe { libc::cfgetispeed(t) }).ok_or(proc_code::UNSUPPORTED)?
-            }
-            // SAFETY: as above.
-            Field::Ospeed => {
-                speed_rate(unsafe { libc::cfgetospeed(t) }).ok_or(proc_code::UNSUPPORTED)?
-            }
+            Field::Ispeed => speed_rate(speed_of(t, true)).ok_or(proc_code::UNSUPPORTED)?,
+            Field::Ospeed => speed_rate(speed_of(t, false)).ok_or(proc_code::UNSUPPORTED)?,
         })
     }
 
@@ -747,15 +787,7 @@ mod sys {
             }
             Field::Ispeed | Field::Ospeed => {
                 if let Some(code) = speed_code(v) {
-                    // SAFETY: a termios tcgetattr filled and a code from
-                    // the table.
-                    unsafe {
-                        if f == Field::Ispeed {
-                            libc::cfsetispeed(t, code);
-                        } else {
-                            libc::cfsetospeed(t, code);
-                        }
-                    }
+                    put_speed(t, f == Field::Ispeed, code);
                 }
             }
         }
