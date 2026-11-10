@@ -1,0 +1,51 @@
+//! check: run(exit=0, stdout="map_odd=invalid\nmap_target_twice=invalid\ndefaults_outside=invalid\ndefaults_negative=invalid\nforged_source: true\nempty_program: true\nsid: true")
+//! phase: run
+//! conforms: os.proc.session, os.term.session, os.uname, err.union
+//!
+//! s290 — the rows of the spawn in a new session that make no child, and
+//! the read of this process's session, deterministic on every host. A
+//! spawn's SHAPE is decided before anything else is read, on windows too:
+//! a map of odd length or naming a target twice, and a `defaults` bit
+//! outside the meanings (or below 0), are each `invalid`. Then the HOST:
+//! windows has no sessions of this kind and answers `unsupported`, so a
+//! forged source and an empty program hold each host to its own side,
+//! named by `os_name` (unix: the source `io`, the program `not_found`).
+//! The session id is positive on unix and `unsupported` on windows.
+//! Nothing here moves a process: `os_setsid` and the live spawns run on a
+//! pseudo-terminal in `crates/wolf_driver/tests/session_lanes.rs` (unix).
+
+fn spawn(exe: str, map: List[int], defaults: int) -> str {
+    let h = os_spawn_session(exe, List[str](), map, defaults) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    let _st = os_wait_status(h) else |_| 0
+    "spawned"
+}
+
+fn main() -> int {
+    let windows = os_name() == "windows"
+    let odd = spawn("true", [1], 0)
+    print("map_odd={odd}")
+    let twice = spawn("true", [1, 1, 1, 2], 0)
+    print("map_target_twice={twice}")
+    let outside = spawn("true", List[int](), 1048576)
+    print("defaults_outside={outside}")
+    let negative = spawn("true", List[int](), -1)
+    print("defaults_negative={negative}")
+    let forged = spawn("true", [1, 4096], 0)
+    let forged_row = if windows { "unsupported" } else { "io" }
+    print("forged_source: {forged == forged_row}")
+    let empty = spawn("", List[int](), 0)
+    let empty_row = if windows { "unsupported" } else { "not_found" }
+    print("empty_program: {empty == empty_row}")
+    let sid = os_sid() else |_| -1
+    let sid_ok = if windows { sid == -1 } else { sid > 0 }
+    print("sid: {sid_ok}")
+    0
+}
