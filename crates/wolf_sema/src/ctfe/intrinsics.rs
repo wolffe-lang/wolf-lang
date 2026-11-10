@@ -311,6 +311,12 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // (`os_signal_last`, `os_signal_realtime` and `os_signal_text`
         // read the host's table: `pure_builtin`.)
         "os_signal_send_group" | "os_signal_send_all" | "os_set_pgid" => SandboxCategory::Exec,
+        // s290 (R6, as ruled): the spawn in a new session and the move of
+        // this process into one are process control, `exec` with
+        // `os_spawn_job` and `os_set_pgid`; the session id is a read of
+        // this process, `env` with `os_pgid`.
+        "os_spawn_session" | "os_setsid" => SandboxCategory::Exec,
+        "os_sid" => SandboxCategory::Env,
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).

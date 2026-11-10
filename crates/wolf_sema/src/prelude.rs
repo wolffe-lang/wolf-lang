@@ -413,6 +413,8 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_setpriority"),
     host("os_signal_poll"),
     host("os_spawn_job"),
+    // s290 (`[os.proc.session]`): the spawn in a new session (`exec`).
+    host("os_spawn_session"),
     host("os_proc_pid"),
     host("os_wait_status"),
     host("os_pgid"),
@@ -464,6 +466,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_signal_send_group"),
     host("os_signal_send_all"),
     host("os_set_pgid"),
+    // s290 (`[os.term.session]`): this process into a session of its own
+    // (`exec`, with `os_set_pgid`) and its id (`env`, with `os_pgid`).
+    host("os_setsid"),
+    host("os_sid"),
     host("os_signal_last"),
     host("os_signal_realtime"),
     host("os_signal_text"),

@@ -15801,6 +15801,20 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 ),
             )
         }
+        // s290 (`[os.proc.session]`): `os_spawn_job` with the child leading
+        // a new session in place of the group and the terminal.
+        "os_spawn_session" => {
+            let list_str = table.intern(TyKind::List(str_));
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_, list_str, list_int, int_],
+                rowed(
+                    table,
+                    int_,
+                    &["unsupported", "invalid", "not_found", "denied", "io"],
+                ),
+            )
+        }
         // s219 (`[os.proc.status]`): a child's pid, and its status — an
         // exit code, or -N for a death by signal N.
         "os_proc_pid" => (vec![int_], rowed(table, int_, &["io"])),
@@ -15865,6 +15879,13 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![int_],
             rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
         ),
+        // s290 (`[os.term.session]`): the CALLING process into a session of
+        // its own (`setsid`), and its session id (`getsid(0)`).
+        "os_setsid" => (
+            Vec::new(),
+            rowed(table, unit, &["denied", "unsupported", "io"]),
+        ),
+        "os_sid" => (Vec::new(), rowed(table, int_, &["unsupported"])),
         "os_term_foreground" | "os_term_mode" => {
             (vec![int_], rowed(table, int_, &["unsupported", "io"]))
         }
