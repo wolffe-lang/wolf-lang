@@ -368,7 +368,10 @@ mod unix {
             argv.extend(lane.argv.iter().cloned());
             let (status, transcript) = pty_run(&argv, &dir);
             let got = printed(&lane, &transcript);
-            eprintln!("s290 {} mover in the leader's group: {status:?}\n{got}", lane.name);
+            eprintln!(
+                "s290 {} mover in the leader's group: {status:?}\n{got}",
+                lane.name
+            );
             expect_lines(
                 &lane,
                 &got,

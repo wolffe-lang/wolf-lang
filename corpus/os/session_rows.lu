@@ -14,7 +14,7 @@
 //! Nothing here moves a process: `os_setsid` and the live spawns run on a
 //! pseudo-terminal in `crates/wolf_driver/tests/session_lanes.rs` (unix).
 
-fn spawn(exe: str, map: List[int], defaults: int) -> str {
+fn start(exe: str, map: List[int], defaults: int) -> str {
     let h = os_spawn_session(exe, List[str](), map, defaults) else |e| {
         return match e {
             unsupported => "unsupported",
@@ -30,18 +30,18 @@ fn spawn(exe: str, map: List[int], defaults: int) -> str {
 
 fn main() -> int {
     let windows = os_name() == "windows"
-    let odd = spawn("true", [1], 0)
+    let odd = start("true", [1], 0)
     print("map_odd={odd}")
-    let twice = spawn("true", [1, 1, 1, 2], 0)
+    let twice = start("true", [1, 1, 1, 2], 0)
     print("map_target_twice={twice}")
-    let outside = spawn("true", List[int](), 1048576)
+    let outside = start("true", List[int](), 1048576)
     print("defaults_outside={outside}")
-    let negative = spawn("true", List[int](), -1)
+    let negative = start("true", List[int](), -1)
     print("defaults_negative={negative}")
-    let forged = spawn("true", [1, 4096], 0)
+    let forged = start("true", [1, 4096], 0)
     let forged_row = if windows { "unsupported" } else { "io" }
     print("forged_source: {forged == forged_row}")
-    let empty = spawn("", List[int](), 0)
+    let empty = start("", List[int](), 0)
     let empty_row = if windows { "unsupported" } else { "not_found" }
     print("empty_program: {empty == empty_row}")
     let sid = os_sid() else |_| -1
