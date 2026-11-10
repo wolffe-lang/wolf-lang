@@ -675,6 +675,7 @@ impl ChildTable {
         {
             use std::os::unix::process::CommandExt as _;
             let group = opts.group as libc::pid_t;
+            let session = opts.session;
             let tty = opts.tty.unwrap_or(-1);
             let defaults = opts.defaults;
             let mut cmd = Command::new(exe);
@@ -701,6 +702,11 @@ impl ChildTable {
             // other threads.
             unsafe {
                 cmd.pre_exec(move || {
+                    // s290 (`[os.proc.session]`): a new session first, in
+                    // place of the group (a new session is a new group).
+                    if session && libc::setsid() < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
                     if group >= 0 && libc::setpgid(0, group) < 0 {
                         return Err(std::io::Error::last_os_error());
                     }
@@ -1024,9 +1030,12 @@ impl ChildTable {
 /// `group` -1 stay in this process's group, 0 lead a new one, > 0 join
 /// that one; `tty` a descriptor whose terminal the child's group takes
 /// as foreground; `defaults` the signal numbers set back to default
-/// (0 slots unused).
+/// (0 slots unused). s290: `session`, `os_spawn_session`'s — the child
+/// leads a new session (`setsid`) first; `group` is -1 and `tty` none
+/// beside it.
 #[derive(Clone, Copy, Debug)]
 pub struct JobOpts {
+    pub session: bool,
     pub group: i64,
     pub tty: Option<InheritFd>,
     pub defaults: [i32; 20],
@@ -1035,6 +1044,7 @@ pub struct JobOpts {
 impl JobOpts {
     /// `os_spawn_fds`'s posture: no group, no terminal, no resets.
     pub const PLAIN: JobOpts = JobOpts {
+        session: false,
         group: -1,
         tty: None,
         defaults: [0; 20],
@@ -1610,6 +1620,7 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_job(
         placed.push((t as InheritFd, src));
     }
     let opts = JobOpts {
+        session: false,
         group,
         tty: tty_fd,
         defaults: sigs,
@@ -1619,6 +1630,88 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_job(
     } else {
         children().spawn_job(exe, &argv, &placed, &opts)
     };
+    drop(held);
+    match r {
+        Ok(h) => h,
+        Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+/// `os_spawn_session(exe: str, args: List[str], map: List[int], defaults:
+/// int) -> int ! {denied, invalid, io, not_found, unsupported}` (s290,
+/// `[os.proc.session]`) — `os_spawn_job` with the child leading a new
+/// session first, in place of the group and the terminal: its session,
+/// group and process ids one number, no controlling terminal. Read in
+/// `os_spawn_job`'s order: the SHAPE (`invalid`: a bad map, a `defaults`
+/// bit outside the meanings), the HOST (windows: `unsupported`, always),
+/// every map source (`io`), then the program. Nothing of the parent's
+/// moves, and there is no parent-side repeat: no process may put another
+/// into a session, and the spawn returns only after the child's exec.
+///
+/// # Safety
+///
+/// `ep`/`el` a valid str pair; `args` a live `List[str]` header; `map`
+/// a live `List[int]` header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_spawn_session(
+    ep: i64,
+    el: i64,
+    args: i64,
+    map: i64,
+    defaults: i64,
+) -> i64 {
+    crate::fs::os_error_clear();
+    let exe = unsafe { view(ep, el) };
+    let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
+        return -proc_code::IO;
+    };
+    let argv: Vec<&str> = pairs.iter().map(|&[p, l]| unsafe { view(p, l) }).collect();
+    let Some(flat) = (unsafe { crate::list::i64_elems(map) }) else {
+        return -proc_code::IO;
+    };
+    let entries = match map_of(flat) {
+        Ok(m) => m,
+        Err(t) => return -proc_code_of_tag(t),
+    };
+    if defaults < 0 || defaults & !SIGNAL_MEANINGS != 0 {
+        return -proc_code::INVALID;
+    }
+    if cfg!(not(unix)) {
+        // windows has no sessions of this kind.
+        return -proc_code::UNSUPPORTED;
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let sigs = crate::signal::signals_of(defaults);
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let sigs = {
+        if defaults != 0 {
+            return -proc_code::UNSUPPORTED;
+        }
+        [0i32; 20]
+    };
+    let mut held: Vec<std::fs::File> = Vec::with_capacity(entries.len());
+    let mut placed: Vec<(InheritFd, Option<InheritFd>)> = Vec::with_capacity(entries.len());
+    for &(t, s) in &entries {
+        let src = match s {
+            None => None,
+            Some(h) => match crate::fs::dup_of(h) {
+                None => return -proc_code::IO,
+                Some(f) => {
+                    let fd = raw_of(&f);
+                    held.push(f);
+                    Some(fd)
+                }
+            },
+        };
+        placed.push((t as InheritFd, src));
+    }
+    let opts = JobOpts {
+        session: true,
+        group: -1,
+        tty: None,
+        defaults: sigs,
+    };
+    let r = children().spawn_job(exe, &argv, &placed, &opts);
     drop(held);
     match r {
         Ok(h) => h,

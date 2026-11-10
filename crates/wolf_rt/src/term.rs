@@ -325,6 +325,34 @@ mod sys {
         })
     }
 
+    /// s290 (`[os.term.session]`): this process's session id,
+    /// `getsid(0)`. It cannot fail for the caller itself (its two errors
+    /// name another process), as `getpgrp` cannot.
+    pub fn sid() -> Result<i64, i64> {
+        // SAFETY: getsid of this process (pid 0).
+        Ok(i64::from(unsafe { libc::getsid(0) }))
+    }
+
+    /// s290 (`[os.term.session]`): `setsid()` — the CALLING process leads
+    /// a new session and a new group, both ids its pid, with no
+    /// controlling terminal. One system call on the process's own state,
+    /// so any thread may make it. `EPERM` (the caller leads a group, a
+    /// session leader included) is `DENIED`, anything else `IO`; the
+    /// host's number goes to `os_error()`.
+    pub fn setsid() -> Result<(), i64> {
+        crate::fs::os_error_clear();
+        // SAFETY: setsid on this process; it takes no argument.
+        if unsafe { libc::setsid() } >= 0 {
+            return Ok(());
+        }
+        let e = std::io::Error::last_os_error();
+        crate::fs::os_error_record(&e);
+        Err(match e.raw_os_error() {
+            Some(libc::EPERM) => proc_code::DENIED,
+            _ => proc_code::IO,
+        })
+    }
+
     /// s234 (`[os.term.size]`): the window's rows and columns as the
     /// terminal reports them (`TIOCGWINSZ`); 0 for a size it was never
     /// told (a fresh pseudo-terminal).
@@ -405,6 +433,14 @@ mod sys {
         }
         Err(proc_code::UNSUPPORTED)
     }
+    /// s290: windows has no sessions of this kind.
+    pub fn sid() -> Result<i64, i64> {
+        Err(proc_code::UNSUPPORTED)
+    }
+    pub fn setsid() -> Result<(), i64> {
+        crate::fs::os_error_clear();
+        Err(proc_code::UNSUPPORTED)
+    }
     pub fn size(_h: i64) -> Result<(i64, i64), i64> {
         Err(proc_code::UNSUPPORTED)
     }
@@ -413,7 +449,9 @@ mod sys {
     }
 }
 
-pub use sys::{chars, foreground, mode_of, pgid, set_foreground, set_mode, set_pgid, size};
+pub use sys::{
+    chars, foreground, mode_of, pgid, set_foreground, set_mode, set_pgid, setsid, sid, size,
+};
 
 // ---- s248: the restore at exit (`[os.term.restore]`, wolf-lang#794) ----
 //
@@ -612,6 +650,20 @@ pub extern "C" fn __wolf_rt_os_pgid() -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_set_pgid(pgid: i64) -> i64 {
     set_pgid(pgid).map_or_else(|c| c, |()| proc_code::OK)
+}
+
+/// `os_sid() -> int ! {unsupported}` (s290, `[os.term.session]`) — this
+/// process's session id (> 0) or `-code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_sid() -> i64 {
+    sid().unwrap_or_else(|c| -c)
+}
+
+/// `os_setsid() -> () ! {denied, io, unsupported}` (s290,
+/// `[os.term.session]`) — 0 ok, else the code.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_setsid() -> i64 {
+    setsid().map_or_else(|c| c, |()| proc_code::OK)
 }
 
 /// `os_term_size(fd) -> (int, int) ! {io, unsupported}` (s234) — 0 and
