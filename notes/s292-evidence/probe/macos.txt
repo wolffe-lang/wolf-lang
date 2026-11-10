@@ -1,0 +1,106 @@
+# s292 probe, macOS 26.4.1 arm64, ptyshape.c at ac80527b
+A1 posix_openpt(O_RDWR|O_NOCTTY|O_CLOEXEC): a master, close-on-exec
+A1b posix_openpt(O_RDWR|O_NOCTTY): a master, inherited
+A2 open /dev/ptmx O_RDWR|O_NOCTTY|O_CLOEXEC: a master, close-on-exec; grantpt ok, unlockpt ok, ptsname_r ok, name /dev/ttysN
+A2b its slave opens: ok; isatty 1
+A4 ptsname_r on the slave: ENOTTY
+A3 before unlockpt: grantpt ok, ptsname_r ok
+A3 the locked slave's open: EAGAIN
+A4 ptsname_r on a file: ENOTTY
+A4 unlockpt on a file: ENOTTY
+B6 before any slave open, on the master: VINTR=7 ENOTTY, size 33x77 ENOTTY
+B1 the master, no slave ever opened: TIOCGWINSZ ENOTTY, TIOCSWINSZ ENOTTY, tcgetattr ENOTTY, tcsetattr ENOTTY
+B6 at the slave's first open: VINTR 3; the slave's size: 0 0 0 0
+D2 a pty's settings, the slave: iflag 0x2b02 oflag 0x3 cflag 0x4b00 lflag 0x5cb ispeed 9600 ospeed 9600 cc 4 255 255 127 23 21 18 255 3 28 26 25 17 19 22 15 1 0 20 255
+B2 the master, the slave open: TIOCGWINSZ ok, TIOCSWINSZ ok, tcgetattr ok, tcsetattr ok
+B2s the slave: TIOCGWINSZ ok, TIOCSWINSZ ok, tcgetattr ok, tcsetattr ok
+B3 TIOCSWINSZ 40x132 on the master: ok; the slave's size: 40 132 0 0
+B3 TIOCSWINSZ 50x100 on the slave: ok; the master's size: 50 100 0 0
+B3 VERASE=8 through the master: ok; the slave reads 8
+B3 VKILL=22 through the slave: ok; the master reads 22
+B4 the master after the slave's last close: TIOCGWINSZ ok, TIOCSWINSZ ok, tcgetattr ok, tcsetattr ok
+B5 the slave opened again: VINTR 3 VERASE 127 VKILL 21; the slave's size: 0 0 0 0
+B5 set on the slave: VINTR=9 ok, 41x133 ok
+B5 after its close and a new open: VINTR 3; the slave's size: 0 0 0 0
+E2 the child, a slave already held open elsewhere: setsid pid; slave open; /dev/tty ok; foreground its group
+C1 TIOCSWINSZ 60x120 on the master: ok
+C1 the child: winch 1 int 0 quit 0
+C2 TIOCSWINSZ 61x121 on a slave that is not the setter's terminal: ok
+C2 the child: winch 1 int 0 quit 0
+C3 the same size again on the master: ok
+C3 the child: winch 0 int 0 quit 0
+C4 the pixel fields alone on the master: ok
+C4 the child: winch 1 int 0 quit 0
+E1 VINTR=7 on the slave: ok; 0x07 written to the master: 1
+E1 the child: winch 0 int 1 quit 0
+E1 0x03 written to the master: 1
+E1 the child: winch 0 int 0 quit 0
+E1 0x1c (VQUIT) written to the master: 1
+E1 the child: winch 0 int 0 quit 1
+C5 the child's status: 0
+D 1 VINTR: was 3, set 7 (ok), reads 7: kept
+D 2 VQUIT: was 28, set 7 (ok), reads 7: kept
+D 3 VERASE: was 127, set 7 (ok), reads 7: kept
+D 4 VKILL: was 21, set 7 (ok), reads 7: kept
+D 5 VEOF: was 4, set 7 (ok), reads 7: kept
+D 6 VEOL: was 255, set 7 (ok), reads 7: kept
+D 7 VEOL2: was 255, set 7 (ok), reads 7: kept
+D 8 VSTART: was 17, set 7 (ok), reads 7: kept
+D 9 VSTOP: was 19, set 7 (ok), reads 7: kept
+D 10 VSUSP: was 26, set 7 (ok), reads 7: kept
+D 11 VDSUSP: was 25, set 7 (ok), reads 7: kept
+D 12 VREPRINT: was 18, set 7 (ok), reads 7: kept
+D 13 VWERASE: was 23, set 7 (ok), reads 7: kept
+D 14 VLNEXT: was 22, set 7 (ok), reads 7: kept
+D 15 VFLUSH: the host lacks it
+D 16 VSWTCH: the host lacks it
+D 17 VSTATUS: was 20, set 7 (ok), reads 7: kept
+D 18 VDISCARD: was 15, set 7 (ok), reads 7: kept
+D 30 IGNPAR: was 0, set 1 (ok), reads 1: kept
+D 31 PARMRK: was 0, set 1 (ok), reads 1: kept
+D 32 INPCK: was 0, set 1 (ok), reads 1: kept
+D 33 ISTRIP: was 0, set 1 (ok), reads 1: kept
+D 34 INLCR: was 0, set 1 (ok), reads 1: kept
+D 35 IGNCR: was 0, set 1 (ok), reads 1: kept
+D 36 ICRNL: was 1, set 0 (ok), reads 0: kept
+D 37 IUCLC: the host lacks it
+D 38 IXON: was 1, set 0 (ok), reads 0: kept
+D 39 IXANY: was 1, set 0 (ok), reads 0: kept
+D 40 IXOFF: was 0, set 1 (ok), reads 1: kept
+D 41 IMAXBEL: was 1, set 0 (ok), reads 0: kept
+D 42 IUTF8: was 0, set 1 (ok), reads 1: kept
+D 50 ISIG: was 1, set 0 (ok), reads 0: kept
+D 51 ICANON: was 1, set 0 (ok), reads 0: kept
+D 52 XCASE: the host lacks it
+D 53 ECHO: was 1, set 0 (ok), reads 0: kept
+D 54 ECHOE: was 1, set 0 (ok), reads 0: kept
+D 55 ECHOK: was 0, set 1 (ok), reads 1: kept
+D 56 ECHONL: was 0, set 1 (ok), reads 1: kept
+D 57 NOFLSH: was 0, set 1 (ok), reads 1: kept
+D 58 TOSTOP: was 0, set 1 (ok), reads 1: kept
+D 59 IEXTEN: was 1, set 0 (ok), reads 0: kept
+D 60 ECHOCTL: was 1, set 0 (ok), reads 0: kept
+D 61 ECHOKE: was 1, set 0 (ok), reads 0: kept
+D 62 PENDIN: was 1, set 0 (ok), reads 1: NOT KEPT
+D 70 OPOST: was 1, set 0 (ok), reads 0: kept
+D 71 OLCUC: the host lacks it
+D 72 ONLCR: was 1, set 0 (ok), reads 0: kept
+D 73 OCRNL: was 0, set 1 (ok), reads 1: kept
+D 74 ONOCR: was 0, set 1 (ok), reads 1: kept
+D 75 ONLRET: was 0, set 1 (ok), reads 1: kept
+D 90 CS7: was 0, set 1 (ok), reads 1: kept
+D 91 CS8: was 1, set 1 (ok), reads 1: kept
+D 92 PARENB: was 0, set 1 (ok), reads 1: kept
+D 93 PARODD: was 0, set 1 (ok), reads 1: kept
+D 128 TTY_OP_ISPEED: was 9600, set 9600 (ok), reads 9600: kept
+D 129 TTY_OP_OSPEED: was 9600, set 9600 (ok), reads 9600: kept
+D kept 50, not kept 1, lacking 5 of 56
+D3 VINTR set to the host's disabled value 255: ok; reads 255
+D4 ospeed B115200 (115200): cfsetospeed ok, tcsetattr ok, reads 115200
+D4 ospeed B230400 (230400): cfsetospeed ok, tcsetattr ok, reads 230400
+D4 ospeed B50 (50): cfsetospeed ok, tcsetattr ok, reads 50
+D4 ospeed 12345, no constant: cfsetospeed ok, tcsetattr ok, reads 12345
+D5 CS7 PARENB PARODD in one set: ok; cflag before 0x7a00 after 0x7a00
+J1 a session leader with no terminal opens /dev/ptmx without O_NOCTTY: setsid pid, open ok, then /dev/tty ENXIO
+END
+END exit=0
