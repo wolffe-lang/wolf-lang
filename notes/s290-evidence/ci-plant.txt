@@ -1,0 +1,21 @@
+s290: the plant on CI (a partial dispatch of ci.yml)
+
+Run 42804930744, branch s290-plant at 81fba602 = 651f0648 + one commit putting `setpgid(0, 0)`
+where the child's hook calls `setsid()`, in both of the hooks that take that step (the
+runtime's, crates/wolf_rt/src/os.rs, and the checked machine's, crates/wolf_mem/src/ubcheck.rs);
+jobs lint-test.
+
+  lint + test + corpus (linux x86-64), job 129791607981: FAILURE at the `test` step, by name:
+    session_lanes::unix::a_spawned_child_leads_a_new_session ... FAILED
+      checked: missing line "child: sid=pid true, pgid=pid true, tty 6, quit ignored false"
+      printed: "child: sid=pid false, pgid=pid true, tty opened, quit ignored false"
+      (the child leads a group but not a session, and /dev/tty opens in it)
+    and green beside it, in the same binary:
+      lupin_does_not_resolve_the_session_calls_before_its_mirror ... ok
+      unix::a_forked_child_moves_from_a_task_and_its_restore_restores ... ok
+      unix::this_process_into_a_session_of_its_own ... ok
+  Every earlier step and test binary passed (fmt, fmt-fixpoint, clippy, rt-none, and the
+  workspace's tests up to session_lanes, freestanding_target among them).
+
+The plant the audit reads is the one-hunk plant on the final head (the runtime's hook only),
+recorded on Linux; this run is the two-hook plant at the head the CI dispatch had.

@@ -1,0 +1,31 @@
+s290: the rows red before the change, on CI (partial dispatches of ci.yml)
+
+Run 42803701191, branch s290-red at 3111ce50 (the rows commit; jobs lint-test build-test)
+  lint + test + corpus (linux x86-64), job 129787509514: FAILURE at the `clippy` step, before any
+    test: clippy::duplicated_attributes, `#[allow(dead_code)] mod test_cpus;` in
+    crates/wolf_driver/tests/session_lanes.rs beside test_cpus/mod.rs's own `#![allow(dead_code)]`.
+    A defect of the rows commit, not a red row; f5007e3d removes the outer attribute. Not
+    evidence of a row; superseded by run 42805940072 below.
+  build + test (macos-latest), job 129787509501: FAILURE, by name:
+    freestanding_target::hosted_allocating_and_float_constructs_are_refused_by_name
+      os_spawn_session (native|release), os_setsid (native|release), os_sid (native|release):
+      "want exit 4 naming `<name>` (hosted runtime, target x86_64-unknown-none); got exit
+      Some(2): error[E0301]: nothing named `<name>` is in scope"
+  build + test (windows-latest, tests), job 129787509544: FAILURE, the same test, the same six
+    lines (E0301 for each name, native and release).
+  build + test (windows-latest, rung), job 129787509593: success (lane-coverage and dist; it
+    runs no test that names the session calls).
+
+Run 42805940072, branch s290-red2 at dec0c365 = 3111ce50 + the clippy fix (cherry-pick of
+f5007e3d) + the spec, comment and note text of ec7ed9c1, e72596a3 and 68f33aba (no code);
+jobs lint-test
+  lint + test + corpus (linux x86-64), job 129795019977: FAILURE at the `test` step, by name:
+    freestanding_target::hosted_allocating_and_float_constructs_are_refused_by_name
+      (the same six E0301 lines). fmt, fmt-fixpoint, clippy and rt-none passed.
+
+`cargo test --workspace` stops at the first failing test binary, so on every leg the
+freestanding refusals (wolf_driver's freestanding_target, which runs first) are the red that
+CI names. The other rows the prediction names red at base (session_lanes: every fixture
+E0301 at `wolf build`, exit 2; wolf_sema's host_table_spec 177 != 180, prelude_names,
+sandbox_s290; str_list_fs_native; corpus/os/session_rows.lu E0301 on every machine) are not
+reached by a stopped run; this file does not claim them.
