@@ -1,7 +1,7 @@
 # s289: the diagnostics sweep, third change: the prelude's `min` on every tier
 
 The third of the sweep's three changes (`notes/s289-prediction.md`), from the second's head
-`743c6770` (`notes/s289-the-census-the-linker-and-the-manifest.md`). It covers wolf-lang#708 as
+`bca5dbc5` (`notes/s289-the-census-the-linker-and-the-manifest.md`). It covers wolf-lang#708 as
 ruled (R-s289-7):
 
 - **`[type.min]`:** `min(a, b)` takes two values of one integer type and answers the smaller, as
@@ -43,12 +43,14 @@ What existing programs mean, by decision:
 
 ## Inputs, verified
 
-- **Base:** the second change's head `743c6770`.
+- **Base:** the second change's head `bca5dbc5`.
   - The base was measured and the rows and fix were written on its earlier head `353ee08c`,
     whose code is identical to the second change's checked commit `934e36ac`.
-  - The second change then gained one test fix (`e03952a3`, the refusal-site rows read past the
-    linker note) and its note, and this change was rebased onto it with the same patches
-    (`m3-rebase-map.txt`). The logs are named by the commits they ran at.
+  - The second change then gained two test fixes and their notes:
+    - `e03952a3`: the refusal-site rows read past the linker note;
+    - `c43cd16c`: the whole-program rows skip it.
+  - This change was rebased onto them with the same patches (`m3-rebase-map.txt`). The logs are
+    named by the commits they ran at.
 - **lupin 0.1.60**, as in the first change.
 - **The spec:**
   - `[type.comb.set]` (`std.list`'s `zip`);
@@ -60,25 +62,25 @@ What existing programs mean, by decision:
 
 ## Prediction
 
-`notes/s289-min-prediction.md`, committed (`c6635ed5`) before the first row, with the base
-measured (`feb3b5fc`). It held, with three corrections:
-- **A folded compare.** The first take of the lowering (`7753e3c4`) branched on the compare
+`notes/s289-min-prediction.md`, committed (`630057a5`) before the first row, with the base
+measured (`6b42956c`). It held, with three corrections:
+- **A folded compare.** The first take of the lowering (`dea08fb8`) branched on the compare
   whatever it was. When both operands are known, the builder folds the compare to a constant and
   the branch to one arm, which left the other arm a block with no predecessor beside the join.
   - Native and release then panicked in SSA construction at the next use of a local (`min_signed`
     and `min_unsigned` red, `m3-check-292bc30a-air.log`).
-  - `54cc3875` answers a folded compare with its operand directly, and one value twice with
+  - `c4e74d12` answers a folded compare with its operand directly, and one value twice with
     itself.
 - **Two consequences the prediction did not name**, found by the full take
   (`m3-full-71e97d82-air.log`):
   - `wolf_sema`'s `prelude_names` pins the table's counts. With `min` and `zip` anchored and `zip`
     off W0304, it reads 28 unanchored names (was 30) and 220 W0304 names (was 221)
-    (`868b0ef7`).
+    (`ad1728c4`).
   - The catalog lists every snapshot that quotes a code as that code's fixture, and the new rows'
     lexer snapshots quote E0401, E0402 and E0415. `docs/diagnostics.md` was regenerated
-    (`62d4466e`).
+    (`2f254d87`).
 
-| row | at the rows' commit `78511cf9` | at the fix | lupin 0.1.60 |
+| row | at the rows' commit `b3006c77` | at the fix | lupin 0.1.60 |
 |---|---|---|---|
 | `typecheck/min_signed.lu` | declined | `3 -5 7`, `i64`'s ends | equal |
 | `typecheck/min_unsigned.lu` | declined | `7 7`, `1 1`, `9` | equal |
@@ -141,24 +143,24 @@ The Linux record of this head and the plant's record are cited in the PR.
 ## Done-when
 
 Commits:
-- `feb3b5fc`: the base measured; `c6635ed5`: the prediction.
+- `6b42956c`: the base measured; `630057a5`: the prediction.
 - The rows:
-  - corpus: `f1f757e1`, `1bbbc41e`, `df9e39b1`, `5b2c6168`, `3e14c08c`, `bdbb7fae`, `46000038`,
-    `1ca487a7`, `25e80248`;
-  - `c43a9e6e` (four machines), `c3328f15` (the census), `78511cf9` (the prelude table);
-  - snapshots: `e186314a`, `f2557e09`.
+  - corpus: `7dceea85`, `348c8f34`, `e1fc0eb8`, `1d33d707`, `408fb3e4`, `92623a12`, `4b67e0be`,
+    `bc56b097`, `ed81fe0f`;
+  - `b7e995d3` (four machines), `17d987e8` (the census), `b3006c77` (the prelude table);
+  - snapshots: `396d303b`, `b4007a5d`.
 - The fix:
-  - `1f79b17c` (the clause);
-  - `3add1ff8` (the table's anchors and `zip`'s exemption);
-  - `24d747e5` (the checker);
-  - `7753e3c4` and `54cc3875` (WIR);
-  - `bc0f5376` (the checked machine).
-- `ad6a914b`: formatting. `c6def8db`: the anchors. `3a12f035`: the ledger. `3a8b25c6`: the
+  - `dfa089f6` (the clause);
+  - `75b8a3fa` (the table's anchors and `zip`'s exemption);
+  - `174cc6cc` (the checker);
+  - `dea08fb8` and `c4e74d12` (WIR);
+  - `898d2381` (the checked machine).
+- `59805073`: formatting. `a828d874`: the anchors. `687f1b68`: the ledger. `09df154c`: the
   changelog. This note and its evidence.
-- `868b0ef7`: the prelude's counts. `62d4466e`: the catalog.
+- `ad1728c4`: the prelude's counts. `2f254d87`: the catalog.
 
 Test targets:
-- [x] the prediction committed before the first row (`c6635ed5`)
+- [x] the prediction committed before the first row (`630057a5`)
 - [x] the rows red at their commit, by name (`m3-red-c2e51c03-air.log`)
 - [x] the rows green at the fix on the checked machine, native and release, spans exact; lupin
       held to its present answers (`prelude_min_lanes`, 11 tests)

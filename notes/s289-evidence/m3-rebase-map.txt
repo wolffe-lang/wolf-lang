@@ -1,28 +1,32 @@
-b8069f89 feb3b5fc same-patch Measure the prelude's min and zip at the second change's head
-581d1cbc c6635ed5 same-patch Predict the third change: the prelude's min on every tier
-9116b60c f1f757e1 same-patch Row: min answers the smaller signed value
-88052b5b 1bbbc41e same-patch Row: min compares an unsigned type unsigned
-f24873ea df9e39b1 same-patch Row: min evaluates each operand once, left to right
-c5767935 5b2c6168 same-patch Row: min with one operand is E0402
-7648f2a4 3e14c08c same-patch Row: min with three operands is E0402
-a4b4d2c7 bdbb7fae same-patch Row: min over two integer types is E0401
-737855a5 46000038 same-patch Row: min over str is E0401
-804daaeb 1ca487a7 same-patch Row: a literal beside a u8 operand of min must fit u8
-fd969d39 25e80248 same-patch Row: a module's own zip runs warning-clean
-ffec2970 c43a9e6e same-patch Hold the min and zip rows on four machines
-af1750fa c3328f15 same-patch Census: min is typed, and the free zip is declined with its reason
-c2e51c03 78511cf9 same-patch Row: the free zip is no shadow hazard
-a4486ef2 e186314a same-patch Add the third change's rows' lexer snapshots
-25bd1773 f2557e09 same-patch Add the third change's rows' parser snapshots
-574d5b10 1f79b17c same-patch Specify the prelude's min, and the free zip's lack of meaning
-991f2c2e 3add1ff8 same-patch Anchor min and zip, and exempt the free zip from W0304
-823a67a0 24d747e5 same-patch Type min by its clause, and decline the free zip with its reason
-dce5441a 7753e3c4 same-patch Lower min in WIR as a compare, a branch and a join
-292bc30a bc0f5376 same-patch Evaluate min on the checked machine
-c1084991 54cc3875 same-patch Fold min's compare when the builder knows both operands
-283c2ced ad6a914b same-patch Format the third change's rows
-9f16bfdb c6def8db same-patch Register the min clauses' anchors
-b53694c7 3a12f035 same-patch List the third change's rows in the lowering ledger
-71dd6a7a 3a8b25c6 same-patch Note the third change in the changelog
-9c771e13 86e698c9 same-patch Keep the third change's red take and checks
-71e97d82 fcacac2b same-patch Note the third change
+b8069f89 6b42956c same-patch Measure the prelude's min and zip at the second change's head
+581d1cbc 630057a5 same-patch Predict the third change: the prelude's min on every tier
+9116b60c 7dceea85 same-patch Row: min answers the smaller signed value
+88052b5b 348c8f34 same-patch Row: min compares an unsigned type unsigned
+f24873ea e1fc0eb8 same-patch Row: min evaluates each operand once, left to right
+c5767935 1d33d707 same-patch Row: min with one operand is E0402
+7648f2a4 408fb3e4 same-patch Row: min with three operands is E0402
+a4b4d2c7 92623a12 same-patch Row: min over two integer types is E0401
+737855a5 4b67e0be same-patch Row: min over str is E0401
+804daaeb bc56b097 same-patch Row: a literal beside a u8 operand of min must fit u8
+fd969d39 ed81fe0f same-patch Row: a module's own zip runs warning-clean
+ffec2970 b7e995d3 same-patch Hold the min and zip rows on four machines
+af1750fa 17d987e8 same-patch Census: min is typed, and the free zip is declined with its reason
+c2e51c03 b3006c77 same-patch Row: the free zip is no shadow hazard
+a4486ef2 396d303b same-patch Add the third change's rows' lexer snapshots
+25bd1773 b4007a5d same-patch Add the third change's rows' parser snapshots
+574d5b10 dfa089f6 same-patch Specify the prelude's min, and the free zip's lack of meaning
+991f2c2e 75b8a3fa same-patch Anchor min and zip, and exempt the free zip from W0304
+823a67a0 174cc6cc same-patch Type min by its clause, and decline the free zip with its reason
+dce5441a dea08fb8 same-patch Lower min in WIR as a compare, a branch and a join
+292bc30a 898d2381 same-patch Evaluate min on the checked machine
+c1084991 c4e74d12 same-patch Fold min's compare when the builder knows both operands
+283c2ced 59805073 same-patch Format the third change's rows
+9f16bfdb a828d874 same-patch Register the min clauses' anchors
+b53694c7 687f1b68 same-patch List the third change's rows in the lowering ledger
+71dd6a7a 09df154c same-patch Note the third change in the changelog
+9c771e13 119335a8 same-patch Keep the third change's red take and checks
+71e97d82 6df39aa3 same-patch Note the third change
+868b0ef7 ad1728c4 same-patch Count min and zip anchored, and the free zip off W0304, in the prelude's list
+62d4466e 2f254d87 same-patch Regenerate the catalog: the min rows' snapshots are fixtures
+bc0743bd 3a3c487d same-patch Keep the third change's full takes and rebase map
+43212f2f 3f20a097 same-patch Note the third change's rebase and its full takes
