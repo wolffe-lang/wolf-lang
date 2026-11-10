@@ -1,6 +1,6 @@
 //! s290 (D33; `[os.proc.session]`, `[os.term.session]`): the comptime
 //! sandbox categories of the session calls, which are also the
-//! capabilities a package is charged for reaching them (R6, as ruled).
+//! capabilities a package is charged for reaching them.
 
 use wolf_sema::ctfe::SandboxCategory;
 use wolf_sema::ctfe::intrinsics::{host_stub, pure_builtin};
