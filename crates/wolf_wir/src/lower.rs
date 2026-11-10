@@ -10985,6 +10985,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_spawn_session"
                 | "os_setsid"
                 | "os_sid"
+                // s292 (`[os.term.pty]`, `[os.term.size.set]`,
+                // `[os.term.attr]`): the pty pair, its name, the size set,
+                // a setting read and set by RFC 4254 opcode.
+                | "os_term_open_pty"
+                | "os_term_pty_name"
+                | "os_term_set_size"
+                | "os_term_attr"
+                | "os_term_set_attr"
                 | "os_proc_pid"
                 | "os_wait_status"
                 // s246 (ruling #88 R3 D): the siblings that report a core.
@@ -16151,6 +16159,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_sid" | "os_setsid" => 0,
             "os_spawn_session" => 4,
+            "os_term_open_pty" => 0,
+            "os_term_set_size" => 5,
+            "os_term_attr" => 2,
+            "os_term_set_attr" => 3,
             "os_signal_last" | "os_signal_realtime" => 0,
             "os_core_limit" | "os_core_off" | "os_name" | "os_arch" => 0,
             "os_set_core_limit" => 2,
@@ -16209,6 +16221,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_spawn_session" => ("__wolf_rt_os_spawn_session", PROC),
             "os_sid" => ("__wolf_rt_os_sid", PROC),
             "os_setsid" => ("__wolf_rt_os_setsid", PROC),
+            "os_term_open_pty" => ("__wolf_rt_os_term_open_pty", PROC),
+            "os_term_pty_name" => ("__wolf_rt_os_term_pty_name", PROC),
+            "os_term_set_size" => ("__wolf_rt_os_term_set_size", PROC),
+            "os_term_attr" => ("__wolf_rt_os_term_attr", PROC),
+            "os_term_set_attr" => ("__wolf_rt_os_term_set_attr", PROC),
             "os_proc_pid" => ("__wolf_rt_os_proc_pid", PROC),
             "os_wait_status" => ("__wolf_rt_os_wait_status", PROC),
             "os_pgid" => ("__wolf_rt_os_pgid", PROC),
@@ -16254,7 +16271,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         // s241 (`[os.signal.text]`): `env_get`'s str shape — rc 0 and the
         // text's (pointer, length) through a 16-byte slot, else the code.
-        if name == "os_signal_text" {
+        //
+        // s292 (`[os.term.pty]`): the slave's name is the same shape.
+        if name == "os_signal_text" || name == "os_term_pty_name" {
             let (region, slot) = self.rt_slot(16);
             let rc = self
                 .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
@@ -16290,6 +16309,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             || name == "os_wait_poll"
             || name == "os_wait_poll_core"
             || name == "os_fork"
+            // s292 (`[os.term.pty]`): the pty's (master, slave).
+            || name == "os_term_open_pty"
         {
             let Some(sema) = self.expr_sema_ty(e.span) else {
                 return Err(refuse("a window size without a recorded type", e.span));
@@ -16405,6 +16426,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_send_all"
                 | "os_set_pgid"
                 | "os_setsid"
+                | "os_term_set_size"
+                | "os_term_set_attr"
                 | "os_signal_ignore_one"
                 | "os_signal_default_one"
                 | "os_exit_signal"
@@ -16439,10 +16462,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             )?;
             return Ok(Flow::Val(Some(out)));
         }
-        if name == "os_wait_status" || name == "os_wait_status_core" {
+        // s292 (`[os.term.attr]`): a setting may read -1 (a character
+        // disabled), so the value comes through an out word too — rc 0 and
+        // the value, else the code.
+        if name == "os_wait_status" || name == "os_wait_status_core" || name == "os_term_attr" {
             let (region, slot) = self.rt_slot(8);
             let rc = self
-                .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
+                .rt_call_slot(sym, &argv, slot, region, Some(types::I64))
                 .expect("rc");
             let z = self.b.iconst(types::I64, 0);
             let hit = self
