@@ -1,0 +1,89 @@
+head abce5fed8b60aeb4421fe1efb28734ff9549b0ea (green 4ce8706f00384f3eaddd668024f1fe5acae6202c + the development plant)
+Darwin 25.4.0
+26.4.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.16s
+== the_pair_its_name_its_size_and_every_op
+
+running 1 test
+test the_pair_its_name_its_size_and_every_op ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 3.61s
+
+exit=0
+== the_documented_order_resize_and_interrupt
+
+running 1 test
+test the_documented_order_resize_and_interrupt ... FAILED
+
+failures:
+
+---- the_documented_order_resize_and_interrupt stdout ----
+
+thread 'the_documented_order_resize_and_interrupt' (7677766) panicked at crates/wolf_driver/tests/pty_lanes.rs:136:9:
+native: missing line "winch: Ctrl-G interrupts true, status 7"
+--- printed
+winch: the child ready at the size set before it true
+winch: a new size heard 1, the same size again heard 0
+winch: a pixel-only change heard true
+winch: Ctrl-G interrupts false, status -3
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    the_documented_order_resize_and_interrupt
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 8.03s
+
+error: test failed, to rerun pass `-p wolf_driver --test pty_lanes`
+exit=101
+== the_documented_order_through_a_spawn_on_every_machine
+
+running 1 test
+test the_documented_order_through_a_spawn_on_every_machine ... FAILED
+
+failures:
+
+---- the_documented_order_through_a_spawn_on_every_machine stdout ----
+
+thread 'the_documented_order_through_a_spawn_on_every_machine' (7678253) panicked at crates/wolf_driver/tests/pty_lanes.rs:136:9:
+native: missing line "spawned: Ctrl-G interrupts true, status 7"
+--- printed
+spawned: the child ready at the size set before it true
+spawned: a new size heard 1, the same size again heard 0
+spawned: a pixel-only change heard true
+spawned: Ctrl-G interrupts false, status -3
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    the_documented_order_through_a_spawn_on_every_machine
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 9.04s
+
+error: test failed, to rerun pass `-p wolf_driver --test pty_lanes`
+exit=101
+== the_checked_table_is_the_runtimes
+
+running 1 test
+test the_checked_table_is_the_runtimes ... FAILED
+
+failures:
+
+---- the_checked_table_is_the_runtimes stdout ----
+
+thread 'the_checked_table_is_the_runtimes' (7678946) panicked at crates/wolf_driver/tests/pty_lanes.rs:239:5:
+assertion `left == right` failed
+  left: ["1 Cc(8)", "2 Cc(9)", "3 Cc(3)", "4 Cc(5)", "5 Cc(0)", "6 Cc(1)", "7 Cc(2)", "8 Cc(12)", "9 Cc(13)", "10 Cc(10)", "11 Cc(11)", "12 Cc(6)", "13 Cc(4)", "14 Cc(14)", "15 lacks", "16 lacks", "17 Cc(18)", "18 Cc(15)", "30 Iflag(4)", "31 Iflag(8)", "32 Iflag(16)", "33 Iflag(32)", "34 Iflag(64)", "35 Iflag(128)", "36 Iflag(256)", "37 lacks", "38 Iflag(512)", "39 Iflag(2048)", "40 Iflag(1024)", "41 Iflag(8192)", "42 Iflag(16384)", "50 Lflag(128)", "51 Lflag(256)", "52 lacks", "53 Lflag(8)", "54 Lflag(2)", "55 Lflag(4)", "56 Lflag(16)", "57 Lflag(2147483648)", "58 Lflag(4194304)", "59 Lflag(1024)", "60 Lflag(64)", "61 Lflag(1)", "62 Lflag(536870912)", "70 Oflag(1)", "71 lacks", "72 Oflag(2)", "73 Oflag(16)", "74 Oflag(32)", "75 Oflag(64)", "90 Csize(512)", "91 Csize(768)", "92 Cflag(4096)", "93 Cflag(8192)", "128 Ispeed", "129 Ospeed", "speed 0 0", "speed 50 50", "speed 75 75", "speed 110 110", "speed 134 134", "speed 150 150", "speed 200 200", "speed 300 300", "speed 600 600", "speed 1200 1200", "speed 1800 1800", "speed 2400 2400", "speed 4800 4800", "speed 9600 9600", "speed 19200 19200", "speed 38400 38400", "speed 57600 57600", "speed 115200 115200", "speed 230400 230400", "disabled 255"]
+ right: ["1 Cc(9)", "2 Cc(8)", "3 Cc(3)", "4 Cc(5)", "5 Cc(0)", "6 Cc(1)", "7 Cc(2)", "8 Cc(12)", "9 Cc(13)", "10 Cc(10)", "11 Cc(11)", "12 Cc(6)", "13 Cc(4)", "14 Cc(14)", "15 lacks", "16 lacks", "17 Cc(18)", "18 Cc(15)", "30 Iflag(4)", "31 Iflag(8)", "32 Iflag(16)", "33 Iflag(32)", "34 Iflag(64)", "35 Iflag(128)", "36 Iflag(256)", "37 lacks", "38 Iflag(512)", "39 Iflag(2048)", "40 Iflag(1024)", "41 Iflag(8192)", "42 Iflag(16384)", "50 Lflag(128)", "51 Lflag(256)", "52 lacks", "53 Lflag(8)", "54 Lflag(2)", "55 Lflag(4)", "56 Lflag(16)", "57 Lflag(2147483648)", "58 Lflag(4194304)", "59 Lflag(1024)", "60 Lflag(64)", "61 Lflag(1)", "62 Lflag(536870912)", "70 Oflag(1)", "71 lacks", "72 Oflag(2)", "73 Oflag(16)", "74 Oflag(32)", "75 Oflag(64)", "90 Csize(512)", "91 Csize(768)", "92 Cflag(4096)", "93 Cflag(8192)", "128 Ispeed", "129 Ospeed", "speed 0 0", "speed 50 50", "speed 75 75", "speed 110 110", "speed 134 134", "speed 150 150", "speed 200 200", "speed 300 300", "speed 600 600", "speed 1200 1200", "speed 1800 1800", "speed 2400 2400", "speed 4800 4800", "speed 9600 9600", "speed 19200 19200", "speed 38400 38400", "speed 57600 57600", "speed 115200 115200", "speed 230400 230400", "disabled 255"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    the_checked_table_is_the_runtimes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p wolf_driver --test pty_lanes`
+exit=101

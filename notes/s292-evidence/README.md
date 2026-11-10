@@ -17,3 +17,9 @@ another job in phase 1 and taken at the start of phase 2: speeds are codes there
 rate with no code `EINVAL`), and `tcsetattr` answers `EINVAL` for CS7 and PARENB on a pty where glibc
 2.42 answered 0; both keep neither.
 A pty's number is written N. The sha256 of each file is in `SHA256SUMS`.
+
+## Phase 2
+
+| file | what |
+|---|---|
+| `plant-dev-macos-abce5fed.log` | the development plant, macOS 26.4.1 arm64: `abce5fed` (branch `s292-plant-dev`) is the head `4ce8706f` with VINTR and VQUIT swapped in the runtime's op table. Each `pty_lanes` row in its own run: every op still round-trips (the swap reads back what it set), the Ctrl-G rows go red natively (the child dies of QUIT, status -3, where INTERRUPT ends it with 7) while the checked machine's spawn row stays green on its own table, and the table row names the swap (ops 1 and 2). |
