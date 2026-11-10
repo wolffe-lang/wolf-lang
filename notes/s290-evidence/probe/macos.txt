@@ -1,0 +1,22 @@
+# Darwin arm64 macOS 26.4.1
+## sess on a fresh pseudo-terminal (the program leads its session)
+P start: pid==pgid yes, pid==sid yes, /dev/tty ok
+P setsid by a group leader: EPERM
+C1 setsid by a non-leader: ok, sid==pid yes, pgid==pid yes, /dev/tty ENXIO, tcgetpgrp(0) ENOTTY
+C1 setsid again by the session leader: EPERM
+C2 setsid from another thread: ok (pid), main thread's getsid(0)==pid yes, getpgrp()==pid yes, /dev/tty ENXIO
+C3 open of a free pty slave by a session leader with no terminal: /dev/tty after ok
+C4 TIOCNOTTY by a non-leader: ok, same session yes, /dev/tty after ENXIO
+## sess with no controlling terminal
+P start: pid==pgid no, pid==sid no, /dev/tty ENXIO
+P setsid by a group leader: EPERM
+C1 setsid by a non-leader: ok, sid==pid yes, pgid==pid yes, /dev/tty ENXIO, tcgetpgrp(0) ENOTTY
+C1 setsid again by the session leader: EPERM
+C2 setsid from another thread: ok (pid), main thread's getsid(0)==pid yes, getpgrp()==pid yes, /dev/tty ENXIO
+C3 open of a free pty slave by a session leader with no terminal: /dev/tty after ok
+C4 no terminal: ENXIO
+## gsid
+getsid(child in another session): its pid (child pid -)
+getsid(1): a value
+getsid(reaped child): No such process
+END exit=0

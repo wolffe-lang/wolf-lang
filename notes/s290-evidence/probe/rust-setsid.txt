@@ -1,0 +1,8 @@
+# rustc +1.97.1: rustc 1.97.1 (8bab26f4f 2026-07-14)
+error[E0658]: use of unstable library feature `process_setsid`
+ --> rsid.rs:4:7
+END exit=1
+# rustc +stable: rustc 1.99.0 (b940084d7 2026-09-28)
+error[E0658]: use of unstable library feature `process_setsid`
+ --> rsid.rs:4:7
+END exit=1
