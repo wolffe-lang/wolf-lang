@@ -1,0 +1,47 @@
+//! member: false
+//! s290 (`[os.proc.session]`) — RUN ONLY ON A PSEUDO-TERMINAL A TEST
+//! OPENED, as its session's leader. The program ignores `QUIT`, then
+//! starts the child named by its first argument (or the file `s290.child`:
+//! the checked machine is handed no arguments here) twice with
+//! `os_spawn_session`, its standard output mapped onto a pipe: once with
+//! `QUIT` in `defaults`, once without. It prints each child's line and
+//! status, and that its own session and terminal are as they were.
+
+fn main() -> !int {
+    let args = env_args()
+    let named = fs_read_text("s290.child") else |_| ""
+    let child = if args.len > 0 { args[0] } else { named }
+    let me = os_pid()
+    let sid0 = os_sid()?
+    print("parent: leads its session {sid0 == me}")
+    os_signal_ignore(4)?
+    for defaults in [4, 0] {
+        let (r, w) = os_pipe()?
+        let h = os_spawn_session(child, List[str](), [1, w], defaults)?
+        fs_close(w)?
+        let cpid = os_proc_pid(h)?
+        var text = List[byte]()
+        loop {
+            let chunk = fs_read_chunk(r, 4096) else |_| List[byte]()
+            if chunk.len == 0 {
+                break
+            }
+            for b in chunk {
+                (mut text).push(b)
+            }
+        }
+        fs_close(r)?
+        let st = os_wait_status(h)?
+        let line = str_from_utf8(text)?
+        print_raw(line)
+        print("parent: defaults {defaults}, child status {st}, child is another process {cpid != me}")
+    }
+    let sid1 = os_sid()?
+    print("parent: session unchanged {sid1 == sid0}")
+    let t = fs_open("/dev/tty") else |_| -1
+    print("parent: /dev/tty opens {t >= 0}")
+    if t >= 0 {
+        fs_close(t)?
+    }
+    0
+}

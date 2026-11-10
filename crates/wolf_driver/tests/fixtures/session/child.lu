@@ -1,0 +1,24 @@
+//! member: false
+//! s290 (`[os.proc.session]`) — the child `spawn.lu` starts with
+//! `os_spawn_session`, built natively. One line on its standard output
+//! (which the parent's map points into a pipe): whether it leads its own
+//! session and group, what opening `/dev/tty` answered (the host's number
+//! when it failed: 6, `ENXIO`, with no controlling terminal), and whether
+//! `QUIT` is ignored in it (the parent ignores it; `defaults` sets it back).
+
+fn main() -> int {
+    let me = os_pid()
+    let sid = os_sid() else |_| -1
+    let pgid = os_pgid() else |_| -1
+    var tty = "opened"
+    let t = fs_open("/dev/tty") else |_| -1
+    if t < 0 {
+        tty = "{os_error()}"
+    } else {
+        fs_close(t) else {}
+    }
+    let ignored = os_signal_ignored() else |_| -1
+    let quit = (ignored & 4) != 0
+    print("child: sid=pid {sid == me}, pgid=pid {pgid == me}, tty {tty}, quit ignored {quit}")
+    0
+}

@@ -1,0 +1,57 @@
+//! member: false
+//! s290 (`[os.term.session]`) — RUN ONLY ON A PSEUDO-TERMINAL A TEST
+//! OPENED: as the session's leader (the call is `denied`, 1, and nothing
+//! moves) and as a child of the leader's shell in the leader's group (the
+//! call moves the process: its session and group ids become its pid,
+//! `/dev/tty` no longer opens, and the old terminal's foreground is not
+//! its to set). A second call is `denied` either way.
+
+fn tag_of(e: str) -> str {
+    e
+}
+
+fn main() -> !int {
+    let me = os_pid()
+    let t0 = fs_open("/dev/tty") else |_| -1
+    let sid0 = os_sid()?
+    print("mover: a terminal before {t0 >= 0}, leads its session {sid0 == me}")
+    if t0 >= 0 {
+        fs_close(t0)?
+    }
+    var first = "ok"
+    os_setsid() else |e| {
+        first = tag_of(match e {
+            denied => "denied",
+            io => "io",
+            unsupported => "unsupported",
+        })
+    }
+    print("mover: setsid {first}, error {os_error()}")
+    let sid1 = os_sid()?
+    let pgid1 = os_pgid()?
+    print("mover: sid=pid {sid1 == me}, pgid=pid {pgid1 == me}")
+    let t1 = fs_open("/dev/tty") else |_| -1
+    let e1 = if t1 < 0 { os_error() } else { 0 }
+    print("mover: a terminal after {t1 >= 0}, error {e1}")
+    if t1 >= 0 {
+        fs_close(t1)?
+    }
+    var again = "ok"
+    os_setsid() else |e| {
+        again = tag_of(match e {
+            denied => "denied",
+            io => "io",
+            unsupported => "unsupported",
+        })
+    }
+    print("mover: again {again}, error {os_error()}")
+    var fg = "ok"
+    os_term_set_foreground(0, me) else |e| {
+        fg = tag_of(match e {
+            io => "io",
+            unsupported => "unsupported",
+        })
+    }
+    print("mover: the old terminal's foreground {fg}")
+    0
+}

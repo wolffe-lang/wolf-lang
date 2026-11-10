@@ -1,0 +1,38 @@
+//! member: false
+//! s290 (`[os.term.session]`) — RUN ONLY ON A PSEUDO-TERMINAL A TEST
+//! OPENED, as its session's leader; native and release (the checked
+//! machine has no fork). A forked child registers a restore of the mode
+//! the terminal had, turns echo off, then moves into a session of its own
+//! from inside a TASK (a worker thread, not `main`'s) and reads the move
+//! back on `main`'s thread; it ends with `os_exit`, an exit the runtime
+//! owns, so the registered restore runs on a terminal that is no longer
+//! its controlling terminal. The parent reads the mode back.
+
+fn main() -> !int {
+    let m0 = os_term_mode(0)?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        os_term_restore_at_exit(0, m0, "RESTORED\n".bytes())?
+        let quiet = m0 - (m0 & 2)
+        os_term_set_mode(0, quiet)?
+        let out = channel[str](1)
+        scope s {
+            s.spawn(fn() {
+                var r = "ok"
+                os_setsid() else |e| {
+                    r = "{e}"
+                }
+                out.send(r) else |_| {}
+            })
+        }
+        let r = out.recv() else |_| "none"
+        let me = os_pid()
+        let sid = os_sid()?
+        print("forked: setsid from a task {r}, main reads sid=pid {sid == me}")
+        os_exit(0)
+    }
+    let st = os_wait_status(h)?
+    let m1 = os_term_mode(0)?
+    print("parent: child status {st}, mode back {m1 == m0}")
+    0
+}
