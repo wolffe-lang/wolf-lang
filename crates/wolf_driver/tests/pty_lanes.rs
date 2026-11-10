@@ -15,6 +15,10 @@
 //!   leads a session on the slave reads the size set before it, hears a
 //!   new size and a pixel-only change but not the same size again, and is
 //!   interrupted by the Ctrl-G its VINTR was set to before the fork.
+//! - `the_documented_order_through_a_spawn_on_every_machine`
+//!   (`fixtures/pty/spawned.lu`, every machine): the same order with
+//!   `os_spawn_session` in place of the fork, the child the compiled
+//!   `fixtures/pty/helper.lu`, so the checked machine runs it too.
 //! - `the_checked_table_is_the_runtimes`: the checked machine's
 //!   transcription of the op table equals the runtime's on this host.
 //!
@@ -195,6 +199,29 @@ fn the_documented_order_resize_and_interrupt() {
     .map(|s| (*s).to_string())
     .collect();
     for (lane, got) in run_lanes(&fixture("winch.lu"), &dir, false) {
+        expect_lines(&lane, &got, &want);
+    }
+}
+
+/// The documented order on every machine, the checked one included: a
+/// spawn in a new session in place of the fork, the child a compiled
+/// helper on the slave.
+#[test]
+fn the_documented_order_through_a_spawn_on_every_machine() {
+    let dir = scratch("spawned");
+    let helper = build(&fixture("helper.lu"), &dir, false);
+    std::fs::write(dir.join("s292.helper"), helper.to_string_lossy().as_bytes())
+        .expect("the helper's name");
+    let want: Vec<String> = [
+        "spawned: the child ready at the size set before it true",
+        "spawned: a new size heard 1, the same size again heard 0",
+        "spawned: a pixel-only change heard true",
+        "spawned: Ctrl-G interrupts true, status 7",
+    ]
+    .iter()
+    .map(|s| (*s).to_string())
+    .collect();
+    for (lane, got) in run_lanes(&fixture("spawned.lu"), &dir, true) {
         expect_lines(&lane, &got, &want);
     }
 }
