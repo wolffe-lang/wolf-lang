@@ -879,6 +879,7 @@ os/priority_rows.lu: lowers
 os/random_differs.lu: lowers
 os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
+os/session_rows.lu: lowers
 os/signal_action_rows.lu: lowers
 os/signal_loopback.lu: lowers
 os/signal_one_rows.lu: lowers
