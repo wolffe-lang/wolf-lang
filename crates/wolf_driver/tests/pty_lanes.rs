@@ -4,21 +4,26 @@
 //! linux also under `taskset` on four CPUs. Each fixture opens its own
 //! pty, so the test needs no terminal around it.
 //!
-//! - `the_pair_its_name_its_size_and_every_op` (`fixtures/pty/pair.lu`,
-//!   every machine): the pair are terminals; the name has the host's form
-//!   and opens a terminal; a size set on each end reads on the other; every
-//!   RFC 4254 opcode on the slave round-trips, or is lacking, or is not
-//!   kept, exactly as `[os.term.attr]`'s table says for this host; the name
-//!   of a slave is `io`; the name is gone after every descriptor closes.
-//! - `the_documented_order_resize_and_interrupt` (`fixtures/pty/winch.lu`,
-//!   native and release: the checked machine has no fork): a child that
-//!   leads a session on the slave reads the size set before it, hears a
-//!   new size and a pixel-only change but not the same size again, and is
-//!   interrupted by the Ctrl-G its VINTR was set to before the fork.
-//! - `the_documented_order_through_a_spawn_on_every_machine`
-//!   (`fixtures/pty/spawned.lu`, every machine): the same order with
-//!   `os_spawn_session` in place of the fork, the child the compiled
-//!   `fixtures/pty/helper.lu`, so the checked machine runs it too.
+//! Each row runs on one side, the checked machine or native and release,
+//! so a break on one side reds its rows by name and leaves the other's
+//! green.
+//!
+//! - `the_pair_on_the_checked_machine`, `the_pair_native_and_release`
+//!   (`fixtures/pty/pair.lu`): the pair are terminals; the name has the
+//!   host's form and opens a terminal; a size set on each end reads on the
+//!   other; every RFC 4254 opcode on the slave round-trips, or is lacking,
+//!   or is not kept, exactly as `[os.term.attr]`'s table says for this
+//!   host; the name of a slave is `io`; the name is gone after every
+//!   descriptor closes.
+//! - `the_documented_order_with_a_fork_native_and_release`
+//!   (`fixtures/pty/winch.lu`; the checked machine has no fork): a child
+//!   that leads a session on the slave reads the size set before it, hears
+//!   a new size and a pixel-only change but not the same size again, and
+//!   is interrupted by the Ctrl-G its VINTR was set to before the fork.
+//! - `the_documented_order_through_a_spawn_on_the_checked_machine`,
+//!   `the_documented_order_through_a_spawn_native_and_release`
+//!   (`fixtures/pty/spawned.lu`): the same order with `os_spawn_session` in
+//!   place of the fork, the child the compiled `fixtures/pty/helper.lu`.
 //! - `the_checked_table_is_the_runtimes`: the checked machine's
 //!   transcription of the op table equals the runtime's on this host.
 //! - `lupin_does_not_resolve_the_pty_calls_before_its_mirror`: the corpus
@@ -80,10 +85,20 @@ fn build(entry: &Path, dir: &Path, release: bool) -> PathBuf {
     bin
 }
 
+/// The side a row runs on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Side {
+    /// `conform-run --json --checked`.
+    Checked,
+    /// The native binary (also pinned to four CPUs where the host has
+    /// them) and the release binary.
+    Native,
+}
+
 /// Each machine's name and what the fixture printed there.
-fn run_lanes(entry: &Path, dir: &Path, checked: bool) -> Vec<(String, String)> {
+fn run_lanes(entry: &Path, dir: &Path, side: Side) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    if checked {
+    if side == Side::Checked {
         let o = Command::new(wolf())
             .args(["conform-run", "--json", "--checked"])
             .arg(entry)
@@ -103,6 +118,7 @@ fn run_lanes(entry: &Path, dir: &Path, checked: bool) -> Vec<(String, String)> {
             "checked".to_string(),
             record["stdout_inline"].as_str().unwrap_or("").to_string(),
         ));
+        return out;
     }
     for (tier, release) in [("native", false), ("release", true)] {
         let bin = build(entry, dir, release);
@@ -163,9 +179,8 @@ const OPS: [i64; 56] = [
     90, 91, 92, 93, 128, 129,
 ];
 
-#[test]
-fn the_pair_its_name_its_size_and_every_op() {
-    let dir = scratch("pair");
+fn the_pair(side: Side, dir: &str) {
+    let dir = scratch(dir);
     let mut want: Vec<String> = vec![
         "pair: handles true, master a terminal true, slave a terminal true".into(),
         "by name: a terminal true".into(),
@@ -179,7 +194,7 @@ fn the_pair_its_name_its_size_and_every_op() {
     } else {
         "name: /dev/pts/"
     };
-    for (lane, got) in run_lanes(&fixture("pair.lu"), &dir, true) {
+    for (lane, got) in run_lanes(&fixture("pair.lu"), &dir, side) {
         expect_lines(&lane, &got, &want);
         assert!(
             got.lines().any(|l| l.starts_with(prefix)),
@@ -189,7 +204,17 @@ fn the_pair_its_name_its_size_and_every_op() {
 }
 
 #[test]
-fn the_documented_order_resize_and_interrupt() {
+fn the_pair_on_the_checked_machine() {
+    the_pair(Side::Checked, "pair-checked");
+}
+
+#[test]
+fn the_pair_native_and_release() {
+    the_pair(Side::Native, "pair-native");
+}
+
+#[test]
+fn the_documented_order_with_a_fork_native_and_release() {
     let dir = scratch("winch");
     let want: Vec<String> = [
         "winch: the child ready at the size set before it true",
@@ -200,7 +225,7 @@ fn the_documented_order_resize_and_interrupt() {
     .iter()
     .map(|s| (*s).to_string())
     .collect();
-    for (lane, got) in run_lanes(&fixture("winch.lu"), &dir, false) {
+    for (lane, got) in run_lanes(&fixture("winch.lu"), &dir, Side::Native) {
         expect_lines(&lane, &got, &want);
     }
 }
@@ -208,9 +233,8 @@ fn the_documented_order_resize_and_interrupt() {
 /// The documented order on every machine, the checked one included: a
 /// spawn in a new session in place of the fork, the child a compiled
 /// helper on the slave.
-#[test]
-fn the_documented_order_through_a_spawn_on_every_machine() {
-    let dir = scratch("spawned");
+fn through_a_spawn(side: Side, dir: &str) {
+    let dir = scratch(dir);
     let helper = build(&fixture("helper.lu"), &dir, false);
     std::fs::write(dir.join("s292.helper"), helper.to_string_lossy().as_bytes())
         .expect("the helper's name");
@@ -223,9 +247,19 @@ fn the_documented_order_through_a_spawn_on_every_machine() {
     .iter()
     .map(|s| (*s).to_string())
     .collect();
-    for (lane, got) in run_lanes(&fixture("spawned.lu"), &dir, true) {
+    for (lane, got) in run_lanes(&fixture("spawned.lu"), &dir, side) {
         expect_lines(&lane, &got, &want);
     }
+}
+
+#[test]
+fn the_documented_order_through_a_spawn_on_the_checked_machine() {
+    through_a_spawn(Side::Checked, "spawned-checked");
+}
+
+#[test]
+fn the_documented_order_through_a_spawn_native_and_release() {
+    through_a_spawn(Side::Native, "spawned-native");
 }
 
 /// `[os.term.attr]`: the checked machine performs the calls in the `wolf`
