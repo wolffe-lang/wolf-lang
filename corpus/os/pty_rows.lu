@@ -1,0 +1,101 @@
+//! check: run(exit=0, stdout="size_rows_negative=invalid\nsize_columns_past=invalid\nsize_pixels_past=invalid\nattr_op_zero=invalid\nattr_op_gap=invalid\nattr_op_past=invalid\nattr_op_negative=invalid\nset_char_past=invalid\nset_char_below=invalid\nset_flag_two=invalid\nset_size_two=invalid\nset_speed_negative=invalid\nlacking_ops: true\nspeed_unlisted: true\nforged_name: true\nforged_size: true\nforged_attr: true\nforged_set_attr: true\nforged_speed: true")
+//! phase: run
+//! conforms: os.term.pty, os.term.size.set, os.term.attr, os.uname, err.union
+//!
+//! s292 — the rows of the pty calls that reach no terminal, deterministic
+//! on every host. The SHAPE is decided first, on windows too: a size field
+//! outside 0..65535, an opcode outside RFC 4254 section 8's vocabulary (and
+//! RFC 8160's 42), a value outside its op's range, each `invalid`. Then
+//! the HOST: windows answers `unsupported` for every call; an op the host's
+//! `termios` lacks is `unsupported` on that host (linux 11, 15, 17; macOS
+//! 15, 16, 37, 52, 71; PAX runs the linux binary), and so is a speed outside
+//! the runtime's table, whatever the handle. Then the HANDLE: a forged one
+//! is `io` on unix. Nothing here opens a pty: the open, the name's form and
+//! every op on a real slave are `crates/wolf_driver/tests/pty_lanes.rs`'s.
+
+fn size(rows: int, columns: int, xp: int, yp: int) -> str {
+    os_term_set_size(1000000, rows, columns, xp, yp) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn attr(op: int) -> str {
+    let _v = os_term_attr(1000000, op) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn set_attr(op: int, value: int) -> str {
+    os_term_set_attr(1000000, op, value) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn lacks(op: int) -> bool {
+    let host = os_name()
+    if host == "windows" {
+        return true
+    }
+    if host == "macos" {
+        return op == 15 || op == 16 || op == 37 || op == 52 || op == 71
+    }
+    op == 11 || op == 15 || op == 17
+}
+
+fn main() -> int {
+    let windows = os_name() == "windows"
+    let handle_row = if windows { "unsupported" } else { "io" }
+    print("size_rows_negative={size(-1, 80, 0, 0)}")
+    print("size_columns_past={size(24, 65536, 0, 0)}")
+    print("size_pixels_past={size(24, 80, 0, 70000)}")
+    print("attr_op_zero={attr(0)}")
+    print("attr_op_gap={attr(19)}")
+    print("attr_op_past={attr(160)}")
+    print("attr_op_negative={attr(-1)}")
+    print("set_char_past={set_attr(1, 256)}")
+    print("set_char_below={set_attr(1, -2)}")
+    print("set_flag_two={set_attr(53, 2)}")
+    print("set_size_two={set_attr(90, 2)}")
+    print("set_speed_negative={set_attr(129, -1)}")
+    var every = true
+    for op in [11, 15, 16, 17, 37, 52, 71] {
+        let want = if lacks(op) { "unsupported" } else { handle_row }
+        if attr(op) != want || set_attr(op, 1) != want {
+            print("lacking op {op}: {attr(op)}, set {set_attr(op, 1)}, want {want}")
+            every = false
+        }
+    }
+    print("lacking_ops: {every}")
+    print("speed_unlisted: {set_attr(129, 12345) == "unsupported"}")
+    print("forged_name: {tag_name() == handle_row}")
+    print("forged_size: {size(24, 80, 0, 0) == handle_row}")
+    print("forged_attr: {attr(1) == handle_row}")
+    print("forged_set_attr: {set_attr(53, 1) == handle_row}")
+    print("forged_speed: {set_attr(129, 9600) == handle_row}")
+    0
+}
+
+fn tag_name() -> str {
+    let _n = os_term_pty_name(1000000) else |e| {
+        return match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
