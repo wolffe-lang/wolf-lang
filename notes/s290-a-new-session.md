@@ -44,27 +44,31 @@ no `setsid` of its own; nothing ran under `/tmp`.
 
 ## Inputs, verified
 
-- Base: trunk `bca5dbc5` (0.2.38), `crates/wolf_driver/STD-PIN` wolf-std `d4a4d4ca`,
+- Base: trunk `878490c4` (0.2.38; the branch was made on `bca5dbc5` and rebased, commit for
+  commit, onto the diagnostics sweep's third change: `notes/s290-evidence/rebase-map.txt`),
+  `crates/wolf_driver/STD-PIN` wolf-std `d4a4d4ca`,
   `crates/wolf_driver/PAIRING` lupin 0.1.60, read twice by the Linux rig's prep take against the
   staged archives' digests (`rig-linux/gauntlet-prep.sh`, `rig-linux/stage-inputs.sh`).
-- The anchors: 733 to 736 (`os.proc.session`, `os.proc.session.note`, `os.term.session`); the
-  regenerated file diffed against the base's both ways: none dropped, none changed.
-- The host table 177 to 180 lines, `spec/prelude.json` 229 to 232 names (191 functions), the clif
+- The anchors: 735 to 738 at `878490c4` (733 to 736 at `bca5dbc5`): `os.proc.session`,
+  `os.proc.session.note`, `os.term.session`; the file diffed against the base's both ways,
+  none dropped, none changed, and `cargo xtask spec-extract --check` holds it in sync.
+- The host table 177 to 180 lines, `spec/prelude.json` 229 to 232 names (191
+  functions; W0304 names 220 to 223 at `878490c4`), the clif
   runtime symbols 270 to 273.
 
 ## Prediction
 
 `notes/s290-prediction.md` section 5, item by item:
 1. **The rows, committed first and red: right, with one defect of the rows' own.** The rows
-   commit (`3111ce50`) carried a clippy error (`#[allow(dead_code)]` on `mod test_cpus` beside the
-   module's own `#![allow]`), so its first dispatch stopped at `clippy` before any test; `f5007e3d`
+   commit (`96488f32`) carried a clippy error (`#[allow(dead_code)]` on `mod test_cpus` beside the
+   module's own `#![allow]`), so its first dispatch stopped at `clippy` before any test; `d3f9d6c3`
    removes it. Rebuilt as `s290-red2` (the rows, that fix, and text only), every CI leg stopped
    red by name at the first failing test binary, `freestanding_target`'s refusals, E0301 for each
    of the three names on native and release (linux, macOS, windows: `ci-red.txt`). `cargo test`
    stops at the first failing binary, so the other rows red at base were not reached there. The
    rows also missed one count: `str_list_fs_native` named the three symbols but kept
    `RT_SYMBOLS.len()` at 270; the first Linux check met it (`linux-cheap-68f33aba.log`) and
-   `15f808ae` moves it to 273.
+   `d20a7cd7` moves it to 273.
 2. **The witnesses: right.** `session_lanes` on the checked machine, native and release, on a
    pseudo-terminal the test opens (the Mac and Linux; the pinned rows on four CPUs in the Linux
    gauntlet's block); `corpus/os/session_rows.lu` on every machine; the freestanding target
@@ -131,6 +135,7 @@ answers:
   the shape (the C probes, a pseudo-terminal runner, Rust's `process_setsid` status).
 - `macos-session-lanes-651f0648.log`, `macos-sema-tests-651f0648.log`: the Mac's checks at the
   change's tree (`session_lanes` 4 passed; the counts).
+- `rebase-map.txt`: each commit before the rebase and after it.
 - `ci-red.txt`: the rows red on CI, run ids, jobs and failing tests by name.
 - `ci-plant.txt`: the two-hook plant red on CI by name, the other tests green.
 - `linux-cheap-68f33aba.log`: the first Linux check in a two-CPU slot (fmt, clippy, the build,
@@ -148,23 +153,25 @@ answers:
   own names (its podman, its locks, its CPUs, its images) come from a host file that is not
   part of them.
 
-`68f33aba` and the final head differ in tests and notes only: the compiler and the runtime that
-built the fixture and ran wolf-std's rows are the final head's. The Linux gauntlet's record at
+The evidence heads `68f33aba`, `15f808ae` and `651f0648` are before the rebase (their commits'
+places after it are in `rebase-map.txt`). The session code that built the PAX fixture and ran
+wolf-std's rows is the final head's: `68f33aba` and the final head differ in tests and notes, and
+in what the rebase brought from trunk (the prelude's `min`), which moved no session line. The Linux gauntlet's record at
 the final head and the one-hunk plant's record are cited in the PR.
 
 ## Done-when
 
 Commits, in order:
-- `2a9a572f` the probes; `da388be5` the prediction.
-- The spec: `923d747b` (`[os.proc.session]`, `[os.term.session]`, the design note, the host
-  table 180), `f7199241` (the anchors, 736), `4f371d93`, `ec7ed9c1` (the decisions as stated).
-- The rows, red before the change: `05d7ffb7` (`session_rows`), `0f453ee1` (`session_lanes` and
-  its fixtures), `57c48127` (the counts), `0e3f002e`, `d1cad3a8`, `3111ce50` (the snapshots).
-- The change: `515b08db` (wolf_rt), `d2bbaee7` (clif), `26d409eb` (sema), `fc7676cf` (WIR),
-  `0c3574f8` (the checked machine), `700bb629` (the charges), `f5007e3d` (the rows' clippy fix),
-  `6837e670` (`spec/prelude.json`), `888655ab` (the lowering ledger), `651f0648` (the
+- `13b94a25` the probes; `5874018b` the prediction.
+- The spec: `7672d9c1` (`[os.proc.session]`, `[os.term.session]`, the design note, the host
+  table 180), `4ad8a0e1` (the anchors), `3077a88a`, `d4bb6716` (the decisions as stated).
+- The rows, red before the change: `9919913d` (`session_rows`), `13d4f12a` (`session_lanes` and
+  its fixtures), `1faa398b` (the counts), `ab5dd070`, `ed357287`, `96488f32` (the snapshots).
+- The change: `2da3d219` (wolf_rt), `0355067c` (clif), `88662388` (sema), `03947218` (WIR),
+  `3fc5f621` (the checked machine), `7c867195` (the charges), `d3f9d6c3` (the rows' clippy fix),
+  `8c437129` (`spec/prelude.json`), `322a7c98` (the lowering ledger), `cca07677` (the
   changelog).
-- `e72596a3`, `8f5475b8`, `68f33aba` (text), `07c229e6` (the CI evidence), `15f808ae`
+- `f54b4ac6`, `b79787c5`, `aade7f53` (text), `dce44ce2` (the CI evidence), `d20a7cd7`
   (`RT_SYMBOLS` 273), then this note and the Linux evidence.
 
 Done when: the PR's `tier full` is green at this head with the `full-matrix` label, the Linux
