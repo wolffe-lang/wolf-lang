@@ -852,6 +852,29 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_signal_action_one`",
             "hosted runtime",
         ),
+        // s290: `[os.proc.session]`, `[os.term.session]` — the spawn in a
+        // new session, this process into one, and its id.
+        (
+            "os_spawn_session",
+            "",
+            "let h = os_spawn_session(\"true\", List[str](), List[int](), 0) else |e| {\n        return 0\n    }\n    h",
+            "`os_spawn_session`",
+            "hosted runtime",
+        ),
+        (
+            "os_setsid",
+            "",
+            "os_setsid() else |e| {\n        return 0\n    }\n    1",
+            "`os_setsid`",
+            "hosted runtime",
+        ),
+        (
+            "os_sid",
+            "",
+            "let s = os_sid() else |e| {\n        return 0\n    }\n    s",
+            "`os_sid`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",

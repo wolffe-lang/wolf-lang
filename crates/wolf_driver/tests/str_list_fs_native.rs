@@ -858,6 +858,10 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_link_at",
         "__wolf_rt_fs_read_dir_entries_at",
         "__wolf_rt_fs_set_mode_fd",
+        // s290: `[os.proc.session]`, `[os.term.session]`.
+        "__wolf_rt_os_spawn_session",
+        "__wolf_rt_os_setsid",
+        "__wolf_rt_os_sid",
         // s256 (#866): `[conf.trap.stack]` — the main thread's guard
         // bounds and alternate signal stack, one call at startup.
         "__wolf_rt_stack_start",
