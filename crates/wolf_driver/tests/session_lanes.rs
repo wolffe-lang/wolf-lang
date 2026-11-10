@@ -31,7 +31,6 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[allow(dead_code)]
 mod test_cpus;
 
 fn wolf() -> &'static str {
