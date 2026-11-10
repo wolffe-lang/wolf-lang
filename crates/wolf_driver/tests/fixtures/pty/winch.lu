@@ -26,11 +26,13 @@ fn count(hay: str, needle: str) -> int {
 }
 
 // Reads the master until `needle` has shown `times` times or `ms` pass.
+// The wait's set must not be empty (`[os.signal.wait.fds]`); the parent
+// listens for nothing, so INTERRUPT never answers it.
 fn read_until(m: int, text: str, needle: str, times: int, ms: int) -> !str {
     var t = text
     var left = ms
     while count(t, needle) < times && left > 0 {
-        let (i, _mm) = os_signal_wait_fds([m], 0, 100)?
+        let (i, _mm) = os_signal_wait_fds([m], 16, 100)?
         if i == 0 {
             let b = fs_read_chunk(m, 4096) else |_| List[byte]()
             t = "{t}{str_from_utf8(b) else ""}"
@@ -40,10 +42,14 @@ fn read_until(m: int, text: str, needle: str, times: int, ms: int) -> !str {
     t
 }
 
+// The child keeps its copies of both ends until its own open by name: on
+// macOS an open of a slave whose master is closed waits for a carrier
+// that never comes, so a parent that failed early must not leave the
+// child parked in the open.
 fn child(m: int, s: int, name: str) -> !int {
-    fs_close(m)?
     os_setsid()?
     let t = fs_open_mode(name, 3)?
+    fs_close(m)?
     fs_close(s)?
     os_signal_listen(16 + 16384)?
     let (r0, c0) = os_term_size(t)?
