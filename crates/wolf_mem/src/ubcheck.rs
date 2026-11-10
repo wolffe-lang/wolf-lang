@@ -10060,6 +10060,7 @@ impl<'t> Machine<'t> {
                     }
                 }
                 let job = (!plain).then(|| CheckedJob {
+                    session: false,
                     group,
                     tty: tty_file,
                     defaults,
@@ -10070,6 +10071,77 @@ impl<'t> Machine<'t> {
                     &placed,
                     self.cwd.as_deref(),
                     job.as_ref(),
+                    &self.env_overlay,
+                    self.program_pipe_ignored(),
+                ) {
+                    Err(e) => Ok(tag(spawn_refusal(&e))),
+                    Ok(child) => {
+                        let h = self.children.len() as i64;
+                        self.children.push(Some(child));
+                        Ok(Flow::Val(Value::Int(h)))
+                    }
+                }
+            }
+            // s290 (`[os.proc.session]`): `os_spawn_job`'s path with the
+            // child leading a new session first. Read in `wolf_rt`'s
+            // order: shape, host, sources, program.
+            "os_spawn_session" => {
+                let (Some(exe), Some(Value::List(args_id)), Some(Value::List(map_id))) =
+                    (str_arg(0), argv.get(1), argv.get(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Some(defaults) = int_arg(3) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let mut flat = Vec::new();
+                for v in self.lists.get(*map_id).into_iter().flatten() {
+                    match v {
+                        Value::Int(n) => flat.push(*n),
+                        _ => return self.refuse("a non-int descriptor map element", span),
+                    }
+                }
+                let Some(entries) = fd_map_of(&flat) else {
+                    return Ok(tag("invalid"));
+                };
+                if defaults < 0 || defaults & !SIG_ALL != 0 {
+                    return Ok(tag("invalid"));
+                }
+                if cfg!(not(unix)) {
+                    return Ok(tag("unsupported"));
+                }
+                let mut placed = Vec::with_capacity(entries.len());
+                for &(t, s) in &entries {
+                    match s {
+                        None => placed.push((t, None)),
+                        Some(h) => match self.fs_handle(h).and_then(|f| f.try_clone().ok()) {
+                            None => return Ok(tag("io")),
+                            Some(f) => placed.push((t, Some(f))),
+                        },
+                    }
+                }
+                if exe.is_empty() {
+                    return Ok(tag("not_found"));
+                }
+                let mut words = Vec::new();
+                for v in self.lists.get(*args_id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => words.push(s.clone()),
+                        _ => return self.refuse("a non-str argv element", span),
+                    }
+                }
+                let job = CheckedJob {
+                    session: true,
+                    group: -1,
+                    tty: None,
+                    defaults,
+                };
+                match spawn_mapped(
+                    &exe,
+                    &words,
+                    &placed,
+                    self.cwd.as_deref(),
+                    Some(&job),
                     &self.env_overlay,
                     self.program_pipe_ignored(),
                 ) {
@@ -10222,6 +10294,11 @@ impl<'t> Machine<'t> {
             // s219 (`[os.term]`): the host's own terminal, through the
             // descriptor the handle names (0..2 the `wolf` process's).
             "os_pgid" => match checked_term::pgid() {
+                Ok(p) => Ok(Flow::Val(Value::Int(p))),
+                Err(t) => Ok(tag(t)),
+            },
+            // s290 (`[os.term.session]`): the `wolf` process's session id.
+            "os_sid" => match checked_term::sid() {
                 Ok(p) => Ok(Flow::Val(Value::Int(p))),
                 Err(t) => Ok(tag(t)),
             },
@@ -10894,6 +10971,16 @@ impl<'t> Machine<'t> {
                     Err(t) => Ok(tag(t)),
                 }
             }
+            // s290 (`[os.term.session]`): the `wolf` process into a session
+            // of its own — it is the process the program runs as — the
+            // host's number beside a refusal (`[os.fs.error]`).
+            "os_setsid" => match checked_term::setsid() {
+                Ok(()) => Ok(Flow::Val(Value::Unit)),
+                Err((t, n)) => {
+                    FS_HOST_ERROR.with(|c| c.set(n));
+                    Ok(tag(t))
+                }
+            },
             // s241 (#740, `[os.signal.host]`): the host's table.
             "os_signal_last" => match checked_sig::last() {
                 Some(n) => Ok(Flow::Val(Value::Int(n))),
@@ -12683,6 +12770,8 @@ impl<'t> Machine<'t> {
             // s219 (#622): dispositions, the poll, the job spawn, the
             // child's pid and status, the group and the terminal.
             | "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
+            // s290: the spawn in a new session, this process into one, its id.
+            | "os_spawn_session" | "os_setsid" | "os_sid"
             | "os_proc_pid" | "os_wait_status" | "os_pgid" | "os_term_foreground"
             | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
             // s248 (#794): the terminal restored at the machine's end.
@@ -12760,7 +12849,9 @@ impl<'t> Machine<'t> {
                     // s272 (#921, #922, #975): so do the change of root, the
                     // nice value's set and the action query (`[os.fs.error]`).
                     n @ ("os_spawn" | "os_spawn_with" | "os_spawn_fds" | "os_spawn_job"
-                    | "os_exec" | "os_chroot" | "os_setpriority" | "os_signal_action_one") => {
+                    | "os_exec" | "os_chroot" | "os_setpriority" | "os_signal_action_one"
+                    // s290: the spawn in a new session and the move into one.
+                    | "os_spawn_session" | "os_setsid") => {
                         FS_HOST_ERROR.with(|c| c.set(0));
                         let r = self.os_builtin(n, argv, e.span);
                         self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
@@ -15275,6 +15366,7 @@ fn spawn_mapped(
     // s219 (`[os.proc.job]`): the group, the terminal and the defaults,
     // done first in the hook (the tty is still this process's).
     let group = job.map_or(-1, |j| j.group as libc::pid_t);
+    let session = job.is_some_and(|j| j.session);
     let tty = job
         .and_then(|j| j.tty.as_ref())
         .map_or(-1, |f| f.as_raw_fd());
@@ -15297,6 +15389,11 @@ fn spawn_mapped(
     // contract in a process that holds other threads.
     unsafe {
         cmd.pre_exec(move || {
+            // s290 (`[os.proc.session]`): a new session first, in place of
+            // the group (a new session is a new group).
+            if session && libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
             if group >= 0 && libc::setpgid(0, group) < 0 {
                 return Err(std::io::Error::last_os_error());
             }
@@ -15394,6 +15491,9 @@ fn spawn_mapped(
 
 /// s219: what `os_spawn_job` asks of the child beyond its map.
 struct CheckedJob {
+    /// s290 (`[os.proc.session]`): `os_spawn_session`'s — the child leads
+    /// a new session first; `group` is -1 and `tty` none beside it.
+    session: bool,
     group: i64,
     tty: Option<std::fs::File>,
     defaults: i64,
@@ -17659,6 +17759,43 @@ mod checked_term {
     #[cfg(not(unix))]
     pub(super) fn pgid() -> Result<i64, &'static str> {
         Err("unsupported")
+    }
+
+    /// s290 (`[os.term.session]`): the `wolf` process's session id,
+    /// `getsid(0)` (it cannot fail for the caller itself).
+    #[cfg(unix)]
+    pub(super) fn sid() -> Result<i64, &'static str> {
+        // SAFETY: getsid of this process.
+        Ok(i64::from(unsafe { libc::getsid(0) }))
+    }
+    #[cfg(not(unix))]
+    pub(super) fn sid() -> Result<i64, &'static str> {
+        Err("unsupported")
+    }
+
+    /// s290 (`[os.term.session]`): `setsid()` on the `wolf` process, the
+    /// runtime's rows: `EPERM` `denied`, anything else `io`, each with the
+    /// host's number; windows `unsupported`.
+    #[cfg(unix)]
+    pub(super) fn setsid() -> Result<(), (&'static str, i64)> {
+        // SAFETY: setsid on this process; it takes no argument.
+        if unsafe { libc::setsid() } >= 0 {
+            return Ok(());
+        }
+        let e = std::io::Error::last_os_error();
+        let n = e.raw_os_error().map_or(0, i64::from);
+        Err((
+            if n == i64::from(libc::EPERM) {
+                "denied"
+            } else {
+                "io"
+            },
+            n,
+        ))
+    }
+    #[cfg(not(unix))]
+    pub(super) fn setsid() -> Result<(), (&'static str, i64)> {
+        Err(("unsupported", 0))
     }
 
     /// s241 (#762, `[os.term.group]`): `setpgid(0, pgid)` on the `wolf`
