@@ -151,7 +151,9 @@ answers:
 - `pax/sessrows.lu`: the PAX fixture.
 - `rig-linux/`: the scripts that ran the Linux checks, the PAX leg and the gauntlet; the host's
   own names (its podman, its locks, its CPUs, its images) come from a host file that is not
-  part of them.
+  part of them. The toolchain image's `taskset` is a translator that maps every pin into CPUs
+  6-11, so that image's block takes run on block B; a first take on another block had its
+  pinned rows moved there and went red at `test_cpus_helper`, and was retaken on block B.
 
 The evidence heads `68f33aba`, `15f808ae` and `651f0648` are before the rebase (their commits'
 places after it are in `rebase-map.txt`). The session code that built the PAX fixture and ran
