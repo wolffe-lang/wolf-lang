@@ -1,0 +1,118 @@
+RECORD repo=pax head=483bfabf59c505e88ee78ab28a9144b6bc4a932e tree=e1dd19bf03ab87dc26f16486ad6cccc52c6120b1 host=7cf70afa2535 boot=5a951da2-4c76-46c7-b075-3d5320625c71 start=2026-11-10T11:51:25Z
+START pax-head
+  pax 483bfabf59c505e88ee78ab28a9144b6bc4a932e notes/px113-the-long-jobs.md: the separation's host beside the build Mac
+  0
+  17c4947ab66e01c772ebf9d6489489586a0232c0c57de53ad2d895b997dabc87  /lane/pax-leg/sessrows
+  crw-rw-rw- 1 nobody nogroup 10, 232 Nov 10 11:49 /dev/kvm
+END pax-head exit=0 secs=0
+START fetch-wolf
+  fetch-wolf: wolf 0.2.35 staged (/lane/pax-leg/cache/wolf-0.2.35/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf, archive sha256 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a): wolf 0.2.35 (wolfgang, pin cf0c13d)
+  wolf 0.2.35 (wolfgang, pin cf0c13d)
+  paired with lupin 0.1.56 (reference interpreter), pin 294d626
+END fetch-wolf exit=0 secs=58
+START fetch-limine
+  fetch-limine: limine 12.9.1 staged (/lane/pax-leg/cache/limine-12.9.1, sha256 5cdebc518daa3af30b22c2322ba0dba2e0e2046fa8b087b9e13071b8dbcdcff4)
+END fetch-limine exit=0 secs=1
+START mkinitramfs
+  dir  40755 0 bin
+  file 100755 14358800 bin/sessrows
+  dir  40755 0 etc
+  file 100644 14 etc/pax-run
+  /lane/pax-leg/out/sess.cpio 14359420 bytes sha256 6918e3c37560fd1e19fc78bc659d8a9200e117a917b99be2dbee2ddb51c9c912
+END mkinitramfs exit=0 secs=0
+START build-kernel
+  [a kernel line that prints control-register values: dropped from this copy, kept in the full record]
+  build-kernel: ok: step 3 (kmain_session, native): linked with kmain_session.rt-none.a; the whole ELF names no xmm/ymm
+  build-kernel: ok: the commit 483bfabf59c505e88ee78ab28a9144b6bc4a932e written into pax_kernel_commit (kmain_session, native)
+  /lane/pax-leg/out/kernel/kmain_session.elf
+END build-kernel exit=0 secs=4
+START mkimage
+  /lane/pax-leg/out/sess.iso
+END mkimage exit=0 secs=0
+START boot
+  qemu-halt: HALTED in pax_halt (RIP ffffffff80000212, unchanged a second later; IF clear; serial still at 4864 bytes; accel kvm; quit -> 0)
+END boot exit=0 secs=2
+START serial
+  c[?7l[2J[0mSeaBIOS (version 1.16.3-debian-1.16.3-2)
+  Booting from DVD/CD...
+  PAX: the session
+  [a kernel line that prints control-register values: dropped from this copy, kept in the full record]
+  screen: 1280x800 32 bpp pitch 5120 rgb 8:16 8:8 8:0 at 0xffff8000fd000000, wc (pat 0x0000010500070406), 1000 pages 3 tables; font spleen 8x16, 160x50 cells; 102 bytes replayed, 0 lost
+  initramfs: module 0xffff80001e7b4000, 14359420 bytes, 4 entries
+  initramfs: dir 0 bin
+  initramfs: file 14358800 bin/sessrows
+  initramfs: dir 0 etc
+  initramfs: file 14 etc/pax-run
+  firmware: bios
+  memory: 20 entries, total 809362432 bytes, usable 510337024, largest unmapped hole 2415919104
+  acpi: RSDT OEM BOCHS  length 56
+  acpi: FACP OEM BOCHS  length 244
+  acpi: SCI 9 PM timer 0x0000000000000608 mask 0x0000000000ffffff PM1a 0x0000000000000604 PM1b 0x0000000000000000
+  acpi: APIC OEM BOCHS  length 120
+  acpi: LAPIC id 0 flags 0x0000000000000001
+  acpi: IOAPIC id 0 address 0x00000000fec00000 GSI 0
+  acpi: ISO bus 0 IRQ 0 GSI 2 flags 0x0000000000000000
+  acpi: ISO bus 0 IRQ 5 GSI 5 flags 0x000000000000000d
+  acpi: ISO bus 0 IRQ 9 GSI 9 flags 0x000000000000000d
+  acpi: ISO bus 0 IRQ 10 GSI 10 flags 0x000000000000000d
+  acpi: ISO bus 0 IRQ 11 GSI 11 flags 0x000000000000000d
+  acpi: NMI UID 255 LINT 1 flags 0x0000000000000000
+  acpi: HPET OEM BOCHS  length 56
+  acpi: HPET address 0x00000000fed00000
+  acpi: MCFG OEM BOCHS  length 60
+  acpi: MCFG base 0x00000000b0000000 segment 0 buses 0..255
+  acpi: WAET OEM BOCHS  length 40
+  acpi: DSDT OEM BOCHS  length 8321
+  clock: HPET 10000000 fs/tick, checked against the PM timer
+  timer: LAPIC calibrated by HPET divide16 62499737 Hz, tick 100 Hz vector 32; PIT IRQ masked
+  [a kernel line that prints control-register values: dropped from this copy, kept in the full record]
+  trace-layout: Thread=512 thread-capacity=512 TraceState=232 trace-capacity=256 slots=64
+  sched: main 0, idle 1, 64 slots, stacks 16 KiB above a 48 KiB guard from 0xffffd00000000000, quantum 2 ticks
+  user: syscall star 0x0010000800000000 lstar 0xffffffff8000182c fmask 0x0000000000044700, efer.sce 1, smep 1, smap 1
+  net: no virtio network device among 5 PCI functions; the network is off
+  ip: 10.0.2.15 netmask 255.255.255.0 gateway 10.0.2.2, MTU 1500, TTL 64, DF set, no fragments either way
+  udp: 16 sockets, a 65536-byte queue each, ports 32768-60999 from 52304, 1472 bytes a datagram, loopback by kernel/ip
+  tcp: 1024 blocks, 65536 bytes each way a connection, MSS 1460, ports 32768-60999 from 54066, RTO 200 ms to 60 s, time-wait 60 s in 32768 entries
+  ahci0: 8086:2922 at 00:1f.2, CAP.NP=5 CAP.NCS=31 S64A=1 PI=0x000000000000003f BOH=0; ports idled; one slot, polled
+  ahci0: 8086:2922 at 00:1f.2 port 0: ATAPI skipped (0x00000000eb140101)
+  ahci0: 8086:2922 at 00:1f.2 port 2: ATAPI skipped (0x00000000eb140101)
+  console: com1 irq 4 vector 36, i8042 0x61 -> 0x61 irq 1 vector 33, 8259 master mask 0xed; iflag 0x100 oflag 0x05 cflag 0xbf lflag 0x8a3b
+  loopback: 127.0.0.1 answers the kernel's echo, 10.0.2.15 answers, 0 frames on the wire
+  run 1: /bin/sessrows
+  [a kernel line that prints control-register values: dropped from this copy, kept in the full record]
+  user: sessrows pid 1 syscall 273: -ENOSYS
+  user: sessrows pid 1 syscall 334: -ENOSYS
+  pax: leads its session true
+  pax: leader setsid denied, error 1
+  [a kernel line that prints control-register values: dropped from this copy, kept in the full record]
+  user: sessrows pid 2 syscall 273: -ENOSYS
+  user: sessrows pid 2 syscall 334: -ENOSYS
+  child: sid=pid true, pgid=pid true, tty 6
+  user: sessrows pid 2 exit_group 0 after 1 runs
+  pax: spawned child status 0, another process true
+  forked: setsid ok, sid=pid true
+  user: sessrows pid 3 exit_group 0 after 1 runs
+  pax: forked child status 0
+  pax: session unchanged true
+  user: sessrows pid 1 exit_group 0 after 3 runs
+  user: frames free 124062 before, 123371 with 1 processes, 124062 after
+  tree: frames 6 (6 when made), 1 (1) of them the inode table's, inodes 5 (5), cap 62219, refusals 0
+  run: 1 commands
+  console: 0 bytes from com1, 0 keys (0 scancodes) from the keyboard, 0 reads, 0 waited, 0 dropped
+  signals: 0 raised from the terminal
+  network: frames 0 in, 0 out; udp datagrams 0 in, 0 out
+  network: tcp connections 0 accepted, 0 made, 0 open
+  timer: 2 ticks of 10 ms in 20329 us by HPET since the mark: the tick clock behind by 16205 ppm
+  PAX: init /bin/sessrows ended with status 0; nothing left to run
+  halt
+END serial exit=0 secs=0
+START rows
+  ROW pax: leads its session true
+  ROW pax: leader setsid denied, error 1
+  ROW child: sid=pid true, pgid=pid true, tty 6
+  ROW pax: spawned child status 0, another process true
+  ROW forked: setsid ok, sid=pid true
+  ROW pax: forked child status 0
+  ROW pax: session unchanged true
+END rows exit=0 secs=0
+RECORD-END worst=0 steps=9 end=2026-11-10T11:52:30Z

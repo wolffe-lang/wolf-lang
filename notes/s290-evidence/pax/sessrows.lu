@@ -1,0 +1,57 @@
+//! member: false
+//! s290 on PAX: one static program, run by the kernel from the image's
+//! `/etc/pax-run`, so it leads a session with the console. It reads that
+//! it leads its session; `os_setsid` as that leader is `denied` with 1;
+//! it starts itself again (`/bin/sessrows child`) with
+//! `os_spawn_session`, and the child reads its session, group and process
+//! ids one number and `/dev/tty` failing with 6 (no controlling
+//! terminal); a forked child, which leads no group, moves with
+//! `os_setsid` (`ok`), and reads its session id its pid after. Every line
+//! is printed before the line after it can start, so the order is fixed.
+
+fn tag_of(e: str) -> str {
+    e
+}
+
+fn main() -> !int {
+    let args = env_args()
+    let me = os_pid()
+    if args.len > 0 {
+        let t = fs_open("/dev/tty") else |_| -1
+        let e = if t < 0 { os_error() } else { 0 }
+        print("child: sid=pid {os_sid()? == me}, pgid=pid {os_pgid()? == me}, tty {e}")
+        return 0
+    }
+    print("pax: leads its session {os_sid()? == me}")
+    var first = "ok"
+    os_setsid() else |e| {
+        first = tag_of(match e {
+            denied => "denied",
+            io => "io",
+            unsupported => "unsupported",
+        })
+    }
+    print("pax: leader setsid {first}, error {os_error()}")
+    let h = os_spawn_session("/bin/sessrows", ["child"], List[int](), 0)?
+    let cpid = os_proc_pid(h)?
+    let st = os_wait_status(h)?
+    print("pax: spawned child status {st}, another process {cpid != me}")
+    let (pid, fh) = os_fork()?
+    if pid == 0 {
+        var r = "ok"
+        os_setsid() else |e| {
+            r = tag_of(match e {
+                denied => "denied",
+                io => "io",
+                unsupported => "unsupported",
+            })
+        }
+        let m = os_pid()
+        print("forked: setsid {r}, sid=pid {os_sid()? == m}")
+        os_exit(0)
+    }
+    let fst = os_wait_status(fh)?
+    print("pax: forked child status {fst}")
+    print("pax: session unchanged {os_sid()? == me}")
+    0
+}

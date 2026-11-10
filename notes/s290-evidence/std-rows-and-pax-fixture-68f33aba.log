@@ -1,0 +1,37 @@
+RECORD repo=wolf-lang head=68f33aba12f57d85085a52a8beb604b2ba5799e8 tree=d48194d0054cb888e299658d5e05dd2a173261a7 host=e81de618cc47 boot=5a951da2-4c76-46c7-b075-3d5320625c71 start=2026-11-10T11:49:52Z
+START versions
+  wolf 0.2.38+dev.unknown (wolfgang)
+  paired with lupin 0.1.60 (reference interpreter), pin 5f1f1c949582f53121e4047bc83c86f23ff72240
+  lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+  2d8edf6 process: start_session, lead_session and own_session over the session builtins
+  825f6aac29a9818d9cc5eaf48fb3fd0d377ffc5788c9fc3c15ea9c70d6227313  /lane/pax-leg/sessrows.lu
+END versions exit=0 secs=0
+START pax-fixture
+  wolf build: note: linking through /usr/bin/ld.lld found on PATH (Ubuntu LLD 18.1.3 (compatible with GNU linkers)); WOLF_LD=cc (or --linker cc) links with the system linker instead
+    Type:                              EXEC (Executable file)
+  17c4947ab66e01c772ebf9d6489489586a0232c0c57de53ad2d895b997dabc87  /lane/pax-leg/sessrows
+  linked against: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/libc.a
+END pax-fixture exit=0 secs=0
+START std-session_rows.lu
+  checked session_rows.lu: exit(0) run "defaults_negative=invalid\ndefaults_wide=invalid\nmissing=not_found\nown_session=positive\nread_twice=same\n" [] 
+  native session_rows.lu: exit(0) run "defaults_negative=invalid\ndefaults_wide=invalid\nmissing=not_found\nown_session=positive\nread_twice=same\n" [] 
+  lupin session_rows.lu: unsupported resolve null [] 
+END std-session_rows.lu exit=0 secs=1
+START std-session_child.lu
+  checked session_child.lu: exit(0) run "child: leads its session true\nchild: leads its group true\nchild: /dev/tty opens false\nparent: session unchanged true\nparent: child status 0\n" [] 
+  native session_child.lu: exit(0) run "child: leads its session true\nchild: leads its group true\nchild: /dev/tty opens false\nparent: session unchanged true\nparent: child status 0\n" [] 
+  lupin session_child.lu: unsupported resolve null [] 
+END std-session_child.lu exit=0 secs=1
+START std-lead_session_rows.lu
+  checked lead_session_rows.lu: exit(0) run "child: lead_session ok\nchild: leads its session true\nchild: again denied\nparent: child status 0\n" [] 
+  native lead_session_rows.lu: exit(0) run "child: lead_session ok\nchild: leads its session true\nchild: again denied\nparent: child status 0\n" [] 
+  lupin lead_session_rows.lu: unsupported resolve null [] 
+END std-lead_session_rows.lu exit=0 secs=1
+START std-comptime_refuses_session.lu
+  checked comptime_refuses_session.lu: TEXT error[E0701]: `os_setsid` reaches child processes, which comptime code can never touch |   --> ./comptime_refuses_session.lu:15:5 |    |
+  native comptime_refuses_session.lu: TEXT error[E0701]: `os_setsid` reaches child processes, which comptime code can never touch |   --> ./comptime_refuses_session.lu:15:5 |    |
+  lupin comptime_refuses_session.lu: unsupported resolve null [] 
+END std-comptime_refuses_session.lu exit=0 secs=0
+START std-fmt
+END std-fmt exit=0 secs=0
+RECORD-END worst=0 steps=7 end=2026-11-10T11:49:55Z
