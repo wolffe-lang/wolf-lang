@@ -206,3 +206,34 @@ consumer's requirements rather than a design. Held against the shape above:
   than one that applies it; burrow may apply them.
 - **The session** (its section 4) is s290's, unchanged; **the release** (its section 5) is the
   contract's: these calls and s290's in one release, with the PAX leg on px111's kernel.
+
+## 9. Phase 2: what the implementation found
+
+The decisions were taken as recommended in sections 6 and 8. Four things the implementation
+measured that the probes had not, each now in the code and, where it changes an answer, the spec:
+
+1. **The read-back follows every set.** In the toolchain image (glibc 2.39) `tcsetattr` answers
+   `EINVAL` for CS7 and PARENB on a pty, where glibc 2.42 answered 0; neither keeps the set. So
+   the setting is read back whatever `tcsetattr` answered, and a set not kept is `unsupported` with
+   what was found put back; another refusal is `io` (`[os.term.attr]`).
+2. **No versioned speed calls on linux.** The `libc` crate binds `cfgetispeed` and its three
+   siblings to glibc's versions before 2.42 (`cfgetispeed@GLIBC_2.2.5` on x86-64), which keeps its
+   `B` constants right on every glibc; but a static link against `libc.a`, the way PAX's programs
+   are built, resolves no versioned name, and the PAX fixture failed to link. The runtime and the
+   checked machine now read and write a linux speed as the kernel's code in `c_cflag` (`CBAUD` with
+   `CBAUDEX`), one speed for input and output, as musl and glibc before 2.42 keep it; an input
+   speed of 0 sets nothing and reads back as the output's, so it is `unsupported`. macOS keeps its
+   unversioned calls. A held speed the table does not name reads `unsupported` (spec line added).
+3. **macOS's PENDIN.** Its kernel ORs its own flag into every set, so a set of 1 is kept and a clear
+   while the kernel holds the flag (as after canonical input comes back on) is not: the rows that
+   toggle every op see 62 not kept, a set of 1 alone sees it kept. Either is a round trip or a
+   refusal by name.
+4. **Two fixture lessons.** `os_signal_wait_fds` refuses an empty set (`io`), so a wait that
+   listens for nothing passes a set no one raises; and on macOS an open of a slave whose master is
+   closed waits for a carrier that never comes, so a child keeps its inherited ends until its own
+   open by name, and a parent that failed early cannot leave it parked.
+
+The checked machine has no fork, so its child rows start a compiled helper with `os_spawn_session`
+(`fixtures/pty/spawned.lu`, `helper.lu`); every `pty_lanes` row runs on one side, the checked
+machine or native and release, so a break on one side is red by name on that side alone (the
+development plant: `notes/s292-evidence/plant-dev-macos-abce5fed.log`).
