@@ -1535,6 +1535,12 @@ mod builtin_cap_tests {
             ("os_signal_send_group", Cap::Exec),
             ("os_signal_send_all", Cap::Exec),
             ("os_set_pgid", Cap::Exec),
+            // s290 (R6, as ruled): the spawn in a new session and the move
+            // into one charge `exec`, with `os_spawn_job` and
+            // `os_set_pgid`; the session id `env`, with `os_pgid`.
+            ("os_spawn_session", Cap::Exec),
+            ("os_setsid", Cap::Exec),
+            ("os_sid", Cap::Env),
             // s242 (#680; ruling owed): the poll of the children reaps as
             // `os_wait_status` does — `exec`.
             ("os_wait_poll", Cap::Exec),
