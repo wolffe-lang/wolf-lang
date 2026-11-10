@@ -10980,6 +10980,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_default"
                 | "os_signal_poll"
                 | "os_spawn_job"
+                // s290 (`[os.proc.session]`, `[os.term.session]`): the
+                // spawn in a new session, this process into one, its id.
+                | "os_spawn_session"
+                | "os_setsid"
+                | "os_sid"
                 | "os_proc_pid"
                 | "os_wait_status"
                 // s246 (ruling #88 R3 D): the siblings that report a core.
@@ -16144,6 +16149,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
+            "os_sid" | "os_setsid" => 0,
+            "os_spawn_session" => 4,
             "os_signal_last" | "os_signal_realtime" => 0,
             "os_core_limit" | "os_core_off" | "os_name" | "os_arch" => 0,
             "os_set_core_limit" => 2,
@@ -16199,6 +16206,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_default" => ("__wolf_rt_os_signal_default", SIG),
             "os_signal_poll" => ("__wolf_rt_os_signal_poll", SIG),
             "os_spawn_job" => ("__wolf_rt_os_spawn_job", PROC),
+            "os_spawn_session" => ("__wolf_rt_os_spawn_session", PROC),
+            "os_sid" => ("__wolf_rt_os_sid", PROC),
+            "os_setsid" => ("__wolf_rt_os_setsid", PROC),
             "os_proc_pid" => ("__wolf_rt_os_proc_pid", PROC),
             "os_wait_status" => ("__wolf_rt_os_wait_status", PROC),
             "os_pgid" => ("__wolf_rt_os_pgid", PROC),
@@ -16394,6 +16404,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_send_group"
                 | "os_signal_send_all"
                 | "os_set_pgid"
+                | "os_setsid"
                 | "os_signal_ignore_one"
                 | "os_signal_default_one"
                 | "os_exit_signal"
@@ -16462,6 +16473,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             self.rt_call_foreign(
                 sym,
                 &[p, l, argv[1], argv[2], argv[3], argv[4], argv[5]],
+                None,
+                Some(types::I64),
+            )
+            .expect("rc")
+        } else if name == "os_spawn_session" {
+            // s290: `os_spawn_job`'s chain without the group and the tty.
+            let (p, l) = self.str_parts(argv[0]);
+            self.rt_call_foreign(
+                sym,
+                &[p, l, argv[1], argv[2], argv[3]],
                 None,
                 Some(types::I64),
             )
