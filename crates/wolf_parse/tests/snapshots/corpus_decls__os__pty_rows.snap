@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1325..1600 name=size body=Block
+FnDecl 1602..1829 name=attr body=Block
+FnDecl 1831..2076 name=set_attr body=Block
+FnDecl 2078..2325 name=lacks body=Block
+FnDecl 2327..3716 name=main body=Block
+FnDecl 3718..3908 name=tag_name body=Block
