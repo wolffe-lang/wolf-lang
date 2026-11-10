@@ -875,6 +875,42 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_sid`",
             "hosted runtime",
         ),
+        // s292: `[os.term.pty]`, `[os.term.size.set]`, `[os.term.attr]`.
+        (
+            "os_term_open_pty",
+            "",
+            "let (m, s) = os_term_open_pty() else |e| {\n        return 0\n    }\n    m + s",
+            "`os_term_open_pty`",
+            "hosted runtime",
+        ),
+        (
+            "os_term_pty_name",
+            "",
+            "let n = os_term_pty_name(3) else |e| {\n        return 0\n    }\n    1",
+            "`os_term_pty_name`",
+            "hosted runtime",
+        ),
+        (
+            "os_term_set_size",
+            "",
+            "os_term_set_size(3, 24, 80, 0, 0) else |e| {\n        return 0\n    }\n    1",
+            "`os_term_set_size`",
+            "hosted runtime",
+        ),
+        (
+            "os_term_attr",
+            "",
+            "let v = os_term_attr(3, 1) else |e| {\n        return 0\n    }\n    v",
+            "`os_term_attr`",
+            "hosted runtime",
+        ),
+        (
+            "os_term_set_attr",
+            "",
+            "os_term_set_attr(3, 1, 7) else |e| {\n        return 0\n    }\n    1",
+            "`os_term_set_attr`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",
