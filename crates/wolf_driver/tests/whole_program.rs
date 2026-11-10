@@ -102,6 +102,11 @@ fn build(dir: &Path, out: &str, extra: &[&str]) -> Option<Vec<(String, String)>>
         let Some((name, verdict)) = rest.split_once(": ") else {
             continue;
         };
+        // A note is the build's, not a unit's: on Linux, the linker it
+        // picked (wolf-lang#1082).
+        if name == "note" {
+            continue;
+        }
         acct.push((name.to_string(), verdict.to_string()));
     }
     Some(acct)
