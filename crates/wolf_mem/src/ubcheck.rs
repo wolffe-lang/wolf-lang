@@ -10400,6 +10400,146 @@ impl<'t> Machine<'t> {
                     Err(t) => Ok(tag(t)),
                 }
             }
+            // s292 (`[os.term.pty]`): the pair, opened in the `wolf` process
+            // and held in the machine's own table, `os_pipe`'s way.
+            "os_term_open_pty" => {
+                #[cfg(unix)]
+                {
+                    match checked_term::open_pty() {
+                        Ok((m, s)) => {
+                            if self.files.len() < FS_FIRST_HANDLE {
+                                self.files.resize_with(FS_FIRST_HANDLE, || None);
+                            }
+                            let mh = self.files.len() as i64;
+                            self.files.push(Some(m));
+                            self.files.push(Some(s));
+                            Ok(Flow::Val(Value::Struct {
+                                fields: vec![
+                                    ("0".to_string(), Value::Int(mh)),
+                                    ("1".to_string(), Value::Int(mh + 1)),
+                                ],
+                            }))
+                        }
+                        Err((t, n)) => {
+                            FS_HOST_ERROR.with(|c| c.set(n));
+                            Ok(tag(t))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    Ok(tag("unsupported"))
+                }
+            }
+            "os_term_pty_name" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if !cfg!(unix) {
+                    return Ok(tag("unsupported"));
+                }
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                #[cfg(unix)]
+                {
+                    match checked_term::pty_name(&f) {
+                        Ok(name) => {
+                            drop(f);
+                            Ok(Flow::Val(self.mint_str(name, span)?))
+                        }
+                        Err(t) => Ok(tag(t)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    drop(f);
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s292 (`[os.term.size.set]`): the shape (each field 0..65535)
+            // before the host and the handle.
+            "os_term_set_size" => {
+                let (Some(fd), Some(r), Some(c), Some(x), Some(y)) =
+                    (int_arg(0), int_arg(1), int_arg(2), int_arg(3), int_arg(4))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let w = [r, c, x, y];
+                if !w.iter().all(|v| (0..=65535).contains(v)) {
+                    return Ok(tag("invalid"));
+                }
+                if !cfg!(unix) {
+                    return Ok(tag("unsupported"));
+                }
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                #[cfg(unix)]
+                {
+                    match checked_term::set_size(&f, w) {
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                        Err(t) => Ok(tag(t)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    drop((f, w));
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s292 (`[os.term.attr]`): the runtime's order of refusal — the
+            // shape (`invalid`), the host (`unsupported`: windows, an op it
+            // lacks, a speed outside the table), the handle (`io`), then the
+            // host's answer and the read-back.
+            "os_term_attr" | "os_term_set_attr" => {
+                let (Some(fd), Some(op)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let set = name == "os_term_set_attr";
+                let v = if set {
+                    let Some(v) = int_arg(2) else {
+                        return self.refuse("this os call shape", span);
+                    };
+                    v
+                } else {
+                    0
+                };
+                let Some(kind) = checked_term::attr_kind(op) else {
+                    return Ok(tag("invalid"));
+                };
+                if set && !checked_term::attr_fits(kind, v) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = fd;
+                    Ok(tag("unsupported"))
+                }
+                #[cfg(unix)]
+                {
+                    let Some(place) = checked_term::field(op) else {
+                        return Ok(tag("unsupported"));
+                    };
+                    if set && kind == 3 && !checked_term::speed_known(v) {
+                        return Ok(tag("unsupported"));
+                    }
+                    let Some(f) = self.fs_handle(fd) else {
+                        return Ok(tag("io"));
+                    };
+                    if set {
+                        match checked_term::set_attr(&f, place, v) {
+                            Ok(()) => Ok(Flow::Val(Value::Unit)),
+                            Err(t) => Ok(tag(t)),
+                        }
+                    } else {
+                        match checked_term::attr(&f, place) {
+                            Ok(x) => Ok(Flow::Val(Value::Int(x))),
+                            Err(t) => Ok(tag(t)),
+                        }
+                    }
+                }
+            }
             // s225 (`[os.proc.exec]`, wolf-lang#534): replace the running
             // program — and here the running program is the `wolf`
             // process interpreting it, so a successful exec REPLACES
@@ -12772,6 +12912,10 @@ impl<'t> Machine<'t> {
             | "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
             // s290: the spawn in a new session, this process into one, its id.
             | "os_spawn_session" | "os_setsid" | "os_sid"
+            // s292: the pty pair, its name, the size set, a setting by
+            // RFC 4254 opcode.
+            | "os_term_open_pty" | "os_term_pty_name" | "os_term_set_size" | "os_term_attr"
+            | "os_term_set_attr"
             | "os_proc_pid" | "os_wait_status" | "os_pgid" | "os_term_foreground"
             | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
             // s248 (#794): the terminal restored at the machine's end.
@@ -12851,7 +12995,9 @@ impl<'t> Machine<'t> {
                     n @ ("os_spawn" | "os_spawn_with" | "os_spawn_fds" | "os_spawn_job"
                     | "os_exec" | "os_chroot" | "os_setpriority" | "os_signal_action_one"
                     // s290: the spawn in a new session and the move into one.
-                    | "os_spawn_session" | "os_setsid") => {
+                    | "os_spawn_session" | "os_setsid"
+                    // s292: the pty open.
+                    | "os_term_open_pty") => {
                         FS_HOST_ERROR.with(|c| c.set(0));
                         let r = self.os_builtin(n, argv, e.span);
                         self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
@@ -18024,6 +18170,394 @@ mod checked_term {
     pub(super) fn chars(_f: &std::fs::File) -> Result<[i64; 12], &'static str> {
         Err("unsupported")
     }
+
+    // ---- s292: the pseudo-terminal and its settings, in the `wolf`
+    // process. `wolf_rt::term`'s rules and its op table, transcribed (the
+    // runtime is not a dependency of this crate); the driver's row holds
+    // the two tables equal (`pty_lanes.rs`).
+
+    /// The value a disabled special character reads as: 0 on linux, 255
+    /// on macOS and the BSDs.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    const DISABLED: u8 = 0;
+    #[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+    const DISABLED: u8 = 0xFF;
+
+    /// `wolf_rt::term::PTY_OPEN`: one pty open at a time in this process.
+    #[cfg(unix)]
+    static PTY_OPEN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// `wolf_rt::term::attr::kind`, by kind: 0 a character, 1 a flag, 2
+    /// the size, 3 a speed; `None` outside the vocabulary.
+    pub(super) fn attr_kind(op: i64) -> Option<u8> {
+        match op {
+            1..=18 => Some(0),
+            30..=42 | 50..=62 | 70..=75 | 92 | 93 => Some(1),
+            90 | 91 => Some(2),
+            128 | 129 => Some(3),
+            _ => None,
+        }
+    }
+
+    /// `wolf_rt::term::attr::fits`.
+    pub(super) fn attr_fits(kind: u8, v: i64) -> bool {
+        match kind {
+            0 => (-1..=255).contains(&v),
+            1 | 2 => (0..=1).contains(&v),
+            _ => (0..=4_294_967_295).contains(&v),
+        }
+    }
+
+    /// `wolf_rt::term::attr::SPEEDS`.
+    #[cfg(unix)]
+    pub(super) const SPEEDS: [i64; 19] = [
+        0, 50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600,
+        115200, 230400,
+    ];
+
+    /// `wolf_rt::term::attr::OPS`.
+    #[cfg(unix)]
+    pub(super) const OPS: [i64; 56] = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 30, 31, 32, 33, 34, 35, 36,
+        37, 38, 39, 40, 41, 42, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 70, 71, 72, 73,
+        74, 75, 90, 91, 92, 93, 128, 129,
+    ];
+
+    /// `wolf_rt::term::Field`, variant for variant (the row compares their
+    /// renderings).
+    #[cfg(unix)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(super) enum Field {
+        Cc(usize),
+        Iflag(libc::tcflag_t),
+        Oflag(libc::tcflag_t),
+        Lflag(libc::tcflag_t),
+        Cflag(libc::tcflag_t),
+        Csize(libc::tcflag_t),
+        Ispeed,
+        Ospeed,
+    }
+
+    /// `wolf_rt::term::field`: linux lacks 11, 15, 17; macOS 15, 16, 37,
+    /// 52, 71.
+    #[cfg(unix)]
+    pub(super) fn field(op: i64) -> Option<Field> {
+        use Field::{Cc, Cflag, Csize, Iflag, Ispeed, Lflag, Oflag, Ospeed};
+        Some(match op {
+            1 => Cc(libc::VINTR),
+            2 => Cc(libc::VQUIT),
+            3 => Cc(libc::VERASE),
+            4 => Cc(libc::VKILL),
+            5 => Cc(libc::VEOF),
+            6 => Cc(libc::VEOL),
+            7 => Cc(libc::VEOL2),
+            8 => Cc(libc::VSTART),
+            9 => Cc(libc::VSTOP),
+            10 => Cc(libc::VSUSP),
+            #[cfg(target_os = "macos")]
+            11 => Cc(libc::VDSUSP),
+            12 => Cc(libc::VREPRINT),
+            13 => Cc(libc::VWERASE),
+            14 => Cc(libc::VLNEXT),
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            16 => Cc(libc::VSWTC),
+            #[cfg(target_os = "macos")]
+            17 => Cc(libc::VSTATUS),
+            18 => Cc(libc::VDISCARD),
+            30 => Iflag(libc::IGNPAR),
+            31 => Iflag(libc::PARMRK),
+            32 => Iflag(libc::INPCK),
+            33 => Iflag(libc::ISTRIP),
+            34 => Iflag(libc::INLCR),
+            35 => Iflag(libc::IGNCR),
+            36 => Iflag(libc::ICRNL),
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            37 => Iflag(libc::IUCLC),
+            38 => Iflag(libc::IXON),
+            39 => Iflag(libc::IXANY),
+            40 => Iflag(libc::IXOFF),
+            41 => Iflag(libc::IMAXBEL),
+            #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
+            42 => Iflag(libc::IUTF8),
+            50 => Lflag(libc::ISIG),
+            51 => Lflag(libc::ICANON),
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            52 => Lflag(libc::XCASE),
+            53 => Lflag(libc::ECHO),
+            54 => Lflag(libc::ECHOE),
+            55 => Lflag(libc::ECHOK),
+            56 => Lflag(libc::ECHONL),
+            57 => Lflag(libc::NOFLSH),
+            58 => Lflag(libc::TOSTOP),
+            59 => Lflag(libc::IEXTEN),
+            60 => Lflag(libc::ECHOCTL),
+            61 => Lflag(libc::ECHOKE),
+            62 => Lflag(libc::PENDIN),
+            70 => Oflag(libc::OPOST),
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            71 => Oflag(libc::OLCUC),
+            72 => Oflag(libc::ONLCR),
+            73 => Oflag(libc::OCRNL),
+            74 => Oflag(libc::ONOCR),
+            75 => Oflag(libc::ONLRET),
+            90 => Csize(libc::CS7),
+            91 => Csize(libc::CS8),
+            92 => Cflag(libc::PARENB),
+            93 => Cflag(libc::PARODD),
+            128 => Ispeed,
+            129 => Ospeed,
+            _ => return None,
+        })
+    }
+
+    /// `wolf_rt::term::sys::SPEED_CODES`.
+    #[cfg(unix)]
+    const SPEED_CODES: [libc::speed_t; 19] = [
+        libc::B0,
+        libc::B50,
+        libc::B75,
+        libc::B110,
+        libc::B134,
+        libc::B150,
+        libc::B200,
+        libc::B300,
+        libc::B600,
+        libc::B1200,
+        libc::B1800,
+        libc::B2400,
+        libc::B4800,
+        libc::B9600,
+        libc::B19200,
+        libc::B38400,
+        libc::B57600,
+        libc::B115200,
+        libc::B230400,
+    ];
+
+    #[cfg(unix)]
+    pub(super) fn speed_known(rate: i64) -> bool {
+        SPEEDS.contains(&rate)
+    }
+
+    #[cfg(unix)]
+    fn speed_code(rate: i64) -> Option<libc::speed_t> {
+        let i = SPEEDS.iter().position(|&r| r == rate)?;
+        Some(SPEED_CODES[i])
+    }
+
+    #[cfg(unix)]
+    fn speed_rate(code: libc::speed_t) -> Option<i64> {
+        let i = SPEED_CODES.iter().position(|&c| c == code)?;
+        Some(SPEEDS[i])
+    }
+
+    /// The table's rendering, line for line `wolf_rt::term::attr_table`'s.
+    #[cfg(unix)]
+    pub(super) fn attr_table() -> Vec<String> {
+        let mut out = Vec::new();
+        for op in OPS {
+            match field(op) {
+                Some(f) => out.push(format!("{op} {f:?}")),
+                None => out.push(format!("{op} lacks")),
+            }
+        }
+        for (rate, code) in SPEEDS.iter().zip(SPEED_CODES.iter()) {
+            out.push(format!("speed {rate} {code}"));
+        }
+        out.push(format!("disabled {DISABLED}"));
+        out
+    }
+
+    #[cfg(unix)]
+    fn read_field(t: &libc::termios, f: Field) -> Result<i64, &'static str> {
+        let on = |flags: libc::tcflag_t, m: libc::tcflag_t| i64::from(flags & m != 0);
+        Ok(match f {
+            Field::Cc(i) => {
+                let c = t.c_cc[i];
+                if c == DISABLED { -1 } else { i64::from(c) }
+            }
+            Field::Iflag(m) => on(t.c_iflag, m),
+            Field::Oflag(m) => on(t.c_oflag, m),
+            Field::Lflag(m) => on(t.c_lflag, m),
+            Field::Cflag(m) => on(t.c_cflag, m),
+            Field::Csize(cs) => i64::from(t.c_cflag & libc::CSIZE == cs),
+            // SAFETY: a termios tcgetattr filled.
+            Field::Ispeed => speed_rate(unsafe { libc::cfgetispeed(t) }).ok_or("unsupported")?,
+            // SAFETY: as above.
+            Field::Ospeed => speed_rate(unsafe { libc::cfgetospeed(t) }).ok_or("unsupported")?,
+        })
+    }
+
+    #[cfg(unix)]
+    fn write_field(t: &mut libc::termios, f: Field, v: i64) {
+        let put = |flags: &mut libc::tcflag_t, m: libc::tcflag_t| {
+            if v != 0 {
+                *flags |= m;
+            } else {
+                *flags &= !m;
+            }
+        };
+        match f {
+            Field::Cc(i) => t.c_cc[i] = if v < 0 { DISABLED } else { v as libc::cc_t },
+            Field::Iflag(m) => put(&mut t.c_iflag, m),
+            Field::Oflag(m) => put(&mut t.c_oflag, m),
+            Field::Lflag(m) => put(&mut t.c_lflag, m),
+            Field::Cflag(m) => put(&mut t.c_cflag, m),
+            Field::Csize(cs) => {
+                if v == 1 {
+                    t.c_cflag = (t.c_cflag & !libc::CSIZE) | cs;
+                }
+            }
+            Field::Ispeed | Field::Ospeed => {
+                if let Some(code) = speed_code(v) {
+                    // SAFETY: a termios tcgetattr filled, a code from the
+                    // table.
+                    unsafe {
+                        if f == Field::Ispeed {
+                            libc::cfsetispeed(t, code);
+                        } else {
+                            libc::cfsetospeed(t, code);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn kept_as(f: Field, v: i64) -> i64 {
+        match f {
+            Field::Cc(_) if v < 0 || v as libc::cc_t == DISABLED => -1,
+            Field::Csize(_) => 1,
+            _ => v,
+        }
+    }
+
+    /// s292 (`[os.term.attr]`): one setting of the terminal `f` holds.
+    #[cfg(unix)]
+    pub(super) fn attr(f: &std::fs::File, place: Field) -> Result<i64, &'static str> {
+        let t = get(f.as_raw_fd())?;
+        read_field(&t, place)
+    }
+
+    /// s292 (`[os.term.attr]`): `wolf_rt::term::set_attr` past the shape
+    /// and the host: set, read back, and put back what was found when the
+    /// host did not keep it.
+    #[cfg(unix)]
+    pub(super) fn set_attr(f: &std::fs::File, place: Field, v: i64) -> Result<(), &'static str> {
+        let fd = f.as_raw_fd();
+        let found = get(fd)?;
+        if matches!(place, Field::Csize(_)) && v == 0 {
+            return Ok(());
+        }
+        let mut t = found;
+        write_field(&mut t, place, v);
+        // SAFETY: a descriptor the machine holds; a termios tcgetattr filled.
+        let set =
+            |t: &libc::termios| ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, t) });
+        if set(&t) < 0 {
+            return Err("io");
+        }
+        let back = get(fd)?;
+        if read_field(&back, place) != Ok(kept_as(place, v)) {
+            let _ = set(&found);
+            return Err("unsupported");
+        }
+        Ok(())
+    }
+
+    /// s292 (`[os.term.size.set]`): the four fields (`TIOCSWINSZ`); the
+    /// shape is the caller's.
+    #[cfg(unix)]
+    pub(super) fn set_size(f: &std::fs::File, w: [i64; 4]) -> Result<(), &'static str> {
+        let ws = libc::winsize {
+            ws_row: w[0] as u16,
+            ws_col: w[1] as u16,
+            ws_xpixel: w[2] as u16,
+            ws_ypixel: w[3] as u16,
+        };
+        // SAFETY: a winsize for the ioctl on a descriptor the machine holds.
+        if unsafe { libc::ioctl(f.as_raw_fd(), libc::TIOCSWINSZ, &ws) } < 0 {
+            Err("io")
+        } else {
+            Ok(())
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    unsafe extern "C" {
+        fn ptsname_r(fd: libc::c_int, buf: *mut libc::c_char, len: libc::size_t) -> libc::c_int;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    use libc::ptsname_r;
+
+    #[cfg(unix)]
+    fn name_of(fd: libc::c_int) -> Option<std::ffi::CString> {
+        let mut buf = [0 as libc::c_char; 128];
+        // SAFETY: a buffer of its stated length.
+        if unsafe { ptsname_r(fd, buf.as_mut_ptr(), buf.len()) } != 0 {
+            return None;
+        }
+        // SAFETY: ptsname_r wrote a NUL-terminated name.
+        Some(unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) }.to_owned())
+    }
+
+    /// s292 (`[os.term.pty]`): the slave's name for the master `f` holds.
+    #[cfg(unix)]
+    pub(super) fn pty_name(f: &std::fs::File) -> Result<String, &'static str> {
+        let name = name_of(f.as_raw_fd()).ok_or("io")?;
+        name.into_string().map_err(|_| "io")
+    }
+
+    /// s292 (`[os.term.pty]`): `wolf_rt::term::open_pty` in the `wolf`
+    /// process — the master and a slave, both close-on-exec and opened
+    /// with `O_NOCTTY`, under one lock; a refusal is `io` with the host's
+    /// number, and closes whatever was opened.
+    #[cfg(unix)]
+    pub(super) fn open_pty() -> Result<(std::fs::File, std::fs::File), (&'static str, i64)> {
+        use std::os::fd::FromRawFd as _;
+        let fail = || {
+            let n = std::io::Error::last_os_error()
+                .raw_os_error()
+                .map_or(0, i64::from);
+            ("io", n)
+        };
+        let _one = PTY_OPEN.lock().unwrap_or_else(|p| p.into_inner());
+        // SAFETY: posix_openpt answers a descriptor this process owns or -1.
+        let m = unsafe { libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY | libc::O_CLOEXEC) };
+        if m < 0 {
+            return Err(fail());
+        }
+        // SAFETY: `m` is ours; the File closes it on every early return.
+        let master = unsafe { std::fs::File::from_raw_fd(m) };
+        // SAFETY: the master just opened.
+        if unsafe { libc::grantpt(m) } != 0 || unsafe { libc::unlockpt(m) } != 0 {
+            return Err(fail());
+        }
+        let Some(name) = name_of(m) else {
+            return Err(fail());
+        };
+        // SAFETY: a NUL-terminated path; a descriptor we own or -1.
+        let s = unsafe {
+            libc::open(
+                name.as_ptr(),
+                libc::O_RDWR | libc::O_NOCTTY | libc::O_CLOEXEC,
+            )
+        };
+        if s < 0 {
+            return Err(fail());
+        }
+        // SAFETY: `s` is ours.
+        Ok((master, unsafe { std::fs::File::from_raw_fd(s) }))
+    }
+}
+
+/// s292 (`[os.term.attr]`): the checked machine's transcription of the
+/// runtime's op table, rendered line for line as `wolf_rt::term::attr_table`
+/// renders it — the driver's row holds them equal on each host.
+#[cfg(unix)]
+pub fn pty_attr_table() -> Vec<String> {
+    checked_term::attr_table()
 }
 
 /// A file an fs call reads through: a standard stream duplicated for
