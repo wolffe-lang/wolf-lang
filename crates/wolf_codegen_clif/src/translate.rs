@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 270] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 273] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -416,6 +416,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 270] = [
     ("__wolf_rt_os_exit_signal", 1, true),
     ("__wolf_rt_os_signal_poll", 1, true),
     ("__wolf_rt_os_spawn_job", 7, true),
+    // s290 (`[os.proc.session]`, `[os.term.session]`).
+    ("__wolf_rt_os_spawn_session", 5, true),
+    ("__wolf_rt_os_setsid", 0, true),
+    ("__wolf_rt_os_sid", 0, true),
     ("__wolf_rt_os_proc_pid", 1, true),
     ("__wolf_rt_os_wait_status", 2, true),
     ("__wolf_rt_os_pgid", 0, true),
