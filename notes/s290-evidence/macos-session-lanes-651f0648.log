@@ -1,0 +1,93 @@
+# macOS (arm64), the tree at 651f0648: session_lanes on the checked machine, native and release (the log as written; lupin is absent there)
+
+running 4 tests
+SKIP: no sibling lupin on this box (set LUPIN) — the oracle leg is absent
+.s290 native forked: ExitStatus(unix_wait_status(0))
+forked: setsid from a task ok, main reads sid=pid true
+RESTORED
+parent: child status 0, mode back true
+
+s290 release forked: ExitStatus(unix_wait_status(0))
+forked: setsid from a task ok, main reads sid=pid true
+RESTORED
+parent: child status 0, mode back true
+
+.s290 checked spawn: ExitStatus(unix_wait_status(0))
+parent: leads its session true
+child: sid=pid true, pgid=pid true, tty 6, quit ignored false
+parent: defaults 4, child status 0, child is another process true
+child: sid=pid true, pgid=pid true, tty 6, quit ignored true
+parent: defaults 0, child status 0, child is another process true
+parent: session unchanged true
+parent: /dev/tty opens true
+
+s290 native spawn: ExitStatus(unix_wait_status(0))
+parent: leads its session true
+child: sid=pid true, pgid=pid true, tty 6, quit ignored false
+parent: defaults 4, child status 0, child is another process true
+child: sid=pid true, pgid=pid true, tty 6, quit ignored true
+parent: defaults 0, child status 0, child is another process true
+parent: session unchanged true
+parent: /dev/tty opens true
+
+s290 release spawn: ExitStatus(unix_wait_status(0))
+parent: leads its session true
+child: sid=pid true, pgid=pid true, tty 6, quit ignored false
+parent: defaults 4, child status 0, child is another process true
+child: sid=pid true, pgid=pid true, tty 6, quit ignored true
+parent: defaults 0, child status 0, child is another process true
+parent: session unchanged true
+parent: /dev/tty opens true
+
+.s290 checked mover as the leader: ExitStatus(unix_wait_status(0))
+mover: a terminal before true, leads its session true
+mover: setsid denied, error 1
+mover: sid=pid true, pgid=pid true
+mover: a terminal after true, error 0
+mover: again denied, error 1
+mover: the old terminal's foreground ok
+
+s290 checked mover in the leader's group: ExitStatus(unix_wait_status(0))
+mover: a terminal before true, leads its session false
+mover: setsid ok, error 0
+mover: sid=pid true, pgid=pid true
+mover: a terminal after false, error 6
+mover: again denied, error 1
+mover: the old terminal's foreground io
+
+s290 native mover as the leader: ExitStatus(unix_wait_status(0))
+mover: a terminal before true, leads its session true
+mover: setsid denied, error 1
+mover: sid=pid true, pgid=pid true
+mover: a terminal after true, error 0
+mover: again denied, error 1
+mover: the old terminal's foreground ok
+
+s290 native mover in the leader's group: ExitStatus(unix_wait_status(0))
+mover: a terminal before true, leads its session false
+mover: setsid ok, error 0
+mover: sid=pid true, pgid=pid true
+mover: a terminal after false, error 6
+mover: again denied, error 1
+mover: the old terminal's foreground io
+
+s290 release mover as the leader: ExitStatus(unix_wait_status(0))
+mover: a terminal before true, leads its session true
+mover: setsid denied, error 1
+mover: sid=pid true, pgid=pid true
+mover: a terminal after true, error 0
+mover: again denied, error 1
+mover: the old terminal's foreground ok
+
+s290 release mover in the leader's group: ExitStatus(unix_wait_status(0))
+mover: a terminal before true, leads its session false
+mover: setsid ok, error 0
+mover: sid=pid true, pgid=pid true
+mover: a terminal after false, error 6
+mover: again denied, error 1
+mover: the old terminal's foreground io
+
+.
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.33s
+
+END exit=0

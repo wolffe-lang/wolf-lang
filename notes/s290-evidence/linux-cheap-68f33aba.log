@@ -1,0 +1,450 @@
+RECORD repo=wolf-lang head=68f33aba12f57d85085a52a8beb604b2ba5799e8 tree=d48194d0054cb888e299658d5e05dd2a173261a7 host=a4cda954098a boot=5a951da2-4c76-46c7-b075-3d5320625c71 start=2026-11-10T11:46:31Z
+START env
+  rig=light slot affinity=10,11 jobs=2 kernel=7.2.4 pid1=podman-init
+  rustc 1.97.1 (8bab26f4f 2026-07-14)
+  lupin 0.1.60 (wolf-interp, reference interpreter at pin 5f1f1c9)
+END env exit=0 secs=0
+START fmt
+END fmt exit=0 secs=3
+START clippy
+     Compiling libc v0.2.189
+      Checking cfg-if v1.0.4
+      Checking wolf_span v0.2.38 (/work/crates/wolf_span)
+      Checking wolf_diag v0.2.38 (/work/crates/wolf_diag)
+      Checking unicode-ident v1.0.24
+      Checking wolf_lex v0.2.38 (/work/crates/wolf_lex)
+      Checking wolf_ast v0.2.38 (/work/crates/wolf_ast)
+      Checking wolf_parse v0.2.38 (/work/crates/wolf_parse)
+     Compiling shlex v2.0.1
+     Compiling find-msvc-tools v0.1.10
+      Checking constant_time_eq v0.4.2
+      Checking arrayref v0.3.9
+     Compiling cc v1.4.2
+      Checking arrayvec v0.7.8
+      Checking cpufeatures v0.3.0
+     Compiling crossbeam-utils v0.8.22
+     Compiling crossbeam-epoch v0.9.20
+     Compiling blake3 v1.8.6
+     Compiling crossbeam-deque v0.8.7
+     Compiling rayon-core v1.13.0
+      Checking either v1.17.0
+      Checking rayon v1.12.0
+      Checking fnv v1.0.7
+      Checking wolf_sema v0.2.38 (/work/crates/wolf_sema)
+     Compiling proc-macro2 v1.0.107
+     Compiling quote v1.0.47
+      Checking memchr v2.8.3
+      Checking wolf_rt v0.2.38 (/work/crates/wolf_rt)
+      Checking foldhash v0.2.0
+      Checking hashbrown v0.17.1
+     Compiling syn v2.0.119
+      Checking wolf_mem v0.2.38 (/work/crates/wolf_mem)
+     Compiling serde_core v1.0.229
+      Checking smallvec v1.15.2
+      Checking wolf_wir v0.2.38 (/work/crates/wolf_wir)
+     Compiling synstructure v0.13.2
+     Compiling zmij v1.0.23
+     Compiling syn v3.0.3
+     Compiling serde_json v1.0.151
+     Compiling zerofrom-derive v0.1.7
+      Checking equivalent v1.0.2
+      Checking itoa v1.0.18
+      Checking indexmap v2.14.0
+      Checking zerofrom v0.1.8
+     Compiling yoke-derive v0.8.2
+      Checking wolf_fmt v0.2.38 (/work/crates/wolf_fmt)
+      Checking stable_deref_trait v1.2.1
+      Checking log v0.4.33
+      Checking yoke v0.8.3
+      Checking hashbrown v0.16.1
+     Compiling zerovec-derive v0.11.3
+      Checking gimli v0.33.0
+      Checking zerovec v0.11.6
+     Compiling displaydoc v0.2.7
+     Compiling cranelift-srcgen v0.134.3
+     Compiling cranelift-assembler-x64-meta v0.134.3
+      Checking tinystr v0.8.3
+      Checking litemap v0.8.2
+      Checking writeable v0.6.3
+     Compiling libm v0.2.16
+      Checking icu_locale_core v2.2.0
+      Checking zerotrie v0.2.4
+      Checking potential_utf v0.1.5
+     Compiling wasmtime-internal-core v47.0.3
+      Checking utf8_iter v1.0.4
+     Compiling icu_properties_data v2.2.0
+     Compiling icu_normalizer_data v2.2.0
+      Checking icu_provider v2.2.0
+      Checking icu_collections v2.2.0
+      Checking wolf_backend v0.2.38 (/work/crates/wolf_backend)
+      Checking wolf_query v0.2.38 (/work/crates/wolf_query)
+     Compiling cranelift-isle v0.134.3
+     Compiling heck v0.5.0
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling serde v1.0.229
+     Compiling cranelift-codegen-meta v0.134.3
+      Checking icu_properties v2.2.0
+      Checking icu_normalizer v2.2.0
+      Checking cranelift-bitset v0.134.3
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling serde_derive v1.0.229
+     Compiling target-lexicon v0.13.5
+      Checking allocator-api2 v0.2.21
+     Compiling cranelift-codegen v0.134.3
+      Checking bumpalo v3.20.3
+      Checking idna_adapter v1.2.2
+      Checking cranelift-entity v0.134.3
+      Checking percent-encoding v2.3.2
+      Checking rustc-hash v2.1.3
+      Checking arbitrary v1.4.2
+      Checking cranelift-bforest v0.134.3
+      Checking regalloc2 v0.15.2
+      Checking form_urlencoded v1.2.2
+      Checking idna v1.1.0
+      Checking cranelift-control v0.134.3
+     Compiling anyhow v1.0.104
+     Compiling crc32fast v1.5.0
+      Checking url v2.5.8
+     Compiling serde_repr v0.1.21
+      Checking crossbeam-channel v0.5.16
+      Checking bitflags v1.3.2
+     Compiling object v0.39.1
+      Checking lsp-types v0.95.1
+      Checking lsp-server v0.10.0
+      Checking wolf_cimport v0.2.38 (/work/crates/wolf_cimport)
+      Checking cranelift-module v0.134.3
+      Checking cranelift-frontend v0.134.3
+      Checking wolf_lsp v0.2.38 (/work/crates/wolf_lsp)
+      Checking wolf_codegen_llvm v0.2.38 (/work/crates/wolf_codegen_llvm)
+      Checking wolf_pkg v0.2.38 (/work/crates/wolf_pkg)
+      Checking cranelift-object v0.134.3
+      Checking wolf_codegen_clif v0.2.38 (/work/crates/wolf_codegen_clif)
+      Checking wolf_doc v0.2.38 (/work/crates/wolf_doc)
+     Compiling getrandom v0.4.3
+     Compiling rustix v1.1.4
+      Checking linux-raw-sys v0.12.1
+      Checking bitflags v2.13.1
+      Checking fastrand v2.5.0
+      Checking once_cell v1.21.4
+      Checking console v0.16.4
+      Checking similar v2.7.0
+     Compiling getrandom v0.3.4
+      Checking tempfile v3.27.0
+     Compiling zerocopy v0.8.56
+      Checking insta v1.48.0
+      Checking rand_core v0.9.5
+     Compiling autocfg v1.5.1
+     Compiling num-traits v0.2.19
+      Checking wait-timeout v0.2.1
+      Checking bit-vec v0.8.0
+      Checking quick-error v1.2.3
+      Checking rusty-fork v0.3.1
+      Checking bit-set v0.8.0
+      Checking rand v0.9.5
+      Checking rand_xorshift v0.4.0
+      Checking unarray v0.1.4
+      Checking regex-syntax v0.8.11
+      Checking ppv-lite86 v0.2.21
+      Checking xtask v0.2.38 (/work/xtask)
+      Checking rand_chacha v0.9.0
+      Checking proptest v1.11.0
+      Checking wolf_rt_none v0.2.38 (/work/crates/wolf_rt_none)
+      Checking wolf_driver v0.2.38 (/work/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 46s
+END clippy exit=0 secs=106
+START build
+     Compiling unicode-ident v1.0.24
+     Compiling wolf_span v0.2.38 (/work/crates/wolf_span)
+     Compiling proc-macro2 v1.0.107
+     Compiling foldhash v0.2.0
+     Compiling hashbrown v0.17.1
+     Compiling quote v1.0.47
+     Compiling syn v2.0.119
+     Compiling syn v3.0.3
+     Compiling synstructure v0.13.2
+     Compiling zerofrom-derive v0.1.7
+     Compiling zerofrom v0.1.8
+     Compiling yoke-derive v0.8.2
+     Compiling crossbeam-utils v0.8.22
+     Compiling cfg-if v1.0.4
+     Compiling stable_deref_trait v1.2.1
+     Compiling yoke v0.8.3
+     Compiling wolf_diag v0.2.38 (/work/crates/wolf_diag)
+     Compiling zerovec-derive v0.11.3
+     Compiling wolf_lex v0.2.38 (/work/crates/wolf_lex)
+     Compiling crossbeam-epoch v0.9.20
+     Compiling zerovec v0.11.6
+     Compiling displaydoc v0.2.7
+     Compiling constant_time_eq v0.4.2
+     Compiling arrayvec v0.7.8
+     Compiling smallvec v1.15.2
+     Compiling cpufeatures v0.3.0
+     Compiling arrayref v0.3.9
+     Compiling blake3 v1.8.6
+     Compiling crossbeam-deque v0.8.7
+     Compiling wolf_ast v0.2.38 (/work/crates/wolf_ast)
+     Compiling rayon-core v1.13.0
+     Compiling wolf_parse v0.2.38 (/work/crates/wolf_parse)
+     Compiling either v1.17.0
+     Compiling equivalent v1.0.2
+     Compiling indexmap v2.14.0
+     Compiling rayon v1.12.0
+     Compiling libm v0.2.16
+     Compiling tinystr v0.8.3
+     Compiling writeable v0.6.3
+     Compiling litemap v0.8.2
+     Compiling wolf_sema v0.2.38 (/work/crates/wolf_sema)
+     Compiling icu_locale_core v2.2.0
+     Compiling wasmtime-internal-core v47.0.3
+     Compiling potential_utf v0.1.5
+     Compiling zerotrie v0.2.4
+     Compiling utf8_iter v1.0.4
+     Compiling fnv v1.0.7
+     Compiling cranelift-codegen-shared v0.134.3
+     Compiling log v0.4.33
+     Compiling hashbrown v0.16.1
+     Compiling gimli v0.33.0
+     Compiling cranelift-codegen-meta v0.134.3
+     Compiling icu_collections v2.2.0
+     Compiling icu_provider v2.2.0
+     Compiling cranelift-bitset v0.134.3
+     Compiling allocator-api2 v0.2.21
+     Compiling memchr v2.8.3
+     Compiling bumpalo v3.20.3
+     Compiling cranelift-entity v0.134.3
+     Compiling cranelift-codegen v0.134.3
+     Compiling serde_core v1.0.229
+     Compiling icu_normalizer_data v2.2.0
+     Compiling icu_properties_data v2.2.0
+     Compiling libc v0.2.189
+     Compiling rustc-hash v2.1.3
+     Compiling arbitrary v1.4.2
+     Compiling cranelift-control v0.134.3
+     Compiling regalloc2 v0.15.2
+     Compiling icu_properties v2.2.0
+     Compiling icu_normalizer v2.2.0
+     Compiling cranelift-assembler-x64 v0.134.3
+     Compiling cranelift-bforest v0.134.3
+     Compiling target-lexicon v0.13.5
+     Compiling serde_derive v1.0.229
+     Compiling serde v1.0.229
+     Compiling idna_adapter v1.2.2
+     Compiling zmij v1.0.23
+     Compiling wolf_mem v0.2.38 (/work/crates/wolf_mem)
+     Compiling itoa v1.0.18
+     Compiling percent-encoding v2.3.2
+     Compiling form_urlencoded v1.2.2
+     Compiling serde_json v1.0.151
+     Compiling wolf_wir v0.2.38 (/work/crates/wolf_wir)
+     Compiling idna v1.1.0
+     Compiling crc32fast v1.5.0
+     Compiling anyhow v1.0.104
+     Compiling wolf_fmt v0.2.38 (/work/crates/wolf_fmt)
+     Compiling wolf_query v0.2.38 (/work/crates/wolf_query)
+     Compiling cranelift-module v0.134.3
+     Compiling object v0.39.1
+     Compiling url v2.5.8
+     Compiling wolf_backend v0.2.38 (/work/crates/wolf_backend)
+     Compiling wolf_rt v0.2.38 (/work/crates/wolf_rt)
+     Compiling serde_repr v0.1.21
+     Compiling crossbeam-channel v0.5.16
+     Compiling bitflags v1.3.2
+     Compiling lsp-types v0.95.1
+     Compiling lsp-server v0.10.0
+     Compiling cranelift-object v0.134.3
+     Compiling cranelift-frontend v0.134.3
+     Compiling wolf_cimport v0.2.38 (/work/crates/wolf_cimport)
+     Compiling wolf_pkg v0.2.38 (/work/crates/wolf_pkg)
+     Compiling wolf_lsp v0.2.38 (/work/crates/wolf_lsp)
+     Compiling wolf_codegen_clif v0.2.38 (/work/crates/wolf_codegen_clif)
+     Compiling wolf_codegen_llvm v0.2.38 (/work/crates/wolf_codegen_llvm)
+     Compiling wolf_doc v0.2.38 (/work/crates/wolf_doc)
+     Compiling wolf_driver v0.2.38 (/work/crates/wolf_driver)
+      Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 18s
+END build exit=0 secs=79
+START rt-none
+  rt-none: target/x86_64-unknown-none/release/libwolf_rt_none.a
+END rt-none exit=0 secs=5
+START session-rows
+  == conform-run --json 
+  {"commit":"unknown","diagnostics":[],"file":"corpus/os/session_rows.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"wir","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"pass","warnings":[]}
+  
+  == conform-run --json --checked
+  {"commit":"unknown","diagnostics":[],"file":"corpus/os/session_rows.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"map_odd=invalid\nmap_target_twice=invalid\ndefaults_outside=invalid\ndefaults_negative=invalid\nforged_source: true\nempty_program: true\nsid: true\n","stdout_sha256":"35a4424eab30d1107d0f3fafa1d328214388b8d187e15710dc06686277140679","verdict":"exit(0)","warnings":[]}
+  
+  == WOLF_NATIVE=1 conform-run --json
+  {"commit":"unknown","diagnostics":[],"file":"corpus/os/session_rows.lu","impl":"wolfgang","impl_version":"0.2.38+dev.unknown","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"map_odd=invalid\nmap_target_twice=invalid\ndefaults_outside=invalid\ndefaults_negative=invalid\nforged_source: true\nempty_program: true\nsid: true\n","stdout_sha256":"35a4424eab30d1107d0f3fafa1d328214388b8d187e15710dc06686277140679","verdict":"exit(0)","warnings":[]}
+  
+END session-rows exit=0 secs=0
+START driver-tests
+     Compiling wolf_driver v0.2.38 (/work/crates/wolf_driver)
+      Finished `test` profile [unoptimized + debuginfo] target(s) in 1.35s
+       Running tests/freestanding_target.rs (target/debug/deps/freestanding_target-d4a012d6a68e1c7e)
+  
+  running 7 tests
+  test hosted_allocating_and_float_constructs_are_refused_by_name ... ok
+  test linux_x86_64::linked_without_libc_the_kernels_run_on_both_tiers ... ok
+  test linux_x86_64::step2_objects_on_both_tiers ... ok
+  test native_objects_import_the_hook_list_and_nothing_else_on_every_host ... ok
+  test the_driver_refuses_bin_run_and_unknown_targets_by_name ... ok
+  test the_hosted_runtime_defines_the_trap_hook ...     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+  ok
+  test the_manifest_key_and_cfg_read_the_build_target ... ok
+  
+  test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
+  
+       Running tests/prelude_list.rs (target/debug/deps/prelude_list-4e9e90963e22d1fe)
+  
+  running 4 tests
+  test every_table_row_is_in_the_output ... ok
+  test the_committed_copy_is_the_output ... ok
+  test the_human_table_and_the_usage_error ... ok
+  test the_output_is_the_schema ... ok
+  
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+  
+       Running tests/session_lanes.rs (target/debug/deps/session_lanes-90bc44baeb765879)
+  
+  running 4 tests
+  test lupin_does_not_resolve_the_session_calls_before_its_mirror ... s290 lupin 0.1.60: unsupported (`os_spawn_session` does not resolve)
+  ok
+  test unix::a_forked_child_moves_from_a_task_and_its_restore_restores ... SKIP: session_lanes::unix: 4 CPU(s) asked of an allocation of 2 (10-11) from this process's affinity — the pinned rows did not run
+  s290 native forked: ExitStatus(unix_wait_status(0))
+  forked: setsid from a task ok, main reads sid=pid true
+  RESTORED
+  parent: child status 0, mode back true
+  
+  s290 release forked: ExitStatus(unix_wait_status(0))
+  forked: setsid from a task ok, main reads sid=pid true
+  RESTORED
+  parent: child status 0, mode back true
+  
+  ok
+  test unix::a_spawned_child_leads_a_new_session ... SKIP: session_lanes::unix: 4 CPU(s) asked of an allocation of 2 (10-11) from this process's affinity — the pinned rows did not run
+  s290 checked spawn: ExitStatus(unix_wait_status(0))
+  parent: leads its session true
+  child: sid=pid true, pgid=pid true, tty 6, quit ignored false
+  parent: defaults 4, child status 0, child is another process true
+  child: sid=pid true, pgid=pid true, tty 6, quit ignored true
+  parent: defaults 0, child status 0, child is another process true
+  parent: session unchanged true
+  parent: /dev/tty opens true
+  
+  s290 native spawn: ExitStatus(unix_wait_status(0))
+  parent: leads its session true
+  child: sid=pid true, pgid=pid true, tty 6, quit ignored false
+  parent: defaults 4, child status 0, child is another process true
+  child: sid=pid true, pgid=pid true, tty 6, quit ignored true
+  parent: defaults 0, child status 0, child is another process true
+  parent: session unchanged true
+  parent: /dev/tty opens true
+  
+  s290 release spawn: ExitStatus(unix_wait_status(0))
+  parent: leads its session true
+  child: sid=pid true, pgid=pid true, tty 6, quit ignored false
+  parent: defaults 4, child status 0, child is another process true
+  child: sid=pid true, pgid=pid true, tty 6, quit ignored true
+  parent: defaults 0, child status 0, child is another process true
+  parent: session unchanged true
+  parent: /dev/tty opens true
+  
+  ok
+  test unix::this_process_into_a_session_of_its_own ... SKIP: session_lanes::unix: 4 CPU(s) asked of an allocation of 2 (10-11) from this process's affinity — the pinned rows did not run
+  s290 checked mover as the leader: ExitStatus(unix_wait_status(0))
+  mover: a terminal before true, leads its session true
+  mover: setsid denied, error 1
+  mover: sid=pid true, pgid=pid true
+  mover: a terminal after true, error 0
+  mover: again denied, error 1
+  mover: the old terminal's foreground ok
+  
+  s290 checked mover in the leader's group: ExitStatus(unix_wait_status(0))
+  mover: a terminal before true, leads its session false
+  mover: setsid ok, error 0
+  mover: sid=pid true, pgid=pid true
+  mover: a terminal after false, error 6
+  mover: again denied, error 1
+  mover: the old terminal's foreground io
+  
+  s290 native mover as the leader: ExitStatus(unix_wait_status(0))
+  mover: a terminal before true, leads its session true
+  mover: setsid denied, error 1
+  mover: sid=pid true, pgid=pid true
+  mover: a terminal after true, error 0
+  mover: again denied, error 1
+  mover: the old terminal's foreground ok
+  
+  s290 native mover in the leader's group: ExitStatus(unix_wait_status(0))
+  mover: a terminal before true, leads its session false
+  mover: setsid ok, error 0
+  mover: sid=pid true, pgid=pid true
+  mover: a terminal after false, error 6
+  mover: again denied, error 1
+  mover: the old terminal's foreground io
+  
+  s290 release mover as the leader: ExitStatus(unix_wait_status(0))
+  mover: a terminal before true, leads its session true
+  mover: setsid denied, error 1
+  mover: sid=pid true, pgid=pid true
+  mover: a terminal after true, error 0
+  mover: again denied, error 1
+  mover: the old terminal's foreground ok
+  
+  s290 release mover in the leader's group: ExitStatus(unix_wait_status(0))
+  mover: a terminal before true, leads its session false
+  mover: setsid ok, error 0
+  mover: sid=pid true, pgid=pid true
+  mover: a terminal after false, error 6
+  mover: again denied, error 1
+  mover: the old terminal's foreground io
+  
+  ok
+  
+  test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.56s
+  
+       Running tests/str_list_fs_native.rs (target/debug/deps/str_list_fs_native-da753834a9b3afb4)
+  
+  running 24 tests
+  test a_bare_variant_renders_qualified_natively ... ok
+  test a_closed_handle_is_io_at_zero_length_on_both_lanes ... ok
+  test a_missing_str_method_with_a_configured_home_is_e0403 ... ok
+  test a_str_method_outside_the_set_comes_from_std_str ... ok
+  test fs_error_rows_carry_their_tags ... ok
+  test fs_fstat_agrees_across_lanes ... ok
+  test fs_roundtrip_and_rows_agree ... ok
+  test interpolation_materializes_in_value_position ... ok
+  test interpolation_of_composites_agrees_across_lanes ... ok
+  test list_oob_is_the_bounds_trap_on_both_lanes ... ok
+  test lists_grow_read_pop_and_iterate ... ok
+  test os_cpus_agrees_across_lanes ... ok
+  test os_exe_agrees_across_lanes ... ok
+  test str_equality_agrees_across_the_inline_threshold ... ok
+  test str_from_utf8_validates_identically_on_both_lanes ... ok
+  test str_lists_hold_pairs ... ok
+  test str_ordering_and_equality_agree ... ok
+  test the_lowerers_trap_kind_table_is_the_runtimes ... ok
+  test the_runtime_symbol_table_covers_the_s40_families ... 
+  thread 'the_runtime_symbol_table_covers_the_s40_families' (5861) panicked at crates/wolf_driver/tests/str_list_fs_native.rs:888:5:
+  assertion `left == right` failed: RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt
+    left: 273
+   right: 270
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+  FAILED
+  test the_s90_fs_surface_agrees_across_lanes ... ok
+  test the_s90_rows_carry_the_same_tags_on_both_lanes ... ok
+  test the_str_method_set_agrees ... ok
+  test to_int_agrees_across_lanes_including_overflow ... ok
+  test to_int_row_escapes_main_on_both_lanes ... ok
+  
+  failures:
+  
+  failures:
+      the_runtime_symbol_table_covers_the_s40_families
+  
+  test result: FAILED. 23 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.10s
+  
+  error: test failed, to rerun pass `-p wolf_driver --test str_list_fs_native`
+END driver-tests exit=101 secs=7
+START record-wrapper
+END record-wrapper exit=101 secs=0
+RECORD-END worst=101 steps=8 end=2026-11-10T11:49:51Z
