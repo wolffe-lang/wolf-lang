@@ -862,6 +862,12 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_spawn_session",
         "__wolf_rt_os_setsid",
         "__wolf_rt_os_sid",
+        // s292: `[os.term.pty]`, `[os.term.size.set]`, `[os.term.attr]`.
+        "__wolf_rt_os_term_open_pty",
+        "__wolf_rt_os_term_pty_name",
+        "__wolf_rt_os_term_set_size",
+        "__wolf_rt_os_term_attr",
+        "__wolf_rt_os_term_set_attr",
         // s256 (#866): `[conf.trap.stack]` — the main thread's guard
         // bounds and alternate signal stack, one call at startup.
         "__wolf_rt_stack_start",
@@ -887,7 +893,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        273,
+        278,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
