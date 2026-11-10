@@ -69,6 +69,15 @@ Linux gauntlet's rig sets `WOLF_LLD_NOTE_REQUIRE=1`, which turns a missing lld t
   `wolf build: note:` lines (`e03952a3`). The note's placement is as ruled, once at the start of a
   binary build.
 
+  The second Linux record, at `743c6770`, stopped at one more such row. `whole_program.rs`'s
+  `release_clusters_and_the_coarse_cache` reads every `wolf build: NAME: VERDICT` line of a
+  `--verbose` build as a unit, and it read the note as a unit named `note`. Its parser now skips
+  the note (`c43cd16c`).
+
+  To find any other row before a third record, a probe take at `743c6770` ran every test of the
+  workspace without stopping at the first red binary (`cargo test --workspace --no-fail-fast`),
+  then the gates and coverage shards. Only that row was red.
+
 | row | at the rows' commit | at the fix |
 |---|---|---|
 | `wolf_sema` `prelude_census`: none of 687 uses answers the stub | 413 do (red) | 0 |
@@ -120,6 +129,7 @@ Commits:
   does.
 - `3c7f311d`: the changelog. `3eda92f6`: the README's linker paragraph. This note and its evidence.
 - `e03952a3`: the refusal-site rows read the refusal past the linker note.
+- `c43cd16c`: the whole-program rows skip the linker note.
 - `ab56e962`: the first change's evidence rig (`rig/air-at.sh`) named the second Mac's ssh host;
   it now writes `SECOND_MAC` in its place, as the sanitizer does for the other hosts.
 
