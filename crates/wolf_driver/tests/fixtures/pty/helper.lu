@@ -1,0 +1,38 @@
+//! member: false
+//! s292 (`[os.term.pty]`) — the program `spawned.lu` starts with
+//! `os_spawn_session` on a pseudo-terminal's slave, built natively (the
+//! checked machine has no fork, so its child is a compiled program). It
+//! leads a new session with no controlling terminal; it opens the slave by
+//! the name its first argument gives, which makes the slave its terminal
+//! and its group the foreground; it listens for INTERRUPT and RESIZE and
+//! reports each on the slave, and ends with status 7 when interrupted (3
+//! when nothing comes for five seconds).
+
+fn main() -> !int {
+    let args = env_args()
+    if args.len < 1 {
+        return 2
+    }
+    let t = fs_open_mode(args[0], 3)?
+    os_signal_listen(16 + 16384)?
+    let (r0, c0) = os_term_size(t)?
+    let fg = os_term_foreground(t)? == os_pgid()?
+    fs_write_chunk(t, "ready {r0} {c0} foreground {fg}\n".bytes())?
+    var resizes = 0
+    loop {
+        let (_i, mm) = os_signal_wait_fds(List[int](), 16 + 16384, 5000)?
+        if mm == 0 {
+            os_exit(3)
+        }
+        if mm == 16384 {
+            resizes = resizes + 1
+            let (r, c) = os_term_size(t)?
+            fs_write_chunk(t, "resize {r} {c}\n".bytes())?
+        }
+        if mm == 16 {
+            fs_write_chunk(t, "interrupted after {resizes}\n".bytes())?
+            os_exit(7)
+        }
+    }
+    0
+}
