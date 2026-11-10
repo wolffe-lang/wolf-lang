@@ -18455,13 +18455,17 @@ mod checked_term {
         // SAFETY: a descriptor the machine holds; a termios tcgetattr filled.
         let set =
             |t: &libc::termios| ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, t) });
-        if set(&t) < 0 {
-            return Err("io");
-        }
+        // The setting is read back whatever `tcsetattr` answered: C
+        // libraries answer the same kernel differently (glibc 2.42 answers
+        // 0 for CS7 on a pty, which keeps CS8; glibc 2.39 `EINVAL`).
+        let rc = set(&t);
         let back = get(fd)?;
         if read_field(&back, place) != Ok(kept_as(place, v)) {
             let _ = set(&found);
             return Err("unsupported");
+        }
+        if rc < 0 {
+            return Err("io");
         }
         Ok(())
     }
