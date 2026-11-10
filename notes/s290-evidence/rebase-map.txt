@@ -1,0 +1,36 @@
+s290: the branch rebased onto trunk 878490c4 (from bca5dbc5); each commit's subject is unchanged.
+old (on bca5dbc5)  new (on 878490c4)  subject
+2a9a572f           13b94a25           Record what setsid and getsid answer on Linux and macOS, before s290's shape
+da388be5           5874018b           Predict s290's shape: a child in a new session, and this process into one
+923d747b           7672d9c1           spec/11: [os.proc.session], [os.term.session] and the design note; os_spawn_session, os_setsid and os_sid in the host table (180)
+f7199241           4ad8a0e1           Regenerate anchors: os.proc.session, os.proc.session.note, os.term.session (736; none dropped, none changed against bca5dbc5)
+4f371d93           3077a88a           spec/11 [os.proc.session]: the live rows run on a pseudo-terminal the test opens, not in a container
+05d7ffb7           9919913d           Add session_rows: the spawn in a new session's shape rows and the session read, red at base (E0301)
+0f453ee1           13d4f12a           Add session_lanes: a child in a new session, this process into one, and the restore after it, on a pty; red at base
+57c48127           1faa398b           Count the three session calls: host table 180, prelude 191 functions and 224 W0304 names, sandbox_s290, the freestanding refusals, the runtime symbols
+0e3f002e           ab5dd070           session_rows: spawn is a keyword, so the helper is start; rustfmt session_lanes
+d1cad3a8           ed357287           The lexer's snapshot of session_rows
+3111ce50           96488f32           The parser's snapshot of session_rows
+515b08db           2da3d219           wolf_rt: os_spawn_session (setsid first in the child's hook), os_setsid and os_sid
+d2bbaee7           0355067c           clif: the three session shims; RT_SYMBOLS 273
+26d409eb           88662388           sema: the three session signatures and prelude rows; exec for the spawn and the move, env for the read
+fc7676cf           03947218           wir: lower os_spawn_session on the job spawn's chain, os_setsid the unit shape, os_sid the int shape
+0c3574f8           3fc5f621           checked machine: os_spawn_session through its own spawn path, os_setsid and os_sid on the wolf process
+700bb629           7c867195           Pin the session calls' charges in the capability table
+f5007e3d           d3f9d6c3           session_lanes: test_cpus allows its own dead code
+6837e670           8c437129           Regenerate prelude.json: os_spawn_session, os_setsid and os_sid and their row marks
+888655ab           322a7c98           The lowering ledger: session_rows lowers
+651f0648           cca07677           Changelog under Unreleased: the spawn in a new session, os_setsid and os_sid
+ec7ed9c1           d4bb6716           spec/11 [os.proc.session.note]: state the decisions as decisions
+e72596a3           f54b4ac6           sandbox_s290: no ruling id in its header
+8f5475b8           b79787c5           Drop the ruling id from the session calls' charge comments
+68f33aba           aade7f53           notes/s290-prediction: number the shape questions Q1 to Q9
+07c229e6           dce44ce2           s290 evidence: the red-first and plant CI runs, by name
+15f808ae           d20a7cd7           str_list_fs_native: RT_SYMBOLS 273 with the three session shims
+d58cead5           26703bbd           s290 evidence: the Linux rig, adapted from s289's
+891185dd           a6c2c8ae           s290 evidence: the PAX boot leg, its fixture, and wolf-std's rows on this wolf
+f7c205af           436edee3           s290 evidence: the Linux and macOS checks
+cc0274c2           d7c86c74           Add the s290 lane note
+
+The counts commit's subject (old 57c48127) says 224 W0304 names; at 878490c4 the count is 223, since
+trunk's free `zip` no longer draws W0304 (crates/wolf_sema/tests/prelude_names.rs holds 223).
