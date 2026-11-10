@@ -286,3 +286,20 @@ five; the rows above; then wolf-std's half once a release carries the calls. Mac
 heavy local gauntlet take on linux, one macOS build hold for `pty_lanes` (two workers), one light
 KVM job for the PAX leg, one full-matrix hosted run (about two hours). About two lane sessions.
 Nothing lands before the ruling on Q1 to Q8.
+
+## 8. Addendum, after the first probe's output was read
+
+The first run (section 5) showed macOS putting a pty's settings back to its defaults when the
+slave is opened while no descriptor of it is open (row B5). That bears on Q1, so a second, smaller
+probe, `notes/s292-evidence/probe/ptyhold.c`, asks what a held slave does, predicted here before it
+runs:
+
+- **K1** a slave descriptor held open, the size and VINTR set on it, a second descriptor opened by
+  name: the second reads both, on both hosts.
+- **K2** the pattern Q1 (B) gives a holder: the opener holds a slave with the settings set; a forked
+  child that inherited that descriptor leads a session and opens the slave by name (its controlling
+  terminal) after the parent closed its own copy: the child reads the settings, on both hosts.
+- **K3** the same with the child closing its inherited copy first, so no descriptor is open at its
+  open: linux keeps the settings; macOS reads its defaults (interrupt 3, size 0 0).
+- **K4** a session leader with no controlling terminal opens the slave with `O_NOCTTY`: `/dev/tty`
+  stays `ENXIO`; opened again without it: it takes the slave. Both hosts.
