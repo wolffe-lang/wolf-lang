@@ -1,0 +1,208 @@
+RECORD repo=wolf-lang head=9cc3231753a1ff12cf8fd3542c03de80f47984cb tree=47689f4bacee03e647b2d84f4eef25b0f8987b05 host=dc99baed3282 boot=5a951da2-4c76-46c7-b075-3d5320625c71 start=2026-11-10T17:36:08Z
+START versions
+  wolf 0.2.38+dev.unknown (wolfgang)
+  paired with lupin 0.1.60 (reference interpreter), pin 5f1f1c949582f53121e4047bc83c86f23ff72240
+  99f96079f9cbfdbd0865746d491085e3f20230ef082dc630d1d925f3703dba9f  /work/notes/s292-evidence/pax/ptyrows.lu
+  b29335009b8c00bd2850d1164204142dbabfd20c59a32cbd7e73f24c0335facb  /work/crates/wolf_driver/tests/fixtures/pty/helper.lu
+  linked against: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/libc.a
+END versions exit=0 secs=0
+START pax-fixture
+  wolf build: note: linking through /usr/bin/ld.lld found on PATH (Ubuntu LLD 18.1.3 (compatible with GNU linkers)); WOLF_LD=cc (or --linker cc) links with the system linker instead
+    Type:                              EXEC (Executable file)
+  df0dc4530d5cdb97c7bdcdd27cf6a456066f6ae14642982804d4fa4be565b5ff  /lane/pax-leg/ptyrows
+END pax-fixture exit=0 secs=8
+START pax-helper
+  wolf build: note: linking through /usr/bin/ld.lld found on PATH (Ubuntu LLD 18.1.3 (compatible with GNU linkers)); WOLF_LD=cc (or --linker cc) links with the system linker instead
+    Type:                              EXEC (Executable file)
+  07cecb9757237d24af6f0787ace111347c2c801c473a8134061a56d452c359fe  /lane/pax-leg/ptyhelper
+END pax-helper exit=0 secs=0
+RECORD-END worst=0 steps=3 end=2026-11-10T17:36:16Z
+
+RECORD repo=pax head=9536d82f021f92f4aa9f6e92bdd7964763210938 tree=e0c741bb5e14d5bf51d89ce8490c35bdb11c0c96 host=a2f237db5ae3 boot=5a951da2-4c76-46c7-b075-3d5320625c71 start=2026-11-10T17:36:28Z
+START pax-head
+  pax 9536d82f021f92f4aa9f6e92bdd7964763210938 notes/px111-ptys.md: mpx3-console's local split as a follow-on
+  0
+  df0dc4530d5cdb97c7bdcdd27cf6a456066f6ae14642982804d4fa4be565b5ff  /lane/pax-leg/ptyrows
+  07cecb9757237d24af6f0787ace111347c2c801c473a8134061a56d452c359fe  /lane/pax-leg/ptyhelper
+  crw-rw-rw- 1 nobody nogroup 10, 232 Nov 10 17:36 /dev/kvm
+END pax-head exit=0 secs=1
+START fetch-wolf
+  fetch-wolf: wolf 0.2.35 staged (/lane/pax-leg/cache/wolf-0.2.35/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf, archive sha256 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a): wolf 0.2.35 (wolfgang, pin cf0c13d)
+  wolf 0.2.35 (wolfgang, pin cf0c13d)
+  paired with lupin 0.1.56 (reference interpreter), pin 294d626
+END fetch-wolf exit=0 secs=40
+START fetch-limine
+  fetch-limine: limine 12.9.1 staged (/lane/pax-leg/cache/limine-12.9.1, sha256 5cdebc518daa3af30b22c2322ba0dba2e0e2046fa8b087b9e13071b8dbcdcff4)
+END fetch-limine exit=0 secs=3
+START mkinitramfs
+  dir  40755 0 bin
+  file 100755 14647984 bin/ptyhelper
+  file 100755 15084616 bin/ptyrows
+  dir  40755 0 etc
+  file 100644 28 etc/pax-run
+  dir  41777 0 tmp
+  /lane/pax-leg/out/pty.cpio 29733472 bytes sha256 c30cad4d7a1ec7a66b1999609993ccbc52c740d994eb71db03aeba6031227964
+END mkinitramfs exit=0 secs=0
+START build-kernel
+  build-kernel: ok: step 2 (kmain_console, native): 70 wolf object(s), imports {__pax_data_start,__pax_image_end,__pax_image_start,__pax_rodata_end,__pax_rodata_start,__pax_text_end,__pax_text_start,limine_base_revision,limine_bootloader_info_request,limine_efi_system_table_request,limine_executable_address_request,limine_executable_cmdline_request,limine_executable_file_request,limine_firmware_type_request,limine_framebuffer_request,limine_hhdm_request,limine_memmap_request,limine_module_request,limine_rsdp_request,pax_apic_base,pax_argbuf,pax_arp_state,pax_call5,pax_con_ring,pax_con_state,pax_cpuid,pax_cpuid7_ebx,pax_cpuid_nx,pax_cr0,pax_cr2,pax_cr3,pax_cr4,pax_debug_load,pax_debug_status,pax_debugregs,pax_dhcp_state,pax_efer,pax_enter_user,pax_epolls,pax_event_state,pax_eventfds,pax_execbuf,pax_fb_copy,pax_fb_fill,pax_font,pax_font_glyphs,pax_font_ranges,pax_fpu_restore,pax_fpu_save,pax_fpu_state,pax_gbe_state,pax_gdt,pax_gdtr,pax_halt,pax_icmp_state,pax_idle,pax_idt,pax_idtr,pax_inb,pax_inl,pax_invlpg,pax_inw,pax_ip_loop,pax_ip_state,pax_irq_restore,pax_irq_save,pax_isr_table,pax_ist1_stack,pax_ist1_top,pax_ist2_top,pax_ist3_top,pax_ist4_top,pax_kbuf,pax_kernel_commit,pax_lidt,pax_load_gdt,pax_log_quiet,pax_ltr,pax_msi_isr_table,pax_net_state,pax_net_stats,pax_ofiles,pax_outb,pax_outl,pax_outw,pax_pause,pax_pci_count,pax_pci_table,pax_peek_user,pax_pipes,pax_procs,pax_pty_table,pax_rdmsr,pax_rdrand,pax_rdtsc,pax_rsp,pax_sched_locks,pax_sched_state,pax_screen_cells,pax_screen_early,pax_screen_state,pax_serial_log,pax_serial_log_count,pax_set_cr0,pax_set_cr3,pax_set_cr4,pax_set_efer,pax_siginfo,pax_snd_state,pax_snd_stats,pax_spk_ring,pax_spk_state,pax_switch,pax_syscall_entry,pax_syscall_state,pax_tcp_conns,pax_tcp_state,pax_tcp_tw,pax_thread_entry,pax_threads,pax_threads_end,pax_tick_count,pax_trace_state,pax_trace_state_end,pax_tree_copy,pax_tree_state,pax_tree_zero,pax_triage_console_h,pax_triage_enabled,pax_triage_entry,pax_triage_fatal,pax_triage_halted,pax_triage_stop,pax_triage_stripe,pax_triple_fault,pax_tss,pax_tty_table,pax_ud2,pax_udp_socks,pax_udp_state,pax_unix,pax_unix_state,pax_uprogs,pax_wait,pax_wrmsr,pax_xgetbv0,pax_xsetbv0}, wolf_trap defined in wolf, kmain T, no main, no xmm/ymm, nothing below %rsp, 2 __wolf_rt_* from kmain_console.rt-none.a, wolf_alloc and wolf_free defined in wolf
+  build-kernel: ok: step 3 (kmain_console, native): linked with kmain_console.rt-none.a; the whole ELF names no xmm/ymm
+  build-kernel: ok: the commit 9536d82f021f92f4aa9f6e92bdd7964763210938 written into pax_kernel_commit (kmain_console, native)
+  /lane/pax-leg/out/kernel/kmain_console.elf
+END build-kernel exit=0 secs=4
+START mkimage
+  /lane/pax-leg/out/pty.iso
+END mkimage exit=0 secs=0
+START boot
+  qemu-halt: HALTED in pax_halt (RIP ffffffff80000212, unchanged a second later; IF clear; serial still at 6650 bytes; accel kvm; quit -> 0)
+END boot exit=0 secs=3
+START serial
+  c[?7l[2J[0mSeaBIOS (version 1.16.3-debian-1.16.3-2)
+  Booting from DVD/CD...
+  PAX: the console
+  kernel: 9536d82f021f92f4aa9f6e92bdd7964763210938 sha256 f71311dcb0ee36cf502faeb775ece16dff5a0e00d382071404871760cadb91b4, 3607656 bytes
+  paging: limine cr3 0x000000001d8c0000, pax cr3 0x0000000000108000, 27 table frames
+  screen: 1280x800 32 bpp pitch 5120 rgb 8:16 8:8 8:0 at 0xffff8000fd000000, wc (pat 0x0000010500070406), 1000 pages 3 tables; font spleen 8x16, 160x50 cells; 239 bytes replayed, 0 lost
+  initramfs: module 0xffff80001d8d5000, 29733472 bytes, 6 entries
+  initramfs: dir 0 bin
+  initramfs: file 14647984 bin/ptyhelper
+  initramfs: file 15084616 bin/ptyrows
+  initramfs: dir 0 etc
+  initramfs: file 28 etc/pax-run
+  initramfs: dir 0 tmp
+  firmware: bios
+  memory: 20 entries, total 809362432 bytes, usable 494743552, largest unmapped hole 2415919104
+  acpi: RSDT OEM BOCHS  length 56
+  acpi: FACP OEM BOCHS  length 244
+  acpi: SCI 9 PM timer 0x0000000000000608 mask 0x0000000000ffffff PM1a 0x0000000000000604 PM1b 0x0000000000000000
+  acpi: APIC OEM BOCHS  length 120
+  acpi: LAPIC id 0 flags 0x0000000000000001
+  acpi: IOAPIC id 0 address 0x00000000fec00000 GSI 0
+  acpi: ISO bus 0 IRQ 0 GSI 2 flags 0x0000000000000000
+  acpi: ISO bus 0 IRQ 5 GSI 5 flags 0x000000000000000d
+  acpi: ISO bus 0 IRQ 9 GSI 9 flags 0x000000000000000d
+  acpi: ISO bus 0 IRQ 10 GSI 10 flags 0x000000000000000d
+  acpi: ISO bus 0 IRQ 11 GSI 11 flags 0x000000000000000d
+  acpi: NMI UID 255 LINT 1 flags 0x0000000000000000
+  acpi: HPET OEM BOCHS  length 56
+  acpi: HPET address 0x00000000fed00000
+  acpi: MCFG OEM BOCHS  length 60
+  acpi: MCFG base 0x00000000b0000000 segment 0 buses 0..255
+  acpi: WAET OEM BOCHS  length 40
+  acpi: DSDT OEM BOCHS  length 8321
+  clock: HPET 10000000 fs/tick, checked against the PM timer
+  timer: LAPIC calibrated by HPET divide16 62502116 Hz, tick 100 Hz vector 32; PIT IRQ masked
+  fpu: xsave 1, xcr0 0x0000000000000007, area 832 bytes, cr0.em 0, cr0.ts 0, cr4.osfxsr 1, cr4.osxsave 1
+  trace-layout: Thread=512 thread-capacity=512 TraceState=232 trace-capacity=256 slots=64
+  sched: main 0, idle 1, 64 slots, stacks 16 KiB above a 48 KiB guard from 0xffffd00000000000, quantum 2 ticks
+  user: syscall star 0x0010000800000000 lstar 0xffffffff8000182c fmask 0x0000000000044700, efer.sce 1, smep 1, smap 1
+  console: com1 irq 4 vector 36, i8042 0x61 -> 0x61 irq 1 vector 33, 8259 master mask 0xed; iflag 0x100 oflag 0x05 cflag 0xbf lflag 0x8a3b
+  net: no virtio network device among 5 PCI functions; the network is off
+  ip: 10.0.2.15 netmask 255.255.255.0 gateway 10.0.2.2, MTU 1500, TTL 64, DF set, no fragments either way
+  udp: 16 sockets, a 65536-byte queue each, ports 32768-60999 from a random start, 1472 bytes a datagram, loopback by kernel/ip
+  tcp: 1024 blocks, 65536 bytes each way a connection, MSS 1460, ports 32768-60999 from a random start, RTO 200 ms to 60 s, time-wait 60 s in 32768 entries
+  ahci0: 8086:2922 at 00:1f.2, CAP.NP=5 CAP.NCS=31 S64A=1 PI=0x000000000000003f BOH=0; ports idled; one slot, polled
+  ahci0: 8086:2922 at 00:1f.2 port 0: ATAPI skipped (0x00000000eb140101)
+  ahci0: 8086:2922 at 00:1f.2 port 2: ATAPI skipped (0x00000000eb140101)
+  loopback: 127.0.0.1 answers the kernel's echo, 10.0.2.15 answers, 0 frames on the wire
+  net: the console waited 0 ms for the network (bound 10 ms: device 10, lease 0, echo 0)
+  kernel: 9536d82f021f92f4aa9f6e92bdd7964763210938 sha256 f71311dcb0ee36cf502faeb775ece16dff5a0e00d382071404871760cadb91b4, 3607656 bytes
+  boot: 217 ms from the kernel's entry to its first program; the console drew for 5 ms of it (0 scrolls by copy (read 282, write 280 cycles; copy when read <= 4 x write), 3710 bytes)
+  run 1: /bin/ptyrows /bin/ptyhelper
+  user: exec pid 1 cr3 0x00000000002eb000 entry 0x0000000000266040 rsp 0x00007fffffffee40 argc 2 envc 4, 4 PT_LOAD: 0x0000000000200000-0x0000000000265014 r-- 0x0000000000266040-0x00000000003f6e30 r-x 0x00000000003f7e30-0x0000000000408000 rw- 0x0000000000408ca0-0x0000000000411d18 rw-, stack 256 pages below 0x00007ffffffff000
+  user: ptyrows pid 1 syscall 273: -ENOSYS
+  user: ptyrows pid 1 syscall 334: -ENOSYS
+  user: ptyrows pid 1 thread 2 started: stack below 0x00007effffff7040, tls 0x00007effffff76c0
+  pax: pair handles true, master a terminal true, slave a terminal true
+  pax: name form true
+  pax: by name a terminal true
+  pax: size master to slave 40 132, slave to master 50 100
+  pax: op 1: kept
+  pax: op 2: kept
+  pax: op 3: kept
+  pax: op 4: kept
+  pax: op 5: kept
+  pax: op 6: kept
+  pax: op 7: kept
+  pax: op 8: kept
+  pax: op 9: kept
+  pax: op 10: kept
+  pax: op 11: lacks
+  pax: op 12: kept
+  pax: op 13: kept
+  pax: op 14: kept
+  pax: op 15: lacks
+  pax: op 16: kept
+  pax: op 17: lacks
+  pax: op 18: kept
+  pax: op 30: kept
+  pax: op 31: kept
+  pax: op 32: kept
+  pax: op 33: kept
+  pax: op 34: kept
+  pax: op 35: kept
+  pax: op 36: kept
+  pax: op 37: kept
+  pax: op 38: kept
+  pax: op 39: kept
+  pax: op 40: kept
+  pax: op 41: kept
+  pax: op 42: kept
+  pax: op 50: kept
+  pax: op 51: kept
+  pax: op 52: kept
+  pax: op 53: kept
+  pax: op 54: kept
+  pax: op 55: kept
+  pax: op 56: kept
+  pax: op 57: kept
+  pax: op 58: kept
+  pax: op 59: kept
+  pax: op 60: kept
+  pax: op 61: kept
+  pax: op 62: kept
+  pax: op 70: kept
+  pax: op 71: kept
+  pax: op 72: kept
+  pax: op 73: kept
+  pax: op 74: kept
+  pax: op 75: kept
+  pax: op 90: kept
+  pax: op 91: kept
+  pax: op 92: kept
+  pax: op 93: kept
+  pax: op 128: kept
+  pax: op 129: kept
+  pax: every op round-trips or is refused by name true
+  pax: name of a slave io
+  user: exec pid 3 cr3 0x0000000000e1a000 entry 0x000000000025cf40 rsp 0x00007fffffffee40 argc 2 envc 4, 4 PT_LOAD: 0x0000000000200000-0x000000000025bf10 r-- 0x000000000025cf40-0x00000000003b1760 r-x 0x00000000003b2760-0x00000000003c1000 rw- 0x00000000003c16c0-0x00000000003c9d78 rw-, stack 256 pages below 0x00007ffffffff000
+  user: ptyhelper pid 3 syscall 273: -ENOSYS
+  user: ptyhelper pid 3 syscall 334: -ENOSYS
+  user: ptyhelper pid 3 thread 4 started: stack below 0x00007effffff70c0, tls 0x00007effffff76c0
+  pax: spawned: the child ready at the size set before it true
+  pax: spawned: a new size heard 1, the same size again heard 0
+  pax: spawned: a pixel-only change heard true
+  user: ptyhelper pid 3 exit_group 7 after 6 runs
+  pax: spawned: Ctrl-G interrupts true, status 7
+  pax: gone true
+  user: ptyrows pid 1 exit_group 0 after 13 runs
+  user: frames free 120252 before, 119454 with 1 processes, 120252 after
+  tree: frames 6 (6 when made), 1 (1) of them the inode table's, inodes 7 (7), cap 60314, refusals 0
+  run: 1 commands
+  console: 0 bytes from com1, 0 keys (0 scancodes) from the keyboard, 0 reads, 0 waited, 0 dropped
+  PAX: init /bin/ptyrows ended with status 0; nothing left to run
+  halt
+END serial exit=0 secs=0
+START rows
+  ROW pax: pair handles true, master a terminal true, slave a terminal true
+  ROW pax: name form true
+  ROW pax: by name a terminal true
+  ROW pax: size master to slave 40 132, slave to master 50 100
+  ROW pax: every op round-trips or is refused by name true
+  ROW pax: name of a slave io
+  ROW pax: spawned: the child ready at the size set before it true
+  ROW pax: spawned: a new size heard 1, the same size again heard 0
+  ROW pax: spawned: a pixel-only change heard true
+  ROW pax: spawned: Ctrl-G interrupts true, status 7
+  ROW pax: gone true
+END rows exit=0 secs=0
+RECORD-END worst=0 steps=9 end=2026-11-10T17:37:19Z
