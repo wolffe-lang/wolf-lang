@@ -21,6 +21,8 @@
 //!   `fixtures/pty/helper.lu`, so the checked machine runs it too.
 //! - `the_checked_table_is_the_runtimes`: the checked machine's
 //!   transcription of the op table equals the runtime's on this host.
+//! - `lupin_does_not_resolve_the_pty_calls_before_its_mirror`: the corpus
+//!   rows on a sibling lupin, pinned by version.
 //!
 //! At the base every fixture is E0301 at `wolf build` (exit 2): a red,
 //! never a skip.
@@ -235,4 +237,93 @@ fn the_checked_table_is_the_runtimes() {
     let rt = wolf_rt::term::attr_table();
     assert_eq!(rt.len(), 56 + 19 + 1, "{rt:#?}");
     assert_eq!(wolf_mem::ubcheck::pty_attr_table(), rt);
+}
+
+fn workspace() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("the workspace")
+        .to_path_buf()
+}
+
+/// The sibling lupin, found exactly as `pairing.rs` finds it.
+fn sibling_lupin() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("LUPIN") {
+        let p = PathBuf::from(p);
+        return p.is_file().then_some(p);
+    }
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    while dir.pop() {
+        let candidate = dir.join("../wolf-interp/target/release/lupin");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// The lupin releases that predate wolf-interp's mirror of s292: each
+/// answers a program naming the five calls "does not resolve".
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.60"];
+
+/// lupin's record: verdict, by-name reason, version, stdout.
+fn record_fields(text: &str) -> (String, String, String, String) {
+    text.lines()
+        .rev()
+        .find_map(|l| {
+            l.find('{').and_then(|i| {
+                serde_json::from_str::<serde_json::Value>(l[i..].trim())
+                    .ok()
+                    .map(|v| {
+                        let s = |k: &str| v[k].as_str().unwrap_or("").to_string();
+                        (
+                            s("verdict"),
+                            s("x-unsupported"),
+                            s("impl_version"),
+                            s("stdout_inline"),
+                        )
+                    })
+            })
+        })
+        .unwrap_or_default()
+}
+
+/// lupin, the reference interpreter: a release before its mirror refuses
+/// the corpus rows because the five names do not resolve; the mirror
+/// answers every one of them (each is decided before a terminal is
+/// reached) with the lines the corpus row states.
+#[test]
+fn lupin_does_not_resolve_the_pty_calls_before_its_mirror() {
+    let Some(lupin) = sibling_lupin() else {
+        assert!(
+            std::env::var_os("WOLF_PAIRING_REQUIRE_SIBLING").is_none(),
+            "WOLF_PAIRING_REQUIRE_SIBLING is set and no sibling lupin was found"
+        );
+        eprintln!("SKIP: no sibling lupin on this box (set LUPIN) — the oracle leg is absent");
+        return;
+    };
+    let entry = workspace().join("corpus/os/pty_rows.lu");
+    let out = Command::new(&lupin)
+        .arg("conform-run")
+        .arg(&entry)
+        .arg("--json")
+        .output()
+        .expect("lupin runs");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let (verdict, reason, version, stdout) = record_fields(&text);
+    eprintln!("s292 lupin {version}: {verdict} ({reason})");
+    if PRE_MIRROR_LUPIN.contains(&version.as_str()) {
+        assert_eq!(verdict, "unsupported", "lupin {version}: {text}");
+        assert!(
+            reason.contains("does not resolve"),
+            "lupin {version} predates the mirror: {reason}"
+        );
+    } else {
+        assert_eq!(verdict, "exit(0)", "lupin {version}: {text}");
+        assert!(
+            stdout.contains("lacking_ops: true") && stdout.contains("forged_speed: true"),
+            "lupin {version} answers the rows: {stdout}"
+        );
+    }
 }
