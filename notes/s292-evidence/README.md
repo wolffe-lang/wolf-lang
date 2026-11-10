@@ -22,4 +22,4 @@ A pty's number is written N. The sha256 of each file is in `SHA256SUMS`.
 
 | file | what |
 |---|---|
-| `plant-dev-macos-abce5fed.log` | the development plant, macOS 26.4.1 arm64: `abce5fed` (branch `s292-plant-dev`) is the head `4ce8706f` with VINTR and VQUIT swapped in the runtime's op table. Each `pty_lanes` row in its own run: every op still round-trips (the swap reads back what it set), the Ctrl-G rows go red natively (the child dies of QUIT, status -3, where INTERRUPT ends it with 7) while the checked machine's spawn row stays green on its own table, and the table row names the swap (ops 1 and 2). |
+| `plant-dev-macos-abce5fed.log` | the development plant, macOS 26.4.1 arm64: `abce5fed` (branch `s292-plant-dev`) is the head `4ce8706f` with VINTR and VQUIT swapped in the runtime's op table. Each `pty_lanes` row in its own run (the rows' names before they were split by side): every op still round-trips (the swap reads back what it set), the Ctrl-G rows go red natively (the child dies of QUIT, status -3, where INTERRUPT ends it with 7) while the checked machine's spawn row stays green on its own table, and the table row names the swap (ops 1 and 2). |
