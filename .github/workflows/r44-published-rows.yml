@@ -1,0 +1,101 @@
+# The published 0.2.39 archives on hosted runners: wolf-lang's session and
+# pty rows at v0.2.39 (corpus/os/session_rows.lu, corpus/os/pty_rows.lu),
+# run by the archive each runner downloads, on macOS arm64 and on Linux
+# x86-64 and aarch64. Each archive is fetched into its own new directory and
+# hashed twice against the digest the release publishes. The version line
+# must be bare. Each row is held to its own `//! check: run(...)` line on
+# the checked, native and release tiers.
+#
+# This workflow lives on its own branch and runs on a push to that branch
+# alone. It reads the release and changes nothing.
+name: published-rows
+
+on:
+  push:
+    branches: [r44-published-rows]
+
+permissions:
+  contents: read
+
+jobs:
+  rows:
+    name: published 0.2.39 rows (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin, sha: 63de947671c240fc8be3e3480bb36321b0a6ac0b5e12e16bdae164d9050cfde0 }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, sha: 53f75d2b2dd79c0532b21920bc9f073098154aa0133caa2405209a1ef2af0457 }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, sha: 390b6548d6bd8c7eac3ae0a1d09099437564418440de782caca45954463dd344 }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: the published archive, read twice
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          WANT: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = 3fc86f77795afbbd6fbe483fef76c08e7f13a840
+          name=wolf-0.2.39-$TARGET.tar.gz
+          d=$RUNNER_TEMP/published
+          mkdir "$d"
+          curl -fsSL --retry 3 -o "$d/$name" "https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.39/$name"
+          a=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          b=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          echo "READ $name $a $b"
+          test "$a" = "$WANT" && test "$b" = "$WANT"
+          mkdir "$d/unpacked"
+          tar -xzf "$d/$name" -C "$d/unpacked"
+          echo "WOLF=$d/unpacked/wolf-0.2.39-$TARGET/wolf" >> "$GITHUB_ENV"
+      - name: the version line
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$WOLF" --version | tee "$RUNNER_TEMP/version.txt"
+          grep -qx 'wolf 0.2.39 (wolfgang, pin 3fc86f7)' "$RUNNER_TEMP/version.txt"
+          grep -qx 'paired with lupin 0.1.61 (reference interpreter), pin 5f1f1c949582f53121e4047bc83c86f23ff72240' "$RUNNER_TEMP/version.txt"
+          if grep -q '+dev' "$RUNNER_TEMP/version.txt"; then echo "a +dev build"; exit 1; fi
+      - name: the session and pty rows on three tiers
+        shell: bash
+        run: |
+          set -uo pipefail
+          unset WOLF_STD WOLF_RT_LIB
+          python3 -I - "$WOLF" "$RUNNER_TEMP/rows" corpus/os/session_rows.lu corpus/os/pty_rows.lu <<'PY'
+          import json, re, shutil, subprocess, sys
+          from pathlib import Path
+          wolf, out, files = sys.argv[1], Path(sys.argv[2]), sys.argv[3:]
+          out.mkdir()
+          bad = 0
+          for f in files:
+              src = Path(f)
+              name = src.stem
+              shutil.copy(src, out / src.name)
+              m = re.search(r'^//! check: run\(exit=(\d+), stdout="(.*)"\)$', src.read_text(), re.M)
+              want_exit, want = int(m[1]), m[2].encode().decode("unicode_escape") + "\n"
+              got = {}
+              p = subprocess.run([wolf, "conform-run", src.name, "--checked", "--json"], cwd=out, capture_output=True, text=True)
+              try:
+                  rec = json.loads(p.stdout)
+                  got["checked"] = (rec["verdict"], rec["stdout_inline"])
+              except ValueError:
+                  got["checked"] = (f"conform-run exit {p.returncode}: {p.stderr[-300:]}", "")
+              for tier, flags in (("native", []), ("release", ["--release"])):
+                  exe = out / f"{name}.{tier}"
+                  b = subprocess.run([wolf, "build", *flags, "--no-cache", src.name, "-o", str(exe)], cwd=out, capture_output=True, text=True)
+                  if b.returncode != 0:
+                      got[tier] = (f"build exit {b.returncode}: {b.stderr[-300:]}", "")
+                      continue
+                  r = subprocess.run([str(exe)], cwd=out, capture_output=True, text=True)
+                  got[tier] = (f"exit({r.returncode})", r.stdout)
+              for tier, (verdict, stdout) in got.items():
+                  ok = verdict == f"exit({want_exit})" and stdout == want
+                  print(f"{'ROW' if ok else 'FAIL'} {name} {tier} {verdict} stdout {'equal to its check line' if ok else repr(stdout)}")
+                  bad += not ok
+          print(f"published rows: {'all' if not bad else bad} {'equal' if not bad else 'differ'}")
+          sys.exit(1 if bad else 0)
+          PY
