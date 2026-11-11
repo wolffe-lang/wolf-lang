@@ -5,7 +5,10 @@
 # hashed twice against the digest the release publishes. The version line
 # must be bare. Each row is held to its own `//! check: run(...)` line on
 # the checked, native and release tiers. A Linux runner first gets what the
-# release workflow's run gate installs there: lld and clang-15.
+# release workflow's run gate installs there (lld and clang-15) and builds the
+# release tier through clang-15 as that gate does. Linux aarch64 is served by
+# neither compiled tier yet: there, as in the run gate, native and release
+# are held to their refusal by name (exit 2) and the checked tier to the rows.
 #
 # This workflow lives on its own branch and runs on a push to that branch
 # alone. It reads the release and changes nothing.
@@ -96,10 +99,14 @@ jobs:
         run: |
           set -uo pipefail
           unset WOLF_STD WOLF_RT_LIB
+          if [ "$RUNNER_OS" = Linux ]; then export WOLF_CLANG=clang-15; fi
           python3 -I - "$WOLF" "$RUNNER_TEMP/rows" corpus/os/session_rows.lu corpus/os/pty_rows.lu <<'PY'
           import json, re, shutil, subprocess, sys
           from pathlib import Path
+          import platform
           wolf, out, files = sys.argv[1], Path(sys.argv[2]), sys.argv[3:]
+          # Linux aarch64: neither compiled tier is served yet; the answer owed is a refusal by name.
+          refuses = platform.system() == "Linux" and platform.machine() == "aarch64"
           out.mkdir()
           bad = 0
           for f in files:
@@ -118,8 +125,14 @@ jobs:
               for tier, flags in (("native", []), ("release", ["--release"])):
                   exe = out / f"{name}.{tier}"
                   b = subprocess.run([wolf, "build", *flags, "--no-cache", src.name, "-o", str(exe)], cwd=out, capture_output=True, text=True)
+                  if refuses:
+                      said = b.stdout + b.stderr
+                      ok = b.returncode == 2 and f"this host cannot run the {tier} tier" in said
+                      print(f"{'ROW' if ok else 'FAIL'} {name} {tier} refused by name on Linux aarch64, exit {b.returncode}" + ("" if ok else f": {said[-2000:]}"))
+                      bad += not ok
+                      continue
                   if b.returncode != 0:
-                      got[tier] = (f"build exit {b.returncode}: {b.stderr[-2000:]}", "")
+                      got[tier] = (f"build exit {b.returncode}: {(b.stdout + b.stderr)[-2000:]}", "")
                       continue
                   r = subprocess.run([str(exe)], cwd=out, capture_output=True, text=True)
                   got[tier] = (f"exit({r.returncode})", r.stdout)
