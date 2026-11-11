@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.39 — 2026-11-11
+
+Pairs with **lupin 0.1.61**, conformance pin
+`5f1f1c949582f53121e4047bc83c86f23ff72240`, and bundles **wolf-std
+`2411d868ee5c7ce6aee272c0475f049f29bab65d`**: the password hash,
+`std.x.crypto.scrypt` (scrypt and PBKDF2-HMAC-SHA-256) and
+`std.x.crypto.passwd` (crypt(5)'s `$7$` string, as Ubuntu's crypt writes
+it). lupin 0.1.61 resolves the eight new session and pseudo-terminal
+names, answers each call's shape as the compiler does, and refuses by
+name every call that would reach a session or a terminal; it mirrors the
+front-end rulings, the undeclared-name diagnostic and the literal-pattern
+rule below. See [the release note](docs/releases/0.2.39.md).
 
 s292 — a pseudo-terminal: its open and its name, its size set, its settings by RFC 4254 opcode (`[os.term.pty]`, `[os.term.size.set]`, `[os.term.attr]`).
 
