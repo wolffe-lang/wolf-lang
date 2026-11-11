@@ -158,3 +158,44 @@ wolf 0.2.39
   s292 PAX-leg fixture links static against glibc on Linux (ET_EXEC, no
   interpreter) and runs.
 - Tap: both formulae, wolf's std resource and the four AUR packages move.
+
+The 0.1.61 postures (added 2026-11-11 at about 01:50Z, before the change)
+------------------------------------------------------------------------
+Measured first, at aa0286af (PAIRING already 0.1.61), with the lupin
+candidate built at its release-PR head a10cbe5, on a Linux gauntlet host in
+CI's environment: wolf-lang's own pty_lanes, session_lanes and pairing rows
+pass with it (pty: exit(0) and the declared lines; session: unsupported,
+refused by name at os_spawn_session). A no-fail-fast run of the whole
+workspace failed 53 tests in 10 binaries, every one at a lupin column:
+attr_closed_set_lanes 1, chan_sent_arg_lanes 21, checked_tasks_lanes 2,
+descriptor_walk_lanes 6, editor_calls_lanes 1, editor_wait_lanes 2,
+literal_pattern_lanes 6, map_pairs_walk_lanes 1, os_surface_lanes 6 and
+region_kept_arg_lanes 7. fs_gaps_lanes, four_machine_regressions,
+front_end_rulings_lanes, diagnostics_sweep_lanes and prelude_min_lanes
+pass with 0.1.61 as they stand.
+
+47 of the 53 are tables keyed by a published version (and, where the file
+keys one, its release commit): 0.1.61 answers each exactly as 0.1.60 did
+(the comptime-fn control, the #232 rows, the two checked-task partings,
+the declined descriptor-relative and s272 calls, the realpath, listen and
+refill pins), since none of its mirrors touches them.
+
+The other 6 are literal_pattern_lanes, where 0.1.61 is the mirror
+(wolf-interp#355) and answers differently from the 0.1.60 posture the
+file holds: it stops at its first fault, which is the compiler's first
+span: E0207 there (it has no error recovery, so never the second to
+fourth), and for E0415 the `overflow` trap at that literal, the code's
+dynamic counterpart. Measured on the five E0415 rows, each trap's
+x-trap-span is the compiler's first span.
+
+Predicted for the change:
+- each of the 47 turns green once 0.1.61 joins its table (keyed by
+  0.1.61 and a10cbe5 where the file keys a commit), and each table's own
+  predicate test still rejects an unlisted version or commit;
+- literal_pattern_lanes turns green once lupin's answer is held to the
+  mirror's (the compiler's first span, by code or by trap) for any lupin
+  not listed as pre-mirror (0.1.59, 0.1.60), and the pre-mirror answer
+  stays required of those two;
+- the same edits stay green with the published 0.1.61 archive, whose
+  conform-run record carries the same impl_version and commit, provided
+  the tag is at a10cbe5.
