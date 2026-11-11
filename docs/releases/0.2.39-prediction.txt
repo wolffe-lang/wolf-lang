@@ -1,0 +1,160 @@
+wolf 0.2.39 and lupin 0.1.61: the prediction, written before the first change
+==========================================================================
+
+Written 2026-11-11 at about 00:10Z, before any version, pin, note or test
+change in either repository. Later paragraphs are added only before the
+change they predict; nothing here is edited after a measurement.
+
+Inputs, re-derived
+------------------
+- wolf-lang trunk 5e89fdbe3ad99d8532475c6f639a37938541f73e, 376 commits past
+  v0.2.38 (tag object 3b71ed9e5a9dfb5bb77429f52056b8995ff2a5c0, peeling to
+  95ae0827a8ad4d0bbed9302df7811caaa7009fa1). Cargo.toml says 0.2.38, so a
+  trunk build prints 0.2.38+dev.<commit>.
+- The round since v0.2.38, each merged by fast-forward:
+  the 0.2.38 DWARF note (#1070) at 9a304544; s285 (#1071, a literal pattern
+  outside its scrutinee's type is E0415, #1058) at d848fbed; s286 (#1077,
+  glibc's arena limit settled before any worker runs, #1051) at 718fe47a;
+  s287 (#1079, the front-end rulings) at d59086f7 and s287b (#1080, a type
+  that contains itself by value, a pattern's bindings) at a57276f2; s289
+  (#1086, an undeclared name is E0301 where no error row takes it, #1085)
+  at 67bd054f, (#1087, every prelude stub by its class, the lld note,
+  `wolf add`'s manifest quoting) at bca5dbc5 and (#1090, the prelude's
+  `min`) at 878490c4; s290 (#1089, os_spawn_session, os_setsid, os_sid) at
+  8a3d1ac8; s292 (#1091, the pseudo-terminal calls) at 5e89fdbe.
+- CHANGELOG.md's "## Unreleased" names s292, s290, s289 (three changes),
+  s287 (s287b's rulings included), s286 and s285. Nothing in the round is
+  missing from it; the release entry is that text, ordered for users.
+- Known limits, open at the cut and named, not fixed: wolf-lang#1092 (a
+  region taken as a value is never freed natively), #1093 (E1010's
+  suggested fix does not converge), #1094 (a rejected build piped into a
+  closed reader exits 101), #1095 (a `for` over a struct value exits 4
+  with no code) and #1088 (the object embeds the working directory).
+- wolf-interp trunk f811390e588f7dfb4a1a4031b2230d7c861808f6, 98 commits
+  past v0.1.60 (tag object 72714c1bcaca2fd4a7a2e10a7fe397439c31324c,
+  peeling to 17bd522382373b361fe035a5cc61f9e136e1caba); spec pin
+  5f1f1c949582f53121e4047bc83c86f23ff72240 (724 anchors), unchanged since
+  0.1.60. Its "## Unreleased" carries user-visible changes: the
+  pseudo-terminal mirror (is87, #364), the new-session mirror (is86, #362),
+  s289's E0301/E0604 mirror (#363), the front-end rulings mirror (s288,
+  #356), the literal-pattern mirror (s285, #355), and is85's test and CI
+  work (#357, #359, #361), with `lupin corpus` evaluating each entry once.
+  So lupin moves: cut 0.1.61 and pair wolf 0.2.39 with it.
+- wolf-std trunk 2411d868ee5c7ce6aee272c0475f049f29bab65d (sc80, #138),
+  17 commits past the current pin d4a4d4cab358e1e8c174f0206f9e13ad5cfe6c61:
+  std.x.crypto.scrypt (scrypt, PBKDF2-HMAC-SHA-256) and std.x.crypto.passwd
+  (crypt(5)'s $7$ string). Its push run 42424933799 and its nightlies
+  42484996660, 42654182296 and 42838905164 are green at that head, and so
+  is the scheduled ci run 42854087990. The pin is a ruling, recommended
+  (A): re-pin to 2411d868. wolf-std#133 (a TLS read reports a clean close,
+  an alert and an EOF alike) and #125 (the lupin ledger rows) stay open.
+  wolf-std's pseudo-terminal surface is not on trunk and follows this
+  release in its own change.
+- homebrew-wolf trunk 6df47a65a89d757fe8965ca5c01f0e99d7737f86 (0.2.38 /
+  0.1.60). The AUR is read at the tap step, never assumed.
+- Published controls, release metadata read 2026-11-11:
+  wolf v0.2.38 (release 437435429):
+    aarch64-apple-darwin      66a2c31324e9e4c4cbb6f103e4014e36b400366c198598b67c71491a65cffba4
+    aarch64-unknown-linux-gnu e0a6763095cf99cb60a18f260966c96dd62be826076aa0ea22e4ad4f141a60e6
+    x86_64-pc-windows-msvc    f9a5eadfd963200bb1287c68c2f3b88bc2e716d001670bd7a08180f9cc4f6d3c
+    x86_64-unknown-linux-gnu  8447a57944da67ba8e76f5b4e88c2f38a32f39466f44b65e5817dcc276394f39
+    musl runtime              486f54735c18a352ae20eb7a7c2bbc3c7d245ca1be488841727d1e4ca6bfa125
+  lupin v0.1.60 (release 437263073):
+    x86_64-unknown-linux-gnu  e7d4c4f1534736c9262f4ccd01a631f03ff70e3b8122eefe6e9ec1e15c02637e
+    aarch64-apple-darwin      f3cae16fdb88a94702c0fd816d5eb90cdc8e8636c028dcf40f03868c5dc36bb8
+  Each control archive is downloaded into its own empty directory and
+  hashed twice on a Linux gauntlet host before any differ uses it.
+
+lupin 0.1.61
+------------
+- The diff is the version (Cargo.toml, Cargo.lock), the changelog entry
+  (derived from the 98 commits, opening with what users see: the session
+  and pseudo-terminal names resolve, their shapes are answered and every
+  other call is refused by name; the front-end rulings, E0301/E0604 and
+  E0207 at the compiler's spans; a literal pattern outside its type traps
+  `overflow`), the README and manual version transcripts, and a
+  release-posture check committed red before the bump. No runtime, spec
+  pin or dependency change.
+- Debug and release gauntlets at the exact head are green; the release
+  binary's two digest reads agree; the live-container rows skip locally
+  (no nested engine) and are owed to the release tier.
+- The built 0.1.61, `conform-run --json`:
+  corpus/os/pty_rows.lu is exit(0) with the row's declared nineteen lines
+  (`lacking_ops: true` through `forged_speed: true`), impl_version 0.1.61;
+  corpus/os/session_rows.lu is unsupported, refused by name at
+  os_spawn_session after its four `invalid` lines. The published 0.1.60
+  answers both "does not resolve". So wolf-lang's pty_lanes and
+  session_lanes lupin rows take their mirror branch and pass with 0.1.61,
+  and fail with a build that still calls itself 0.1.60.
+- Assets at the tag: six, the 0.1.60 shape.
+
+wolf 0.2.39
+-----------
+- Version 0.2.39 in Cargo.toml, Cargo.lock and fuzz/Cargo.lock; the
+  two-module interface snapshot's toolchain stamp; PAIRING to lupin
+  0.1.61 with pin 5f1f1c94 (unchanged); STD-PIN to 2411d868 if the ruling
+  is (A). The metadata check is committed red first.
+- Lupin-keyed test postures. The tests that key lupin's column by a
+  published (version, commit) hold an unlisted release to the compiler's
+  answer, so 0.1.61 needs an entry wherever 0.1.60 has one and its answer
+  did not move: chan_sent_arg_lanes, checked_tasks_lanes,
+  attr_closed_set_lanes, descriptor_walk_lanes, editor_calls_lanes,
+  editor_wait_lanes, map_pairs_walk_lanes, fs_gaps_lanes, os_surface_lanes,
+  region_kept_arg_lanes and four_machine_regressions; none of 0.1.61's
+  mirrors touches their calls. The tests whose pre-mirror list is 0.1.60
+  alone take the mirror branch with 0.1.61: pty_lanes and session_lanes
+  pass there. literal_pattern_lanes, front_end_rulings_lanes,
+  diagnostics_sweep_lanes and prelude_min_lanes judge lupin by its answer:
+  where 0.1.61 mirrors a rule at the compiler's spans they pass; where its
+  answer is the rule's dynamic counterpart (the `overflow` trap for
+  E0415) or an unmirrored row (s289's second and third changes, `min`),
+  a row may go red and needs a measured 0.1.61 posture. Each move is
+  measured with the candidate lupin at its release head before any posture
+  commit, in a no-fail-fast run of the workspace; a paragraph with the
+  measured movers is added here before those commits.
+- Compiler differ, candidate against published 0.2.38, on the corpus at
+  the head (81 new files since the tag, 78 of them entries, 3 module
+  members; 3 rows edited):
+  - the fail-pinned new rows (E0207, E0301, E0302, E0401, E0402, E0404,
+    E0410, E0415, E0601, E0604, E0609, E0610, E0827, E0828) are
+    completeness notes or agreements, never hard;
+  - hard on every tier: os/pty_rows and os/session_rows (0.2.38 does not
+    resolve the names), rows/error_alias_union_own_after (0.2.38 is E0601
+    where the candidate runs it) and lints/zip_own (0.2.38 warns W0304);
+  - the three `min` run rows are unsupported against 0.2.38 (declined as
+    a stub without a signature), not hard;
+  - native and release, by chance: memory/unsafe_ub_uaf,
+    memory/volatile_ub_uaf and conc/atomic_ub_uaf, as in every round;
+  - the five W0801 binder rows that were hard against 0.2.37 agree now;
+  - so 4 hard on checked (3 to 6) and 4 to 7 on native and release; 0
+    soundness findings on any tier.
+- Interpreter differ, candidate against lupin 0.1.61 with 0.1.60 as the
+  control: os/pty_rows moves from unsupported to agreement; session_rows
+  stays unsupported (refused by name); the s288, s289 and s285 mirror rows
+  are fail-pinned on the compiler side, so they stay completeness notes
+  whichever answer lupin gives. Control moves between 1 and 6 ledger
+  counts, each owned by a named wolf-interp commit. The standing warning
+  rows and the UB-licensed native soundness rows are unchanged.
+- Fixed std at 2411d868: 634 tests and 580 doc examples (sc80's ten test
+  rows and fifteen doc examples). Against the candidate with lupin 0.1.61
+  every compiler cell is green and only lupin cells can move: the seven
+  rows and two std/os/os.lu doc lines of wolf-std#125 lag as they did at
+  0.2.38, and no further row moves, since std calls none of the mirrors'
+  new names.
+- Start-up row on the gauntlet host's Ubuntu 24.04.5 container: 12 (the
+  runtime's own syscalls: wolf 47, C 35). s286's arena settle is a
+  library call before main and adds no system call.
+- Gauntlets at the final head: prep, debug, release, constrained and
+  startup green in CI's environment (no std root, the published 0.1.61 as
+  LUPIN), each lock take at most two hours; the plant red by name.
+- Release workflow dry run green with its readback; tier release green at
+  the head through the release-matrix label.
+- Readback after the tags: 11 assets (five wolf, six lupin), each read
+  twice on each of two hosts; both tags print bare versions; GNU/Linux
+  binaries import at most GLIBC_2.34; the musl libwolf_rt.a equals the
+  release jobs' digest. corpus/os/session_rows.lu and pty_rows.lu run to
+  exit 0 with their declared stdout on the checked machine and natively
+  from the published archives on Linux x86-64 and macOS arm64, and the
+  s292 PAX-leg fixture links static against glibc on Linux (ET_EXEC, no
+  interpreter) and runs.
+- Tap: both formulae, wolf's std resource and the four AUR packages move.
