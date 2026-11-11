@@ -5,11 +5,13 @@
 //! a different number (`300` over a `u8` matched 44), while the checked
 //! machine and lupin never matched, and no tier said anything.
 //!
-//! lupin is the fourth machine. The pinned lupin (0.1.60, as 0.1.59) has no E0415 for
-//! a pattern and accepts a signed literal pattern; its mirror is the
-//! wolf-interp change of the same name. Until the pin moves, lupin is held
-//! to the same spans whenever its record carries the code, and otherwise to
-//! the never-matching answer each row is written for, never the wrapped one.
+//! lupin is the fourth machine. lupin 0.1.59 and 0.1.60 have no E0415 for a
+//! pattern and accept a signed literal pattern: each is held to the
+//! never-matching answer the row is written for, never the wrapped one.
+//! Their mirror (wolf-interp#355, lupin 0.1.61) stops at its first fault,
+//! which is the compiler's first span: the code itself there for E0207 (it
+//! has no error recovery, so never a second span), and for E0415 the
+//! `overflow` trap at that literal, the code's dynamic counterpart.
 mod lane_exit;
 
 use std::path::{Path, PathBuf};
@@ -113,9 +115,14 @@ fn errors(record: &serde_json::Value) -> Vec<(String, (u64, u64))> {
     found
 }
 
+/// The lupin releases before the mirror (wolf-interp#355), each held to the
+/// answer a row is written for.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.59", "0.1.60"];
+
 /// Every compiled tier refuses `row` by `code` at exactly `spans` and at
-/// nothing else, and its rendering says each of `texts`. lupin carries
-/// `code` at the same spans, or (the pinned 0.1.60) answers `lupin_else`.
+/// nothing else, and its rendering says each of `texts`. A pre-mirror lupin
+/// answers `lupin_else`; any other stops at the compiler's first span, by
+/// `code` or, for E0415, by the `overflow` trap at that literal.
 fn refused(row: &str, code: &str, spans: &[(u64, u64)], texts: &[&str], lupin_else: &str) {
     let want: Vec<(String, (u64, u64))> = spans.iter().map(|s| (code.to_string(), *s)).collect();
     for (machine, record, stderr) in compiled(row) {
@@ -135,10 +142,30 @@ fn refused(row: &str, code: &str, spans: &[(u64, u64)], texts: &[&str], lupin_el
     let Some(record) = lupin(row) else {
         return;
     };
-    if record["verdict"] == format!("fail({code})") {
-        assert_eq!(errors(&record), want, "lupin {row}: spans: {record}");
+    let version = record["impl_version"].as_str().unwrap_or("");
+    let version = version.split('+').next().unwrap_or(version);
+    if PRE_MIRROR_LUPIN.contains(&version) {
+        assert_eq!(
+            record["verdict"], lupin_else,
+            "lupin {version} {row}: {record}"
+        );
+    } else if record["verdict"] == format!("fail({code})") {
+        assert_eq!(
+            errors(&record),
+            want[..1].to_vec(),
+            "lupin {version} {row}: spans: {record}"
+        );
     } else {
-        assert_eq!(record["verdict"], lupin_else, "lupin {row}: {record}");
+        assert_eq!(code, "E0415", "lupin {version} {row}: {record}");
+        assert_eq!(
+            record["verdict"], "trap(overflow)",
+            "lupin {version} {row}: {record}"
+        );
+        assert_eq!(
+            record["x-trap-span"],
+            serde_json::json!([spans[0].0, spans[0].1]),
+            "lupin {version} {row}: the trap is at the compiler's first span: {record}"
+        );
     }
 }
 
@@ -252,7 +279,8 @@ fn a_literal_scrutinee_holds_its_pattern_to_i32() {
 
 /// No literal pattern carries a sign: each signed literal is E0207 by
 /// name, at the literal, in every position. lupin 0.1.60 runs the file
-/// (and matches `-1` against an `i8` holding -1): `exit(2)`.
+/// (and matches `-1` against an `i8` holding -1): `exit(2)`; lupin 0.1.61
+/// is E0207 at the first.
 #[test]
 fn a_signed_literal_pattern_is_refused_by_name() {
     refused(
