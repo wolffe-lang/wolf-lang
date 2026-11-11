@@ -4,7 +4,8 @@
 # x86-64 and aarch64. Each archive is fetched into its own new directory and
 # hashed twice against the digest the release publishes. The version line
 # must be bare. Each row is held to its own `//! check: run(...)` line on
-# the checked, native and release tiers.
+# the checked, native and release tiers. A Linux runner first gets what the
+# release workflow's run gate installs there: lld and clang-15.
 #
 # This workflow lives on its own branch and runs on a push to that branch
 # alone. It reads the release and changes nothing.
@@ -40,7 +41,11 @@ jobs:
           WANT: ${{ matrix.sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 3fc86f77795afbbd6fbe483fef76c08e7f13a840
+          # The rows as they are at v0.2.39 (3fc86f77).
+          shasum -a 256 -c - <<'SUMS'
+          b950c1ec5eeb1cc8bb2549029af8def81fbddae7e77952c185c42ebb4c6d91c6  corpus/os/session_rows.lu
+          3bcacf544bb848cfbb4674dbec93cb17f40c209e140d71b280e19dc471653c24  corpus/os/pty_rows.lu
+          SUMS
           name=wolf-0.2.39-$TARGET.tar.gz
           d=$RUNNER_TEMP/published
           mkdir "$d"
@@ -52,6 +57,12 @@ jobs:
           mkdir "$d/unpacked"
           tar -xzf "$d/$name" -C "$d/unpacked"
           echo "WOLF=$d/unpacked/wolf-0.2.39-$TARGET/wolf" >> "$GITHUB_ENV"
+      # What the release workflow's own run gate installs on these runners
+      # before it builds from the archive: the native linker and the release
+      # tier's clang.
+      - name: the native linker and the release tier's clang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lld clang-15
       - name: the version line
         shell: bash
         run: |
@@ -88,7 +99,7 @@ jobs:
                   exe = out / f"{name}.{tier}"
                   b = subprocess.run([wolf, "build", *flags, "--no-cache", src.name, "-o", str(exe)], cwd=out, capture_output=True, text=True)
                   if b.returncode != 0:
-                      got[tier] = (f"build exit {b.returncode}: {b.stderr[-300:]}", "")
+                      got[tier] = (f"build exit {b.returncode}: {b.stderr[-2000:]}", "")
                       continue
                   r = subprocess.run([str(exe)], cwd=out, capture_output=True, text=True)
                   got[tier] = (f"exit({r.returncode})", r.stdout)
