@@ -53,9 +53,10 @@ fn wolf() -> &'static str {
 // r41 resume: published .58 re-measured the same two answers.
 // Published .59 still reports the same rendezvous race and self-exclusivity trap.
 // r43: so does the 0.1.60 candidate at 17bd522 (wolf-interp#227, #230 still open).
+// r44: and the 0.1.61 candidate at a10cbe5.
 const PINNED_LUPIN: &[&str] = &[
     "0.1.49", "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57",
-    "0.1.58", "0.1.59", "0.1.60",
+    "0.1.58", "0.1.59", "0.1.60", "0.1.61",
 ];
 
 #[derive(Debug, Clone)]
