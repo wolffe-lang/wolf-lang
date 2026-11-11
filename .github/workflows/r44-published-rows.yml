@@ -27,9 +27,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, target: aarch64-apple-darwin, sha: 63de947671c240fc8be3e3480bb36321b0a6ac0b5e12e16bdae164d9050cfde0 }
-          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, sha: 53f75d2b2dd79c0532b21920bc9f073098154aa0133caa2405209a1ef2af0457 }
-          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, sha: 390b6548d6bd8c7eac3ae0a1d09099437564418440de782caca45954463dd344 }
+          - { os: macos-latest, target: aarch64-apple-darwin, sha: 63de947671c240fc8be3e3480bb36321b0a6ac0b5e12e16bdae164d9050cfde0, lupin_sha: 7236424618f5bbf1e5f7693cd6333df90b715e1401b08b795668cbb1425ed5af }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, sha: 53f75d2b2dd79c0532b21920bc9f073098154aa0133caa2405209a1ef2af0457, lupin_sha: 61ce849eac0b531803e5bdf1fe07d91d3d69ecb57f83c5e7eb7c5d553cbef41b }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, sha: 390b6548d6bd8c7eac3ae0a1d09099437564418440de782caca45954463dd344, lupin_sha: 3a2b92423e53a6b539e30b8a4f055c09ccac30853f332da3305966550d1ac7d3 }
     steps:
       - uses: actions/checkout@v5
         with:
@@ -71,6 +71,26 @@ jobs:
           grep -qx 'wolf 0.2.39 (wolfgang, pin 3fc86f7)' "$RUNNER_TEMP/version.txt"
           grep -qx 'paired with lupin 0.1.61 (reference interpreter), pin 5f1f1c949582f53121e4047bc83c86f23ff72240' "$RUNNER_TEMP/version.txt"
           if grep -q '+dev' "$RUNNER_TEMP/version.txt"; then echo "a +dev build"; exit 1; fi
+      - name: the paired lupin 0.1.61 archive, read twice, and its version line
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          WANT: ${{ matrix.lupin_sha }}
+        run: |
+          set -euo pipefail
+          name=lupin-0.1.61-$TARGET.tar.gz
+          d=$RUNNER_TEMP/published-lupin
+          mkdir "$d"
+          curl -fsSL --retry 3 -o "$d/$name" "https://github.com/wolffe-lang/wolf-interp/releases/download/v0.1.61/$name"
+          a=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          b=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          echo "READ $name $a $b"
+          test "$a" = "$WANT" && test "$b" = "$WANT"
+          mkdir "$d/unpacked"
+          tar -xzf "$d/$name" -C "$d/unpacked"
+          l=$(find "$d/unpacked" -type f -name lupin | head -1)
+          "$l" --version | tee "$RUNNER_TEMP/lupin-version.txt"
+          grep -qx 'lupin 0.1.61 (wolf-interp, reference interpreter at pin 5f1f1c9)' "$RUNNER_TEMP/lupin-version.txt"
       - name: the session and pty rows on three tiers
         shell: bash
         run: |
