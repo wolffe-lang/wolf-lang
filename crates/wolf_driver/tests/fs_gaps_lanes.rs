@@ -272,25 +272,36 @@ fn published_059_keeps_the_six_measured_fs_gap_cells() {
     ] {
         assert!(measured_pre_mirror("0.1.59", name, calls), "{name}");
         assert!(!measured_pre_mirror("0.1.59+dev", name, calls), "{name}");
-        assert!(!measured_pre_mirror("0.1.61", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.62", name, calls), "{name}");
     }
-    // r43: 0.1.60 keeps exactly the four container cells.
-    for (name, calls) in [
-        ("lock_rows.lu", LOCK_CALLS),
-        ("fifo_rows.lu", FIFO_CALLS),
-        ("nonblock_rows.lu", NONBLOCK_CALLS),
-        ("clip_write.lu", CLIP_CALLS),
-    ] {
-        assert!(measured_pre_mirror("0.1.60", name, calls), "{name}");
-        assert!(!measured_pre_mirror("0.1.60+dev", name, calls), "{name}");
-    }
-    for (name, calls) in [
-        ("nofollow_rows.lu", &[][..]),
-        ("fstat_record_rows.lu", &["fs_fstat_record"][..]),
-        ("access_rows.lu", &["fs_access"][..]),
-        ("lock_rows.lu", &[][..]),
-    ] {
-        assert!(!measured_pre_mirror("0.1.60", name, calls), "{name}");
+    // r43: 0.1.60 keeps exactly the four container cells; r44: so does 0.1.61.
+    for version in ["0.1.60", "0.1.61"] {
+        for (name, calls) in [
+            ("lock_rows.lu", LOCK_CALLS),
+            ("fifo_rows.lu", FIFO_CALLS),
+            ("nonblock_rows.lu", NONBLOCK_CALLS),
+            ("clip_write.lu", CLIP_CALLS),
+        ] {
+            assert!(
+                measured_pre_mirror(version, name, calls),
+                "{version} {name}"
+            );
+            assert!(
+                !measured_pre_mirror(&format!("{version}+dev"), name, calls),
+                "{version} {name}"
+            );
+        }
+        for (name, calls) in [
+            ("nofollow_rows.lu", &[][..]),
+            ("fstat_record_rows.lu", &["fs_fstat_record"][..]),
+            ("access_rows.lu", &["fs_access"][..]),
+            ("lock_rows.lu", &[][..]),
+        ] {
+            assert!(
+                !measured_pre_mirror(version, name, calls),
+                "{version} {name}"
+            );
+        }
     }
     for (name, calls) in [
         ("access_rows.lu", &["fs_access"][..]),
