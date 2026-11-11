@@ -211,6 +211,7 @@ fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
     let measured: &[(&str, &[&str])] = match version {
         "0.1.59" => MEASURED_059,
         "0.1.60" => MEASURED_060,
+        "0.1.61" => MEASURED_061,
         _ => &[],
     };
     PRE_MIRROR_LUPIN.contains(&version)
@@ -243,6 +244,14 @@ const MEASURED_060: &[(&str, &[&str])] = &[
     ("nonblock_rows.lu", NONBLOCK_CALLS),
     ("clip_write.lu", CLIP_CALLS),
 ];
+
+/// r44: published 0.1.61 at its release commit `a10cbe5` answers the four
+/// container rows exactly as 0.1.60 does, "does not resolve" at `fs_lock`,
+/// `fs_mkfifo` and `fs_set_nonblock` (wolf-interp#278 still open), measured
+/// directly on their fixtures. The release-tier run 42951594980 was the
+/// first to run the rows themselves with 0.1.61: a rig without a nested
+/// engine skips them, and a skip measures nothing.
+const MEASURED_061: &[(&str, &[&str])] = MEASURED_060;
 
 /// The calls each container row's lupin leg names, shared by the row and
 /// the predicate's test so the two cannot drift apart.
