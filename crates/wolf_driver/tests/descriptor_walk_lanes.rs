@@ -29,10 +29,10 @@
 //!   moved), as s272's container rows are.
 //!
 //! **lupin 0.1.58 and 0.1.59** predate every new name: each is pinned
-//! here by version, exactly as measured. **lupin 0.1.60** serves bit 32
-//! and `fs_set_mode_fd`, and resolves the nine directory-relative calls,
-//! checks their shapes and declines each by name; those rows are pinned by
-//! version, as measured. A newer lupin is held to the mirror (tracked in
+//! here by version, exactly as measured. **lupin 0.1.60** and **0.1.61**
+//! serve bit 32 and `fs_set_mode_fd`, and resolve the nine
+//! directory-relative calls, check their shapes and decline each by name;
+//! those rows are pinned by version, as measured. A newer lupin is held to the mirror (tracked in
 //! wolf-interp issue 321).
 
 mod lane_exit;
