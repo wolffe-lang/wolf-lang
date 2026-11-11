@@ -42,11 +42,12 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-The current release is v0.2.38, under the codename wolfgang. See the
-[0.2.38 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.38.md)
-for source types and call frames in a debugger, nested variant patterns,
-the binder warning, the hashed Map, the fork-and-drain fix, the paired
-interpreter's argument change and its unsupported cells.
+The current release is v0.2.39, under the codename wolfgang. See the
+[0.2.39 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.39.md)
+for new sessions and pseudo-terminals, the patterns, names and types the
+checker now refuses, `min` on every tier, the fix for a program started
+with standard output closed, the bundled password hash, and what the
+paired interpreter answers and refuses by name.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -91,6 +92,14 @@ heartbeat every 60 seconds. `--quiet` hides this reporter, not diagnostics;
 These apply to build/run/test compilation, not program execution. See the
 [CLI timing schema](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/cli.md) for nested and parallel elapsed scopes.
 
+From 0.2.39, a program can start a child in a session of its own
+(`os_spawn_session`, `os_setsid`, `os_sid`) and open a pseudo-terminal,
+name its slave, set its size and read or set its modes by RFC 4254 opcode
+(`os_term_open_pty`, `os_term_pty_name`, `os_term_set_size`,
+`os_term_attr`, `os_term_set_attr`), on Linux and macOS; windows answers
+`unsupported`. See `[os.proc.session]` and `[os.term.pty]` in
+[the OS chapter](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/11-os.md).
+
 ### Debugging native programs
 
 Native debug builds describe source scalars, structs, tuples, strings, container
@@ -119,7 +128,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.38 by campaign, and
+tells the history of v0.2.39 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 
