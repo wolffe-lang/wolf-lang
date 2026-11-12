@@ -34,7 +34,7 @@ fn main() -> !int {
     let (m, s) = os_term_open_pty()?
     let idle = one(m0, 0)?
     print("pty_idle: {idle}")
-    let h = os_spawn_session("true", List[str](), [s, 0, s, 1, s, 2], 0)?
+    let h = os_spawn_session("true", List[str](), [0, s, 1, s, 2, s], 0)?
     let st = os_wait_status(h)?
     fs_close(s)?
     print("child_status: {st}")

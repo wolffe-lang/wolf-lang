@@ -320,9 +320,17 @@ fn the_peer_credentials_native_and_release() {
 #[test]
 fn a_fork_child_and_its_parents_set_native_and_release() {
     let dir = scratch("fork");
+    // `[os.net.peer.cred]`: macOS's LOCAL_PEERPID answers only while the
+    // peer is connected.
+    let after = if cfg!(target_os = "macos") {
+        "after_close: pid -1, uid true"
+    } else {
+        "after_close: pid the child's, uid true"
+    };
     let want = lines(&[
         "child: set io wait io close ok",
         "parent: child exit 0, its pid true, read k",
+        after,
         "parent_set: [1, 1] 0",
     ]);
     for (lane, got) in run_lanes(&fixture("fork.lu"), &dir, Side::Native) {

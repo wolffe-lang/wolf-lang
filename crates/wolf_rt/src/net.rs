@@ -219,12 +219,36 @@ impl Sock {
             let flags = libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL;
             #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "freebsd")))]
             let flags = libc::MSG_DONTWAIT;
+            // macOS's send on a Unix-domain stream parks whatever
+            // MSG_DONTWAIT says (measured, `probe/dontwait.c`): the
+            // descriptor's own flag is what holds. On the reactor hosts
+            // every socket of the table lives non-blocking already
+            // (`[os.net.io]`); elsewhere it is made so for the one send.
+            // SAFETY: a live socket of the table; only its status flag
+            // changes, and it is put back.
+            let was = if REACTOR_HOST {
+                -1
+            } else {
+                let fl = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+                if fl >= 0 && fl & libc::O_NONBLOCK == 0 {
+                    unsafe { libc::fcntl(raw, libc::F_SETFL, fl | libc::O_NONBLOCK) };
+                    fl
+                } else {
+                    -1
+                }
+            };
             // SAFETY: a live socket and `bytes.len()` readable bytes.
             let n = unsafe { libc::send(raw, bytes.as_ptr().cast(), bytes.len(), flags) };
-            if n < 0 {
-                return Err(std::io::Error::last_os_error());
+            let r = if n < 0 {
+                Err(std::io::Error::last_os_error())
+            } else {
+                Ok(n as usize)
+            };
+            if was >= 0 {
+                // SAFETY: as above.
+                unsafe { libc::fcntl(raw, libc::F_SETFL, was) };
             }
-            Ok(n as usize)
+            r
         }
         #[cfg(not(unix))]
         {

@@ -4,7 +4,9 @@
 //! does not use its parent's set: its `os_ready_set` and `os_ready_wait`
 //! answer `io`, its close of a handle the set holds and its
 //! `os_ready_close` leave the parent's set as it was. The child dials the
-//! parent's listener: the accepted end's credentials name the child's pid.
+//! parent's listener: the accepted end's credentials name the child's pid
+//! while it is connected; asked again after it has gone, linux still
+//! names it and macOS answers -1.
 //! `ready_lanes.rs` holds each line.
 
 fn main() -> !int {
@@ -45,14 +47,23 @@ fn main() -> !int {
         print("child: set {added} wait {waited} close {dropped}")
         let c = net_connect_unix("fork.sock")?
         net_write(c, "k")?
+        // Connected until the parent has asked who it is.
+        let _z = net_read(c, 1)?
         net_close(c)?
         return 0
     }
     let a = net_accept(l)?
     let got = net_read(a, 1)?
     let cred = net_peer_cred(a)?
+    net_write(a, "z")?
     let st = os_wait_status(h)?
     print("parent: child exit {st}, its pid {cred.0 == pid}, read {got}")
+    // Asked again once the child has gone: linux keeps what it recorded at
+    // the connection; macOS's LOCAL_PEERPID answers only while the peer is
+    // connected, so the pid is -1 there.
+    let after = net_peer_cred(a)?
+    let after_pid = if after.0 == pid then "the child's" else "{after.0}"
+    print("after_close: pid {after_pid}, uid {after.1 == cred.1}")
     let still = os_ready_wait(r, 0, 0)?
     print("parent_set: {still.0} {still.1}")
     os_ready_close(r)?

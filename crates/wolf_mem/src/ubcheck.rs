@@ -16124,17 +16124,32 @@ fn checked_send_now(sock: &mut NetSock, bytes: &[u8]) -> std::io::Result<usize> 
         let flags = libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL;
         #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "freebsd")))]
         let flags = libc::MSG_DONTWAIT;
-        loop {
+        // The machine's sockets are blocking, and macOS's send on a
+        // Unix-domain stream parks whatever MSG_DONTWAIT says (measured:
+        // `notes/s290-one-wait-evidence/probe/dontwait.c`), so the
+        // descriptor itself is non-blocking for the one send.
+        // SAFETY: the machine's own live socket; only its status flag
+        // changes, and it is put back.
+        let was = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+        if was >= 0 && was & libc::O_NONBLOCK == 0 {
+            unsafe { libc::fcntl(raw, libc::F_SETFL, was | libc::O_NONBLOCK) };
+        }
+        let r = loop {
             // SAFETY: a live socket and `bytes.len()` readable bytes.
             let n = unsafe { libc::send(raw, bytes.as_ptr().cast(), bytes.len(), flags) };
             if n >= 0 {
-                return Ok(n as usize);
+                break Ok(n as usize);
             }
             let e = std::io::Error::last_os_error();
             if e.kind() != std::io::ErrorKind::Interrupted {
-                return Err(e);
+                break Err(e);
             }
+        };
+        if was >= 0 && was & libc::O_NONBLOCK == 0 {
+            // SAFETY: as above.
+            unsafe { libc::fcntl(raw, libc::F_SETFL, was) };
         }
+        r
     }
     #[cfg(not(unix))]
     {
