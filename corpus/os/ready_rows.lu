@@ -73,7 +73,11 @@ fn main() -> !int {
     let p = os_pipe()?
     fs_write(p.1, "x")?
     say("both_ends", once([p.0, p.1 + WRITE], 0, 0), if windows then u else "[0, 1, 1, 2]/0")
-    say("listed_twice", once([p.1 + WRITE, p.0, p.0], 0, 0), if windows then u else "[0, 2, 1, 1, 2, 1]/0")
+    say(
+        "listed_twice",
+        once([p.1 + WRITE, p.0, p.0], 0, 0),
+        if windows then u else "[0, 2, 1, 1, 2, 1]/0",
+    )
     say("nothing_listed", once(List[int](), 0, 0), if windows then u else "[]/0")
     say("never_ends", once(List[int](), 0, -1), if windows then u else "io")
     say("deadline_below", once([p.0], 0, -2), "invalid")
@@ -83,10 +87,18 @@ fn main() -> !int {
     say("negative", once([-1], 0, 0), if windows then u else "io")
     let r = os_ready_open() else |_| -1
     say("set_open", if r >= 0 then "ok" else "refused", if windows then "refused" else "ok")
-    say("set_one", put(r, p.0, 1, 7) + " " + wait(r, 0, 0), if windows then "unsupported unsupported" else "ok [7, 1]/0")
+    say(
+        "set_one",
+        put(r, p.0, 1, 7) + " " + wait(r, 0, 0),
+        if windows then "unsupported unsupported" else "ok [7, 1]/0",
+    )
     let two = put(r, p.1, 2, 8) + " " + wait(r, 0, 0)
     let two_ok = two == "ok [7, 1, 8, 2]/0" || two == "ok [8, 2, 7, 1]/0"
-    say("set_two", if two_ok then "two" else two, if windows then "unsupported unsupported" else "two")
+    say(
+        "set_two",
+        if two_ok then "two" else two,
+        if windows then "unsupported unsupported" else "two",
+    )
     if windows {
         say("set_changed", two, "unsupported unsupported")
     } else {
@@ -94,7 +106,11 @@ fn main() -> !int {
         let changed_ok = changed == "ok [9, 1, 8, 2]/0" || changed == "ok [8, 2, 9, 1]/0"
         say("set_changed", if changed_ok then "changed" else changed, "changed")
     }
-    say("set_removed", put(r, p.1, 0, 0) + " " + wait(r, 0, 0), if windows then "unsupported unsupported" else "ok [9, 1]/0")
+    say(
+        "set_removed",
+        put(r, p.1, 0, 0) + " " + wait(r, 0, 0),
+        if windows then "unsupported unsupported" else "ok [9, 1]/0",
+    )
     say("remove_absent", put(r, p.1, 0, 0), if windows then u else "io")
     say("interest_outside", put(r, p.0, 4, 1), "invalid")
     say("key_negative", put(r, p.0, 1, -1), "invalid")

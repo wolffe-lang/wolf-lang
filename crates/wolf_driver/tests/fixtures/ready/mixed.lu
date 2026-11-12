@@ -112,7 +112,9 @@ fn main() -> !int {
     os_ready_set(r, p.0, 1, 99)?
     os_ready_set(r, m2, 0, 0)?
     let moved = os_ready_wait(r, 0, 0)?
-    print("changed: key 12 {facts(moved.0, 12)}, key 99 {facts(moved.0, 99)}, key 11 {facts(moved.0, 11)}, entries {moved.0.len / 2}")
+    print(
+        "changed: key 12 {facts(moved.0, 12)}, key 99 {facts(moved.0, 99)}, key 11 {facts(moved.0, 11)}, entries {moved.0.len / 2}",
+    )
     // Write interest beside read on an accepted client.
     os_ready_set(r, NET + a1, 3, 14)?
     let both = os_ready_wait(r, 0, 0)?
@@ -121,7 +123,9 @@ fn main() -> !int {
     fs_close(m1)?
     net_close(a2)?
     let after = os_ready_wait(r, 0, 0)?
-    print("closed: key 10 {facts(after.0, 10)}, key 15 {facts(after.0, 15)}, entries {after.0.len / 2}")
+    print(
+        "closed: key 10 {facts(after.0, 10)}, key 15 {facts(after.0, 15)}, entries {after.0.len / 2}",
+    )
     var again = "ok"
     os_ready_set(r, m1, 1, 10) else |e| {
         again = match e {
