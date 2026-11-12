@@ -868,6 +868,15 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_term_set_size",
         "__wolf_rt_os_term_attr",
         "__wolf_rt_os_term_set_attr",
+        // s290, the one wait: `[os.ready.wait]`, `[os.ready.set]`,
+        // `[os.net.write.some]`, `[os.net.peer.cred]`.
+        "__wolf_rt_os_wait_ready",
+        "__wolf_rt_os_ready_open",
+        "__wolf_rt_os_ready_set",
+        "__wolf_rt_os_ready_wait",
+        "__wolf_rt_os_ready_close",
+        "__wolf_rt_net_write_some",
+        "__wolf_rt_net_peer_cred",
         // s256 (#866): `[conf.trap.stack]` — the main thread's guard
         // bounds and alternate signal stack, one call at startup.
         "__wolf_rt_stack_start",
@@ -893,7 +902,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        278,
+        285,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

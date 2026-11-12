@@ -911,6 +911,57 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_term_set_attr`",
             "hosted runtime",
         ),
+        // s290, the one wait: `[os.ready.wait]`, `[os.ready.set]`,
+        // `[os.net.write.some]`, `[os.net.peer.cred]`.
+        (
+            "os_wait_ready",
+            "",
+            "let r = os_wait_ready(List[int](), 0, 0) else |e| {\n        return 0\n    }\n    r.1",
+            "`os_wait_ready`",
+            "hosted runtime",
+        ),
+        (
+            "os_ready_open",
+            "",
+            "let r = os_ready_open() else |e| {\n        return 0\n    }\n    r",
+            "`os_ready_open`",
+            "hosted runtime",
+        ),
+        (
+            "os_ready_set",
+            "",
+            "os_ready_set(0, 3, 1, 1) else |e| {\n        return 0\n    }\n    1",
+            "`os_ready_set`",
+            "hosted runtime",
+        ),
+        (
+            "os_ready_wait",
+            "",
+            "let r = os_ready_wait(0, 0, 0) else |e| {\n        return 0\n    }\n    r.1",
+            "`os_ready_wait`",
+            "hosted runtime",
+        ),
+        (
+            "os_ready_close",
+            "",
+            "os_ready_close(0) else |e| {\n        return 0\n    }\n    1",
+            "`os_ready_close`",
+            "hosted runtime",
+        ),
+        (
+            "net_write_some",
+            "",
+            "let n = net_write_some(0, List[byte]()) else |e| {\n        return 0\n    }\n    n",
+            "`net_write_some`",
+            "hosted runtime",
+        ),
+        (
+            "net_peer_cred",
+            "",
+            "let c = net_peer_cred(0) else |e| {\n        return 0\n    }\n    c.0",
+            "`net_peer_cred`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",

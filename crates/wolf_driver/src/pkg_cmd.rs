@@ -1543,6 +1543,16 @@ mod builtin_cap_tests {
             ("os_sid", Cap::Env),
             // s292: the pty open charges `exec`, with `os_pipe`.
             ("os_term_open_pty", Cap::Exec),
+            // s290, the one wait: the waits and the set charge `exec`,
+            // with `os_signal_wait_fds`; the send that counts and the
+            // peer's credentials `net`, with the family.
+            ("os_wait_ready", Cap::Exec),
+            ("os_ready_open", Cap::Exec),
+            ("os_ready_set", Cap::Exec),
+            ("os_ready_wait", Cap::Exec),
+            ("os_ready_close", Cap::Exec),
+            ("net_write_some", Cap::Net),
+            ("net_peer_cred", Cap::Net),
             // s242 (#680; ruling owed): the poll of the children reaps as
             // `os_wait_status` does — `exec`.
             ("os_wait_poll", Cap::Exec),
