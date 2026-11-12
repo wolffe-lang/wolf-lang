@@ -11,4 +11,4 @@
 # program from the unpacked archive). The commit must be on
 # wolffe-lang/wolf-std; dist fetches exactly this sha and refuses any
 # other.
-wolf-std-commit = 2411d868ee5c7ce6aee272c0475f049f29bab65d
+wolf-std-commit = be1d10fa2798cc6bc2a1fd0b2e559e283469c9bf
