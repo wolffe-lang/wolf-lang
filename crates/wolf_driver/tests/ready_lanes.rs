@@ -216,7 +216,7 @@ fn write_interest_and_busy(side: Side, dir: &str) {
         "socket_empty: 0",
         "socket_peer_gone: closed",
         "listener_write_some: io",
-        "pty_full_at: busy taken true",
+        "pty_full_at: busy taken true settled true",
         "pty_wait_full: [] [] waited true",
         "pty_room: [0, 2] [6, 2]",
     ]);

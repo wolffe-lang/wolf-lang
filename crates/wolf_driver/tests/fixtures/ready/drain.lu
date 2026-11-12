@@ -4,9 +4,11 @@
 //! `net_write_some` until it answers `busy` (the host's EAGAIN in
 //! `os_error()`); a write wait on it answers its 25 ms deadline, waited
 //! for, in both forms; the peer reads what was taken and the write wait
-//! answers write at once; a send is taken again; an empty list is 0. A pty
-//! master (its slave raw) the same with `fs_write_some`. Then the peer
-//! goes: the send answers `closed`. `ready_lanes.rs` holds each line.
+//! answers write at once; a send is taken again; an empty list is 0. Then
+//! the peer goes: the send answers `closed`. A pty master (its slave raw)
+//! the same with `fs_write_some`, written and waited on until a write wait
+//! answers its deadline (linux's line discipline makes room again a moment
+//! after the first `busy`). `ready_lanes.rs` holds each line.
 
 const NET: int = 2305843009213693952
 
@@ -84,20 +86,32 @@ fn main() -> !int {
     let (m, s) = os_term_open_pty()?
     os_term_set_mode(s, 352)?
     fs_set_nonblock(m, true)?
+    // Written until `busy`, then a write wait: on linux the line
+    // discipline moves what the master queued a moment later, so the wait
+    // can answer write again and the next writes take more (measured,
+    // `probe/ptyfull.c`); the loop goes on until a wait answers its
+    // deadline.
     var ptaken = 0
     var plast = ""
-    while true {
-        let n = fs_write_some(m, chunk) else |e| {
-            plast = match e {
-                busy => "busy",
-                invalid => "invalid",
-                io => "io",
+    var settled = false
+    var rounds = 0
+    while !settled && rounds < 20 {
+        while true {
+            let n = fs_write_some(m, chunk) else |e| {
+                plast = match e {
+                    busy => "busy",
+                    invalid => "invalid",
+                    io => "io",
+                }
+                break
             }
-            break
+            ptaken += n
         }
-        ptaken += n
+        let look = os_wait_ready([m + WRITE], 0, 25)?
+        settled = look.0.len == 0
+        rounds += 1
     }
-    print("pty_full_at: {plast} taken {ptaken > 0}")
+    print("pty_full_at: {plast} taken {ptaken > 0} settled {settled}")
     let pr = os_ready_open()?
     os_ready_set(pr, m, 2, 6)?
     let p0 = os_clock_ns()

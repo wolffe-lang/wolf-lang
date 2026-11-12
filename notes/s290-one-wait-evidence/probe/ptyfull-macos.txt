@@ -1,0 +1,4 @@
+# macOS 26.4.1 arm64 (Apple clang 21.0.0), 2026-11-12
+round 0: took 1022 then Resource temporarily unavailable; poll(25ms) n=0 revents=-
+total written 1022, the slave read 1022; poll after: n=1 revents=OUT
+END exit=0

@@ -1,0 +1,5 @@
+# Linux 7.2.4 x86-64 (gcc 15.3.0), 2026-11-12
+round 0: took 11776 then Resource temporarily unavailable; poll(25ms) n=1 revents=OUT
+round 1: took 3584 then Resource temporarily unavailable; poll(25ms) n=0 revents=-
+total written 15360, the slave read 15360; poll after: n=1 revents=OUT
+END exit=0
