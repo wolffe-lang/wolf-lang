@@ -69,8 +69,8 @@ const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
 /// r43: the releases that resolve the directory-relative calls, check their
 /// shapes and decline each by name (wolf-interp#321 still open), measured on
 /// the 0.1.60 candidate at its release head `17bd522`; r44: and on the 0.1.61
-/// candidate at `a10cbe5`.
-const DECLINED_LUPIN: &[&str] = &["0.1.60", "0.1.61"];
+/// candidate at `a10cbe5`; r45: and on the 0.1.62 candidate at `72eff3c`.
+const DECLINED_LUPIN: &[&str] = &["0.1.60", "0.1.61", "0.1.62"];
 
 /// The call a declining release names first on each corpus row it declines.
 fn declined_call(name: &str) -> Option<&'static str> {
