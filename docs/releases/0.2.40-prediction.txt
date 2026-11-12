@@ -1,0 +1,215 @@
+wolf 0.2.40 and lupin 0.1.62: the prediction, written before the first change
+==========================================================================
+
+Written 2026-11-12 at about 20:10Z, before any version, pin, note or test
+change in either repository. Later paragraphs are added only before the
+change they predict; nothing here is edited after a measurement.
+
+Inputs, re-derived
+------------------
+- wolf-lang trunk ead70b824e1ff1a0a1d353a2666aaa96d126b3fd, 30 commits past
+  v0.2.39 (tag object abfdedbbe99954dfc7d21cf2171f843ce89f4758, peeling to
+  3fc86f77795afbbd6fbe483fef76c08e7f13a840). Cargo.toml says 0.2.39, so a
+  trunk build prints 0.2.39+dev.<commit>.
+- The round since v0.2.39: the 0.2.39 release note of what was measured
+  against the published archives (#1099) at 991f56e1, and s290's one wait
+  (#1102) from 24d1e30a to ead70b82: os_wait_ready, os_ready_open,
+  os_ready_set, os_ready_wait, os_ready_close, net_write_some and
+  net_peer_cred, with spec/11's [os.ready.wait], [os.ready.set],
+  [os.ready.facts], [os.ready.note], [os.net.write.some] and
+  [os.net.peer.cred]; host table 185 to 192 lines, prelude 203 functions,
+  anchors 742 to 748 (none dropped or changed), runtime symbols 285. One
+  corpus file is new, corpus/os/ready_rows.lu (1,354 .lu files under
+  corpus/).
+- CHANGELOG.md's "## Unreleased" names s290's one wait alone. Nothing in
+  the round is missing from it; the release entry is that text, ordered
+  for users.
+- Known limits, open at the cut and named, not fixed: wolf-lang#1104 (a
+  single-use function's inlining in the release tier follows the codegen
+  cluster packing, and no attribute keeps a function out of line), #1103
+  (wolf build of a yew-sized program runs out of memory on a 2 GiB and a
+  4 GiB PAX guest), #1092 (a region taken as a value is never freed
+  natively), #1093 (E1010's suggested fix does not converge), #1094 (a
+  rejected build piped into a closed reader exits 101), #1095 (a `for`
+  over a struct value exits 4 with no code) and #1088 (the object embeds
+  the working directory). #887 (a musl compiler executable) stays open:
+  the fifth asset is a runtime.
+- The nightly. wolf-lang#1057's row (blast_radius at MUTATE_BUDGET=300:
+  one token swap in corpus/grammar/match_nested_bare_variant_guard.lu
+  draws 4 cascade diagnostics at one site, against a bound of 3) was red
+  in the nightly at 3fc86f77 (run 43007609722) and at the earlier heads
+  the issue names. The nightly at ead70b82 (run 43205969460) is red at a
+  different row first: map_index_lanes'
+  native_string_index_doubling_costs_at_most_two_point_five, a wall-time
+  ratio of medians of three (2.6358 against a bound of 2.5) on a hosted
+  runner; the job's `cargo test --workspace` stops at the first red
+  binary, so blast_radius did not run that night. Neither row is in the
+  PR or release tier. Predicted for a local no-fail-fast take of the
+  nightly's property job at the release head: blast_radius red on #1057's
+  one case and nothing else red in that crate; the doubling row green or
+  red by the host's noise, never by the change (s290 touches no map code).
+  Neither holds the release: #1057 is a diagnostic count on invalid
+  source, and the doubling row times the host.
+- wolf-interp trunk 6a4f206610c2f70891035f5feb3976126b9f71e3, 14 commits
+  past v0.1.61 (tag object 3ae69f9279fd3c7ef77bef913855cf4c9fff5928,
+  peeling to a10cbe5745d6092752217932851d3b9c12c66b4d); spec pin
+  5f1f1c949582f53121e4047bc83c86f23ff72240 (724 anchors), unchanged since
+  0.1.60. Its "## Unreleased" carries li-wait, the one-wait mirror
+  (wolf-interp#366): the seven names resolve; net_write_some is served;
+  the wait and the set answer every row decided before the host and
+  refuse the rest by name; net_peer_cred answers its io and windows rows
+  and refuses a Unix stream by name. Users see it, so lupin moves: cut
+  0.1.62 and pair wolf 0.2.40 with it.
+- wolf-std trunk be1d10fa2798cc6bc2a1fd0b2e559e283469c9bf, 39 commits past
+  the current pin 2411d868ee5c7ce6aee272c0475f049f29bab65d: sc81 (#143,
+  sessions and pseudo-terminals over wolf 0.2.39's calls; the vendored
+  pins to wolf 0.2.39 and lupin 0.1.61; wolf-std#125's seven lupin rows
+  and two std.os mirror-lag entries advanced and #125 closed) and sc82
+  (#146, std.poll: a Waiter over 0.2.39's narrow waits, which answers
+  `unsupported` for files and sockets together, sockets with meanings or
+  write interest, and files with no meanings, by name, until the runtime
+  calls this release adds reach the std in a later std change). Its
+  scheduled ci run 43262230878 is green but for one row in one job: rig
+  (macos-latest), tests/term/pty_child.lu (wolf-std#147:
+  not_controlling=false, read_ends_on_master_close=false,
+  child_status=-1). Its nightly 43246070967 (drift) is green.
+- wolf-std#147, measured before this prediction (a Linux gauntlet host's
+  Ubuntu 24.04 container, Linux 7.2.4; a Python probe that forks, calls
+  setsid, puts a pty slave opened O_NOCTTY on 0, 1 and 2, and execs, which
+  is the runtime's spawn path): /bin/sleep shows no terminal in ps (`?`,
+  Ss); dash as /bin/sh answers controlling=no; bash answers
+  controlling=yes and ps shows the slave as its terminal (pts/0, Ss+). So
+  a new session holds no controlling terminal after the spawn, and bash
+  takes its terminal itself when it starts. Ubuntu's /bin/sh is dash and
+  macOS's is bash, which is the whole difference the row met on macOS.
+  Predicted for the same probe on a hosted macOS runner: sleep no
+  terminal, /bin/sh (bash) controlling=yes. So #147 is not a runtime fault
+  in os_spawn_session: the row's child shell takes the terminal. The std
+  pin below.
+- homebrew-wolf trunk 2780263431c9a7101a84c1ba1539699b20a5e4cb (0.2.39 /
+  0.1.61). The AUR is read at the tap step, never assumed.
+- Published controls, release metadata read 2026-11-12:
+  wolf v0.2.39 (release 441434977):
+    aarch64-apple-darwin      63de947671c240fc8be3e3480bb36321b0a6ac0b5e12e16bdae164d9050cfde0
+    aarch64-unknown-linux-gnu 390b6548d6bd8c7eac3ae0a1d09099437564418440de782caca45954463dd344
+    x86_64-pc-windows-msvc    dbb958fe64e348e9b4421553dfa7718a223d36515b09a6d88ca17d0d80adeb9a
+    x86_64-unknown-linux-gnu  53f75d2b2dd79c0532b21920bc9f073098154aa0133caa2405209a1ef2af0457
+    musl runtime              6cc429551e34935a1e7b6f3edd77ff034ff5be3fb6b7f399f33fe4132b9f594e
+  lupin v0.1.61 (release 441174610):
+    x86_64-unknown-linux-gnu  61ce849eac0b531803e5bdf1fe07d91d3d69ecb57f83c5e7eb7c5d553cbef41b
+    aarch64-apple-darwin      7236424618f5bbf1e5f7693cd6333df90b715e1401b08b795668cbb1425ed5af
+  Each control archive is downloaded into its own empty directory and
+  hashed twice on a Linux gauntlet host before any differ uses it.
+
+The std pin, a ruling (recommended, never decided here)
+-------------------------------------------------------
+(A) Re-pin to be1d10fa with wolf-std#147 named as a limit of the row on
+macOS, not of the library: the release ships sc81's sessions and
+pseudo-terminals and sc82's std.poll in its narrow form, and the row and
+the std's doc are fixed in wolf-std (the row's child should be one that
+takes no terminal, or the row should say a shell may take one).
+(B) Keep 2411d868: neither sc81 nor sc82 ships, and burrow's terminal
+request and the multiplexer wait another release for them.
+(C) Hold the release for a runtime change to os_spawn_session on macOS.
+Recommended: (A). The probe shows the spawn gives no controlling
+terminal; nothing in the runtime is at fault, so (C) would change
+nothing, and the std's only red is a row whose child is bash on macOS.
+
+lupin 0.1.62
+------------
+- The diff is the version (Cargo.toml, Cargo.lock), the changelog entry
+  (derived from the 14 commits, opening with what users see: the seven
+  one-wait names resolve; net_write_some is served; the wait, the set and
+  the credentials answer their shape, host and handle rows and refuse the
+  rest by name; wolf-lang's corpus/os/ready_rows.lu is refused at its
+  first wait), the README and manual version transcripts, and a
+  release-posture check committed red before the bump. No runtime, spec
+  pin or dependency change.
+- Debug and release takes at the exact head are green; the release
+  binary's two digest reads agree; the live-container rows skip locally
+  (no nested engine) and are owed to the release tier. wolf-interp#367
+  (a 400 ms ceiling in net_family on a busy host) may be red once in a
+  take on a hot host; if it is, it is named as that issue, never waived.
+- The built 0.1.62, `conform-run --json` on wolf-lang's
+  corpus/os/ready_rows.lu: verdict unsupported, x-unsupported-at run, the
+  reason naming os_wait_ready and not "does not resolve", no stdout,
+  impl_version 0.1.62; `lupin run` exits 4. The published 0.1.61 answers
+  unsupported, "does not resolve". corpus/os/pty_rows.lu and
+  session_rows.lu answer as 0.1.61 does (exit(0) with the nineteen lines;
+  unsupported at os_spawn_session).
+- wolf-lang's lupin_refuses_the_one_wait_by_name accepts both answers
+  today. Against the built 0.1.62 it must become a posture by version, as
+  session_lanes' and pty_lanes' rows are: the releases before the mirror
+  (0.1.61) answer "does not resolve"; any other lupin is refused at run
+  by name at os_wait_ready, and "does not resolve" is red for it. The
+  tightened row passes with the candidate and with the published 0.1.61,
+  and fails with a build that resolves nothing but calls itself 0.1.62.
+- Assets at the tag: six, the 0.1.61 shape.
+
+wolf 0.2.40
+-----------
+- Version 0.2.40 in Cargo.toml, Cargo.lock and fuzz/Cargo.lock; the
+  two-module interface snapshot's toolchain stamp; PAIRING to lupin
+  0.1.62 with pin 5f1f1c94 (unchanged); STD-PIN to be1d10fa if the ruling
+  is (A). The metadata check is committed red first.
+- Lupin-keyed test postures. The tables that key lupin's column by a
+  published (version, commit) hold an unlisted release to the compiler's
+  answer, so 0.1.62 needs an entry wherever 0.1.61 has one, and its answer
+  does not move, since the mirror touches none of their calls:
+  attr_closed_set_lanes (1), chan_sent_arg_lanes (21),
+  checked_tasks_lanes (2), descriptor_walk_lanes (6), editor_calls_lanes
+  (1), editor_wait_lanes (2), map_pairs_walk_lanes (1), os_surface_lanes
+  (6) and region_kept_arg_lanes (7): 47 tests in 9 binaries, measured
+  with the candidate before any posture commit. fs_gaps_lanes' four
+  container cells (fs_lock, fs_mkfifo and fs_set_nonblock do not resolve)
+  need 0.1.62 too, and its predicate's guard moves to 0.1.63; those cells
+  run only where an engine starts their containers, so they are measured
+  on their fixtures and held in the container-rows step. literal_pattern,
+  pty, session, front_end_rulings, diagnostics_sweep and prelude_min
+  lanes pass with 0.1.62 as they stand. A paragraph with the measured
+  movers is added here before those commits.
+- Compiler differ, candidate against published 0.2.39, on the corpus at
+  the head (1,354 files, one new):
+  - hard on every tier: os/ready_rows (0.2.39 does not resolve the names,
+    fail(E0301), where the candidate runs it, exit(0));
+  - the four rows that were hard against 0.2.38 (os/pty_rows,
+    os/session_rows, rows/error_alias_union_own_after, lints/zip_own)
+    agree now;
+  - native and release, by chance: memory/unsafe_ub_uaf,
+    memory/volatile_ub_uaf and conc/atomic_ub_uaf, as in every round;
+  - so 1 hard on checked and 1 to 4 on native and release; 0 soundness on
+    any tier.
+- Interpreter differ, candidate against lupin 0.1.62 with 0.1.61 as the
+  control: os/ready_rows stays unsupported (the reason moves from "does
+  not resolve" to refused by name, below the ledger); the interpreter bump
+  moves 0 ledger counts; the hard rows are the 0.2.39 set (19 checked, 33
+  native: the warning rows lupin does not emit, conc/proc_link_root_death
+  and the 14 UB-licensed native rows). No hard count grows.
+- Fixed std at be1d10fa: 656 tests. Against the candidate with lupin
+  0.1.62 every cell is green, the lupin cells included (sc81 advanced
+  wolf-std#125's seven rows; std.poll calls none of the seven new names):
+  divergent rows 0, mirror-lag rows 0. The doc examples (580 at 2411d868,
+  more with sc81's and sc82's) are green on every machine, the two std.os
+  entries having retired; the count is read at the take.
+- Start-up row on the gauntlet host's Ubuntu 24.04 container: 12 (the
+  runtime's own syscalls). A program that names neither wait makes no hub
+  or wake pipe before main.
+- Gauntlets at the final head: prep, debug, release, constrained,
+  start-up and the container rows green in CI's environment (no std
+  root, the published 0.1.62 as LUPIN), each lock take at most two hours;
+  ready_lanes green there, its lupin row on the mirror branch; the plant
+  red by name.
+- Release workflow dry run green with its readback; tier release green at
+  the head through the release-matrix label.
+- Readback after the tags: 11 assets (five wolf, six lupin), each read
+  twice on each of two hosts; both tags print bare versions; GNU/Linux
+  binaries import at most GLIBC_2.34; the musl libwolf_rt.a equals the
+  release jobs' digest. corpus/os/ready_rows.lu runs to exit 0 with its
+  declared stdout on the checked machine and natively and in release from
+  the published archives on Linux x86-64 and macOS arm64 (Linux aarch64:
+  checked, and native and release refused by name). The ready fixtures
+  mixed.lu and ready_rows.lu link static against glibc on Linux (ET_EXEC,
+  no interpreter) and print the lines ready_lanes holds on Linux.
+  pelt, boreutils and sniff, unchanged, are green against the published
+  0.2.40 as they were against 0.2.39.
+- Tap: both formulae, wolf's std resource and the four AUR packages move.
