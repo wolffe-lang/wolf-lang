@@ -281,10 +281,11 @@ fn published_059_keeps_the_six_measured_fs_gap_cells() {
     ] {
         assert!(measured_pre_mirror("0.1.59", name, calls), "{name}");
         assert!(!measured_pre_mirror("0.1.59+dev", name, calls), "{name}");
-        assert!(!measured_pre_mirror("0.1.62", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.63", name, calls), "{name}");
     }
-    // r43: 0.1.60 keeps exactly the four container cells; r44: so does 0.1.61.
-    for version in ["0.1.60", "0.1.61"] {
+    // r43: 0.1.60 keeps exactly the four container cells; r44: so does 0.1.61;
+    // r45: and 0.1.62.
+    for version in ["0.1.60", "0.1.61", "0.1.62"] {
         for (name, calls) in [
             ("lock_rows.lu", LOCK_CALLS),
             ("fifo_rows.lu", FIFO_CALLS),
