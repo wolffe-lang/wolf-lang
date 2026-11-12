@@ -180,9 +180,10 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 // Published .59 retains these measured issue-232 outcomes; other helpers stay unchanged.
 // r43: the 0.1.60 candidate at 17bd522 answers the same seven rows (#232 still open).
 // r44: so does the 0.1.61 candidate at a10cbe5.
+// r45: and the 0.1.62 candidate at 72eff3c.
 const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &[
     "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57", "0.1.58",
-    "0.1.59", "0.1.60", "0.1.61",
+    "0.1.59", "0.1.60", "0.1.61", "0.1.62",
 ];
 
 fn base_version(v: &str) -> &str {
