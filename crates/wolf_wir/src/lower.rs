@@ -10891,6 +10891,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_writev"
                 | "net_writev_head"
                 | "net_nodelay"
+                // s290: the send that counts and the peer's credentials —
+                // `[os.net.write.some]`, `[os.net.peer.cred]`.
+                | "net_write_some"
+                | "net_peer_cred"
         ) {
             return self.lower_net_builtin(&callee_text, d, e);
         }
@@ -11023,6 +11027,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // s248 (#795): the wait over several descriptors, a set and
                 // a deadline.
                 | "os_signal_wait_fds"
+                // s290: the one wait over both tables, and the set the
+                // kernel holds — `[os.ready.wait]`, `[os.ready.set]`.
+                | "os_wait_ready"
+                | "os_ready_open"
+                | "os_ready_set"
+                | "os_ready_wait"
+                | "os_ready_close"
                 // s236 (#633, #742): who the process runs as, and the
                 // one call that changes it.
                 | "os_uid"
@@ -15091,6 +15102,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (8, "not_found"),
             (9, "denied"),
             (10, "exists"),
+            // s290 (`[os.net.write.some]`): the one send found no room.
+            (11, "busy"),
         ]
         .into_iter()
         .map(|(c, t)| {
@@ -15263,6 +15276,67 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     eu,
                     hit,
                     |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s290 (`[os.net.write.some]`): the `List[byte]` header the
+            // shim READS (the foreign chain, as `net_write_bytes`) and the
+            // count through an out word — `fs_write_some`'s shape.
+            "net_write_some" => {
+                let fd = arg(0)?;
+                let hdr = arg(1)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_net_write_some",
+                        &[fd, hdr],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s290 (`[os.net.peer.cred]`): (pid, uid, gid) through a 24-byte
+            // slot, rc 0, else the code.
+            "net_peer_cred" => {
+                let fd = arg(0)?;
+                let Some(sema) = self.expr_sema_ty(e.span) else {
+                    return Err(refuse("credentials without a recorded type", e.span));
+                };
+                let stripped = self.strip_sema(sema);
+                let TyKind::ErrUnion(ok, _) = self.table.kind(stripped).clone() else {
+                    return Err(refuse("credentials without a union shape", e.span));
+                };
+                let Some(triple_ty) =
+                    wir_ty(&mut self.b.module.types, self.table, self.sigs, ok, e.span)?
+                else {
+                    return Err(refuse("credentials without a triple type", e.span));
+                };
+                let (region, slot) = self.rt_slot(24);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_net_peer_cred",
+                        &[fd],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(triple_ty, slot, region, e.span)?)),
                     |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
                 )?;
                 Ok(Flow::Val(Some(out)))
@@ -16175,6 +16249,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_send_group" => 2,
             "os_signal_wait_fd" => 2,
             "os_signal_wait_fds" => 3,
+            "os_wait_ready" | "os_ready_wait" => 3,
+            "os_ready_open" => 0,
+            "os_ready_set" => 4,
             "os_term_restore_at_exit" => 3,
             _ => 1,
         };
@@ -16242,6 +16319,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_chars" => ("__wolf_rt_os_term_chars", PROC),
             "os_signal_wait_fd" => ("__wolf_rt_os_signal_wait_fd", SIG),
             "os_signal_wait_fds" => ("__wolf_rt_os_signal_wait_fds", PROC),
+            "os_wait_ready" => ("__wolf_rt_os_wait_ready", PROC),
+            "os_ready_open" => ("__wolf_rt_os_ready_open", PROC),
+            "os_ready_set" => ("__wolf_rt_os_ready_set", PROC),
+            "os_ready_wait" => ("__wolf_rt_os_ready_wait", PROC),
+            "os_ready_close" => ("__wolf_rt_os_ready_close", PROC),
             "os_uid" => ("__wolf_rt_os_uid", PROC),
             "os_euid" => ("__wolf_rt_os_euid", PROC),
             "os_gid" => ("__wolf_rt_os_gid", PROC),
@@ -16350,7 +16432,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // argument the shim READS — the foreign chain, as `os_set_ids`'s
         // groups — rc 0 and the (index, meaning) pair through a 16-byte
         // slot, else the code.
-        if name == "os_signal_wait_fds" {
+        //
+        // s290 (`[os.ready.wait]`, `[os.ready.set]`): the one wait and the
+        // set's wait are the same shape, the answer's `List[int]` minted by
+        // the shim beside the meaning.
+        if name == "os_signal_wait_fds" || name == "os_wait_ready" || name == "os_ready_wait" {
             let Some(sema) = self.expr_sema_ty(e.span) else {
                 return Err(refuse("a wait answer without a recorded type", e.span));
             };
@@ -16426,6 +16512,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_send_all"
                 | "os_set_pgid"
                 | "os_setsid"
+                | "os_ready_set"
+                | "os_ready_close"
                 | "os_term_set_size"
                 | "os_term_set_attr"
                 | "os_signal_ignore_one"
