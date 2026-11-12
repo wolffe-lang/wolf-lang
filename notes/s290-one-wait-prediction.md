@@ -88,7 +88,7 @@ net_write_some(int, List[byte]) -> int ! {busy, closed, invalid, io}
 net_peer_cred(int) -> (int, int, int) ! {io, unsupported}
 ```
 
-- **R-s290-1, the lane id.** The orchestrator's id is kept; the files are named apart from the
+- **R-s290-1, the lane id.** The id given is kept; the files are named apart from the
   first s290's (`s290-one-wait*`). Branch `s290` is free on origin (the first lane's was deleted
   at its merge).
 - **R-s290-2, where the clauses live.** (A) `[os.ready.wait]`, `[os.ready.set]`,
