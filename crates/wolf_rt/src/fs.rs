@@ -557,7 +557,13 @@ pub extern "C" fn __wolf_rt_fs_close(fd: i64) -> i64 {
     let gone = files.remove(fd);
     drop(files);
     match gone {
-        Some(_) => fs_code::OK,
+        Some(file) => {
+            // s290 (`[os.ready.set]`): the handle leaves every readiness set
+            // while its descriptor is still open.
+            crate::ready::forget(crate::ready::Table::Fs, fd);
+            drop(file);
+            fs_code::OK
+        }
         None => fs_code::IO,
     }
 }
