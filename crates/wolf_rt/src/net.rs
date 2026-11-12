@@ -1758,7 +1758,7 @@ fn peer_cred_of(raw: std::os::fd::RawFd) -> std::io::Result<(i64, i64, i64)> {
 /// another task cannot let its number be reused while a wait holds it.
 /// `None`: a closed or forged handle, or a duplicate the host will not
 /// make (its number in `os_error()`).
-#[cfg(unix)]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn dup_of(h: i64) -> Option<std::os::fd::OwnedFd> {
     use std::os::fd::FromRawFd as _;
     let mut t = tbl();
@@ -1776,7 +1776,7 @@ pub(crate) fn dup_of(h: i64) -> Option<std::os::fd::OwnedFd> {
 /// s290 (`[os.ready.set]`): `f` on the descriptor behind a live net handle,
 /// under the table lock, so the descriptor stays the handle's while `f`
 /// registers it; `None` for a closed or forged handle.
-#[cfg(unix)]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(crate) fn with_raw<R>(h: i64, f: impl FnOnce(std::os::fd::RawFd) -> R) -> Option<R> {
     let mut t = tbl();
     let raw = t.raw_fd_of(h)?;
