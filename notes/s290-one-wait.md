@@ -33,7 +33,11 @@ How the prediction held, item by item (section 5 of the prediction):
 3. The counts: right (host table 192, prelude 203 functions, W0304 235, runtime symbols 285,
    anchors 748, the lowering ledger +1).
 4. The plant: its record is cited in the PR (Seen red, below).
-5. Two facts the prediction did not have, both measured on macOS 26.4.1 and now in the spec:
+5. Three facts the prediction did not have, now in the spec. On Linux, a pty master that has
+   answered `busy` can be ready to write again a moment later (`probe/ptyfull.c`: 11776 bytes,
+   `busy`, ready, 3584 more, `busy` and not ready; macOS: 1022, `busy`, not ready): the first
+   Linux take's drain row assumed a write wait after `busy` would answer its deadline, and now
+   writes and waits until one does (`6a48bb58`). And two measured on macOS 26.4.1:
    **macOS's `send` on a blocking Unix-domain stream parks whatever `MSG_DONTWAIT` says**
    (`probe/dontwait.c`: 8192 bytes, then parked until the alarm; Linux answers EAGAIN), so the
    send is made on a non-blocking descriptor; and **macOS's `LOCAL_PEERPID` answers only while
@@ -91,6 +95,9 @@ peer is -1.
 
 - The rows were committed red before any implementation (`f4cce536`, `f004123c`, `489cc4b2`,
   `7e404485`); the red take at `f71426b4` names each red test (record cited in the PR).
+- The first Linux gauntlet, at `d25a5ee8`, was red in three places, each fixed before the take at
+  the head: rustfmt (`16131aa0`), `wolf fmt` of the corpus rows (`1c390cba`, snapshots
+  `2fe603bd`) and the pty drain row above (`6a48bb58`). Every other step was green there.
 - macOS (this lane's runs at `af9fb070` and `53e73eb8`, single builds): `ready_lanes` 10 of 14
   green at the first, the four reds the row defects and the two macOS facts above; 14 of 14 at
   `53e73eb8`; `wolf_rt`'s ready, net and wait unit tests 17 of 17; clippy `-D warnings` on the
