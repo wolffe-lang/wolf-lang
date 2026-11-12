@@ -213,3 +213,37 @@ wolf 0.2.40
   pelt, boreutils and sniff, unchanged, are green against the published
   0.2.40 as they were against 0.2.39.
 - Tap: both formulae, wolf's std resource and the four AUR packages move.
+
+The 0.1.62 postures (added 2026-11-12 at about 21:00Z, before the change)
+------------------------------------------------------------------------
+Measured first, at bfd7f1bd (PAIRING already 0.1.62), with the lupin
+candidate built at its release-PR head 72eff3c, on a Linux gauntlet host in
+CI's environment: wolf-lang's own ready_lanes, pty_lanes, session_lanes and
+pairing rows pass with it (ready: unsupported, refused by name at
+os_wait_ready; pty: exit(0); session: unsupported at os_spawn_session;
+pairing: the dev sibling's base version matches). A no-fail-fast run of
+the whole workspace failed 47 tests in 9 binaries, every one at a lupin
+column, exactly the 47 predicted above: attr_closed_set_lanes 1,
+chan_sent_arg_lanes 21, checked_tasks_lanes 2, descriptor_walk_lanes 6,
+editor_calls_lanes 1, editor_wait_lanes 2, map_pairs_walk_lanes 1,
+os_surface_lanes 6 and region_kept_arg_lanes 7. Each is a table keyed by a
+published version (and, where the file keys one, its release commit), and
+0.1.62 answers each exactly as 0.1.61 did: its mirror touches none of
+their calls. fs_gaps_lanes' four container cells were skipped there (no
+engine inside the take's container) and are measured on their fixtures.
+
+Predicted for the change:
+- each of the 47 turns green once 0.1.62 joins its table (keyed by 0.1.62
+  and 72eff3c where the file keys a commit), and each table's own
+  predicate test still rejects 0.1.62 at another commit or at none;
+- fs_gaps_lanes' predicate test, once it asks for 0.1.62's four container
+  cells, is red until 0.1.62 is pinned there, and green after, with its
+  guard moved to 0.1.63; the container cells pass with 0.1.62 in the
+  container-rows step and in the release tier;
+- ready_lanes' lupin row, held by version (0.1.61 "does not resolve",
+  any other refused at run by name at os_wait_ready with nothing printed),
+  passes with the candidate and with the published 0.1.61 and 0.1.62, and
+  a pre-mirror list that names 0.1.62 is red with either 0.1.62;
+- the same edits stay green with the published 0.1.62 archive, whose
+  conform-run record carries the same impl_version and commit, provided
+  the tag is at 72eff3c.
