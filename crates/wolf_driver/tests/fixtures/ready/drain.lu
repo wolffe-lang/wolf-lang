@@ -1,0 +1,119 @@
+//! member: false
+//! s290 (`[os.net.write.some]`, `[os.ready.set]`, `[os.fs.nonblock]`) — the
+//! write half of a server's loop. A Unix stream is written with
+//! `net_write_some` until it answers `busy` (the host's EAGAIN in
+//! `os_error()`); a write wait on it answers its 25 ms deadline, waited
+//! for, in both forms; the peer reads what was taken and the write wait
+//! answers write at once; a send is taken again; an empty list is 0. A pty
+//! master (its slave raw) the same with `fs_write_some`. Then the peer
+//! goes: the send answers `closed`. `ready_lanes.rs` holds each line.
+
+const NET: int = 2305843009213693952
+
+const WRITE: int = 4611686018427387904
+
+fn some(fd: int, bytes: List[byte]) -> str {
+    let n = net_write_some(fd, bytes) else |e| {
+        return match e {
+            busy => "busy",
+            closed => "closed",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "{n}"
+}
+
+fn main() -> !int {
+    var chunk = List[byte]()
+    while chunk.len < 4096 {
+        (mut chunk).push(119 as byte)
+    }
+    if fs_exists("drain.sock") {
+        fs_remove("drain.sock")?
+    }
+    let l = net_listen_unix("drain.sock")?
+    let c = net_connect_unix("drain.sock")?
+    let a = net_accept(l)?
+    var taken = 0
+    var last = ""
+    while true {
+        let got = some(c, chunk)
+        let n = got.to_int() else -1
+        if n < 0 {
+            last = got
+            break
+        }
+        taken += n
+    }
+    print("socket_full_at: {last} taken {taken > 0}")
+    print("socket_busy_errno: {os_error() != 0}")
+    let r = os_ready_open()?
+    os_ready_set(r, NET + c, 2, 5)?
+    let t0 = os_clock_ns()
+    let none = os_wait_ready([NET + c + WRITE], 0, 25)?
+    let held = os_ready_wait(r, 0, 25)?
+    print("socket_wait_full: {none.0} {held.0} waited {os_clock_ns() - t0 >= 50000000}")
+    var drained = 0
+    while drained < taken {
+        let got = net_read_bytes(a, 65536)?
+        drained += got.len
+    }
+    let room = os_wait_ready([NET + c + WRITE], 0, 1000)?
+    let room_held = os_ready_wait(r, 0, 1000)?
+    print("socket_room: {room.0} {room_held.0}")
+    print("socket_again: {some(c, [120 as byte]) == "1"}")
+    print("socket_empty: {some(c, List[byte]())}")
+    let _x = net_read_bytes(a, 1)?
+    // The peer leaves: a send answers `closed` (EPIPE or ECONNRESET), and
+    // no SIGPIPE ends the program.
+    net_close(a)?
+    var gone = some(c, [121 as byte])
+    var spins = 0
+    while gone == "1" && spins < 10 {
+        gone = some(c, [121 as byte])
+        spins += 1
+    }
+    print("socket_peer_gone: {gone}")
+    print("listener_write_some: {some(l, [122 as byte])}")
+    os_ready_close(r)?
+    net_close(c)?
+    net_close(l)?
+    // A pty master, its slave raw (no echo, no line, no processing), so
+    // what the master writes waits in the slave's input until it is read.
+    let (m, s) = os_term_open_pty()?
+    os_term_set_mode(s, 352)?
+    fs_set_nonblock(m, true)?
+    var ptaken = 0
+    var plast = ""
+    while true {
+        let n = fs_write_some(m, chunk) else |e| {
+            plast = match e {
+                busy => "busy",
+                invalid => "invalid",
+                io => "io",
+            }
+            break
+        }
+        ptaken += n
+    }
+    print("pty_full_at: {plast} taken {ptaken > 0}")
+    let pr = os_ready_open()?
+    os_ready_set(pr, m, 2, 6)?
+    let p0 = os_clock_ns()
+    let pnone = os_wait_ready([m + WRITE], 0, 25)?
+    let pheld = os_ready_wait(pr, 0, 25)?
+    print("pty_wait_full: {pnone.0} {pheld.0} waited {os_clock_ns() - p0 >= 50000000}")
+    var pdrained = 0
+    while pdrained < ptaken {
+        let got = fs_read_chunk(s, 65536)?
+        pdrained += got.len
+    }
+    let proom = os_wait_ready([m + WRITE], 0, 1000)?
+    let proom_held = os_ready_wait(pr, 0, 1000)?
+    print("pty_room: {proom.0} {proom_held.0}")
+    os_ready_close(pr)?
+    fs_close(s)?
+    fs_close(m)?
+    0
+}

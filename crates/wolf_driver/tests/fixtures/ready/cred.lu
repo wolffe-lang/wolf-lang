@@ -1,0 +1,44 @@
+//! member: false
+//! s290 (`[os.net.peer.cred]`) — who is at the other end. A client this
+//! process dialed: the accepted end answers this process's pid and its
+//! effective ids, and so does the dialed end (the listener is this
+//! process too). A listener, a TCP stream and a closed handle are `io`,
+//! decided by kind before the host is asked. `ready_lanes.rs` holds each
+//! line.
+
+fn cred(fd: int) -> str {
+    let c = net_peer_cred(fd) else |e| {
+        return match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    let uid = os_euid() else |_| -1
+    let gid = os_egid() else |_| -1
+    "pid {c.0 == os_pid()} uid {c.1 == uid} gid {c.2 == gid}"
+}
+
+fn main() -> !int {
+    if fs_exists("cred.sock") {
+        fs_remove("cred.sock")?
+    }
+    let l = net_listen_unix("cred.sock")?
+    let c = net_connect_unix("cred.sock")?
+    let a = net_accept(l)?
+    print("accepted: {cred(a)}")
+    print("dialed: {cred(c)}")
+    print("listener: {cred(l)}")
+    let tl = net_listen("127.0.0.1:0")?
+    let port = net_port(tl)?
+    let tc = net_connect("127.0.0.1:{port}")?
+    let ta = net_accept(tl)?
+    print("tcp: {cred(ta)} {cred(tc)}")
+    net_close(a)?
+    print("closed: {cred(a)}")
+    net_close(c)?
+    net_close(l)?
+    net_close(ta)?
+    net_close(tc)?
+    net_close(tl)?
+    0
+}

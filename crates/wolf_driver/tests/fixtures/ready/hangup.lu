@@ -1,0 +1,95 @@
+//! member: false
+//! s290 (`[os.ready.facts]`) — the ends a server must notice. A pty master
+//! whose child exited (the child spawned in a new session on the slave,
+//! the program's own slave descriptor closed after it) answers read and
+//! hangup, 5, in both forms, and its read the host's end (`io` on linux,
+//! `eof` on macOS); a pty whose slave is open and idle answers nothing. A
+//! pipe's read end whose writer left: 5. A pipe's write end whose reader
+//! left: write with the host's word for it (10 on linux, error; 6 on
+//! macOS, hangup). A Unix stream whose peer closed: 5 to a read element, 7
+//! to an entry that asked both; a TCP stream whose peer closed: 5.
+//! `ready_lanes.rs` holds each line to the host.
+
+const NET: int = 2305843009213693952
+
+const WRITE: int = 4611686018427387904
+
+const BROKEN_PIPE: int = 2048
+
+fn one(entry: int, deadline: int) -> !List[int] {
+    let r = os_wait_ready([entry], 0, deadline)?
+    r.0
+}
+
+fn held(entry: int, interest: int) -> !List[int] {
+    let r = os_ready_open()?
+    os_ready_set(r, entry, interest, 1)?
+    let w = os_ready_wait(r, 0, 1000)?
+    os_ready_close(r)?
+    w.0
+}
+
+fn main() -> !int {
+    let (m0, s0) = os_term_open_pty()?
+    let (m, s) = os_term_open_pty()?
+    let idle = one(m0, 0)?
+    print("pty_idle: {idle}")
+    let h = os_spawn_session("true", List[str](), [s, 0, s, 1, s, 2], 0)?
+    let st = os_wait_status(h)?
+    fs_close(s)?
+    print("child_status: {st}")
+    let pa = one(m, 1000)?
+    let pb = held(m, 1)?
+    print("pty_child_exited: {pa} {pb}")
+    let end = fs_read_chunk(m, 64) else |e| {
+        let word = match e {
+            eof => "eof",
+            io => "io",
+        }
+        print("pty_read_after: {word}")
+        List[byte]()
+    }
+    if end.len > 0 {
+        print("pty_read_after: {end.len} bytes")
+    }
+    fs_close(m)?
+    fs_close(s0)?
+    fs_close(m0)?
+    let p = os_pipe()?
+    fs_close(p.1)?
+    let wa = one(p.0, 1000)?
+    let wb = held(p.0, 1)?
+    print("pipe_writer_gone: {wa} {wb}")
+    fs_close(p.0)?
+    os_signal_ignore(BROKEN_PIPE)?
+    let q = os_pipe()?
+    fs_close(q.0)?
+    let ra = one(q.1 + WRITE, 1000)?
+    let rb = held(q.1, 2)?
+    print("pipe_reader_gone: {ra} {rb}")
+    fs_close(q.1)?
+    if fs_exists("hangup.sock") {
+        fs_remove("hangup.sock")?
+    }
+    let l = net_listen_unix("hangup.sock")?
+    let c = net_connect_unix("hangup.sock")?
+    let a = net_accept(l)?
+    net_close(c)?
+    let ua = one(NET + a, 1000)?
+    let ub = held(NET + a, 1)?
+    let uc = held(NET + a, 3)?
+    print("unix_peer_closed: {ua} {ub} {uc}")
+    net_close(a)?
+    net_close(l)?
+    let tl = net_listen("127.0.0.1:0")?
+    let port = net_port(tl)?
+    let tc = net_connect("127.0.0.1:{port}")?
+    let ta = net_accept(tl)?
+    net_close(tc)?
+    let ta1 = one(NET + ta, 1000)?
+    let ta2 = held(NET + ta, 1)?
+    print("tcp_peer_closed: {ta1} {ta2}")
+    net_close(ta)?
+    net_close(tl)?
+    0
+}

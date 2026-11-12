@@ -1,0 +1,150 @@
+//! member: false
+//! s290 (`[os.ready.wait]`, `[os.ready.set]`) — a multiplexer's set, all
+//! ready at once: two pty masters with output waiting, a pipe with a byte,
+//! a Unix listener with a connection pending, two connected clients with
+//! bytes, a regular file (a polled entry: no kernel set holds one) and a
+//! pipe holding as much as the host lets it (the flood). Both forms answer
+//! every one of them in one wait; fifty waits that read only from the
+//! flood answer every entry every time; the set survives a change, a
+//! removal, a write interest added and a close of two of its handles,
+//! whose keys never come back. `ready_lanes.rs` holds each line.
+
+const NET: int = 2305843009213693952
+
+const WRITE: int = 4611686018427387904
+
+/// The facts the flat answer gives `key`, or -1 where it names none.
+fn facts(xs: List[int], key: int) -> int {
+    var i = 0
+    while i + 1 < xs.len {
+        if xs[i] == key {
+            return xs[i + 1]
+        }
+        i += 2
+    }
+    -1
+}
+
+/// Each key in `keys` answered with exactly `want`, and nothing else.
+fn all(xs: List[int], keys: List[int], want: int) -> bool {
+    if xs.len != keys.len * 2 {
+        return false
+    }
+    for k in keys {
+        if facts(xs, k) != want {
+            return false
+        }
+    }
+    true
+}
+
+fn main() -> !int {
+    let (m1, s1) = os_term_open_pty()?
+    let (m2, s2) = os_term_open_pty()?
+    fs_write(s1, "a")?
+    fs_write(s2, "b")?
+    let p = os_pipe()?
+    fs_write(p.1, "c")?
+    let flood = os_pipe()?
+    fs_set_nonblock(flood.1, true)?
+    var chunk = List[byte]()
+    while chunk.len < 4096 {
+        (mut chunk).push(102 as byte)
+    }
+    var flooded = 0
+    while true {
+        let n = fs_write_some(flood.1, chunk) else |_| {
+            break
+        }
+        flooded += n
+    }
+    if fs_exists("mixed.sock") {
+        fs_remove("mixed.sock")?
+    }
+    let l = net_listen_unix("mixed.sock")?
+    let c1 = net_connect_unix("mixed.sock")?
+    let a1 = net_accept(l)?
+    let c2 = net_connect_unix("mixed.sock")?
+    let a2 = net_accept(l)?
+    let c3 = net_connect_unix("mixed.sock")?
+    net_write(c1, "d")?
+    net_write(c2, "e")?
+    fs_write_text("mixed.txt", "f")?
+    let file = fs_open("mixed.txt")?
+    let entries = [m1, m2, p.0, NET + l, NET + a1, NET + a2, flood.0, file]
+    // A pty's output reaches its master through the line discipline, which
+    // may take a moment: look until every entry has been seen ready once,
+    // then ask for all of them in one wait.
+    var tries = 0
+    var seen = os_wait_ready(entries, 0, 1000)?
+    while seen.0.len < 16 && tries < 50 {
+        seen = os_wait_ready(entries, 0, 100)?
+        tries += 1
+    }
+    let one = os_wait_ready(entries, 0, 0)?
+    print("one_shot: {one.0} meaning {one.1}")
+    print("flooded: {flooded > 0}")
+    let r = os_ready_open()?
+    var keys = List[int]()
+    var i = 0
+    while i < entries.len {
+        os_ready_set(r, entries[i], 1, 10 + i)?
+        (mut keys).push(10 + i)
+        i += 1
+    }
+    let held = os_ready_wait(r, 0, 0)?
+    print("set_all: {all(held.0, keys, 1)} meaning {held.1}")
+    // The flood never hides the others: each wait reads one byte of it and
+    // nothing else, and every entry is answered every time.
+    var fair = 0
+    var w = 0
+    while w < 50 {
+        let a = os_wait_ready(entries, 0, 0)?
+        let b = os_ready_wait(r, 0, 0)?
+        if a.0.len == 16 && all(b.0, keys, 1) {
+            fair += 1
+        }
+        let _one = fs_read_chunk(flood.0, 1)?
+        w += 1
+    }
+    print("fair: {fair} of 50")
+    // A change: the pipe's key moves; a removal: the second master leaves.
+    os_ready_set(r, p.0, 1, 99)?
+    os_ready_set(r, m2, 0, 0)?
+    let moved = os_ready_wait(r, 0, 0)?
+    print("changed: key 12 {facts(moved.0, 12)}, key 99 {facts(moved.0, 99)}, key 11 {facts(moved.0, 11)}, entries {moved.0.len / 2}")
+    // Write interest beside read on an accepted client.
+    os_ready_set(r, NET + a1, 3, 14)?
+    let both = os_ready_wait(r, 0, 0)?
+    print("both_interests: key 14 {facts(both.0, 14)}")
+    // Closes: the first master and the second client leave every set.
+    fs_close(m1)?
+    net_close(a2)?
+    let after = os_ready_wait(r, 0, 0)?
+    print("closed: key 10 {facts(after.0, 10)}, key 15 {facts(after.0, 15)}, entries {after.0.len / 2}")
+    var again = "ok"
+    os_ready_set(r, m1, 1, 10) else |e| {
+        again = match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    print("closed_handle_add: {again}")
+    os_ready_close(r)?
+    fs_close(file)?
+    fs_remove("mixed.txt")?
+    net_close(c1)?
+    net_close(c2)?
+    net_close(c3)?
+    net_close(a1)?
+    net_close(l)?
+    fs_close(s1)?
+    fs_close(m2)?
+    fs_close(s2)?
+    fs_close(p.0)?
+    fs_close(p.1)?
+    fs_close(flood.0)?
+    fs_close(flood.1)?
+    0
+}

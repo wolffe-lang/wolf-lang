@@ -1,0 +1,64 @@
+//! member: false
+//! s290 (`[os.ready.set]`, `[os.proc.fork]`, `[os.net.peer.cred]`) — the
+//! native tiers only (the checked machine has no fork). A fork's child
+//! does not use its parent's set: its `os_ready_set` and `os_ready_wait`
+//! answer `io`, its close of a handle the set holds and its
+//! `os_ready_close` leave the parent's set as it was. The child dials the
+//! parent's listener: the accepted end's credentials name the child's pid.
+//! `ready_lanes.rs` holds each line.
+
+fn main() -> !int {
+    if fs_exists("fork.sock") {
+        fs_remove("fork.sock")?
+    }
+    let l = net_listen_unix("fork.sock")?
+    let p = os_pipe()?
+    fs_write(p.1, "x")?
+    let r = os_ready_open()?
+    os_ready_set(r, p.0, 1, 1)?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        var added = "ok"
+        os_ready_set(r, p.0, 1, 2) else |e| {
+            added = match e {
+                invalid => "invalid",
+                io => "io",
+                unsupported => "unsupported",
+            }
+        }
+        var waited = "ok"
+        let _w = os_ready_wait(r, 0, 0) else |e| {
+            waited = match e {
+                invalid => "invalid",
+                io => "io",
+                unsupported => "unsupported",
+            }
+            (List[int](), 0)
+        }
+        fs_close(p.0)?
+        var dropped = "ok"
+        os_ready_close(r) else |e| {
+            dropped = match e {
+                io => "io",
+            }
+        }
+        print("child: set {added} wait {waited} close {dropped}")
+        let c = net_connect_unix("fork.sock")?
+        net_write(c, "k")?
+        net_close(c)?
+        return 0
+    }
+    let a = net_accept(l)?
+    let got = net_read(a, 1)?
+    let cred = net_peer_cred(a)?
+    let st = os_wait_status(h)?
+    print("parent: child exit {st}, its pid {cred.0 == pid}, read {got}")
+    let still = os_ready_wait(r, 0, 0)?
+    print("parent_set: {still.0} {still.1}")
+    os_ready_close(r)?
+    net_close(a)?
+    net_close(l)?
+    fs_close(p.0)?
+    fs_close(p.1)?
+    0
+}
