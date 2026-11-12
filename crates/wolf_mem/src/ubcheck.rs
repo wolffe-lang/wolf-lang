@@ -753,8 +753,6 @@ struct Frame<'t> {
 }
 
 /// Per-body evaluation context: the typed side tables, span-keyed.
-/// One open socket in the checked machine's table (s39 net tier).
-#[derive(Debug)]
 /// s290 (`[os.ready.set]`): one entry of a checked readiness set — a
 /// handle of either table, its interest (1 read, 2 write, 3 both) and the
 /// caller's key.
@@ -766,6 +764,8 @@ struct ReadyEntry {
     key: i64,
 }
 
+/// One open socket in the checked machine's table (s39 net tier).
+#[derive(Debug)]
 enum NetSock {
     Listener(std::net::TcpListener),
     Stream(std::net::TcpStream),

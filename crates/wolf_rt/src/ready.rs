@@ -396,11 +396,11 @@ impl Set {
         let Some(idx) = self.by_handle.remove(&key) else {
             return false;
         };
-        if let Some(s) = self.slots[idx].take() {
-            if !s.polled {
-                let _ = kernel::del(&self.kfd, s.raw, s.interest);
-                self.in_kernel = self.in_kernel.saturating_sub(1);
-            }
+        if let Some(s) = self.slots[idx].take()
+            && !s.polled
+        {
+            let _ = kernel::del(&self.kfd, s.raw, s.interest);
+            self.in_kernel = self.in_kernel.saturating_sub(1);
         }
         self.free.push(idx);
         true
@@ -708,10 +708,11 @@ pub fn set_close(r: i64) -> Result<(), i64> {
             reg.sets.remove(i)
         };
         OPEN.fetch_sub(1, Ordering::Relaxed);
-        if gone.pid != std::process::id() && !kernel::INHERITED {
-            if let Ok(fd) = Arc::try_unwrap(gone.kfd) {
-                let _ = std::os::fd::IntoRawFd::into_raw_fd(fd);
-            }
+        if gone.pid != std::process::id()
+            && !kernel::INHERITED
+            && let Ok(fd) = Arc::try_unwrap(gone.kfd)
+        {
+            let _ = std::os::fd::IntoRawFd::into_raw_fd(fd);
         }
         Ok(())
     }
