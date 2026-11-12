@@ -193,9 +193,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "net_fetch" | "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read"
         | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline"
         | "net_listen_unix" | "net_connect_unix" | "net_listen_with" | "net_adopt_listener"
-        | "net_wait" | "net_writev" | "net_writev_head" | "net_nodelay" => {
-            SandboxCategory::Net
-        }
+        | "net_wait" | "net_writev" | "net_writev_head" | "net_nodelay"
+        // s290 (`[os.net.write.some]`, `[os.net.peer.cred]`): the send that
+        // counts and the peer's credentials, with the family.
+        | "net_write_some" | "net_peer_cred" => SandboxCategory::Net,
         // The s40 os/env builtin tier: `env` is I13's capability for
         // the environment family plus the process-context reads
         // (`os_cwd` — machine state that differs per host); `exec`
@@ -304,6 +305,11 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_signal_wait_fd" => SandboxCategory::Exec,
         // s248 (#795): its widening is signal control too.
         "os_signal_wait_fds" => SandboxCategory::Exec,
+        // s290 (`[os.ready.wait]`, `[os.ready.set]`): the one wait and the
+        // set the kernel holds are signal control over the program's
+        // handles, `exec` with `os_signal_wait_fds`.
+        "os_wait_ready" | "os_ready_open" | "os_ready_set" | "os_ready_wait"
+        | "os_ready_close" => SandboxCategory::Exec,
         // s241 (ruling #79 R6, #54's reading): a signal to a group or to
         // every process is process control, `exec` with `os_signal_send`;
         // moving this process into a group changes which group every later

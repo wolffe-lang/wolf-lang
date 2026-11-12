@@ -15456,6 +15456,22 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             let list_int = table.intern(TyKind::List(int_));
             (vec![list_int, int_], rowed(table, list_int, &["io"]))
         }
+        // s290 (`[os.net.write.some]`): ONE send, never a park — the count
+        // the host took; `busy` nothing taken, `closed` a peer gone,
+        // `invalid` a list of the wrong width.
+        "net_write_some" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, list_byte],
+                rowed(table, int_, &["busy", "closed", "invalid", "io"]),
+            )
+        }
+        // s290 (`[os.net.peer.cred]`): (pid, uid, gid) of a Unix-domain
+        // stream's peer; windows `unsupported`.
+        "net_peer_cred" => {
+            let triple = table.intern(TyKind::Tuple(vec![int_, int_, int_]));
+            (vec![int_], rowed(table, triple, &["unsupported", "io"]))
+        }
         "net_port" => (vec![int_], rowed(table, int_, &["io"])),
         "net_accept" => (vec![int_], rowed(table, int_, &["timeout", "io"])),
         "net_connect" => (
@@ -15729,6 +15745,33 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, pair, &["invalid", "unsupported", "io"]),
             )
         }
+        // s290 (`[os.ready.wait]`): the one wait over both tables and a
+        // set — ([index, facts, …], the meaning or 0).
+        "os_wait_ready" => {
+            let list_int = table.intern(TyKind::List(int_));
+            let pair = table.intern(TyKind::Tuple(vec![list_int, int_]));
+            (
+                vec![list_int, int_, int_],
+                rowed(table, pair, &["invalid", "unsupported", "io"]),
+            )
+        }
+        // s290 (`[os.ready.set]`): the set the kernel holds — its handle,
+        // an entry added, changed or removed under the caller's key, a wait
+        // answering ([key, facts, …], the meaning or 0), its close.
+        "os_ready_open" => (Vec::new(), rowed(table, int_, &["unsupported", "io"])),
+        "os_ready_set" => (
+            vec![int_, int_, int_, int_],
+            rowed(table, unit, &["invalid", "unsupported", "io"]),
+        ),
+        "os_ready_wait" => {
+            let list_int = table.intern(TyKind::List(int_));
+            let pair = table.intern(TyKind::Tuple(vec![list_int, int_]));
+            (
+                vec![int_, int_, int_],
+                rowed(table, pair, &["invalid", "unsupported", "io"]),
+            )
+        }
+        "os_ready_close" => (vec![int_], rowed(table, unit, &["io"])),
         // s232 (wolf-lang#681, `[os.signal.ignored]`): the listenable
         // meanings ignored now (before the program's first disposition
         // call, the ones it started with); windows `unsupported`.

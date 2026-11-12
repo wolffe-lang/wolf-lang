@@ -316,6 +316,10 @@ pub const PRELUDE: &[Ambient] = &[
     // s137 (#127): readiness over a set, `[os.net.wait]` — the
     // primitive a spawn-free serving loop blocks on.
     host("net_wait"),
+    // s290 (`[os.net.write.some]`, `[os.net.peer.cred]`): the send that
+    // counts and the peer's credentials — `net`.
+    host("net_write_some"),
+    host("net_peer_cred"),
     host("net_close"),
     // s106 (#45's builtin half): the per-socket deadline budget that
     // makes the `timeout` tag reachable — declared with the family
@@ -457,6 +461,14 @@ pub const PRELUDE: &[Ambient] = &[
     // s248 (wolf-lang#795; ruling #93 R2 A): the wait over several
     // descriptors, a signal set and a deadline. `exec`, with the wait.
     host("os_signal_wait_fds"),
+    // s290 (`[os.ready.wait]`, `[os.ready.set]`): the one wait over files,
+    // sockets and signals, and the set the kernel holds. `exec`, with the
+    // waits.
+    host("os_wait_ready"),
+    host("os_ready_open"),
+    host("os_ready_set"),
+    host("os_ready_wait"),
+    host("os_ready_close"),
     // s241 (wolf-lang#739, #740, #741, #762; ruling #79): a signal to a
     // process group and to every process this one may signal, this
     // process into a group, the host's last signal number and its
