@@ -397,11 +397,16 @@ fn record_fields(text: &str) -> (String, String, String, String) {
         .unwrap_or_default()
 }
 
+/// The lupin releases that predate wolf-interp's mirror of the one wait:
+/// each answers a program naming the seven calls "does not resolve".
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.61"];
+
 /// lupin, the reference interpreter, has no `poll` and no peer-credential
 /// call (`[os.ready.wait]`, `[os.net.peer.cred]`): every release refuses
-/// the corpus rows by name — before its mirror because the names do not
-/// resolve, after it because the waits and the credentials are refused by
-/// name. Never a wrong answer.
+/// the corpus rows, never a wrong answer. A release before its mirror
+/// (`PRE_MIRROR_LUPIN`) refuses them because the names do not resolve; any
+/// other resolves them and is refused at run, by name, at the first wait,
+/// before a line prints (r45: the 0.1.62 candidate at `72eff3c`).
 #[test]
 fn lupin_refuses_the_one_wait_by_name() {
     let Some(lupin) = sibling_lupin() else {
@@ -420,11 +425,22 @@ fn lupin_refuses_the_one_wait_by_name() {
         .output()
         .expect("lupin runs");
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    let (verdict, reason, version, _stdout) = record_fields(&text);
+    let (verdict, reason, version, stdout) = record_fields(&text);
     eprintln!("s290 lupin {version}: {verdict} ({reason})");
     assert_eq!(verdict, "unsupported", "lupin {version}: {text}");
-    assert!(
-        reason.contains("does not resolve") || reason.contains("os_wait_ready"),
-        "lupin {version} refuses by name: {reason}"
-    );
+    if PRE_MIRROR_LUPIN.contains(&version.as_str()) {
+        assert!(
+            reason.contains("does not resolve"),
+            "lupin {version} predates the mirror: {reason}"
+        );
+    } else {
+        assert!(
+            reason.contains("os_wait_ready") && !reason.contains("does not resolve"),
+            "lupin {version} refuses the first wait by name: {reason}"
+        );
+        assert_eq!(
+            stdout, "",
+            "lupin {version} prints nothing before the first wait"
+        );
+    }
 }
