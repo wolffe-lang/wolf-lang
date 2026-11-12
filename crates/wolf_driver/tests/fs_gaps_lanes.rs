@@ -212,6 +212,7 @@ fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
         "0.1.59" => MEASURED_059,
         "0.1.60" => MEASURED_060,
         "0.1.61" => MEASURED_061,
+        "0.1.62" => MEASURED_062,
         _ => &[],
     };
     PRE_MIRROR_LUPIN.contains(&version)
@@ -252,6 +253,12 @@ const MEASURED_060: &[(&str, &[&str])] = &[
 /// first to run the rows themselves with 0.1.61: a rig without a nested
 /// engine skips them, and a skip measures nothing.
 const MEASURED_061: &[(&str, &[&str])] = MEASURED_060;
+
+/// r45: the 0.1.62 candidate at its release head `72eff3c` answers the four
+/// container rows as 0.1.61 does, "does not resolve" at `fs_lock`,
+/// `fs_mkfifo` and `fs_set_nonblock` (wolf-interp#278 still open), measured
+/// directly on their fixtures; its mirror adds only the seven one-wait names.
+const MEASURED_062: &[(&str, &[&str])] = MEASURED_060;
 
 /// The calls each container row's lupin leg names, shared by the row and
 /// the predicate's test so the two cannot drift apart.
