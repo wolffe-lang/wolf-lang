@@ -1019,12 +1019,16 @@ pub fn names_a_restore(m: &WirModule) -> bool {
 /// drain thread) when it is not made yet: the listen, the wait and the
 /// wait on a descriptor (`[os.signal.hub]`). `ignore`, `default`,
 /// `poll` and `raise` make nothing on unix and are not here.
-pub const HUB_SIGNAL: [&str; 4] = [
+pub const HUB_SIGNAL: [&str; 6] = [
     "__wolf_rt_os_signal_listen",
     "__wolf_rt_os_signal_wait",
     "__wolf_rt_os_signal_wait_fd",
     // s248 (#795): the wait over several descriptors makes the hub too.
     "__wolf_rt_os_signal_wait_fds",
+    // s290 (`[os.ready.wait]`, `[os.ready.set]`): the one wait and the
+    // set's wait, whatever set a call passes.
+    "__wolf_rt_os_wait_ready",
+    "__wolf_rt_os_ready_wait",
 ];
 
 /// Whether a function the program reaches calls one of `names` — read
@@ -1070,6 +1074,9 @@ pub fn names_a_descriptor_wait(m: &WirModule) -> bool {
         &[
             "__wolf_rt_os_signal_wait_fd",
             "__wolf_rt_os_signal_wait_fds",
+            // s290: the one wait and the set's wait share the pipe.
+            "__wolf_rt_os_wait_ready",
+            "__wolf_rt_os_ready_wait",
         ],
     )
 }

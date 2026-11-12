@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 278] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 285] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -347,6 +347,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 278] = [
     // deadline in, the ready subset minted through the caller out
     // slot, `[os.net.wait]`.
     ("__wolf_rt_net_wait", 3, true),
+    // s290 (`[os.net.write.some]`, `[os.net.peer.cred]`).
+    ("__wolf_rt_net_write_some", 3, true),
+    ("__wolf_rt_net_peer_cred", 2, true),
     // The s107 json family (wolf_rt::json, #118's last crossing):
     // pure query kernels — two str pairs in, a code back, the
     // rendered node through a caller out slot; `json_len` rides the
@@ -478,6 +481,12 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 278] = [
     // header, the set and the deadline in, the (index, meaning) pair
     // through a 16-byte out slot.
     ("__wolf_rt_os_signal_wait_fds", 4, true),
+    // s290 (`[os.ready.wait]`, `[os.ready.set]`).
+    ("__wolf_rt_os_wait_ready", 4, true),
+    ("__wolf_rt_os_ready_open", 0, true),
+    ("__wolf_rt_os_ready_set", 4, true),
+    ("__wolf_rt_os_ready_wait", 4, true),
+    ("__wolf_rt_os_ready_close", 1, true),
     // s236 (#633, #742): the four ids (none in, the id or a negated
     // code out), the supplementary groups (a minted List[int] header
     // through the out slot), and the drop (the two ids and the groups'
