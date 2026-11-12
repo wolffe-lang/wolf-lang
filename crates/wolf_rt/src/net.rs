@@ -202,6 +202,36 @@ impl Sock {
         }
     }
 
+    /// s290 (`[os.net.write.some]`): one send that never parks, whatever
+    /// the socket's mode: `send(2)` with `MSG_DONTWAIT` on unix (and
+    /// `MSG_NOSIGNAL` where the host has it: macOS's sockets carry std's
+    /// `SO_NOSIGPIPE`), the non-blocking stream's own write on windows.
+    fn send_now(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsRawFd as _;
+            let raw = match self {
+                Sock::Stream(s) => s.as_raw_fd(),
+                Sock::UnixStream(s) => s.as_raw_fd(),
+                _ => return Err(std::io::Error::from(std::io::ErrorKind::Other)),
+            };
+            #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+            let flags = libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL;
+            #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "freebsd")))]
+            let flags = libc::MSG_DONTWAIT;
+            // SAFETY: a live socket and `bytes.len()` readable bytes.
+            let n = unsafe { libc::send(raw, bytes.as_ptr().cast(), bytes.len(), flags) };
+            if n < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(n as usize)
+        }
+        #[cfg(not(unix))]
+        {
+            self.write(bytes)
+        }
+    }
+
     /// One accepted connection of the listener's own family, as the
     /// kernel hands it over; the runtime's posture for it (non-blocking
     /// on the reactor hosts, Nagle off) is [`NetTable::push_stream`]'s
@@ -1417,6 +1447,66 @@ impl NetTable {
         Ok(true)
     }
 
+    /// `net_write_some(fd, bytes)` (s290, `[os.net.write.some]`): ONE send
+    /// of `bytes`, all of them or a first part, never a park; the count the
+    /// host took (at least 1 for a non-empty list; 0 for an empty one, the
+    /// handle still checked and no send). `busy` when the socket takes
+    /// nothing now (its EAGAIN kept in `os_error()`, `[os.fs.nonblock]`'s
+    /// rule); `closed` for a peer gone, with no SIGPIPE; `io` for a
+    /// listener, a forged or closed handle and the rest. A TCP stream pays
+    /// `[os.net.nodelay]`'s deferred option first, as every write does. On
+    /// unix the send is `send(2)` with `MSG_DONTWAIT` (and `MSG_NOSIGNAL`
+    /// where the host has it; macOS's sockets carry `SO_NOSIGPIPE` from
+    /// std), so it never parks whatever the socket's mode; on windows the
+    /// stream lives non-blocking under the runtime (`[os.net.io]`).
+    pub fn write_some(&mut self, fd: i64, bytes: &[u8]) -> Result<usize, NetErr> {
+        let Some(e) = self.entry(fd).filter(|e| e.sock.is_stream()) else {
+            return Err("io");
+        };
+        if bytes.is_empty() {
+            return Ok(0);
+        }
+        e.arm_nodelay()?;
+        loop {
+            match e.sock.send_now(bytes) {
+                Ok(0) => return Err("io"),
+                Ok(n) => {
+                    e.wrote(n);
+                    return Ok(n);
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    crate::fs::os_error_record(&err);
+                    return Err("busy");
+                }
+                Err(err) => return Err(host_err(&err)),
+            }
+        }
+    }
+
+    /// `net_peer_cred(fd)` (s290, `[os.net.peer.cred]`): `(pid, uid, gid)` of
+    /// the process at the other end of a connected `AF_UNIX` stream, its
+    /// effective ids as the host recorded them at the connection, its pid
+    /// -1 where the host gives none. A TCP stream, a listener, a forged or
+    /// closed handle is `io`, decided here before the host is asked (linux
+    /// answers a listener and macOS a TCP socket, measured); windows
+    /// `unsupported`, by name.
+    pub fn peer_cred(&mut self, fd: i64) -> Result<(i64, i64, i64), NetErr> {
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsRawFd as _;
+            let Some(Sock::UnixStream(s)) = self.get(fd) else {
+                return Err("io");
+            };
+            peer_cred_of(s.as_raw_fd()).map_err(|e| host_io(&e))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = fd;
+            Err("unsupported")
+        }
+    }
+
     /// `net_nodelay(fd, on)` (s141, #254, `[os.net.nodelay]`): Nagle's
     /// algorithm off (`true`, the posture every stream enters the table
     /// with) or on (`false`) for a TCP stream. A listener, a
@@ -1542,6 +1632,9 @@ pub mod net_code {
     pub const NOT_FOUND: i64 = 8;
     pub const DENIED: i64 = 9;
     pub const EXISTS: i64 = 10;
+    /// s290 (`[os.net.write.some]`): the one send found no room
+    /// (`[os.fs.nonblock]`'s mark, the same number as the fs family's).
+    pub const BUSY: i64 = 11;
 }
 
 /// The process-wide socket table behind the shim family — the fs
@@ -1579,6 +1672,117 @@ fn dial_unix(path: &str) -> Result<Sock, NetErr> {
     }
 }
 
+/// s290 (`[os.net.peer.cred]`): the credentials the host recorded for the
+/// peer of the `AF_UNIX` stream `raw`: linux (and PAX) `SO_PEERCRED`;
+/// macOS `LOCAL_PEERCRED` (the uid and the first group) and
+/// `LOCAL_PEERPID`; freebsd `getpeereid`, pid -1.
+#[cfg(unix)]
+fn peer_cred_of(raw: std::os::fd::RawFd) -> std::io::Result<(i64, i64, i64)> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        // SAFETY: a zeroed ucred the host fills, its length beside it.
+        unsafe {
+            let mut c: libc::ucred = std::mem::zeroed();
+            let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+            if libc::getsockopt(
+                raw,
+                libc::SOL_SOCKET,
+                libc::SO_PEERCRED,
+                (&raw mut c).cast(),
+                &mut len,
+            ) < 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok((i64::from(c.pid), i64::from(c.uid), i64::from(c.gid)))
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // <sys/ucred.h>'s `struct xucred` and <sys/un.h>'s options, as the
+        // header declares them.
+        #[repr(C)]
+        struct XUcred {
+            cr_version: u32,
+            cr_uid: u32,
+            cr_ngroups: i16,
+            cr_groups: [u32; 16],
+        }
+        const SOL_LOCAL: libc::c_int = 0;
+        const LOCAL_PEERCRED: libc::c_int = 1;
+        const LOCAL_PEERPID: libc::c_int = 2;
+        // SAFETY: zeroed records the host fills, their lengths beside them.
+        unsafe {
+            let mut x: XUcred = std::mem::zeroed();
+            let mut len = std::mem::size_of::<XUcred>() as libc::socklen_t;
+            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERCRED, (&raw mut x).cast(), &mut len) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let mut pid: libc::pid_t = -1;
+            let mut plen = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
+            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERPID, (&raw mut pid).cast(), &mut plen) < 0 {
+                pid = -1;
+            }
+            let gid = if x.cr_ngroups > 0 {
+                i64::from(x.cr_groups[0])
+            } else {
+                -1
+            };
+            Ok((i64::from(pid), i64::from(x.cr_uid), gid))
+        }
+    }
+    #[cfg(target_os = "freebsd")]
+    {
+        let mut uid: libc::uid_t = 0;
+        let mut gid: libc::gid_t = 0;
+        // SAFETY: two ids the host fills.
+        if unsafe { libc::getpeereid(raw, &mut uid, &mut gid) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok((-1, i64::from(uid), i64::from(gid)))
+    }
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd"
+    )))]
+    {
+        let _ = raw;
+        Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+    }
+}
+
+/// s290 (`[os.ready.wait]`): a duplicate (close-on-exec) of the descriptor
+/// behind a live net handle, made under the table lock so a close by
+/// another task cannot let its number be reused while a wait holds it.
+/// `None`: a closed or forged handle, or a duplicate the host will not
+/// make (its number in `os_error()`).
+#[cfg(unix)]
+pub(crate) fn dup_of(h: i64) -> Option<std::os::fd::OwnedFd> {
+    use std::os::fd::FromRawFd as _;
+    let mut t = tbl();
+    let raw = t.raw_fd_of(h)?;
+    // SAFETY: a live descriptor of the table, held under its lock.
+    let fd = unsafe { libc::fcntl(raw, libc::F_DUPFD_CLOEXEC, 3) };
+    if fd < 0 {
+        crate::fs::os_error_record(&std::io::Error::last_os_error());
+        return None;
+    }
+    // SAFETY: a fresh descriptor this call owns.
+    Some(unsafe { std::os::fd::OwnedFd::from_raw_fd(fd) })
+}
+
+/// s290 (`[os.ready.set]`): `f` on the descriptor behind a live net handle,
+/// under the table lock, so the descriptor stays the handle's while `f`
+/// registers it; `None` for a closed or forged handle.
+#[cfg(unix)]
+pub(crate) fn with_raw<R>(h: i64, f: impl FnOnce(std::os::fd::RawFd) -> R) -> Option<R> {
+    let mut t = tbl();
+    let raw = t.raw_fd_of(h)?;
+    Some(f(raw))
+}
+
 fn tbl() -> std::sync::MutexGuard<'static, NetTable> {
     NET.lock().unwrap_or_else(|p| p.into_inner())
 }
@@ -1593,6 +1797,7 @@ fn code_of_tag(tag: NetErr) -> i64 {
         "not_found" => net_code::NOT_FOUND,
         "denied" => net_code::DENIED,
         "exists" => net_code::EXISTS,
+        "busy" => net_code::BUSY,
         _ => net_code::IO,
     }
 }
@@ -2156,6 +2361,52 @@ pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hd
     r
 }
 
+/// `net_write_some(fd: int, bytes: List[byte]) -> int ! {busy, closed,
+/// invalid, io}` (s290, `[os.net.write.some]`) — 0 and the count through
+/// `out`, or the code. A list of another element width is `invalid`
+/// before the handle is looked at, as `fs_write_some` refuses it.
+///
+/// # Safety
+///
+/// `hdr` must be a live list header; `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_write_some(fd: i64, hdr: i64, out: i64) -> i64 {
+    crate::fs::os_error_clear();
+    let Some(bytes) = (unsafe { crate::list::u8_elems(hdr) }) else {
+        return net_code::INVALID;
+    };
+    match tbl().write_some(fd, bytes) {
+        Ok(n) => {
+            unsafe { crate::str::write_word(out, n as i64) };
+            net_code::OK
+        }
+        Err(t) => code_of_tag(t),
+    }
+}
+
+/// `net_peer_cred(fd: int) -> (int, int, int) ! {io, unsupported}` (s290,
+/// `[os.net.peer.cred]`) — 0 and `(pid, uid, gid)` through `out`, or the
+/// code.
+///
+/// # Safety
+///
+/// `out` must address 24 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_peer_cred(fd: i64, out: i64) -> i64 {
+    crate::fs::os_error_clear();
+    match tbl().peer_cred(fd) {
+        Ok((pid, uid, gid)) => {
+            unsafe {
+                crate::str::write_word(out, pid);
+                crate::str::write_word(out + 8, uid);
+                crate::str::write_word(out + 16, gid);
+            }
+            net_code::OK
+        }
+        Err(t) => code_of_tag(t),
+    }
+}
+
 /// `net_nodelay(fd, on) -> () ! {io}` (s141, #254, `[os.net.nodelay]`):
 /// Nagle off (`on != 0`, the default every stream is handed out with)
 /// or back on, for a TCP stream; anything else is `IO`.
@@ -2173,7 +2424,13 @@ pub extern "C" fn __wolf_rt_net_nodelay(fd: i64, on: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_close(fd: i64) -> i64 {
     crate::fs::os_error_clear();
-    match tbl().close(fd) {
+    let mut t = tbl();
+    // s290 (`[os.ready.set]`): the handle leaves every readiness set while
+    // its descriptor is still open (the table's lock, then the sets').
+    if t.entry(fd).is_some() {
+        crate::ready::forget(crate::ready::Table::Net, fd);
+    }
+    match t.close(fd) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
     }
