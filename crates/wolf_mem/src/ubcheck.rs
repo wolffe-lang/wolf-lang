@@ -755,6 +755,17 @@ struct Frame<'t> {
 /// Per-body evaluation context: the typed side tables, span-keyed.
 /// One open socket in the checked machine's table (s39 net tier).
 #[derive(Debug)]
+/// s290 (`[os.ready.set]`): one entry of a checked readiness set — a
+/// handle of either table, its interest (1 read, 2 write, 3 both) and the
+/// caller's key.
+#[derive(Debug, Clone, Copy)]
+struct ReadyEntry {
+    net: bool,
+    handle: i64,
+    interest: i64,
+    key: i64,
+}
+
 enum NetSock {
     Listener(std::net::TcpListener),
     Stream(std::net::TcpStream),
@@ -1563,6 +1574,11 @@ struct Machine<'t> {
     /// has no timed accept, so the budget lives here and
     /// `accept_deadline` polls it out.
     sock_deadlines: HashMap<i64, std::time::Duration>,
+    /// s290 (`[os.ready.set]`): the program's readiness sets, each a list
+    /// of entries the machine holds itself (no kernel set: every wait
+    /// polls them, O(N)); `ready_next` the next set's number.
+    ready_sets: Vec<(i64, Vec<ReadyEntry>)>,
+    ready_next: i64,
     /// Spawned OS children (s40 os tier): a third handle namespace,
     /// same discipline — index = the `int` handle, `None` after a
     /// successful `os_wait` (the reap tombstones; double wait is
@@ -3031,6 +3047,8 @@ impl<'t> Machine<'t> {
             files: Vec::new(),
             socks: Vec::new(),
             sock_deadlines: HashMap::new(),
+            ready_sets: Vec::new(),
+            ready_next: 0,
             children: Vec::new(),
             signal_listening: 0,
             signal_queue: std::collections::VecDeque::new(),
@@ -7087,6 +7105,8 @@ impl<'t> Machine<'t> {
                 match usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i)) {
                     Some(slot @ Some(_)) => {
                         *slot = None; // drop closes; double close is `io`
+                        // s290 (`[os.ready.set]`): it leaves every set.
+                        self.ready_forget(false, fd);
                         Ok(Flow::Val(Value::Unit))
                     }
                     _ => Ok(tag("io")),
@@ -9239,6 +9259,71 @@ impl<'t> Machine<'t> {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
+            // s290 (`[os.net.write.some]`): ONE send that never parks —
+            // `send(2)` with `MSG_DONTWAIT` (and `MSG_NOSIGNAL` where the host
+            // has it) on the machine's own socket, whatever its mode; the
+            // count, `busy` (the host's EAGAIN kept), `closed`, `invalid`,
+            // `io`, as the runtime answers them. An empty list is 0.
+            "net_write_some" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let bytes = match self.bytes_of(argv.get(1)) {
+                    None => return self.refuse("this net call shape", span),
+                    Some(Err(())) => return Ok(tag("invalid")),
+                    Some(Ok(b)) => b,
+                };
+                let Some(sock) = self.sock(fd).filter(|s| s.is_stream()) else {
+                    return Ok(tag("io"));
+                };
+                if bytes.is_empty() {
+                    return Ok(Flow::Val(Value::Int(0)));
+                }
+                match checked_send_now(sock, &bytes) {
+                    Ok(0) => Ok(tag("io")),
+                    Ok(n) => Ok(Flow::Val(Value::Int(n as i64))),
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        fs_host_error(&e);
+                        Ok(tag("busy"))
+                    }
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
+                }
+            }
+            // s290 (`[os.net.peer.cred]`): the peer's (pid, uid, gid) of a
+            // Unix-domain stream, the runtime's options asked of the
+            // machine's own socket; any other kind `io`; windows
+            // `unsupported`.
+            "net_peer_cred" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let raw = match self.sock(fd) {
+                        Some(NetSock::UnixStream(s)) => s.as_raw_fd(),
+                        _ => return Ok(tag("io")),
+                    };
+                    match checked_peer_cred(raw) {
+                        Ok((pid, uid, gid)) => Ok(Flow::Val(Value::Struct {
+                            fields: vec![
+                                ("0".to_string(), Value::Int(pid)),
+                                ("1".to_string(), Value::Int(uid)),
+                                ("2".to_string(), Value::Int(gid)),
+                            ],
+                        })),
+                        Err(e) => {
+                            fs_host_error(&e);
+                            Ok(tag("io"))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = fd;
+                    Ok(tag("unsupported"))
+                }
+            }
             "net_close" => {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);
@@ -9250,6 +9335,8 @@ impl<'t> Machine<'t> {
                         // listener's path is unlinked (s136, the
                         // runtime's cleanup posture, mirrored).
                         let gone = slot.take();
+                        // s290 (`[os.ready.set]`): it leaves every set.
+                        self.ready_forget(true, fd);
                         #[cfg(unix)]
                         if let Some(NetSock::UnixListener(l, path)) = gone {
                             drop(l);
@@ -9439,6 +9526,145 @@ impl<'t> Machine<'t> {
                 })
             })
             .collect()
+    }
+
+    /// s290 (`[os.ready.set]`): a closed handle leaves every set.
+    fn ready_forget(&mut self, net: bool, h: i64) {
+        for (_, es) in &mut self.ready_sets {
+            es.retain(|e| !(e.net == net && e.handle == h));
+        }
+    }
+
+    /// s290: whether `h` is a live handle of its table.
+    fn ready_live(&self, net: bool, h: i64) -> bool {
+        if net {
+            usize::try_from(h)
+                .ok()
+                .and_then(|i| self.socks.get(i))
+                .is_some_and(Option::is_some)
+        } else {
+            self.fs_handle(h).is_some()
+        }
+    }
+
+    /// s290 (`[os.ready.wait]`): a duplicate of the descriptor behind a
+    /// handle of either table, held for the wait so the machine's table
+    /// stays free for the tasks the wait lets run; `None` a closed or
+    /// forged handle.
+    #[cfg(unix)]
+    fn ready_dup(&self, net: bool, h: i64) -> Option<std::fs::File> {
+        use std::os::fd::FromRawFd as _;
+        if !net {
+            return self.fs_handle(h).and_then(|f| f.try_clone().ok());
+        }
+        let raw = self.wait_raws(&[h])?.pop()?;
+        // SAFETY: a live descriptor of the machine's own socket.
+        let fd = unsafe { libc::fcntl(raw, libc::F_DUPFD_CLOEXEC, 3) };
+        if fd < 0 {
+            return None;
+        }
+        // SAFETY: a fresh descriptor this call owns.
+        Some(unsafe { std::fs::File::from_raw_fd(fd) })
+    }
+
+    /// s290 (`[os.ready.wait]`, `[os.ready.set]`): the one wait over
+    /// `files` (each a duplicate, its interest and the label the answer
+    /// names it by: an index or a key) — every ready one answered with its
+    /// facts beside one meaning of `want` (0: none asked). The runtime's
+    /// answers on the machine's own queue: a meaning taken looks once more
+    /// with no park; entries found take a meaning that came with them.
+    /// Beside other tasks the wait is a park a millisecond at a time
+    /// (`os_signal_wait_fds`'s posture). `Err` is a row tag.
+    #[cfg(unix)]
+    fn ready_wait(
+        &mut self,
+        files: Vec<(std::fs::File, i64, i64)>,
+        want: i64,
+        deadline: i64,
+        span: Span,
+    ) -> E<Result<(Vec<i64>, i64), &'static str>> {
+        use std::os::fd::AsRawFd as _;
+        let fds: Vec<(libc::c_int, libc::c_short)> = files
+            .iter()
+            .map(|(f, i, _)| (f.as_raw_fd(), checked_ready_events(*i)))
+            .collect();
+        let pairs = |re: &[libc::c_short]| -> Vec<i64> {
+            files
+                .iter()
+                .zip(re)
+                .filter_map(|((_, i, label), &r)| {
+                    let f = checked_ready_facts(r, *i);
+                    (f != 0).then_some([*label, f])
+                })
+                .flatten()
+                .collect()
+        };
+        let end = u64::try_from(deadline)
+            .ok()
+            .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
+        loop {
+            let mut meaning = 0;
+            if want != 0 {
+                meaning = self.ready_take(want);
+            }
+            if meaning != 0 {
+                return Ok(match checked_sig::wait_ready_many(&fds, 0, 0) {
+                    Err(t) => Err(t),
+                    Ok(re) => Ok((re.map(|re| pairs(&re)).unwrap_or_default(), meaning)),
+                });
+            }
+            let left = end.map(|e| e.saturating_duration_since(std::time::Instant::now()));
+            let left_ms =
+                left.map(|d| i32::try_from(d.as_micros().div_ceil(1000)).unwrap_or(i32::MAX));
+            let others = if left_ms == Some(0) {
+                false
+            } else {
+                self.yield_now(span)?
+            };
+            let timeout = match (left_ms, others) {
+                (Some(0), _) => 0,
+                (Some(ms), true) => ms.min(1),
+                (Some(ms), false) => ms,
+                (None, true) => 1,
+                (None, false) => -1,
+            };
+            match checked_sig::wait_ready_many(&fds, want & self.signal_listening, timeout) {
+                Err(t) => return Ok(Err(t)),
+                Ok(Some(re)) => {
+                    let found = pairs(&re);
+                    if !found.is_empty() {
+                        let m = if want != 0 { self.ready_take(want) } else { 0 };
+                        return Ok(Ok((found, m)));
+                    }
+                }
+                Ok(None) => {}
+            }
+            if left_ms == Some(0) {
+                let m = if want != 0 { self.ready_take(want) } else { 0 };
+                return Ok(Ok((Vec::new(), m)));
+            }
+        }
+    }
+
+    /// s290: the oldest meaning of `want` the machine holds, taken (0:
+    /// none) — the queue, then the host's delivered set.
+    fn ready_take(&mut self, want: i64) -> i64 {
+        checked_sig::settle(self.signal_listening);
+        if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
+            return self.signal_queue.remove(pos).unwrap_or(0);
+        }
+        checked_sig::take(want & self.signal_listening).unwrap_or(0)
+    }
+
+    /// s290: the wait's answer, `(List[int], int)`.
+    fn ready_answer(&mut self, pairs: Vec<i64>, meaning: i64, span: Span) -> E<Flow> {
+        let id = self.mint_list(pairs.into_iter().map(Value::Int).collect(), span)?;
+        Ok(Flow::Val(Value::Struct {
+            fields: vec![
+                ("0".to_string(), Value::List(id)),
+                ("1".to_string(), Value::Int(meaning)),
+            ],
+        }))
     }
 
     /// s244: the windows twin of the unix `wait_raws`.
@@ -10852,6 +11078,181 @@ impl<'t> Machine<'t> {
                             return Ok(Flow::Val(Value::Int(0)));
                         }
                     }
+                }
+            }
+            // s290 (`[os.ready.wait]`): the one wait over both tables — the
+            // runtime's order of refusal (a non-empty set's shape `io`, a
+            // deadline below -1 `invalid`, a host other than linux and macOS
+            // `unsupported`, a wait nothing could end and a forged or closed
+            // handle `io`), every ready element answered with its facts
+            // beside one meaning, over the host's `poll(2)` on a duplicate
+            // of each element's descriptor and the machine's wake pipe.
+            "os_wait_ready" => {
+                let (Some(Value::List(id)), Some(mask), Some(deadline)) =
+                    (argv.first(), int_arg(1), int_arg(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let id = *id;
+                if mask != 0 && !sig_set_ok(mask) {
+                    return Ok(tag("io"));
+                }
+                if deadline < -1 {
+                    return Ok(tag("invalid"));
+                }
+                if !cfg!(any(target_os = "linux", target_os = "macos")) {
+                    return Ok(tag("unsupported"));
+                }
+                let mut elems = Vec::new();
+                for v in self.lists.get(id).into_iter().flatten() {
+                    match v {
+                        Value::Int(h) => elems.push(*h),
+                        _ => return self.refuse("a non-int element", span),
+                    }
+                }
+                if elems.is_empty() && mask == 0 && deadline == -1 {
+                    return Ok(tag("io"));
+                }
+                #[cfg(unix)]
+                {
+                    let mut files = Vec::with_capacity(elems.len());
+                    for (i, &e) in elems.iter().enumerate() {
+                        if e < 0 {
+                            return Ok(tag("io"));
+                        }
+                        let net = e & READY_NET != 0;
+                        let write = e & READY_WRITE != 0;
+                        let Some(f) = self.ready_dup(net, e & !(READY_NET | READY_WRITE)) else {
+                            return Ok(tag("io"));
+                        };
+                        files.push((f, if write { 2 } else { 1 }, i as i64));
+                    }
+                    match self.ready_wait(files, mask, deadline, span)? {
+                        Err(t) => Ok(tag(t)),
+                        Ok((pairs, m)) => self.ready_answer(pairs, m, span),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s290 (`[os.ready.set]`): the set, held by the machine as a
+            // list of its own (no kernel set: each wait polls every entry).
+            "os_ready_open" => {
+                if !cfg!(any(target_os = "linux", target_os = "macos")) {
+                    return Ok(tag("unsupported"));
+                }
+                let h = self.ready_next;
+                self.ready_next += 1;
+                self.ready_sets.push((h, Vec::new()));
+                Ok(Flow::Val(Value::Int(h)))
+            }
+            "os_ready_set" => {
+                let (Some(r), Some(handle), Some(interest), Some(key)) =
+                    (int_arg(0), int_arg(1), int_arg(2), int_arg(3))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                if !(0..=3).contains(&interest) || key < 0 {
+                    return Ok(tag("invalid"));
+                }
+                if !cfg!(any(target_os = "linux", target_os = "macos")) {
+                    return Ok(tag("unsupported"));
+                }
+                let Some(si) = self.ready_sets.iter().position(|(h, _)| *h == r) else {
+                    return Ok(tag("io"));
+                };
+                if handle < 0 || handle & READY_WRITE != 0 {
+                    return Ok(tag("io"));
+                }
+                let net = handle & READY_NET != 0;
+                let h = handle & !READY_NET;
+                let pos = self.ready_sets[si]
+                    .1
+                    .iter()
+                    .position(|e| e.net == net && e.handle == h);
+                if interest == 0 {
+                    return match pos {
+                        Some(p) => {
+                            self.ready_sets[si].1.remove(p);
+                            Ok(Flow::Val(Value::Unit))
+                        }
+                        None => Ok(tag("io")),
+                    };
+                }
+                if !self.ready_live(net, h) {
+                    return Ok(tag("io"));
+                }
+                match pos {
+                    Some(p) => {
+                        let e = &mut self.ready_sets[si].1[p];
+                        e.interest = interest;
+                        e.key = key;
+                    }
+                    None => self.ready_sets[si].1.push(ReadyEntry {
+                        net,
+                        handle: h,
+                        interest,
+                        key,
+                    }),
+                }
+                Ok(Flow::Val(Value::Unit))
+            }
+            "os_ready_wait" => {
+                let (Some(r), Some(mask), Some(deadline)) = (int_arg(0), int_arg(1), int_arg(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                if mask != 0 && !sig_set_ok(mask) {
+                    return Ok(tag("io"));
+                }
+                if deadline < -1 {
+                    return Ok(tag("invalid"));
+                }
+                if !cfg!(any(target_os = "linux", target_os = "macos")) {
+                    return Ok(tag("unsupported"));
+                }
+                let Some(entries) = self
+                    .ready_sets
+                    .iter()
+                    .find(|(h, _)| *h == r)
+                    .map(|(_, es)| es.clone())
+                else {
+                    return Ok(tag("io"));
+                };
+                if entries.is_empty() && mask == 0 && deadline == -1 {
+                    return Ok(tag("io"));
+                }
+                #[cfg(unix)]
+                {
+                    let mut files = Vec::with_capacity(entries.len());
+                    for e in entries {
+                        let Some(f) = self.ready_dup(e.net, e.handle) else {
+                            return Ok(tag("io"));
+                        };
+                        files.push((f, e.interest, e.key));
+                    }
+                    match self.ready_wait(files, mask, deadline, span)? {
+                        Err(t) => Ok(tag(t)),
+                        Ok((pairs, m)) => self.ready_answer(pairs, m, span),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    Ok(tag("unsupported"))
+                }
+            }
+            "os_ready_close" => {
+                let Some(r) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                match self.ready_sets.iter().position(|(h, _)| *h == r) {
+                    Some(i) => {
+                        self.ready_sets.remove(i);
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    None => Ok(tag("io")),
                 }
             }
             // s248 (wolf-lang#795, `[os.signal.wait.fds]`): the wait over
@@ -12877,6 +13278,8 @@ impl<'t> Machine<'t> {
             // operations, D30 rows, comptime is the one refusal site.
             "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_listen_with"
             | "net_adopt_listener" | "net_wait" | "net_port" | "net_accept" | "net_connect"
+            // s290: the send that counts and the peer's credentials.
+            | "net_write_some" | "net_peer_cred"
             | "net_read" | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
             | "net_deadline" | "net_writev" | "net_writev_head" | "net_nodelay" => {
                 let mut argv = Vec::new();
@@ -12932,6 +13335,9 @@ impl<'t> Machine<'t> {
             | "os_term_size" | "os_term_chars" | "os_signal_wait_fd"
             // s248 (#795): the wait over several descriptors.
             | "os_signal_wait_fds"
+            // s290: the one wait over both tables, and the set.
+            | "os_wait_ready" | "os_ready_open" | "os_ready_set" | "os_ready_wait"
+            | "os_ready_close"
             // s236 (#633, #742): who the process runs as, and the drop.
             | "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" | "os_set_ids"
             // s241 (#739, #740, #741, #762): the group and all sends, the
@@ -15654,6 +16060,172 @@ const SIG_ALL: i64 = (1 << 20) - 1;
 /// the six fault signals, bits 0..27).
 const SIG_SENDABLE: i64 = (1 << 28) - 1;
 
+/// s290 (`[os.ready.wait]`): bit 61 of an element, a net handle; bit 62,
+/// write interest (`wolf_rt::ready`'s, mirrored: the runtime is not a
+/// dependency of this crate, D15).
+const READY_NET: i64 = 1 << 61;
+const READY_WRITE: i64 = 1 << 62;
+
+/// s290: the `poll(2)` events an entry with `interest` asks — the
+/// runtime's `ready::poll_events`, mirrored.
+#[cfg(unix)]
+fn checked_ready_events(interest: i64) -> libc::c_short {
+    let mut ev = 0;
+    if interest & 1 != 0 {
+        ev |= libc::POLLIN;
+        #[cfg(target_os = "linux")]
+        {
+            ev |= libc::POLLRDHUP;
+        }
+    }
+    if interest & 2 != 0 {
+        ev |= libc::POLLOUT;
+    }
+    ev
+}
+
+/// s290 (`[os.ready.facts]`): the facts `poll(2)`'s revents give an entry
+/// with `interest` — the runtime's `ready::facts_of`, mirrored: a hangup
+/// or an error always comes with an interest asked.
+#[cfg(unix)]
+fn checked_ready_facts(re: libc::c_short, interest: i64) -> i64 {
+    let mut f = 0;
+    if interest & 1 != 0 && re & libc::POLLIN != 0 {
+        f |= 1;
+    }
+    if interest & 2 != 0 && re & libc::POLLOUT != 0 {
+        f |= 2;
+    }
+    #[cfg(target_os = "linux")]
+    if re & libc::POLLRDHUP != 0 {
+        f |= 4 | (interest & 1);
+    }
+    if re & libc::POLLHUP != 0 {
+        f |= 4 | interest;
+    }
+    if re & libc::POLLERR != 0 {
+        f |= 8 | interest;
+    }
+    f
+}
+
+/// s290 (`[os.net.write.some]`): one send that never parks — the runtime's
+/// `Sock::send_now`, mirrored on the machine's socket.
+fn checked_send_now(sock: &mut NetSock, bytes: &[u8]) -> std::io::Result<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd as _;
+        let raw = match sock {
+            NetSock::Stream(s) => s.as_raw_fd(),
+            NetSock::UnixStream(s) => s.as_raw_fd(),
+            _ => return Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        };
+        #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+        let flags = libc::MSG_DONTWAIT | libc::MSG_NOSIGNAL;
+        #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "freebsd")))]
+        let flags = libc::MSG_DONTWAIT;
+        loop {
+            // SAFETY: a live socket and `bytes.len()` readable bytes.
+            let n = unsafe { libc::send(raw, bytes.as_ptr().cast(), bytes.len(), flags) };
+            if n >= 0 {
+                return Ok(n as usize);
+            }
+            let e = std::io::Error::last_os_error();
+            if e.kind() != std::io::ErrorKind::Interrupted {
+                return Err(e);
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        use std::io::Write as _;
+        let NetSock::Stream(s) = sock else {
+            return Err(std::io::Error::from(std::io::ErrorKind::Other));
+        };
+        s.set_nonblocking(true)?;
+        let r = s.write(bytes);
+        let _ = s.set_nonblocking(false);
+        r
+    }
+}
+
+/// s290 (`[os.net.peer.cred]`): the peer's credentials of the `AF_UNIX`
+/// stream `raw` — the runtime's `net::peer_cred_of`, mirrored.
+#[cfg(unix)]
+fn checked_peer_cred(raw: libc::c_int) -> std::io::Result<(i64, i64, i64)> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        // SAFETY: a zeroed ucred the host fills, its length beside it.
+        unsafe {
+            let mut c: libc::ucred = std::mem::zeroed();
+            let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+            if libc::getsockopt(
+                raw,
+                libc::SOL_SOCKET,
+                libc::SO_PEERCRED,
+                (&raw mut c).cast(),
+                &mut len,
+            ) < 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok((i64::from(c.pid), i64::from(c.uid), i64::from(c.gid)))
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        #[repr(C)]
+        struct XUcred {
+            cr_version: u32,
+            cr_uid: u32,
+            cr_ngroups: i16,
+            cr_groups: [u32; 16],
+        }
+        const SOL_LOCAL: libc::c_int = 0;
+        const LOCAL_PEERCRED: libc::c_int = 1;
+        const LOCAL_PEERPID: libc::c_int = 2;
+        // SAFETY: zeroed records the host fills, their lengths beside them.
+        unsafe {
+            let mut x: XUcred = std::mem::zeroed();
+            let mut len = std::mem::size_of::<XUcred>() as libc::socklen_t;
+            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERCRED, (&raw mut x).cast(), &mut len) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let mut pid: libc::pid_t = -1;
+            let mut plen = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
+            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERPID, (&raw mut pid).cast(), &mut plen) < 0 {
+                pid = -1;
+            }
+            let gid = if x.cr_ngroups > 0 {
+                i64::from(x.cr_groups[0])
+            } else {
+                -1
+            };
+            Ok((i64::from(pid), i64::from(x.cr_uid), gid))
+        }
+    }
+    #[cfg(target_os = "freebsd")]
+    {
+        let mut uid: libc::uid_t = 0;
+        let mut gid: libc::gid_t = 0;
+        // SAFETY: two ids the host fills.
+        if unsafe { libc::getpeereid(raw, &mut uid, &mut gid) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok((-1, i64::from(uid), i64::from(gid)))
+    }
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "freebsd"
+    )))]
+    {
+        let _ = raw;
+        Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+    }
+}
+
 /// s232 (`[os.signal.set]`'s one shape rule): a non-empty set of
 /// listenable meanings.
 fn sig_set_ok(set: i64) -> bool {
@@ -16422,6 +16994,109 @@ mod checked_sig {
             }))
         }
     }
+    /// s290 (`[os.ready.wait]`): one look over `fds` (each with its
+    /// events) and, when `set` is not 0, the wake pipe — `Some` every fd's
+    /// revents when one had any, `None` a wake, a pending meaning of `set`,
+    /// an interruption or the timeout. The runtime's `ready::poll_many`,
+    /// mirrored: where the host's poll refuses a descriptor (POLLNVAL),
+    /// `select(2)`, read and write alone.
+    #[cfg(unix)]
+    pub(super) fn wait_ready_many(
+        fds: &[(libc::c_int, libc::c_short)],
+        set: i64,
+        timeout_ms: i32,
+    ) -> Result<Option<Vec<libc::c_short>>, &'static str> {
+        let mut all: Vec<libc::pollfd> = fds
+            .iter()
+            .map(|&(fd, events)| libc::pollfd {
+                fd,
+                events,
+                revents: 0,
+            })
+            .collect();
+        if set != 0 {
+            let r = wake_pipe()?;
+            let mut buf = [0u8; 16];
+            // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
+            while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+            if PENDING.load(Ordering::SeqCst) & set != 0 {
+                return Ok(None);
+            }
+            all.push(libc::pollfd {
+                fd: r,
+                events: libc::POLLIN,
+                revents: 0,
+            });
+        }
+        let n = fds.len();
+        // SAFETY: `all.len()` live pollfds.
+        let got = unsafe { libc::poll(all.as_mut_ptr(), all.len() as libc::nfds_t, timeout_ms) };
+        if got < 0 {
+            let e = std::io::Error::last_os_error().raw_os_error();
+            if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                return Ok(None);
+            }
+            return Err("io");
+        }
+        let re: Vec<libc::c_short> = if all.iter().all(|p| p.revents & libc::POLLNVAL == 0) {
+            all[..n].iter().map(|p| p.revents).collect()
+        } else {
+            if all.iter().any(|p| i64::from(p.fd) >= libc::FD_SETSIZE as i64) {
+                return Err("io");
+            }
+            // SAFETY: zeroed fd_sets filled by FD_ZERO/FD_SET with
+            // descriptors under FD_SETSIZE; a timeval or none.
+            unsafe {
+                let mut rs: libc::fd_set = std::mem::zeroed();
+                let mut ws: libc::fd_set = std::mem::zeroed();
+                libc::FD_ZERO(&mut rs);
+                libc::FD_ZERO(&mut ws);
+                let mut top = 0;
+                for p in &all {
+                    if p.events & libc::POLLIN != 0 {
+                        libc::FD_SET(p.fd, &mut rs);
+                    }
+                    if p.events & libc::POLLOUT != 0 {
+                        libc::FD_SET(p.fd, &mut ws);
+                    }
+                    top = top.max(p.fd);
+                }
+                #[allow(clippy::useless_conversion)]
+                let mut tv = libc::timeval {
+                    tv_sec: (timeout_ms.max(0) / 1000).into(),
+                    tv_usec: ((timeout_ms.max(0) % 1000) * 1000).into(),
+                };
+                let tvp = if timeout_ms < 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &raw mut tv
+                };
+                let got = libc::select(top + 1, &mut rs, &mut ws, std::ptr::null_mut(), tvp);
+                if got < 0 {
+                    let e = std::io::Error::last_os_error().raw_os_error();
+                    if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                        return Ok(None);
+                    }
+                    return Err("io");
+                }
+                all[..n]
+                    .iter()
+                    .map(|p| {
+                        let mut r = 0;
+                        if p.events & libc::POLLIN != 0 && libc::FD_ISSET(p.fd, &rs) {
+                            r |= libc::POLLIN;
+                        }
+                        if p.events & libc::POLLOUT != 0 && libc::FD_ISSET(p.fd, &ws) {
+                            r |= libc::POLLOUT;
+                        }
+                        r
+                    })
+                    .collect()
+            }
+        };
+        Ok(re.iter().any(|&r| r != 0).then_some(re))
+    }
+
     #[cfg(not(unix))]
     pub(super) fn wait_readable_many(
         _files: &[std::fs::File],
