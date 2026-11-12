@@ -10,4 +10,4 @@ FnDecl 1754..2019 name=wait body=Block
 FnDecl 2021..2278 name=put body=Block
 FnDecl 2280..2413 name=shut body=Block
 FnDecl 2415..2558 name=say body=Block
-FnDecl 2560..6192 name=main body=Block
+FnDecl 2560..6316 name=main body=Block
