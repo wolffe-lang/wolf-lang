@@ -111,6 +111,10 @@ pub(crate) mod arena;
 // gate; BSD delivery widens with s61 (a NAMED stop).
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod signal;
+// s290, the one wait (`[os.ready.wait]`, `[os.ready.set]`): one wait over
+// the fs and net tables and the signal set, every ready entry answered;
+// served on linux and macOS, refused by name elsewhere.
+pub mod ready;
 // s272 (wolf-lang#686): the record of the file system that holds a path —
 // `[os.fs.statfs]`.
 pub mod statfs;

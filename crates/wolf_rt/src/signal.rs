@@ -1103,6 +1103,198 @@ mod sys {
         out
     }
 
+    /// s290 (`[os.ready.wait]`, `[os.ready.set]`): the meaning half of the
+    /// one wait, around a `look` the caller owns — `look(wake, timeout_ms)`
+    /// parks at most `timeout_ms` (-1: no limit; 0: never) until something
+    /// it watches is ready or `wake` (when given) has a byte, and answers
+    /// what was ready (`Some`) or nothing (`None`); `Err` is the errno.
+    /// Answers `(what was ready, the meaning taken or 0)`, both in one
+    /// return: a wait that takes a meaning looks once more without parking,
+    /// and a wait woken by its entries takes a meaning that came with them.
+    /// `want` 0 asks for no meaning: no hub and no pipe are asked for, and
+    /// `look` is never given the pipe. Otherwise the registration is
+    /// [`wait_fds`]'s, unchanged: the wait registered with the hub under
+    /// its lock before the queue's last look, so a meaning queued after it
+    /// writes the pipe and ends the park, and a pipe still full of a
+    /// generation this wait has seen is waited out on the condvar. Inside a
+    /// scope that can be killed the park is at most 100 ms, and a kill ends
+    /// the wait (`Err(0)`). `Err(0)` is also a hub or pipe the host will not
+    /// give: a refusal with no number of its own.
+    pub fn wait_looking<T>(
+        want: i64,
+        deadline_ms: i64,
+        mut look: impl FnMut(Option<RawFd>, i32) -> Result<Option<T>, i32>,
+    ) -> Result<(Option<T>, i64), i32> {
+        use std::time::{Duration, Instant};
+        let end = u64::try_from(deadline_ms)
+            .ok()
+            .map(|ms| Instant::now() + Duration::from_millis(ms));
+        let left = move || end.map(|e| e.saturating_duration_since(Instant::now()));
+        // Rounded UP to whole ms, so a wake never comes early.
+        let ms_of = |d: Duration| i32::try_from(d.as_micros().div_ceil(1000)).unwrap_or(i32::MAX);
+        let retry = |e: i32| e == libc::EINTR || e == libc::EAGAIN;
+        // One look that never parks, past an interruption.
+        fn now<T>(
+            look: &mut impl FnMut(Option<RawFd>, i32) -> Result<Option<T>, i32>,
+            wake: Option<RawFd>,
+        ) -> Result<Option<T>, i32> {
+            loop {
+                match look(wake, 0) {
+                    Err(e) if e == libc::EINTR || e == libc::EAGAIN => {}
+                    r => return r,
+                }
+            }
+        }
+        if want == 0 {
+            return crate::task::blocking(move || {
+                let scope = crate::task::current_scope();
+                loop {
+                    if let Some(s) = scope.as_ref()
+                        && s.is_killed()
+                    {
+                        crate::task::kill_teardown_check(s);
+                        return Err(0);
+                    }
+                    let timeout = match (left(), scope.is_some()) {
+                        (Some(d), true) => ms_of(d.min(Duration::from_millis(100))),
+                        (Some(d), false) => ms_of(d),
+                        (None, true) => 100,
+                        (None, false) => -1,
+                    };
+                    match look(None, timeout) {
+                        Ok(Some(r)) => return Ok((Some(r), 0)),
+                        Ok(None) => {}
+                        Err(e) if retry(e) => {}
+                        Err(e) => return Err(e),
+                    }
+                    if left() == Some(Duration::ZERO) {
+                        return Ok((None, 0));
+                    }
+                }
+            });
+        }
+        let Ok(h) = super::try_hub() else {
+            return Err(0);
+        };
+        let Ok(wake) = make_wake() else {
+            return Err(0);
+        };
+        crate::task::blocking(move || {
+            let scope = crate::task::current_scope();
+            let mut registered = false;
+            let mut seen = 0u64;
+            let mut remade = false;
+            loop {
+                settle(super::installed(h));
+                let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                drain(h, &mut st);
+                if registered {
+                    ack(h, &mut st, &mut seen);
+                }
+                if let Some(m) = super::take(&mut st, want) {
+                    if registered {
+                        deregister(h, &mut st, &mut seen);
+                    }
+                    drop(st);
+                    // The meaning does not hide the entries: one more look.
+                    return Ok((now(&mut look, Some(wake))?, m));
+                }
+                if left() == Some(Duration::ZERO) && !registered {
+                    // The deadline 0: one look and no park.
+                    drop(st);
+                    let ready = now(&mut look, Some(wake))?;
+                    settle(super::installed(h));
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    drain(h, &mut st);
+                    return Ok((ready, super::take(&mut st, want).unwrap_or(0)));
+                }
+                if !registered {
+                    st.wake.waiters += 1;
+                    seen = st.wake.generation;
+                    registered = true;
+                }
+                // s275's rule (`wait_fds`): no park without the drain thread.
+                if !running() {
+                    drop(st);
+                    if remade || super::try_hub().is_err() {
+                        let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                        deregister(h, &mut st, &mut seen);
+                        return Err(0);
+                    }
+                    remade = true;
+                    continue;
+                }
+                let mut timed_out = false;
+                while st.wake.full && st.wake.generation == seen {
+                    let cap = match (left(), scope.as_ref()) {
+                        (Some(d), Some(_)) => Some(d.min(Duration::from_millis(100))),
+                        (Some(d), None) => Some(d),
+                        (None, Some(_)) => Some(Duration::from_millis(100)),
+                        (None, None) => None,
+                    };
+                    if scope.as_ref().is_some_and(|s| s.is_killed()) {
+                        break;
+                    }
+                    if left() == Some(Duration::ZERO) {
+                        timed_out = true;
+                        break;
+                    }
+                    st = match cap {
+                        Some(d) => {
+                            h.cv.wait_timeout(st, d)
+                                .unwrap_or_else(|p| p.into_inner())
+                                .0
+                        }
+                        None => h.cv.wait(st).unwrap_or_else(|p| p.into_inner()),
+                    };
+                }
+                if st.wake.generation != seen {
+                    continue;
+                }
+                if let Some(s) = scope.as_ref()
+                    && s.is_killed()
+                {
+                    deregister(h, &mut st, &mut seen);
+                    drop(st);
+                    crate::task::kill_teardown_check(s);
+                    return Err(0);
+                }
+                if timed_out {
+                    deregister(h, &mut st, &mut seen);
+                    drop(st);
+                    return Ok((now(&mut look, Some(wake))?, 0));
+                }
+                drop(st);
+                let timeout = match (left(), scope.is_some()) {
+                    (Some(d), true) => ms_of(d.min(Duration::from_millis(100))),
+                    (Some(d), false) => ms_of(d),
+                    (None, true) => 100,
+                    (None, false) => -1,
+                };
+                let ready = match look(Some(wake), timeout) {
+                    Ok(r) => r,
+                    Err(e) if retry(e) => continue,
+                    Err(e) => {
+                        let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                        deregister(h, &mut st, &mut seen);
+                        return Err(e);
+                    }
+                };
+                if ready.is_some() || left() == Some(Duration::ZERO) {
+                    // A meaning that came with the entries, or the
+                    // deadline's last look at the queue.
+                    settle(super::installed(h));
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    drain(h, &mut st);
+                    deregister(h, &mut st, &mut seen);
+                    return Ok((ready, super::take(&mut st, want).unwrap_or(0)));
+                }
+                // A wake (or the kill look's timeout): the next pass acks
+                // the generation and looks at the queue.
+            }
+        })
+    }
+
     /// s234: wait until one of `fds` has something to read or `wake` has
     /// a byte (or `timeout_ms` passes; -1 never), answering (the lowest
     /// ready index, wake). `poll(2)` first; where the host's poll refuses
@@ -2525,6 +2717,18 @@ pub fn wait_fds(fds: &[i64], mask: i64, deadline_ms: i64) -> Result<(i64, i64), 
             proc_code::IO
         }
     })
+}
+
+/// s290 (`[os.ready.wait]`, `[os.ready.set]`): the meaning half of the one
+/// wait around the caller's look ([`sys::wait_looking`]); `want` 0 asks for
+/// no meaning. Unix: the hub's wake pipe.
+#[cfg(unix)]
+pub fn wait_looking<T>(
+    want: i64,
+    deadline_ms: i64,
+    look: impl FnMut(Option<std::os::fd::RawFd>, i32) -> Result<Option<T>, i32>,
+) -> Result<(Option<T>, i64), i32> {
+    sys::wait_looking(want, deadline_ms, look)
 }
 
 /// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
