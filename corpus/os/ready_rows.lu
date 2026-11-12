@@ -1,0 +1,145 @@
+//! check: run(exit=0, stdout="both_ends: true\nlisted_twice: true\nnothing_listed: true\nnever_ends: true\ndeadline_below: true\nbad_set: true\nforged_fs: true\nforged_net: true\nnegative: true\nset_open: true\nset_one: true\nset_two: true\nset_changed: true\nset_removed: true\nremove_absent: true\ninterest_outside: true\nkey_negative: true\nset_forged_handle: true\nset_forged_net: true\nwriter_gone: true\nwait_below: true\nwait_bad_set: true\nclose: true\nclosed_close: true\nclosed_wait: true\nclosed_set: true\nempty_never_ends: true\nempty_looks: true\nwrite_some_forged: true\nwrite_some_negative: true\npeer_cred_forged: true")
+//! phase: run
+//! conforms: os.ready.wait, os.ready.set, os.ready.facts, os.net.write.some, os.net.peer.cred, os.uname, err.union
+//!
+//! s290 — the rows of the one wait, the set the kernel holds, the send that
+//! counts and the peer's credentials that need nothing but a pipe, decided
+//! on every host. Each line is `true` where the host answers what the
+//! clause says (unix: the value below; windows: `unsupported` by name for
+//! every wait and set call, `io` for a set's close and for the send to a
+//! forged handle); a mismatch prints what was answered instead. The live
+//! rows (pty masters, sockets, a hangup, a meaning, the credentials of a
+//! real client) are `crates/wolf_driver/tests/ready_lanes.rs`'s.
+
+const NET: int = 2305843009213693952
+
+const WRITE: int = 4611686018427387904
+
+const KILL: int = 1048576
+
+fn once(entries: List[int], set: int, deadline: int) -> str {
+    let r = os_wait_ready(entries, set, deadline) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "{r.0}/{r.1}"
+}
+
+fn wait(r: int, set: int, deadline: int) -> str {
+    let w = os_ready_wait(r, set, deadline) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "{w.0}/{w.1}"
+}
+
+fn put(r: int, h: int, interest: int, key: int) -> str {
+    os_ready_set(r, h, interest, key) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn shut(r: int) -> str {
+    os_ready_close(r) else |e| {
+        return match e {
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn say(name: str, got: str, want: str) {
+    if got == want {
+        print("{name}: true")
+    } else {
+        print("{name}: {got}")
+    }
+}
+
+fn main() -> !int {
+    let windows = os_name() == "windows"
+    let u = "unsupported"
+    let p = os_pipe()?
+    fs_write(p.1, "x")?
+    say("both_ends", once([p.0, p.1 + WRITE], 0, 0), if windows then u else "[0, 1, 1, 2]/0")
+    say("listed_twice", once([p.1 + WRITE, p.0, p.0], 0, 0), if windows then u else "[0, 2, 1, 1, 2, 1]/0")
+    say("nothing_listed", once(List[int](), 0, 0), if windows then u else "[]/0")
+    say("never_ends", once(List[int](), 0, -1), if windows then u else "io")
+    say("deadline_below", once([p.0], 0, -2), "invalid")
+    say("bad_set", once([p.0], KILL, 0), "io")
+    say("forged_fs", once([1000000], 0, 0), if windows then u else "io")
+    say("forged_net", once([NET + 1000000], 0, 0), if windows then u else "io")
+    say("negative", once([-1], 0, 0), if windows then u else "io")
+    let r = os_ready_open() else |_| -1
+    say("set_open", if r >= 0 then "ok" else "refused", if windows then "refused" else "ok")
+    say("set_one", put(r, p.0, 1, 7) + " " + wait(r, 0, 0), if windows then "unsupported unsupported" else "ok [7, 1]/0")
+    let two = put(r, p.1, 2, 8) + " " + wait(r, 0, 0)
+    let two_ok = two == "ok [7, 1, 8, 2]/0" || two == "ok [8, 2, 7, 1]/0"
+    say("set_two", if two_ok then "two" else two, if windows then "unsupported unsupported" else "two")
+    if windows {
+        say("set_changed", two, "unsupported unsupported")
+    } else {
+        let changed = put(r, p.0, 1, 9) + " " + wait(r, 0, 0)
+        let changed_ok = changed == "ok [9, 1, 8, 2]/0" || changed == "ok [8, 2, 9, 1]/0"
+        say("set_changed", if changed_ok then "changed" else changed, "changed")
+    }
+    say("set_removed", put(r, p.1, 0, 0) + " " + wait(r, 0, 0), if windows then "unsupported unsupported" else "ok [9, 1]/0")
+    say("remove_absent", put(r, p.1, 0, 0), if windows then u else "io")
+    say("interest_outside", put(r, p.0, 4, 1), "invalid")
+    say("key_negative", put(r, p.0, 1, -1), "invalid")
+    say("set_forged_handle", put(r, 1000000, 1, 1), if windows then u else "io")
+    say("set_forged_net", put(r, NET + 1000000, 1, 1), if windows then u else "io")
+    // The writer's close leaves the set (it was removed above) and the
+    // read end, a byte still in it, answers read and hangup.
+    fs_close(p.1)?
+    say("writer_gone", wait(r, 0, 0), if windows then u else "[9, 5]/0")
+    say("wait_below", wait(r, 0, -2), "invalid")
+    say("wait_bad_set", wait(r, KILL, 0), "io")
+    say("close", shut(r), if windows then "io" else "ok")
+    say("closed_close", shut(r), "io")
+    say("closed_wait", wait(r, 0, 0), if windows then u else "io")
+    say("closed_set", put(r, p.0, 1, 1), if windows then u else "io")
+    let e = os_ready_open() else |_| -1
+    say("empty_never_ends", wait(e, 0, -1), if windows then u else "io")
+    say("empty_looks", wait(e, 0, 0), if windows then u else "[]/0")
+    let _closed = shut(e)
+    fs_close(p.0)?
+    let some = net_write_some(1000000, [120 as byte]) else |err| {
+        match err {
+            busy => -2,
+            closed => -3,
+            invalid => -4,
+            io => -5,
+        }
+    }
+    say("write_some_forged", "{some}", "-5")
+    let neg = net_write_some(-1, List[byte]()) else |err| {
+        match err {
+            busy => -2,
+            closed => -3,
+            invalid => -4,
+            io => -5,
+        }
+    }
+    say("write_some_negative", "{neg}", "-5")
+    let cred = net_peer_cred(1000000) else |err| {
+        let row = match err {
+            io => -5,
+            unsupported => -6,
+        }
+        (row, 0, 0)
+    }
+    say("peer_cred_forged", "{cred.0}", if windows then "-6" else "-5")
+    0
+}
