@@ -431,6 +431,12 @@ fn the_implemented_attributes_still_compile() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            // r45: so does the 0.1.62 candidate at 72eff3c.
+            Pin {
+                version: "0.1.62",
+                verdict: "unsupported",
+                stdout: "",
+            },
         ],
     );
 }
