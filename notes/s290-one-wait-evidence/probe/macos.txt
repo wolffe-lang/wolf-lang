@@ -1,0 +1,94 @@
+# macOS 26.4.1 arm64 (Apple clang 21.0.0), run in the lane's directory, 2026-11-12
+poll   pty master, slave never opened     ask=I|O n=1 revents=OUT 
+select pty master, slave never opened     n=0 r=0 w=0
+kqueue pty master, slave never opened     n=1 [WRITE data=0 fflags=0] 
+poll   pty master, slave open, idle       ask=I|O n=1 revents=OUT 
+select pty master, slave open, idle       n=1 r=0 w=1
+kqueue pty master, slave open, idle       n=1 [WRITE data=0 fflags=0] 
+poll   pty master, slave wrote 1          ask=I|O n=1 revents=IN OUT 
+select pty master, slave wrote 1          n=2 r=1 w=1
+kqueue pty master, slave wrote 1          n=2 [READ data=1 fflags=0] [WRITE data=0 fflags=0] 
+poll   pty master, slave closed           ask=I|O n=1 revents=IN HUP 
+select pty master, slave closed           n=2 r=1 w=1
+kqueue pty master, slave closed           n=2 [READ EOF data=0 fflags=0] [WRITE EOF data=0 fflags=0] 
+read   pty master after slave closed: 0 
+poll   pty master, slave wrote 2 then closed ask=I|O n=1 revents=IN HUP 
+select pty master, slave wrote 2 then closed n=2 r=1 w=1
+kqueue pty master, slave wrote 2 then closed n=2 [READ EOF data=0 fflags=0] [WRITE EOF data=0 fflags=0] 
+read   pty master (data then close): 0
+read   pty master (then): 0 
+poll   pty master, child on slave exited  ask=I|O n=1 revents=IN HUP 
+select pty master, child on slave exited  n=2 r=1 w=1
+kqueue pty master, child on slave exited  n=2 [READ EOF data=0 fflags=0] [WRITE EOF data=0 fflags=0] 
+poll   pipe read end, empty               ask=IN  n=0 revents=- 
+select pipe read end, empty               n=1 r=0 w=1
+kqueue pipe read end, empty               n=0 -
+poll   pipe write end, room               ask=OUT n=1 revents=OUT 
+select pipe write end, room               n=1 r=0 w=1
+kqueue pipe write end, room               n=1 [WRITE data=16384 fflags=0] 
+poll   pipe read end, writer gone         ask=IN  n=1 revents=IN HUP 
+select pipe read end, writer gone         n=2 r=1 w=1
+kqueue pipe read end, writer gone         n=1 [READ EOF data=0 fflags=0] 
+poll   pipe write end, reader gone        ask=OUT n=1 revents=HUP 
+select pipe write end, reader gone        n=2 r=1 w=1
+kqueue pipe write end, reader gone        n=2 [READ EOF data=0 fflags=0] [WRITE EOF data=0 fflags=0] 
+write  pipe nonblocking 1 MiB: took 65536
+poll   pipe write end, full               ask=OUT n=0 revents=- 
+select pipe write end, full               n=0 r=0 w=0
+kqueue pipe write end, full               n=0 -
+poll   socketpair, idle                   ask=I|O n=1 revents=OUT 
+select socketpair, idle                   n=1 r=0 w=1
+kqueue socketpair, idle                   n=1 [WRITE data=8192 fflags=0] 
+poll   socketpair, peer SHUT_WR           ask=I|O n=1 revents=IN HUP 
+select socketpair, peer SHUT_WR           n=2 r=1 w=1
+kqueue socketpair, peer SHUT_WR           n=2 [READ EOF data=0 fflags=0] [WRITE data=8192 fflags=0] 
+poll   socketpair, peer closed            ask=I|O n=1 revents=IN HUP 
+select socketpair, peer closed            n=2 r=1 w=1
+kqueue socketpair, peer closed            n=2 [READ EOF data=0 fflags=0] [WRITE EOF data=8192 fflags=0] 
+send   unix stream nonblocking 1 MiB: took 8192
+send   unix stream again: -1 Resource temporarily unavailable
+poll   unix stream, send buffer full      ask=OUT n=0 revents=- 
+select unix stream, send buffer full      n=0 r=0 w=0
+kqueue unix stream, send buffer full      n=0 -
+send   unix stream, peer closed: -1 Broken pipe
+poll   tcp stream, idle                   ask=I|O n=1 revents=OUT 
+select tcp stream, idle                   n=1 r=0 w=1
+kqueue tcp stream, idle                   n=1 [WRITE data=146988 fflags=0] 
+poll   tcp stream, peer closed            ask=I|O n=1 revents=IN HUP 
+select tcp stream, peer closed            n=2 r=1 w=1
+kqueue tcp stream, peer closed            n=2 [READ EOF data=0 fflags=0] [WRITE data=146988 fflags=0] 
+poll   regular file, 3 bytes, at 0        ask=I|O n=1 revents=IN OUT 
+select regular file, 3 bytes, at 0        n=2 r=1 w=1
+kqueue regular file, 3 bytes, at 0        n=2 [READ data=3 fflags=0] [WRITE data=1 fflags=0] 
+poll   regular file, at end               ask=I|O n=1 revents=IN OUT 
+select regular file, at end               n=2 r=1 w=1
+kqueue regular file, at end               n=1 [WRITE data=1 fflags=0] 
+poll   /dev/null                          ask=I|O n=1 revents=NVAL 
+select /dev/null                          n=2 r=1 w=1
+kqueue /dev/null                          filter=READ ctl=Invalid argument
+kqueue /dev/null                          filter=WRITE ctl=Invalid argument
+kqueue /dev/null                          n=0 -
+poll   unix listener, none pending        ask=IN  n=0 revents=- 
+select unix listener, none pending        n=0 r=0 w=0
+kqueue unix listener, none pending        n=0 -
+poll   unix listener, one pending         ask=IN  n=1 revents=IN 
+select unix listener, one pending         n=1 r=1 w=0
+kqueue unix listener, one pending         n=1 [READ data=1 fflags=0] 
+cred   LOCAL_PEERCRED accepted: r=0 ver=0 uid=501 ngroups=16 g0=20 getgid=20
+cred   LOCAL_PEERPID accepted: r=0 pid_is_self=1
+cred   LOCAL_PEERCRED listener: r=-1 Socket is not connected
+cred   LOCAL_PEERCRED tcp: r=0 
+kset   poll on kqueue fd with a ready entry: n=1 revents=1
+kset   select on kqueue fd with a ready entry: n=1
+kset   kqueue after close of the registered fd, a dup alive: n=0
+kset   kqueue fd in a fork's child: n=-1 Bad file descriptor
+tty    /dev/tty open: 5 
+poll   /dev/tty (a pty slave)             ask=I|O n=1 revents=NVAL 
+select /dev/tty (a pty slave)             n=1 r=0 w=1
+kqueue /dev/tty (a pty slave)             filter=READ ctl=Invalid argument
+kqueue /dev/tty (a pty slave)             filter=WRITE ctl=Invalid argument
+kqueue /dev/tty (a pty slave)             n=0 -
+poll   pty slave by path                  ask=I|O n=1 revents=OUT 
+select pty slave by path                  n=1 r=0 w=1
+kqueue pty slave by path                  n=1 [WRITE data=1024 fflags=0] 
+END exit=0

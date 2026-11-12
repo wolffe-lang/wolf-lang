@@ -1,0 +1,90 @@
+# Linux 7.2.4 x86-64 (gcc 15.3.0), run in the lane's directory on a Linux host, 2026-11-12
+poll   pty master, slave never opened     ask=I|O n=1 revents=OUT 
+select pty master, slave never opened     n=1 r=0 w=1
+epoll  pty master, slave never opened     n=1 events=OUT 
+poll   pty master, slave open, idle       ask=I|O n=1 revents=OUT 
+select pty master, slave open, idle       n=1 r=0 w=1
+epoll  pty master, slave open, idle       n=1 events=OUT 
+poll   pty master, slave wrote 1          ask=I|O n=1 revents=IN OUT 
+select pty master, slave wrote 1          n=2 r=1 w=1
+epoll  pty master, slave wrote 1          n=1 events=IN OUT 
+poll   pty master, slave closed           ask=I|O n=1 revents=OUT HUP 
+select pty master, slave closed           n=2 r=1 w=1
+epoll  pty master, slave closed           n=1 events=OUT HUP 
+read   pty master after slave closed: -1 Input/output error
+poll   pty master, slave wrote 2 then closed ask=I|O n=1 revents=IN OUT HUP 
+select pty master, slave wrote 2 then closed n=2 r=1 w=1
+epoll  pty master, slave wrote 2 then closed n=1 events=IN OUT HUP 
+read   pty master (data then close): 2
+read   pty master (then): -1 Input/output error
+poll   pty master, child on slave exited  ask=I|O n=1 revents=IN OUT HUP 
+select pty master, child on slave exited  n=2 r=1 w=1
+epoll  pty master, child on slave exited  n=1 events=IN OUT HUP 
+poll   pipe read end, empty               ask=IN  n=0 revents=- 
+select pipe read end, empty               n=0 r=0 w=0
+epoll  pipe read end, empty               n=0 events=- 
+poll   pipe write end, room               ask=OUT n=1 revents=OUT 
+select pipe write end, room               n=1 r=0 w=1
+epoll  pipe write end, room               n=1 events=OUT 
+poll   pipe read end, writer gone         ask=IN  n=1 revents=HUP 
+select pipe read end, writer gone         n=1 r=1 w=0
+epoll  pipe read end, writer gone         n=1 events=HUP 
+poll   pipe write end, reader gone        ask=OUT n=1 revents=OUT ERR 
+select pipe write end, reader gone        n=2 r=1 w=1
+epoll  pipe write end, reader gone        n=1 events=OUT ERR 
+write  pipe nonblocking 1 MiB: took 65536
+poll   pipe write end, full               ask=OUT n=0 revents=- 
+select pipe write end, full               n=0 r=0 w=0
+epoll  pipe write end, full               n=0 events=- 
+poll   socketpair, idle                   ask=I|O n=1 revents=OUT 
+select socketpair, idle                   n=1 r=0 w=1
+epoll  socketpair, idle                   n=1 events=OUT 
+poll   socketpair, peer SHUT_WR           ask=I|O n=1 revents=IN OUT 
+select socketpair, peer SHUT_WR           n=2 r=1 w=1
+epoll  socketpair, peer SHUT_WR           n=1 events=IN OUT RDHUP 
+poll   socketpair, peer closed            ask=I|O n=1 revents=IN OUT HUP 
+select socketpair, peer closed            n=2 r=1 w=1
+epoll  socketpair, peer closed            n=1 events=IN OUT HUP RDHUP 
+send   unix stream nonblocking 1 MiB: took 219264
+send   unix stream again: -1 Resource temporarily unavailable
+poll   unix stream, send buffer full      ask=OUT n=0 revents=- 
+select unix stream, send buffer full      n=0 r=0 w=0
+epoll  unix stream, send buffer full      n=0 events=- 
+send   unix stream, peer closed: -1 Broken pipe
+poll   tcp stream, idle                   ask=I|O n=1 revents=OUT 
+select tcp stream, idle                   n=1 r=0 w=1
+epoll  tcp stream, idle                   n=1 events=OUT 
+poll   tcp stream, peer closed            ask=I|O n=1 revents=IN OUT 
+select tcp stream, peer closed            n=2 r=1 w=1
+epoll  tcp stream, peer closed            n=1 events=IN OUT RDHUP 
+poll   regular file, 3 bytes, at 0        ask=I|O n=1 revents=IN OUT 
+select regular file, 3 bytes, at 0        n=2 r=1 w=1
+epoll  regular file, 3 bytes, at 0        ctl=Operation not permitted
+poll   regular file, at end               ask=I|O n=1 revents=IN OUT 
+select regular file, at end               n=2 r=1 w=1
+epoll  regular file, at end               ctl=Operation not permitted
+poll   /dev/null                          ask=I|O n=1 revents=IN OUT 
+select /dev/null                          n=2 r=1 w=1
+epoll  /dev/null                          ctl=Operation not permitted
+poll   unix listener, none pending        ask=IN  n=0 revents=- 
+select unix listener, none pending        n=0 r=0 w=0
+epoll  unix listener, none pending        n=0 events=- 
+poll   unix listener, one pending         ask=IN  n=1 revents=IN 
+select unix listener, one pending         n=1 r=1 w=0
+epoll  unix listener, one pending         n=1 events=IN 
+cred   SO_PEERCRED accepted: r=0 pid_is_self=1 uid=1000 gid=100
+cred   SO_PEERCRED dialed: r=0 pid_is_self=1
+cred   SO_PEERCRED listener: r=0  pid=492218 uid=1000
+cred   SO_PEERCRED tcp unconnected: r=0  pid=0 uid=-1
+kset   poll on epoll fd with a ready entry: n=1 revents=0
+kset   epoll after close of the registered fd, a dup alive: n=1 data=1
+kset   epoll after the dup closed too: n=0
+kset   epoll fd in a fork's child: n=0 (usable)
+tty    /dev/tty open: 5 
+poll   /dev/tty (a pty slave)             ask=I|O n=1 revents=OUT 
+select /dev/tty (a pty slave)             n=1 r=0 w=1
+epoll  /dev/tty (a pty slave)             n=1 events=OUT 
+poll   pty slave by path                  ask=I|O n=1 revents=OUT 
+select pty slave by path                  n=1 r=0 w=1
+epoll  pty slave by path                  n=1 events=OUT 
+END exit=0
