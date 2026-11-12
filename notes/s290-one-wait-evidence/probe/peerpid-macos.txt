@@ -1,0 +1,4 @@
+# macOS 26.4.1 arm64 (Apple clang 21.0.0), 2026-11-12
+LOCAL_PEERPID r=0 pid_is_child=1 pid_is_parent=0 len=4
+after the child closed: LOCAL_PEERPID r=-1 pid=-2
+END exit=0

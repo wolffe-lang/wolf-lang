@@ -1,0 +1,4 @@
+# Linux 7.2.4 x86-64 (gcc 15.3.0), 2026-11-12
+SO_PEERCRED r=0 pid_is_child=1 pid_is_parent=0
+after the child closed: SO_PEERCRED r=0 pid_is_child=1
+END exit=0
