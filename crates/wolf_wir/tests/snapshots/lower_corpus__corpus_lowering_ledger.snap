@@ -880,6 +880,7 @@ os/pty_rows.lu: lowers
 os/random_differs.lu: lowers
 os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
+os/ready_rows.lu: lowers
 os/session_rows.lu: lowers
 os/signal_action_rows.lu: lowers
 os/signal_loopback.lu: lowers

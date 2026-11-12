@@ -1,0 +1,13 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 1364..1401 name=NET init=LiteralExpr
+ConstDecl 1402..1441 name=WRITE init=LiteralExpr
+ConstDecl 1442..1468 name=KILL init=LiteralExpr
+FnDecl 1469..1752 name=once body=Block
+FnDecl 1754..2019 name=wait body=Block
+FnDecl 2021..2278 name=put body=Block
+FnDecl 2280..2413 name=shut body=Block
+FnDecl 2415..2558 name=say body=Block
+FnDecl 2560..6192 name=main body=Block
