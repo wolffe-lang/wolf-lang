@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.2.40 — 2026-11-12
+
+Pairs with **lupin 0.1.62**, conformance pin
+`5f1f1c949582f53121e4047bc83c86f23ff72240`, and bundles **wolf-std
+`be1d10fa2798cc6bc2a1fd0b2e559e283469c9bf`**: sessions and
+pseudo-terminals over 0.2.39's calls (`std.process`'s `start_session`,
+`lead_session` and `own_session`; `std.term`'s `Pty`, `open_pty`,
+`pty_name`, `set_size`, `attr`, `set_attr` and `open_controlling`), and
+`std.poll`, one waiter over files and sockets, in a first form built on
+0.2.39's narrower waits. lupin 0.1.62 resolves the seven new names below,
+serves `net_write_some`, answers each call's shape as the compiler does,
+and refuses by name every wait, set and Unix peer's credentials that
+would reach the host. See [the release note](docs/releases/0.2.40.md).
 
 s290 — one wait over files, sockets and signals, every ready entry answered; a socket send that counts; a Unix-domain peer's credentials (`[os.ready.wait]`, `[os.ready.set]`, `[os.ready.facts]`, `[os.net.write.some]`, `[os.net.peer.cred]`).
 
