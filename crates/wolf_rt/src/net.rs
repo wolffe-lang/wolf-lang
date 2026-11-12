@@ -1739,12 +1739,26 @@ fn peer_cred_of(raw: std::os::fd::RawFd) -> std::io::Result<(i64, i64, i64)> {
         unsafe {
             let mut x: XUcred = std::mem::zeroed();
             let mut len = std::mem::size_of::<XUcred>() as libc::socklen_t;
-            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERCRED, (&raw mut x).cast(), &mut len) < 0 {
+            if libc::getsockopt(
+                raw,
+                SOL_LOCAL,
+                LOCAL_PEERCRED,
+                (&raw mut x).cast(),
+                &mut len,
+            ) < 0
+            {
                 return Err(std::io::Error::last_os_error());
             }
             let mut pid: libc::pid_t = -1;
             let mut plen = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
-            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERPID, (&raw mut pid).cast(), &mut plen) < 0 {
+            if libc::getsockopt(
+                raw,
+                SOL_LOCAL,
+                LOCAL_PEERPID,
+                (&raw mut pid).cast(),
+                &mut plen,
+            ) < 0
+            {
                 pid = -1;
             }
             let gid = if x.cr_ngroups > 0 {

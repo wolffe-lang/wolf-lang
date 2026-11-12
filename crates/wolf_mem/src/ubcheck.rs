@@ -16203,12 +16203,26 @@ fn checked_peer_cred(raw: libc::c_int) -> std::io::Result<(i64, i64, i64)> {
         unsafe {
             let mut x: XUcred = std::mem::zeroed();
             let mut len = std::mem::size_of::<XUcred>() as libc::socklen_t;
-            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERCRED, (&raw mut x).cast(), &mut len) < 0 {
+            if libc::getsockopt(
+                raw,
+                SOL_LOCAL,
+                LOCAL_PEERCRED,
+                (&raw mut x).cast(),
+                &mut len,
+            ) < 0
+            {
                 return Err(std::io::Error::last_os_error());
             }
             let mut pid: libc::pid_t = -1;
             let mut plen = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
-            if libc::getsockopt(raw, SOL_LOCAL, LOCAL_PEERPID, (&raw mut pid).cast(), &mut plen) < 0 {
+            if libc::getsockopt(
+                raw,
+                SOL_LOCAL,
+                LOCAL_PEERPID,
+                (&raw mut pid).cast(),
+                &mut plen,
+            ) < 0
+            {
                 pid = -1;
             }
             let gid = if x.cr_ngroups > 0 {
@@ -17056,7 +17070,10 @@ mod checked_sig {
         let re: Vec<libc::c_short> = if all.iter().all(|p| p.revents & libc::POLLNVAL == 0) {
             all[..n].iter().map(|p| p.revents).collect()
         } else {
-            if all.iter().any(|p| i64::from(p.fd) >= libc::FD_SETSIZE as i64) {
+            if all
+                .iter()
+                .any(|p| i64::from(p.fd) >= libc::FD_SETSIZE as i64)
+            {
                 return Err("io");
             }
             // SAFETY: zeroed fd_sets filled by FD_ZERO/FD_SET with

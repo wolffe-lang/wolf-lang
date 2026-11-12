@@ -42,9 +42,9 @@
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::fd::{AsRawFd as _, OwnedFd, RawFd};
+use std::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::os::proc_code;
 
@@ -195,7 +195,10 @@ fn poll_many(fds: &[(RawFd, libc::c_short)], timeout_ms: i32) -> Result<Vec<libc
     if pfds.iter().all(|p| p.revents & libc::POLLNVAL == 0) {
         return Ok(pfds.iter().map(|p| p.revents).collect());
     }
-    if fds.iter().any(|&(fd, _)| i64::from(fd) >= libc::FD_SETSIZE as i64) {
+    if fds
+        .iter()
+        .any(|&(fd, _)| i64::from(fd) >= libc::FD_SETSIZE as i64)
+    {
         return Err(libc::EBADF);
     }
     // SAFETY: zeroed fd_sets filled by FD_ZERO/FD_SET with descriptors
@@ -673,10 +676,7 @@ pub fn set_wait(r: i64, set: i64, deadline_ms: i64) -> Result<(Vec<i64>, i64), i
     {
         {
             let mut reg = sets();
-            let Some(s) = reg
-                .get_mut(r)
-                .filter(|s| s.pid == std::process::id())
-            else {
+            let Some(s) = reg.get_mut(r).filter(|s| s.pid == std::process::id()) else {
                 return Err(proc_code::IO);
             };
             if s.by_handle.is_empty() && set == 0 && deadline_ms == -1 {
@@ -799,7 +799,13 @@ mod kernel {
         ctl(k, libc::EPOLL_CTL_ADD, raw, interest, token)
     }
 
-    pub fn change(k: &OwnedFd, raw: RawFd, _old: i64, interest: i64, token: u64) -> Result<(), i32> {
+    pub fn change(
+        k: &OwnedFd,
+        raw: RawFd,
+        _old: i64,
+        interest: i64,
+        token: u64,
+    ) -> Result<(), i32> {
         ctl(k, libc::EPOLL_CTL_MOD, raw, interest, token)
     }
 
@@ -908,7 +914,10 @@ mod kernel {
         }
         for (c, r) in changes.iter().zip(&out[..n as usize]) {
             let e = r.data as i32;
-            if r.flags & libc::EV_ERROR != 0 && e != 0 && !(c.flags & libc::EV_DELETE != 0 && e == libc::ENOENT) {
+            if r.flags & libc::EV_ERROR != 0
+                && e != 0
+                && !(c.flags & libc::EV_DELETE != 0 && e == libc::ENOENT)
+            {
                 return Err(e);
             }
         }
@@ -1061,7 +1070,12 @@ unsafe fn __wolf_rt_os_wait_ready_parks(entries: i64, set: i64, deadline_ms: i64
 ///
 /// As [`__wolf_rt_os_wait_ready_parks`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_os_wait_ready(entries: i64, set: i64, deadline_ms: i64, out: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_os_wait_ready(
+    entries: i64,
+    set: i64,
+    deadline_ms: i64,
+    out: i64,
+) -> i64 {
     let r = unsafe { __wolf_rt_os_wait_ready_parks(entries, set, deadline_ms, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
     unsafe { crate::leave_if_killed() };
@@ -1114,7 +1128,12 @@ unsafe fn __wolf_rt_os_ready_wait_parks(r: i64, set: i64, deadline_ms: i64, out:
 ///
 /// As [`__wolf_rt_os_ready_wait_parks`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_os_ready_wait(r: i64, set: i64, deadline_ms: i64, out: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_os_ready_wait(
+    r: i64,
+    set: i64,
+    deadline_ms: i64,
+    out: i64,
+) -> i64 {
     let rc = unsafe { __wolf_rt_os_ready_wait_parks(r, set, deadline_ms, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
     unsafe { crate::leave_if_killed() };
@@ -1193,7 +1212,10 @@ mod tests {
         let (r, w) = pipe();
         assert_eq!(wait_ready(&[r, w + WRITE], 0, 0), Ok((vec![1, 2], 0)));
         put_byte(w);
-        assert_eq!(wait_ready(&[r, w + WRITE, r], 0, 0), Ok((vec![0, 1, 1, 2, 2, 1], 0)));
+        assert_eq!(
+            wait_ready(&[r, w + WRITE, r], 0, 0),
+            Ok((vec![0, 1, 1, 2, 2, 1], 0))
+        );
         assert_eq!(wait_ready(&[], 0, -1), Err(proc_code::IO));
         assert_eq!(wait_ready(&[r], 0, -2), Err(proc_code::INVALID));
         assert_eq!(wait_ready(&[1_000_000], 0, 0), Err(proc_code::IO));
