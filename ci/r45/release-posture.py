@@ -85,6 +85,8 @@ class ReleasePosture(unittest.TestCase):
             self.assertIn(f"wolf-lang/issues/{issue}", note)
         for issue in ("133", "147"):
             self.assertIn(f"wolf-std/issues/{issue}", note)
+        # The paired lupin's own known limit at the cut.
+        self.assertIn("wolf-interp/issues/369", note)
 
     def test_readme_names_the_release(self):
         readme = (ROOT / "README.md").read_text()
