@@ -1,0 +1,235 @@
+# The published 0.2.40 archives on hosted runners: wolf-lang's one-wait rows
+# at v0.2.40 (corpus/os/ready_rows.lu), run by the archive each runner
+# downloads, on macOS arm64 and on Linux x86-64 and aarch64. Each archive is
+# fetched into its own new directory and hashed twice against the digest the
+# release publishes. The version line must be bare. The row is held to its
+# own `//! check: run(...)` line on the checked, native and release tiers. A
+# Linux runner first gets what the release workflow's run gate installs there
+# (lld and clang-15) and builds the release tier through clang-15 as that
+# gate does. Linux aarch64 is served by neither compiled tier yet: there, as
+# in the run gate, native and release are held to their refusal by name
+# (exit 2) and the checked tier to the row. The paired lupin archive is read
+# twice too, and refuses the row by name at its first wait.
+#
+# One more step reads a host fact, not the release: whether a new session
+# given a pseudo-terminal slave on its standard descriptors holds it as its
+# controlling terminal, for a program that is not a shell (sleep) and for
+# the host's /bin/sh, bash and dash where present. A spawn through fork,
+# setsid, dup2 and exec gives it none; bash takes it itself when it starts.
+#
+# This workflow lives on its own branch and runs on a push to that branch
+# alone. It reads the release and changes nothing.
+name: published-rows
+
+on:
+  push:
+    branches: [r45-published-rows]
+
+permissions:
+  contents: read
+
+jobs:
+  rows:
+    name: published 0.2.40 rows (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin, sha: "3f18a56562fb089da05a50a612e031cd297f20a617b9e6e7ada768fbeb69e72b", lupin_sha: "228790ef3aef7605a2f9524abdcb6de5c8a5fa179437d82f3d3af262495a4e7f" }
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, sha: "bc2020e0b7400c18162a6072c299c65c0582ea74a0eba22aaa57ca04ae13e7e1", lupin_sha: "3b3bf9c23a9e545a4a99e65a5183d0c5e71e91d6bfb8a189147e2701c03e177f" }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, sha: "cea26eea215e7cdba60db2870c0eb4d2c5738065046ec5fe6e0eec7da55e48cd", lupin_sha: "f5391308ad9cd8ae1e31a42e7a17c1453679e2a0ac03f83783c4ac52e650ef2e" }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - name: the published archive, read twice
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          WANT: ${{ matrix.sha }}
+        run: |
+          set -euo pipefail
+          # The row as it is at v0.2.40.
+          shasum -a 256 -c - <<'SUMS'
+          c68193f194bcf53a67862720e925cb8947c456733cb254c6f1e05bba4d2a76b7  corpus/os/ready_rows.lu
+          SUMS
+          name=wolf-0.2.40-$TARGET.tar.gz
+          d=$RUNNER_TEMP/published
+          mkdir "$d"
+          curl -fsSL --retry 3 -o "$d/$name" "https://github.com/wolffe-lang/wolf-lang/releases/download/v0.2.40/$name"
+          a=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          b=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          echo "READ $name $a $b"
+          test "$a" = "$WANT" && test "$b" = "$WANT"
+          mkdir "$d/unpacked"
+          tar -xzf "$d/$name" -C "$d/unpacked"
+          echo "WOLF=$d/unpacked/wolf-0.2.40-$TARGET/wolf" >> "$GITHUB_ENV"
+      # What the release workflow's own run gate installs on these runners
+      # before it builds from the archive: the native linker and the release
+      # tier's clang.
+      - name: the native linker and the release tier's clang (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lld clang-15
+      - name: the version line
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$WOLF" --version | tee "$RUNNER_TEMP/version.txt"
+          grep -qx 'wolf 0.2.40 (wolfgang, pin b333b9d)' "$RUNNER_TEMP/version.txt"
+          grep -qx 'paired with lupin 0.1.62 (reference interpreter), pin 5f1f1c949582f53121e4047bc83c86f23ff72240' "$RUNNER_TEMP/version.txt"
+          if grep -q '+dev' "$RUNNER_TEMP/version.txt"; then echo "a +dev build"; exit 1; fi
+      - name: the paired lupin 0.1.62 archive, read twice, its version line and its answer to the row
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          WANT: ${{ matrix.lupin_sha }}
+        run: |
+          set -euo pipefail
+          name=lupin-0.1.62-$TARGET.tar.gz
+          d=$RUNNER_TEMP/published-lupin
+          mkdir "$d"
+          curl -fsSL --retry 3 -o "$d/$name" "https://github.com/wolffe-lang/wolf-interp/releases/download/v0.1.62/$name"
+          a=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          b=$(shasum -a 256 "$d/$name" | cut -d' ' -f1)
+          echo "READ $name $a $b"
+          test "$a" = "$WANT" && test "$b" = "$WANT"
+          mkdir "$d/unpacked"
+          tar -xzf "$d/$name" -C "$d/unpacked"
+          l=$(find "$d/unpacked" -type f -name lupin | head -1)
+          "$l" --version | tee "$RUNNER_TEMP/lupin-version.txt"
+          grep -qx 'lupin 0.1.62 (wolf-interp, reference interpreter at pin 5f1f1c9)' "$RUNNER_TEMP/lupin-version.txt"
+          "$l" conform-run corpus/os/ready_rows.lu --json | tail -1 > "$RUNNER_TEMP/lupin-ready.json"
+          python3 -I - "$RUNNER_TEMP/lupin-ready.json" <<'PY'
+          import json, sys
+          r = json.load(open(sys.argv[1]))
+          why = r.get("x-unsupported", "")
+          ok = (r["impl_version"] == "0.1.62" and r["verdict"] == "unsupported" and r.get("x-unsupported-at") == "run"
+                and "os_wait_ready" in why and "does not resolve" not in why and not r.get("stdout_inline"))
+          print(("ROW" if ok else "FAIL") + f" lupin {r['impl_version']} ready_rows {r['verdict']} at {r.get('x-unsupported-at')}: {why[:160]}")
+          sys.exit(0 if ok else 1)
+          PY
+      - name: the one-wait row on three tiers
+        shell: bash
+        run: |
+          set -uo pipefail
+          unset WOLF_STD WOLF_RT_LIB
+          if [ "$RUNNER_OS" = Linux ]; then export WOLF_CLANG=clang-15; fi
+          python3 -I - "$WOLF" "$RUNNER_TEMP/rows" corpus/os/ready_rows.lu <<'PY'
+          import json, re, shutil, subprocess, sys
+          from pathlib import Path
+          import platform
+          wolf, out, files = sys.argv[1], Path(sys.argv[2]), sys.argv[3:]
+          # Linux aarch64: neither compiled tier is served yet; the answer owed is a refusal by name.
+          refuses = platform.system() == "Linux" and platform.machine() == "aarch64"
+          out.mkdir()
+          bad = 0
+          for f in files:
+              src = Path(f)
+              name = src.stem
+              shutil.copy(src, out / src.name)
+              m = re.search(r'^//! check: run\(exit=(\d+), stdout="(.*)"\)$', src.read_text(), re.M)
+              want_exit, want = int(m[1]), m[2].encode().decode("unicode_escape") + "\n"
+              got = {}
+              p = subprocess.run([wolf, "conform-run", src.name, "--checked", "--json"], cwd=out, capture_output=True, text=True)
+              try:
+                  rec = json.loads(p.stdout)
+                  got["checked"] = (rec["verdict"], rec["stdout_inline"])
+              except ValueError:
+                  got["checked"] = (f"conform-run exit {p.returncode}: {p.stderr[-300:]}", "")
+              for tier, flags in (("native", []), ("release", ["--release"])):
+                  exe = out / f"{name}.{tier}"
+                  b = subprocess.run([wolf, "build", *flags, "--no-cache", src.name, "-o", str(exe)], cwd=out, capture_output=True, text=True)
+                  if refuses:
+                      said = b.stdout + b.stderr
+                      ok = b.returncode == 2 and f"this host cannot run the {tier} tier" in said
+                      print(f"{'ROW' if ok else 'FAIL'} {name} {tier} refused by name on Linux aarch64, exit {b.returncode}" + ("" if ok else f": {said[-2000:]}"))
+                      bad += not ok
+                      continue
+                  if b.returncode != 0:
+                      got[tier] = (f"build exit {b.returncode}: {(b.stdout + b.stderr)[-2000:]}", "")
+                      continue
+                  r = subprocess.run([str(exe)], cwd=out, capture_output=True, text=True)
+                  got[tier] = (f"exit({r.returncode})", r.stdout)
+              for tier, (verdict, stdout) in got.items():
+                  ok = verdict == f"exit({want_exit})" and stdout == want
+                  print(f"{'ROW' if ok else 'FAIL'} {name} {tier} {verdict} stdout {'equal to its check line' if ok else repr(stdout)}")
+                  bad += not ok
+          print(f"published rows: {'all' if not bad else bad} {'equal' if not bad else 'differ'}")
+          sys.exit(1 if bad else 0)
+          PY
+      - name: a new session's controlling terminal (a host fact, read only)
+        shell: bash
+        run: |
+          set -uo pipefail
+          shells=()
+          for s in /bin/sh /bin/bash /bin/dash; do [ -x "$s" ] && shells+=("$s"); done
+          echo "/bin/sh -> $(readlink -f /bin/sh 2>/dev/null || echo /bin/sh)"
+          python3 -I - "${shells[@]}" <<'PY'
+          #!/usr/bin/env python3
+          """r45: does a new session given a pty slave on 0, 1 and 2 hold it as its
+          controlling terminal? Separates the spawn (fork, setsid, dup2, exec: what
+          the runtime's os_spawn_session does) from what the child program does.
+
+          For each child: fork; the child calls setsid, places the slave (opened with
+          O_NOCTTY) on 0, 1 and 2 and a pipe on 3, and execs. The parent reads the
+          child's answer from the pipe and the child's tty from ps while it lives.
+          """
+          import os
+          import subprocess
+          import sys
+          import time
+
+          CHECK = ('if (: </dev/tty) 2>/dev/null; then echo controlling=yes >&3; '
+                   'else echo controlling=no >&3; fi; sleep 1')
+
+
+          def spawn(argv):
+              m, s = os.openpty()
+              r, w = os.pipe()
+              pid = os.fork()
+              if pid == 0:
+                  try:
+                      os.setsid()
+                      hi_s = os.dup(s) if s < 4 else s
+                      hi_w = os.dup(w) if w < 4 else w
+                      os.dup2(hi_s, 0)
+                      os.dup2(hi_s, 1)
+                      os.dup2(hi_s, 2)
+                      os.dup2(hi_w, 3)
+                      os.closerange(4, 1024)
+                      os.execv(argv[0], argv)
+                  finally:
+                      os._exit(127)
+              os.close(s)
+              os.close(w)
+              time.sleep(0.5)
+              ps = subprocess.run(["ps", "-o", "pid=,sess=,tty=,stat=", "-p", str(pid)],
+                                  capture_output=True, text=True).stdout.strip()
+              answer = b""
+              while True:
+                  chunk = os.read(r, 256)
+                  if not chunk:
+                      break
+                  answer += chunk
+              _, status = os.waitpid(pid, 0)
+              os.close(r)
+              os.close(m)
+              return ps, answer.decode().strip(), status
+
+
+          def main():
+              rows = []
+              for shell in sys.argv[1:]:
+                  rows.append(([shell, "-c", CHECK], "shell"))
+              rows.append((["/bin/sleep", "1"], "sleep"))
+              print("uname", os.uname().sysname, os.uname().release)
+              for argv, kind in rows:
+                  real = os.path.realpath(argv[0])
+                  ps, answer, status = spawn(argv)
+                  print(f"ROW {kind} {argv[0]} (-> {real}): ps[{ps}] answer[{answer or '-'}] status={status}")
+
+
+          main()
+          PY
