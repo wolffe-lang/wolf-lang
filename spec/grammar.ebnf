@@ -148,14 +148,15 @@ field_init ::= IDENT ':' expr | IDENT
 literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
           | GENERALIZED_STRING | 'true' | 'false'
 
-if_expr    ::= 'if' expr 'then'? block ('else' (if_expr | block))?
+if_expr    ::= 'if' binding_header? expr 'then'? block ('else' (if_expr | block))?
              | 'if' expr 'then' expr  ('else' (if_expr | expr))?
+binding_header ::= ('let' | 'var') binder ';'
 match_expr ::= 'match' expr '{' arm* '}'
 match_arm  ::= pattern ('if' expr)? '=>' (expr | block)
 arm        ::= match_arm arm_sep?
 arm_sep    ::= ',' | TERM
 loop_expr  ::= 'for' pattern 'in' expr block
-             | 'while' expr block
+             | 'while' binding_header? expr block
              | 'loop' block
 jump_expr  ::= 'return' expr? | 'break' expr? | 'continue'
 

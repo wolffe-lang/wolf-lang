@@ -238,6 +238,7 @@
     "gram.expr.conc": "01-grammar.md",
     "gram.expr.flow": "01-grammar.md",
     "gram.expr.if": "01-grammar.md",
+    "gram.expr.if.head": "01-grammar.md",
     "gram.expr.index.origin": "01-grammar.md",
     "gram.expr.list": "01-grammar.md",
     "gram.expr.prec": "01-grammar.md",
