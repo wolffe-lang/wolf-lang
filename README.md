@@ -11,6 +11,10 @@ Arithmetic is checked in every profile, including release.
 
 Wolf is pre-alpha. The surface still moves.
 
+[Loops, queries and guards](docs/programming-idioms.md) introduces range
+loops, the shipped eager combinators, one-statement `if` guards and error
+propagation with `?` and `else return`.
+
 ## Install
 
 ```sh
