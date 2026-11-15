@@ -1,0 +1,12 @@
+use status
+
+fn classify(s: status.State) -> int {
+    match s {
+        status.State.Foreign => 1,
+        status.State.Empty => 0,
+    }
+}
+
+fn main() -> int {
+    classify(status.State.Foreign)
+}

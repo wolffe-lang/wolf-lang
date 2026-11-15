@@ -1,0 +1,21 @@
+pub enum State {
+    Empty,
+    Foreign,
+}
+
+enum Other {
+    Foreign,
+}
+
+pub fn inspect(empty: bool) -> State {
+    if empty { State.Empty } else { State.Foreign }
+}
+
+pub fn score(s: State) -> int {
+    match s {
+        State.Foreign => 1,
+        State.Empty => 0,
+    }
+}
+
+fn other() -> Other { Other.Foreign }
