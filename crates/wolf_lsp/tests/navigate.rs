@@ -168,8 +168,8 @@ fn references_are_package_wide_and_ordered() {
     let (l, c) = pos(&geo, "pub fn area", 0);
     assert_eq!(
         refs(&mut client, &geo_open, (l, c + 7), true),
-        json!([decl_geo, use_geo]),
-        "a sibling opened as its own entry is a one-file package (D32 entry rule)"
+        json!([use_main, decl_geo, use_geo]),
+        "an imported file keeps the open package entry's reference set"
     );
     client.shutdown();
 }

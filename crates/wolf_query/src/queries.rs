@@ -164,6 +164,44 @@ impl Snapshot {
         Some(computed)
     }
 
+    /// Navigation in an imported file must keep its package context.
+    /// Treating that file as a fresh CLI entry makes sibling imports
+    /// disappear and prevents typecheck from recording member references.
+    /// Prefer the outermost open entry whose resolved import graph really
+    /// contains the requested file; path order breaks ties deterministically.
+    /// A failed ancestor analysis never hides a usable standalone analysis.
+    /// Diagnostics still use `analysis` directly: their CLI ladder is unchanged.
+    pub(crate) fn analysis_in_open_package(&self, entry: &Path) -> Option<Arc<PackageAnalysis>> {
+        let entry = crate::overlay::normalize(entry);
+        let mut candidates: Vec<_> = self
+            .overlays
+            .paths()
+            .filter(|p| {
+                **p != entry
+                    && p.extension().is_some_and(|e| e == "lu")
+                    && p.parent().is_some_and(|dir| entry.starts_with(dir))
+            })
+            .collect();
+        candidates.sort_by(|a, b| {
+            a.components()
+                .count()
+                .cmp(&b.components().count())
+                .then(a.cmp(b))
+        });
+        for candidate in candidates {
+            self.checkpoint();
+            if let Some(a) = self.analysis(candidate)
+                && a.typecheck.is_some()
+                && a.resolution
+                    .as_ref()
+                    .is_some_and(|res| file_index(res, &entry).is_some())
+            {
+                return Some(a);
+            }
+        }
+        self.analysis(&entry)
+    }
+
     fn compute_analysis(&self, entry: &Path) -> Option<PackageAnalysis> {
         self.compute_analysis_from(entry, &self.overlays)
     }
@@ -358,7 +396,7 @@ impl Snapshot {
     // ---------------------------------------------------------- innards --
 
     fn type_at_impl(&self, entry: &Path, offset: u32) -> Option<HoverResult> {
-        let a = self.analysis(entry)?;
+        let a = self.analysis_in_open_package(entry)?;
         let res = a.resolution.as_ref()?;
         let file_idx = file_index(res, entry)?;
         let unit = &res.package.files[file_idx];

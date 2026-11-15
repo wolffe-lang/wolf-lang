@@ -55,6 +55,12 @@ impl OverlayStore {
         std::fs::read(&path).ok().map(Arc::new)
     }
 
+    /// Open documents, in path order. Package-sensitive editor queries
+    /// may reuse an open entry's import graph; they never scan for entries.
+    pub(crate) fn paths(&self) -> impl Iterator<Item = &PathBuf> {
+        self.files.keys()
+    }
+
     /// Overlay paths directly inside `dir` with extension `lu` — the
     /// unsaved-and-never-saved files a directory listing would miss.
     fn overlaid_in_dir(&self, dir: &Path) -> Vec<PathBuf> {

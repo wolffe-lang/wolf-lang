@@ -141,7 +141,7 @@ impl Snapshot {
     // ---------------------------------------------------------- innards --
 
     fn definition_impl(&self, entry: &Path, offset: u32) -> Option<DefResult> {
-        let a = self.analysis(entry)?;
+        let a = self.analysis_in_open_package(entry)?;
         let res = a.resolution.as_ref()?;
         let file_idx = file_index(res, entry)?;
         let (origin, symbol) = symbol_at(&a, file_idx, offset)?;
@@ -172,7 +172,7 @@ impl Snapshot {
         offset: u32,
         include_declaration: bool,
     ) -> Option<Vec<DefResult>> {
-        let a = self.analysis(entry)?;
+        let a = self.analysis_in_open_package(entry)?;
         let res = a.resolution.as_ref()?;
         let file_idx = file_index(res, entry)?;
         let (origin, symbol) = symbol_at(&a, file_idx, offset)?;
@@ -194,7 +194,7 @@ impl Snapshot {
     }
 
     fn prepare_rename_impl(&self, entry: &Path, offset: u32) -> Option<RenamePrep> {
-        let a = self.analysis(entry)?;
+        let a = self.analysis_in_open_package(entry)?;
         let res = a.resolution.as_ref()?;
         let file_idx = file_index(res, entry)?;
         let unit = &res.package.files[file_idx];
