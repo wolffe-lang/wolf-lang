@@ -172,6 +172,39 @@ fn variant_context_is_not_inferred_from_an_unrelated_open_ancestor() {
 }
 
 #[test]
+fn failed_open_package_does_not_hide_standalone_navigation() {
+    let (mut client, _) = Client::start(&["utf-8"]);
+    let root = fixture("navigate/main.lu");
+    let text = std::fs::read_to_string(&root).unwrap();
+    let uri = client.open(&root, &format!("use nonexistent\n{text}"));
+    let ds = client.wait_publish(&uri);
+    assert!(ds.iter().any(|d| d["code"] == "E0301"));
+    let member = fixture("navigate/shapes/geo.lu");
+    let uri = client.open_from_disk(&member);
+    let _ = client.wait_publish(&uri);
+    let text = std::fs::read_to_string(&member).unwrap();
+    let off = text.find("area(side").unwrap();
+    let line = text[..off].bytes().filter(|&b| b == b'\n').count();
+    let col = off - text[..off].rfind('\n').map_or(0, |i| i + 1);
+    let id = client.request(
+        "textDocument/references",
+        json!({
+            "textDocument": {"uri": uri}, "position": {"line": line, "character": col},
+            "context": {"includeDeclaration": true}
+        }),
+    );
+    let refs = client.wait_response(id).unwrap();
+    assert_eq!(refs.as_array().unwrap().len(), 2);
+    assert!(
+        refs.as_array()
+            .unwrap()
+            .iter()
+            .all(|r| r["uri"] == uri.as_str())
+    );
+    client.shutdown();
+}
+
+#[test]
 fn variant_context_tracks_unsaved_import_edits_and_close() {
     let mut client = start(true);
     let mut p = params(MEMBER, 0);
