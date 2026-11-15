@@ -1216,6 +1216,63 @@ fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
     assert_eq!(group[0].secondary.len(), 2, "naming the other two binders");
 }
 
+/// The nightly's budget-300 red at trunk `b333b9da` (2026-11-13 to
+/// 11-15), pinned by its (file, iteration):
+/// `grammar/match_nested_bare_variant_guard.lu [swap tokens 82/83 at
+/// 704..708]`, four cascade diagnostics at one site against the tight
+/// bound of three. The swap is in `main`'s header, not in the match the
+/// file is about: `fn main() -> !int {` becomes `fn main() -> int! {`,
+/// and the `!` left after the return type reads the body's `{` as an
+/// error row.
+///
+/// The row reads `print` as a row entry and the call's arguments,
+/// `(say(W.K(Kind.Food, 5)))`, as the entry's payload, a type list. A
+/// payload that is not a type ends the row: one report, then the escape
+/// (`5c965297`). But a call nested in a call is a tuple type nested in a
+/// tuple type, and each list kept its own one-report latch (#420), so the
+/// one payload reported three times: the `(` after `say`, the `(` after
+/// `W.K`, and the `5`. The fourth was the body's next line, spilled to the
+/// top level as a stray run.
+///
+/// A list nested inside one that has already reported is that list's
+/// wreck, as a nested argument list is. The payload is one report and the
+/// spilled body one more: two, at one site.
+#[test]
+fn a_call_read_as_an_error_row_payload_is_one_report() {
+    const FILE: &str = "grammar/match_nested_bare_variant_guard.lu";
+    const ITERATION: usize = 167;
+    // The property's own mutation, so the failure reads as the nightly's.
+    let mut sm = wolf_span::SourceMap::new();
+    let s = subject(&corpus_root().join(FILE), &mut sm);
+    let m = mutation_of(&s, ITERATION)
+        .unwrap_or_else(|| panic!("{FILE} mutation {ITERATION} no longer picks a target"));
+    assert_eq!(
+        m.describe, "swap tokens 82/83 at 704..708",
+        "{FILE} mutation {ITERATION} no longer rolls the nightly's swap"
+    );
+    let (found, _) = violations(&s, &m, ITERATION, &mut sm);
+    assert!(found.is_empty(), "{}", found.join("\n"));
+
+    // And the reading above, spelled as the splice.
+    let (parse, sites) = pinned_case(
+        FILE,
+        b"fn main() -> !int {",
+        b"fn main() -> ".len(),
+        b"!int".len(),
+        b" int! ",
+    );
+    let shape: Vec<Vec<&str>> = sites
+        .iter()
+        .map(|s| s.iter().map(|d| d.code.as_str()).collect())
+        .collect();
+    assert_eq!(
+        shape,
+        [vec!["E0201", "E0203"]],
+        "the payload once and the spilled body once: {:?}",
+        parse.diagnostics
+    );
+}
+
 /// The exact #283 counter-example, pinned deterministically (no
 /// seed) so it runs in the ordinary gauntlet, not only the nightly:
 /// replacing the `fn` of `fn main` in
