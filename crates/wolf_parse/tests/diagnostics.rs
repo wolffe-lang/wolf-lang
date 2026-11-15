@@ -784,6 +784,27 @@ fn a_malformed_paren_type_list_reports_once() {
         all("fn f(g: fn(1, 2), h: fn(3, 4)) -> int { 1 }\n"),
         [ty.clone(), ty.clone()]
     );
+    // A list nested inside one that has already reported is that list's
+    // wreck, as a nested argument list is: `(bool str)` after the missing
+    // `,` reports nothing of its own. A call read as a type list nests
+    // this way, one tuple per call, and each nested call used to report
+    // again: the second shape was three reports, the nightly
+    // blast-radius red's three.
+    assert_eq!(
+        all("fn f(g: fn(int int (bool str))) -> int { 1 }\n"),
+        vec![expected.clone()]
+    );
+    assert_eq!(
+        all("fn f(g: fn(int int (bool (u8, 1)))) -> int { 1 }\n"),
+        vec![expected.clone()]
+    );
+    // A nested list that breaks before its enclosing list has reported
+    // still reports, and the enclosing list's own later miss is a second
+    // place: two reports.
+    assert_eq!(
+        all("fn f(g: fn((bool str), int int)) -> int { 1 }\n"),
+        [expected.clone(), expected.clone()]
+    );
     // And a healthy fn-type is still silent.
     assert!(
         all("fn f(g: fn(int, int) -> bool) -> int { 1 }\n").is_empty(),
