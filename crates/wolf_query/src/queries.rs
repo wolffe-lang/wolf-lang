@@ -191,7 +191,7 @@ impl Snapshot {
         for candidate in candidates {
             self.checkpoint();
             if let Some(a) = self.analysis(candidate)
-                && a.typecheck.is_some()
+                && a.typecheck.is_none()
                 && a.resolution
                     .as_ref()
                     .is_some_and(|res| file_index(res, &entry).is_some())
