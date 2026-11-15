@@ -983,7 +983,7 @@ unchanged. For `while`, `body` denotes the contents of the original body
 block, in its original nested lexical scope, **not a closure or a new
 loop**. The synthesized `loop` has the same normal completion value as
 an ordinary `while`. No hidden call, allocation, copy, move, error
-handler or implicit explicit-region construct is added.
+handler or region-creation construct is added.
 
 - The initializer runs once before the `if` condition. Its new names
   enter scope **after** the initializer, just as for a normal declaration:
