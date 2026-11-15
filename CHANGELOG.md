@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `wolf lsp` keeps navigation in an imported file in the context of an open
+  package entry that actually imports it. References and rename now include
+  the package's uses of enum variants instead of losing them when the
+  member's sibling imports cannot resolve as a standalone entry. Definition
+  and expression hover use the same context. Without a usable open entry,
+  queries retain their standalone behavior; diagnostics are unchanged.
+
 ## 0.2.40 — 2026-11-12
 
 Pairs with **lupin 0.1.62**, conformance pin
