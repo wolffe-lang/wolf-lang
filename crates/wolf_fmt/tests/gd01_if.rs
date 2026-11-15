@@ -30,6 +30,15 @@ fn a_long_guard_call_does_not_introduce_braces_or_argument_breaks() {
 }
 
 #[test]
+fn a_long_then_guard_retains_its_trailing_comment() {
+    let source = format!(
+        "fn f() {{\n    if {} then emit() // keep this comment\n}}\n",
+        "c".repeat(110)
+    );
+    assert_eq!(formatted(&source), source);
+}
+
+#[test]
 fn a_braced_guard_is_not_converted_to_then() {
     let source = "fn f() {\n    if ready {\n        return answer\n    }\n}\n";
     assert_eq!(formatted(source), source);
