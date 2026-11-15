@@ -36,10 +36,17 @@ fn a_braced_guard_is_not_converted_to_then() {
 }
 
 #[test]
+fn block_comments_are_not_valid_wolf_syntax() {
+    // spec/01 §1 explicitly admits line comments only. This is not a
+    // preservation fixture: a partial result is the correct response.
+    let source = b"fn f() {\n    if ready /* condition */ then emit()\n}\n";
+    assert!(wolf_fmt::format_text(source).partial);
+}
+
+#[test]
 fn comments_and_multiline_branches_remain_a_fixed_point() {
     for source in [
         "fn f() {\n    if ready then emit() // retain this comment\n}\n",
-        "fn f() {\n    if ready /* condition */ then emit()\n}\n",
         "fn f() {\n    if ready then emit(\n        // retain this argument comment\n        answer\n    )\n}\n",
         "fn f() {\n    if ready then emit(fn() {\n        one()\n        two()\n    })\n}\n",
         "fn f() {\n    if ready then emit(\"\"\"\n        first\n        second\n        \"\"\")\n}\n",
