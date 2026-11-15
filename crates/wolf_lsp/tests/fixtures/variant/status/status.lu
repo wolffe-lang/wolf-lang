@@ -1,3 +1,5 @@
+use backend
+
 pub enum State {
     Empty,
     Foreign,
@@ -8,7 +10,7 @@ enum Other {
 }
 
 pub fn inspect(empty: bool) -> State {
-    if empty { State.Empty } else { State.Foreign }
+    if backend.usable(empty) { State.Empty } else { State.Foreign }
 }
 
 pub fn score(s: State) -> int {
