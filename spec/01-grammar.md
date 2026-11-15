@@ -12,8 +12,9 @@ zero-or-more; `+` one-or-more; `A - B` matches what `A` matches and `B` does
 not (the W3C exception); parentheses group; terminals in `'quotes'`;
 UPPER names are lexer tokens, lower names are syntactic productions.
 
-This document says what *parses*. Meaning is informal gloss only; semantics
-live in 02-memory-model, 03-concurrency, and later sema documents.
+This document says what *parses*. Meaning is informal gloss except for
+explicitly normative desugarings such as `[gram.expr.if.head]`; other
+semantics live in 02-memory-model, 03-concurrency, and later sema documents.
 
 ---
 
@@ -233,11 +234,15 @@ Multiline expression style is therefore **trailing** operator/dot; the
 formatter enforces it (`[gram.fmt.continuation]`).
 
 `;` is an explicit terminator token, interchangeable with the inserted one
-— it exists for single-line blocks (`{ print(USAGE); return 2 }`, the
-guard-clause idiom). An empty statement (a `;` with no statement before it
-on the same line) is an error (E0002). The formatter strips every `;` that
-is not separating statements within a single-line block
-(`[gram.fmt.inline]`).
+in statement position — it separates statements in single-line blocks
+(`{ print(USAGE); return 2 }`, the guard-clause idiom). It also closes a
+binding header (`[gram.expr.if.head]`), where a literal `;` is required:
+an inserted newline terminator is **not** a substitute. An empty statement
+(a `;` with no statement before it on the same line) is an error (E0002).
+The formatter preserves binding-header semicolons and strips every other
+`;` that is not separating statements within a single-line block
+(`[gram.fmt.inline]`). No newline-insertion rule changes for a header;
+a header may break after its literal `;`, but not replace it with a newline.
 
 Exceptions (grammar-level):
 - The *innermost* enclosing delimiter decides: when it is `(`, `[`, or an
@@ -881,14 +886,15 @@ spelling for spans inside a 1-origin scope. Files:
 ### 3.4 Control flow as expressions `[gram.expr.flow]`
 
 ```ebnf
-if_expr    ::= 'if' expr 'then'? block ('else' (if_expr | block))?
+if_expr    ::= 'if' binding_header? expr 'then'? block ('else' (if_expr | block))?
              | 'if' expr 'then' expr  ('else' (if_expr | expr))?
+binding_header ::= ('let' | 'var') binder ';'
 match_expr ::= 'match' expr '{' arm* '}'
 match_arm  ::= pattern ('if' expr)? '=>' (expr | block)
 arm        ::= match_arm arm_sep?
 arm_sep    ::= ',' | TERM
 loop_expr  ::= 'for' pattern 'in' expr block
-             | 'while' expr block
+             | 'while' binding_header? expr block
              | 'loop' block
 jump_expr  ::= 'return' expr? | 'break' expr? | 'continue'
 ```
@@ -934,6 +940,107 @@ spellings. Files: `grammar/if_then_let.lu`, `grammar/if_then_arm.lu`,
 `grammar/if_then_ident.lu`, `grammar/if_then_member.lu`,
 `grammar/if_then_width.lu`; refused: `grammar/if_then_missing.lu`,
 `grammar/if_then_mixed.lu`, `grammar/if_then_let_body.lu`.
+
+**Scoped binding headers `[gram.expr.if.head]`** (approved for the language;
+planned for 0.2.41). The braced `if` and `while` forms admit exactly one
+`let` or `var` binder before the condition:
+
+```wolf
+if let x = e; cond { a } else { b }
+if var x: int = e; cond { a } else if other { b } else { c }
+while let x = e; cond { body }
+while var x = e; cond { body }
+```
+
+The binder is `[gram.item.let]`'s existing `binder`: an optional type and
+an irrefutable pattern, including destructuring (`[gram.pat.binder]`),
+not a pattern test or a comma group. There is one initializer, even when
+its pattern binds several names. The initializer is an ordinary expression
+and may contain `?` and defaulting/handling `else`; its literal `;` closes
+it. Only the following condition uses the existing no-struct-literal
+mode (`[gram.amb.structlit]`), and that condition must have type `bool`.
+An optional `then` before the first block is still legal and formatted
+away as in `[gram.fmt.if]`. A header-bearing `if` cannot use bare branches;
+an ordinary `else if` without a header still picks its own existing form.
+
+**Normative desugaring.** Write `H` for the one complete declaration
+(`let pattern = e` or `var pattern = e`, including any type annotation).
+The following equivalences define the feature's meaning, not merely an
+implementation strategy:
+
+```text
+if H; cond { a } else T
+    ≡ { H; if cond { a } else T }
+
+while H; cond { body }
+    ≡ loop { H; if !(cond) { break }; body }
+```
+
+For `if`, `else T` stands for the entire remaining `else if`/`else` chain
+and is omitted on both sides when absent. The inner `if` is the tail
+expression of the synthesized block: the result type and value are
+unchanged. For `while`, `body` denotes the contents of the original body
+block, in its original nested lexical scope, **not a closure or a new
+loop**. The synthesized `loop` has the same normal completion value as
+an ordinary `while`. No hidden call, allocation, copy, move, error
+handler or implicit explicit-region construct is added.
+
+- The initializer runs once before the `if` condition. Its new names
+  enter scope **after** the initializer, just as for a normal declaration:
+  `if let x = x + 1; ...` reads an outer `x` on the right and shadows it
+  thereafter. They are visible in the condition and every subsequent
+  arm of that chain, including its `else if` conditions and final `else`,
+  and nowhere after the chain. A nested header introduces a nested scope,
+  not a sibling declaration; it can shadow an earlier header's name.
+  Normal lookup and shadow diagnostics apply unchanged (W0304 is the
+  existing prelude-name warning, not a new warning for every outer local).
+- In a `while`, the declaration runs **before every test**, including the
+  first test and the final false test. It is not a once-only loop setup.
+  Each iteration has a fresh binding; a body's `continue` re-enters at
+  `H`, so mutating a `var` in the body does not carry that binding into
+  the next test. The names scope over that iteration's condition and
+  body, not the code after the loop.
+- The binding's lexical lifetime is the synthesized chain block (or one
+  synthesized iteration block for `while`). Its region behavior is
+  exactly that block's behavior under `[mem.region]`: ordinary ambient
+  allocation (`[mem.region.create.3]`), region escape, move and lend
+  rules remain in force. The header does not itself create an arena or
+  change the current region; lexical scope and an allocation's region
+  are not interchangeable.
+- `?` in `e` propagates from the enclosing function or closure, not from
+  a hidden wrapper. `else return` likewise returns from that function
+  or closure. An `else` consumed inside `e` is the existing expression
+  handler/default, not the conditional's `else` after its first block.
+- In a `while` initializer, an ordinary `break` exits this synthesized
+  loop, `continue` starts its next iteration (re-evaluating `H` without
+  testing the interrupted initializer), and `return` exits the enclosing
+  function or closure. These are existing jump expressions, including
+  their use in an `else` handler, not a new fallible-binding shorthand.
+  A jump inside a nested loop or closure keeps its ordinary target.
+  In an `if` initializer, `break`/`continue` target an enclosing loop,
+  if any; the synthesized block does not add a loop. Existing rules
+  for illegal jump targets and jump values still apply.
+
+**Refusals.** More than one binder (`if let x = 1, y = 2; ...` or a second
+`let`/`var` before the condition), a missing literal `;` (including a
+newline in its place), and a header on the bare `if ... then expr` form
+are **E0201**, at the extra binder, missing separator or bare branch
+respectively. The message names the supported one-binder, `;`, braced
+spelling. A header name read after the chain or loop, with no outer
+binding of that name, is **E0301**, ordinary undeclared-name lookup; an
+outer name is instead visible again. Refutable patterns retain **E0806**
+(`[gram.pat.binder]`). Assignment stays a statement
+(`[gram.expr.assign]`): `if x = e; cond { ... }`, parenthesized assignment
+and expression-level binding are not introduced.
+
+The ten intended conformance programs are staged outside the gated
+corpus in [`pending/binding-headers/`](pending/binding-headers/README.md)
+until implementation: six accepted (`if_let_chain.lu`, `if_var.lu`,
+`if_shadow_destructure.lu`, `if_errors.lu`, `while_rebind.lu`,
+`while_header_jumps.lu`) and four refused (`refuse_two_binders.lu`,
+`refuse_missing_semicolon.lu`, `refuse_bare_then.lu`,
+`refuse_after_chain.lu`). They are pending expectations, not evidence
+that a released compiler supports the feature.
 
 ### 3.5 Closures `[gram.expr.closure]`
 
@@ -1208,7 +1315,8 @@ groups, `for` headers) and in `match` arms, where it participates in
 exhaustiveness as the single-constructor product of its fields.
 
 Binder positions `[gram.pat.binder]` (2026-11-06): a `let` or `var`
-binder (`[gram.item.let]`, every binder of a D63 group), a `for`
+binder (`[gram.item.let]`, every binder of a D63 group and the single
+binder of `[gram.expr.if.head]`), a `for`
 header (`[gram.expr.flow]`) and the `else |…|` handler's binding form
 (`[gram.expr.primary]`) take a pattern that binds every value it
 meets, because no other branch exists for a value to go to. Every bare
@@ -1448,8 +1556,9 @@ a closed construct, so reserving them would steal good identifiers
 
 No turbofish, no `<>` generics, no `do` single-statement form, no
 `++`/`--`, no statement macros, no ternary `?:` (use `if` expressions),
-no `goto`, no *required* semicolons (terminators are inserted;
-`[gram.lex.newline]` defines the explicit `;` and its single legal use).
+no `goto`, no required statement-ending semicolons (terminators are inserted).
+The binding-header separator is the one required literal `;`;
+`[gram.lex.newline]` defines its two legal uses.
 
 ---
 
@@ -1515,7 +1624,10 @@ no `goto`, no *required* semicolons (terminators are inserted;
   `crates/wolf_fmt/tests/style.rs` under this anchor.
 - `[gram.fmt.inline]` A block stays on one line (with `;` separators) only
   when it is a guard-clause-shaped body (≤2 statements, fits the width);
-  otherwise the formatter breaks it multiline and strips the semicolons.
+  otherwise the formatter breaks it multiline and strips the statement
+  semicolons. The binding-header `;` (`[gram.expr.if.head]`) is always
+  preserved, including in a multiline header; a long header may break
+  after it or at the existing trailing-operator continuation points.
 - `[gram.fmt.region]` X4 canonicalization: a region created, used
   lexically, and freed in one scope is written in sugar form; a region
   that escapes (moved, stored, returned) is written in value form. The
