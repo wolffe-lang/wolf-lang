@@ -2126,7 +2126,17 @@ fn paren_type_list(p: &mut Parser<'_>) {
     // drew a pair of reports for every parameter it then swallowed,
     // three pairs for three parameters and more for more. The wreck is
     // the list, and the boundary diagnostic below says where it ends.
-    let mut reported = false;
+    //
+    // A list nested inside one that has already reported is that list's
+    // wreck too, as a nested argument list is (`arg_error_reported`), so
+    // it starts reported. An error row's payload is where this bites: a
+    // call statement read as a row entry nests one tuple type per call,
+    // and `print(say(W.K(Kind.Food, 5)))` reported the `(` after `say`,
+    // the `(` after `W.K` and the `5`, three reports for one payload,
+    // the escape's "one report" said three times. A list nested BEFORE
+    // its enclosing list reports is a separate place and still speaks.
+    let enclosing = p.type_list_reported;
+    let mut reported = enclosing;
     loop {
         if p.at_punct(Punct::RParen) {
             p.bump();
@@ -2146,6 +2156,7 @@ fn paren_type_list(p: &mut Parser<'_>) {
         if !type_(p) {
             if !reported {
                 reported = true;
+                p.type_list_reported = true;
                 let at = p.current_span();
                 expected_type_here(p, at);
             }
@@ -2159,6 +2170,7 @@ fn paren_type_list(p: &mut Parser<'_>) {
             // the grammar requires the separator: `(int, int, int)`, never
             // `(int int int)` — leniency here was DIV-001
             reported = true;
+            p.type_list_reported = true;
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.current_span(),
@@ -2170,6 +2182,7 @@ fn paren_type_list(p: &mut Parser<'_>) {
             break;
         }
     }
+    p.type_list_reported = enclosing;
 }
 
 /// `'[' type_arg (',' type_arg)* ','? ']'` — type application.
