@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Language (planned for 0.2.41, after implementation):** scoped binding
+  headers on braced `if` and `while`: `if let x = e; cond { ... }` and
+  `while var x = e; cond { ... }` (both accept `let` or `var`). Exactly
+  one binder and a literal `;`; the name scopes over the whole conditional
+  chain, or one loop test and body. The normative desugar re-evaluates a
+  `while` binding before every test, including after `continue`.
+  `[gram.expr.if.head]` specifies the language; its ten pending conformance
+  programs are outside the gated corpus until compiler support lands.
+  This entry records the specification, not support in the current compiler.
+
 - `wolf lsp` keeps navigation in an imported file in the context of an open
   package entry that actually imports it. References and rename now include
   the package's uses of enum variants instead of losing them when the
