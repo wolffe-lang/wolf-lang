@@ -87,6 +87,12 @@ pub(crate) struct Parser<'a> {
     /// lists dragged into the same wreck stay silent (D22 containment).
     /// Cleared whenever a real terminator is consumed.
     pub(crate) arg_error_reported: bool,
+    /// Inside a type list (`paren_type_list`) that has already reported:
+    /// a list nested in it is the same wreck and stays silent, as nested
+    /// argument lists do under [`Self::arg_error_reported`]. Set by the
+    /// list that reports; each list restores it as it ends, so a sibling
+    /// list after a broken one still reports for itself.
+    pub(crate) type_list_reported: bool,
     /// A run of not-a-declaration lines reports once — cleared when a
     /// real declaration keyword is reached (D22 containment).
     pub(crate) toplevel_error_reported: bool,
@@ -166,6 +172,7 @@ impl<'a> Parser<'a> {
             suppressed_miss_reported: false,
             item_floor: None,
             arg_error_reported: false,
+            type_list_reported: false,
             toplevel_error_reported: false,
             decl_floor: None,
             arm_error_reported: false,
