@@ -640,13 +640,11 @@ fn bare_if_past_the_width_breaks_to_the_braced_form_once() {
         &format!("fn f() -> int {{\n    {chain}\n}}\n"),
         "fn f() -> int {\n    if aaaaaaaaaaaaaaaaaaaaaaaaaaaa {\n        1\n    } else if bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb {\n        2\n    } else {\n        33333333333333333333\n    }\n}\n",
     );
-    // One-armed.
+    // One-armed guards are the explicit width exception.
     let one = "if some_rather_long_condition(alpha, beta, gamma, delta) then do_the_one_thing(epsilon, zeta, eta)";
     assert!(4 + one.len() > 100);
-    check(
-        &format!("fn f() {{\n    {one}\n}}\n"),
-        "fn f() {\n    if some_rather_long_condition(alpha, beta, gamma, delta) {\n        do_the_one_thing(epsilon, zeta, eta)\n    }\n}\n",
-    );
+    let source = format!("fn f() {{\n    {one}\n}}\n");
+    check(&source, &source);
 }
 
 #[test]

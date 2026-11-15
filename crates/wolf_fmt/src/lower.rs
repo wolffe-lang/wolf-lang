@@ -30,6 +30,31 @@ use wolf_span::Span;
 
 use crate::doc::Doc;
 
+/// Commit an otherwise flat guard to its inline spelling. Required line
+/// breaks (including comments and multiline literals) still use normal layout.
+/// Keep suffixes as suffixes so their spacing and newline timing do not change.
+fn inline_guard(ds: &[Doc]) -> Option<Doc> {
+    let mut pending: Vec<&Doc> = ds.iter().rev().collect();
+    let mut flat = Vec::new();
+    while let Some(doc) = pending.pop() {
+        match doc {
+            Doc::Text(_) | Doc::LineSuffix(_) => flat.push(doc.clone()),
+            Doc::Raw(bytes) if !bytes.contains(&b'\n') => flat.push(doc.clone()),
+            Doc::Line => flat.push(Doc::text(" ")),
+            Doc::Softline => {}
+            Doc::IfBreak { flat: bytes, .. } => flat.push(Doc::Text(bytes.clone())),
+            Doc::Concat(children)
+            | Doc::Group(children)
+            | Doc::LastResort(children)
+            | Doc::Indent(children)
+            | Doc::IndentIfBroken(children)
+            | Doc::Shield(children) => pending.extend(children.iter().rev()),
+            _ => return None,
+        }
+    }
+    Some(Doc::Concat(flat))
+}
+
 // ------------------------------------------------------------ context ---
 
 /// X4 sugar-preference rewrite: the `in r { … }` at the key span is
@@ -2567,16 +2592,22 @@ impl<'a> Fmt<'a> {
     }
 
     /// The bare form `if c then a else b` (`[gram.fmt.if]`): one group
-    /// per chain whose BROKEN rendering is the braced form, so the
-    /// width fallback is the only conversion, one direction, and a
-    /// fixed point — the braced result is braced on every later pass.
+    /// per chain whose BROKEN rendering is the braced form. A one-armed
+    /// guard with no required line break stays inline even past the width;
+    /// other bare forms retain the one-way width fallback to braces.
     /// A bare `else if` joins the group (the chain breaks as one); a
     /// braced `else if` keeps its braces behind a shield and does not
     /// make the bare head break.
     fn bare_if(&self, n: &GreenNode, out: &mut Vec<Doc>) {
         let mut g = Vec::new();
         self.bare_if_links(n, &mut g);
-        out.push(Doc::Group(g));
+        if n.child_token(K::ElseKw).is_none()
+            && let Some(flat) = inline_guard(&g)
+        {
+            out.push(flat);
+        } else {
+            out.push(Doc::Group(g));
+        }
     }
 
     fn bare_if_links(&self, n: &GreenNode, g: &mut Vec<Doc>) {

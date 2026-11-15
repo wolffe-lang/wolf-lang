@@ -1541,10 +1541,13 @@ no `goto`, no *required* semicolons (terminators are inserted;
   position, would have rewritten 68 lines across four repos: corpus 9,
   wolf-std 9, lobo 39, wolf-book 11, measured 2026-09-11.) Inside a form
   it normalizes: a `then` before `{` is dropped, the braced form having
-  one spelling; a bare `if` whose one-line rendering no longer fits the
-  width is broken to the braced form — the only conversion, one
-  direction, and a fixed point (the braced result is braced on every
-  later pass). A bare chain breaks as one: its bare `else if`s go braced
+  one spelling. A one-statement bare guard with no `else` stays on one
+  line, even past the width, unless its contents require a line break
+  (for example, an argument comment or a multiline literal). Other bare
+  `if`s whose one-line rendering no longer fits the width are broken to
+  the braced form — the only conversion, one direction, and a fixed
+  point (the braced result is braced on every later pass). A bare chain
+  breaks as one: its bare `else if`s go braced
   together; a braced `else if` inside a bare chain keeps its braces and
   does not make the bare head break. **A braced chain breaks as one
   too** (s154, wolf-lang#303): the inline decision belongs to the
