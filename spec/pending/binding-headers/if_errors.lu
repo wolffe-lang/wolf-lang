@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="6\n90\n6\n70\n")
+//! phase: run
+//! conforms: gram.expr.if.head
+//! Pending (sp01): expected to fail until binding headers are implemented.
+
+fn read_value(ok: bool) -> int ! {missing} {
+    if ok { 5 } else { return missing }
+}
+
+fn propagate(ok: bool) -> int ! {missing} {
+    if let n = read_value(ok)?; n > 0 {
+        n + 1
+    } else {
+        n
+    }
+}
+
+fn early_return(ok: bool) -> int {
+    if let n = read_value(ok) else return 70; n > 0 {
+        n + 1
+    } else {
+        n
+    }
+}
+
+fn main() -> !int {
+    print("{propagate(true) else 90}")
+    print("{propagate(false) else 90}")
+    print("{early_return(true)}")
+    print("{early_return(false)}")
+    0
+}

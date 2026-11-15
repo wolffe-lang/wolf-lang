@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="3\n10\n22\n")
+//! phase: run
+//! conforms: gram.expr.if.head
+//! Pending (sp01): expected to fail until binding headers are implemented.
+
+fn choose(value: int) -> int {
+    if let n = value; n < 0 {
+        -n
+    } else if n == 0 {
+        n + 10
+    } else {
+        n + 20
+    }
+}
+
+fn main() -> !int {
+    print("{choose(-3)}")
+    print("{choose(0)}")
+    print("{choose(2)}")
+    0
+}

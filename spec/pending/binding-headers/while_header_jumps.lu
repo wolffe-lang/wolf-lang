@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="3:2\n77\n")
+//! phase: run
+//! conforms: gram.expr.if.head
+//! Pending (sp01): expected to fail until binding headers are implemented.
+
+fn next_value(turn: int) -> int ! {missing} {
+    if turn == 2 { turn } else { return missing }
+}
+
+fn header_return() -> int {
+    while let n = next_value(1) else return 77; n > 0 {
+        return n
+    }
+    0
+}
+
+fn main() -> !int {
+    var turn = 0
+    var total = 0
+    while let n = next_value({ turn += 1; turn }) else {
+        if turn == 1 { continue }
+        break
+    }; n < 10 {
+        total += n
+    }
+    print("{turn}:{total}")
+    print("{header_return()}")
+    0
+}

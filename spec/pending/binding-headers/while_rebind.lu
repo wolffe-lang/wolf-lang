@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="4:4\n3:3\n")
+//! phase: run
+//! conforms: gram.expr.if.head
+//! Pending (sp01): expected to fail until binding headers are implemented.
+
+fn main() -> !int {
+    var calls = 0
+    var total = 0
+    while let n = { calls += 1; calls }; n < 4 {
+        if n == 2 { continue }
+        total += n
+    }
+    print("{calls}:{total}")
+    calls = 0
+    total = 0
+    while var n = { calls += 1; calls }; n < 3 {
+        total += n
+        n = 100
+        if n == 100 { continue }
+    }
+    print("{calls}:{total}")
+    0
+}

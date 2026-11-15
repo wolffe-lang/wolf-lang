@@ -1,0 +1,13 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.if.head
+//! Pending (sp01): intended refusal after binding headers are implemented.
+//! An inserted newline terminator cannot replace the literal header `;`.
+
+fn main() -> !int {
+    if let x = 1
+        x > 0 {
+        print("missing separator")
+    }
+    0
+}

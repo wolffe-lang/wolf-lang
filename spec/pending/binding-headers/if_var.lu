@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="8\n3\n")
+//! phase: run
+//! conforms: gram.expr.if.head
+//! Pending (sp01): expected to fail until binding headers are implemented.
+
+fn adjust(value: int) -> int {
+    if var n: int = value; n > 0 {
+        n += 3
+        n
+    } else {
+        n = 3
+        n
+    }
+}
+
+fn main() -> !int {
+    print("{adjust(5)}")
+    print("{adjust(0)}")
+    0
+}

@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="10:7\n7\n")
+//! phase: run
+//! conforms: gram.expr.if.head, mem.region.create.3
+//! Pending (sp01): expected to fail until binding headers are implemented.
+
+fn main() -> !int {
+    let n = 7
+    let answer = if let (n, extra) = (n + 1, 2); n > 0 {
+        n + extra
+    } else {
+        extra
+    }
+    print("{answer}:{n}")
+    region scratch {
+        if let text = "{n}"; text.len > 0 {
+            print(text)
+        } else {
+            print("empty")
+        }
+    }
+    0
+}

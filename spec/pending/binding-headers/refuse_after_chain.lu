@@ -1,0 +1,17 @@
+//! check: fail(E0301)
+//! phase: parse
+//! conforms: gram.expr.if.head
+//! Pending (sp01): intended refusal after binding headers are implemented.
+//! The header itself must parse; only the final use is undeclared.
+
+fn main() -> !int {
+    if let scoped = 1; scoped > 0 {
+        print("{scoped}")
+    } else if scoped == 0 {
+        print("zero")
+    } else {
+        print("negative")
+    }
+    print("{scoped}")
+    0
+}
