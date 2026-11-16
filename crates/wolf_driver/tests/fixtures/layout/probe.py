@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import struct
 import sys
 
 ROW = "function-placement-stability"
@@ -19,13 +20,18 @@ FUNCTIONS = 24
 PAGE = 4096
 
 
-def run(argv, cwd, env, log):
+def run(argv, cwd, env, log, inspect_layout_refusal=False):
     result = subprocess.run(list(map(str, argv)), cwd=cwd, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             timeout=180)
     log.with_suffix(".stdout").write_bytes(result.stdout)
     log.with_suffix(".stderr").write_bytes(result.stderr)
-    if result.returncode:
+    log.with_suffix(".exit").write_text(str(result.returncode) + "\n")
+    # A deliberate ordering plant can also trip the compiler's linked-image
+    # verifier. Still inspect its actual emitted executable; no other build
+    # error is accepted, and the symbol comparison must independently fail.
+    layout_refusal = inspect_layout_refusal and b"wolf build: linker did not honor stable function layout:" in result.stderr
+    if result.returncode and not layout_refusal:
         raise RuntimeError(f"{argv}: exit {result.returncode}\n"
                            + result.stderr.decode(errors="replace"))
     return result.stdout.decode()
@@ -68,7 +74,63 @@ def canonical(symbol):
     return match.group(1) if match else None
 
 
+def macho_table(path):
+    """Read Mach-O64 section and nlist tables, not a disassembly heuristic.
+
+    Mach-O has no ELF st_size. Its size column is explicitly an atom extent
+    (next external text symbol/section end), including alignment padding.
+    """
+    data = path.read_bytes()
+    if data[:4] != b"\xcf\xfa\xed\xfe":
+        raise RuntimeError("expected little-endian Mach-O64")
+    commands = struct.unpack_from("<I", data, 16)[0]
+    sections = {}
+    symtab = None
+    offset = 32
+    for _ in range(commands):
+        command, size = struct.unpack_from("<II", data, offset)
+        if size < 8 or offset + size > len(data):
+            raise RuntimeError("invalid Mach-O load command")
+        if command == 0x19:
+            count = struct.unpack_from("<I", data, offset + 64)[0]
+            if 72 + count * 80 > size:
+                raise RuntimeError("invalid Mach-O section table")
+            for i in range(count):
+                at = offset + 72 + i * 80
+                name = data[at:at + 16].split(b"\0")[0].decode()
+                address, length = struct.unpack_from("<QQ", data, at + 32)
+                sections[len(sections) + 1] = dict(name=name, address=address, size=length)
+        elif command == 2:
+            symtab = struct.unpack_from("<IIII", data, offset + 8)
+        offset += size
+    if symtab is None:
+        raise RuntimeError("missing Mach-O symbol table")
+    start, count, strings, string_size = symtab
+    raw = []
+    for i in range(count):
+        name_at, kind, section, desc, address = struct.unpack_from("<IBBHQ", data, start + i * 16)
+        if kind & 0xe0 or kind & 0x0e != 0x0e or not kind & 1:
+            continue
+        if name_at >= string_size or section not in sections:
+            raise RuntimeError("invalid Mach-O symbol")
+        end = data.index(b"\0", strings + name_at, strings + string_size)
+        name = data[strings + name_at:end].decode()
+        if sections[section]["name"] in ["__text", "__wolf_cold"]:
+            raw.append(dict(symbol=name, address=address, section=str(section)))
+    for row in raw:
+        section = sections[int(row["section"])]
+        ends = [s["address"] for s in raw if s["section"] == row["section"] and s["address"] > row["address"]]
+        ends.append(section["address"] + section["size"])
+        row["size"] = min(ends) - row["address"]
+        row["size_kind"] = "Mach-O symbol atom extent, including padding"
+    return sections, raw
+
+
 def symbols(path, env, log):
+    if path.read_bytes()[:4] == b"\xcf\xfa\xed\xfe":
+        sections, raw = macho_table(path)
+        log.with_suffix(".stdout").write_text(json.dumps(dict(sections=sections, symbols=raw), indent=2))
+        return {canonical(row["symbol"][1:]): row for row in raw if canonical(row["symbol"][1:])}
     raw = run(["readelf", "--wide", "--symbols", path], path.parent, env, log)
     out = {}
     for line in raw.splitlines():
@@ -87,8 +149,15 @@ def symbols(path, env, log):
 
 
 def text_origin(path, env, log):
+    if path.read_bytes()[:4] == b"\xcf\xfa\xed\xfe":
+        sections, _ = macho_table(path)
+        log.with_suffix(".stdout").write_text(json.dumps(sections, indent=2))
+        matches = [s["address"] for s in sections.values() if s["name"] == "__text"]
+        if len(matches) != 1:
+            raise RuntimeError("expected one linked Mach-O __text section")
+        return matches[0]
     raw = run(["readelf", "--wide", "--section-headers", path], path.parent, env, log)
-    match = re.search(r"\[\s*\d+\]\s+\.text\s+PROGBITS\s+([0-9a-fA-F]+)\s", raw)
+    match = re.search(r"\[\s*\d+\]\s+\.text(?:\.wolf)?\s+PROGBITS\s+([0-9a-fA-F]+)\s", raw)
     if not match:
         raise RuntimeError(f"no .text section in {path}")
     return int(match.group(1), 16)
@@ -103,7 +172,7 @@ def build(wolf, path, tier, env, cold, linker):
         argv.extend(["--cold-function", name])
     if linker:
         argv.extend(["--linker", linker])
-    run(argv, path, env, path / "build")
+    run(argv, path, env, path / "build", inspect_layout_refusal=True)
     objects = sorted((path / ".lu-cache" / "obj").glob("*.o"))
     if not objects:
         raise RuntimeError("no real relocatable objects found")
@@ -125,7 +194,11 @@ def build(wolf, path, tier, env, cold, linker):
             raise RuntimeError(f"object/linked identity mismatch for {name}")
         row["offset"] = row["address"] - origin
     output = run([exe, "one", "two"], path, env, path / "run")
+    expected = "54\n" if path.name == "after" else "48\n"
+    if output != expected:
+        raise RuntimeError(f"fixture computed {output!r}, expected {expected!r}")
     return dict(objects=object_symbols, linked=linked, object_count=len(objects),
+                build_exit=int((path / "build.exit").read_text()),
                 text_origin=origin, output=output,
                 executable_sha256=hashlib.sha256(exe.read_bytes()).hexdigest())
 
@@ -182,6 +255,8 @@ def main():
     before = build(wolf, root / "before", args.tier, env, args.cold_function, linker)
     after = build(wolf, root / "after", args.tier, env, args.cold_function, linker)
     report = compare(before, after)
+    report["compiler_verified"] = before["build_exit"] == after["build_exit"] == 0
+    report["pass"] = report["pass"] and report["compiler_verified"]
     if args.cold_function:
         for which, image in [("before", before), ("after", after)]:
             linked = image["linked"]

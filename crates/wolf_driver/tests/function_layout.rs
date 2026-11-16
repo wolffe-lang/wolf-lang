@@ -4,15 +4,15 @@
 //! fixture has multiple source modules and release clusters; its added function
 //! is smaller than half a page. The standalone probe can run against a released
 //! compiler, so the same row demonstrates the regression before a fix exists.
-//! ELF is the first witness; the platform-specific Mach-O witness follows with
-//! its layout implementation rather than pretending ELF tools cover that host.
+//! ELF reads st_size; Mach-O reads symbol atom extents (including padding).
+//! Both read real object and executable symbol/section tables.
 
-#![cfg(target_os = "linux")]
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 
 use std::path::Path;
 use std::process::Command;
 
-fn placement(tier: &str) {
+fn placement(tier: &str, cold: bool, linker: Option<&str>) {
     static RUNTIME: std::sync::Once = std::sync::Once::new();
     RUNTIME.call_once(|| {
         let status = Command::new(env!("CARGO"))
@@ -30,16 +30,33 @@ fn placement(tier: &str) {
             .as_nanos()
     ));
     let probe = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/layout/probe.py");
-    let output = Command::new("python3")
+    let mut command = Command::new("python3");
+    command
         .arg("-I")
         .arg(probe)
         .arg("--wolf")
         .arg(env!("CARGO_BIN_EXE_wolf"))
         .arg("--output")
         .arg(&root)
-        .args(["--tier", tier])
+        .args(["--tier", tier]);
+    if cold {
+        command.args(["--cold-function", "m00.f00", "--cold-function", "m04.f04"]);
+    }
+    if let Some(linker) = linker {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::create_dir_all(root.parent().unwrap()).unwrap();
+        let wrapper = root.with_extension("linker");
+        std::fs::write(
+            &wrapper,
+            format!("#!/bin/sh\nexec cc -fuse-ld={linker} \"$@\"\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+        command.arg("--linker").arg(wrapper);
+    }
+    let output = command
         .output()
-        .expect("python3 for the ELF symbol witness");
+        .expect("python3 for the object symbol witness");
     print!("{}", String::from_utf8_lossy(&output.stdout));
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
     assert!(
@@ -52,10 +69,27 @@ fn placement(tier: &str) {
 
 #[test]
 fn release_function_placement_is_local_under_additions() {
-    placement("release");
+    placement("release", false, None);
 }
 
 #[test]
 fn native_function_placement_is_local_under_additions() {
-    placement("native");
+    placement("native", false, None);
+}
+
+#[test]
+fn cold_functions_are_in_a_separate_trailing_region_on_both_tiers() {
+    for tier in ["native", "release"] {
+        placement(tier, true, None);
+    }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn explicitly_selected_gnu_and_lld_links_keep_the_same_layout_contract() {
+    for linker in ["bfd", "lld"] {
+        for tier in ["native", "release"] {
+            placement(tier, true, Some(linker));
+        }
+    }
 }
