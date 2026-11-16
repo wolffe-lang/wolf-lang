@@ -47,6 +47,7 @@
 
 mod debug_frame;
 mod dense;
+mod macho_layout;
 mod translate;
 
 use std::collections::HashMap;
@@ -289,21 +290,26 @@ impl Backend for ClifBackend {
         if let Some(f) = module.funcs.get(id).filter(|f| f.export) {
             si = translate::with_ret_ext(si, f.ret_ext);
         }
-        // kw09 (`[abi.link.section]`): a placed definition needs its
-        // own section, on an ELF object.
-        if linkage != Linkage::Import
-            && let Some(sec) = module.funcs.get(id).and_then(|f| f.section.clone())
-        {
-            if let Some(format) = self.non_elf_format() {
+        if linkage != Linkage::Import {
+            let f = &module.funcs[id];
+            if f.section.is_some()
+                && let Some(format) = self.non_elf_format()
+            {
                 return Err(wolf_backend::section_unsupported(format));
             }
-            if !self.per_function_sections {
-                return Err(BackendError::Internal(format!(
-                    "`{name}` is placed in `{sec}` but this object was built without \
-                     per-function sections"
-                )));
+            let section = if self.non_elf_format() == Some("Mach-O") && f.code_home.is_some() {
+                Some(if f.cold { "__wolf_cold" } else { "__text" }.to_string())
+            } else {
+                wolf_backend::code_layout::elf_section(f, symbol)
+            };
+            if let Some(section) = section {
+                if !self.per_function_sections {
+                    return Err(BackendError::Internal(format!(
+                        "`{name}` needs function sections"
+                    )));
+                }
+                self.fn_sections.push((symbol.to_string(), section));
             }
-            self.fn_sections.push((symbol.to_string(), sec));
         }
         let variadic = module.sigs[sig].variadic.is_some();
         // Cranelift owns only the fixed core. The public entry is filled in
@@ -324,8 +330,14 @@ impl Backend for ClifBackend {
             si.clif.params.push(cranelift_codegen::ir::AbiParam::new(
                 cranelift_codegen::ir::types::I64,
             ));
-            let core_name = format!("_W.va.core.{}", id.as_u32());
-            if let Some(section) = module.funcs.get(id).and_then(|f| f.section.clone()) {
+            let core_name = format!("_W.va.core.{symbol}");
+            let f = &module.funcs[id];
+            let section = if self.non_elf_format() == Some("Mach-O") && f.code_home.is_some() {
+                Some(if f.cold { "__wolf_cold" } else { "__text" }.to_string())
+            } else {
+                wolf_backend::code_layout::elf_section(f, &core_name)
+            };
+            if let Some(section) = section {
                 self.fn_sections.push((core_name.clone(), section));
             }
             let core = self
@@ -821,7 +833,11 @@ impl Backend for ClifBackend {
             patch_macho_debug(&mut bytes, &macho_patches)?;
         }
         if !self.fn_sections.is_empty() {
-            place_elf_functions(&mut bytes, &self.fn_sections)?;
+            if bytes.starts_with(b"\x7fELF") {
+                place_elf_functions(&mut bytes, &self.fn_sections)?;
+            } else {
+                macho_layout::place(&mut bytes, &self.fn_sections)?;
+            }
         }
         Ok(ObjectProduct {
             bytes,

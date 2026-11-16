@@ -24,8 +24,10 @@ pub fn selected(
     rt: &Path,
     verbose: bool,
     trap_hook: bool,
+    layout_args: &[std::ffi::OsString],
 ) -> Result<(), String> {
     let mut command = std::process::Command::new(linker);
+    command.args(layout_args);
     command.arg("-o").arg(out).args(paths).arg(rt);
     command.args(["-lpthread", "-ldl", "-lm", "-Wl,--gc-sections"]);
     if trap_hook {

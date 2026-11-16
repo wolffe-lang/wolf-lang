@@ -24,6 +24,7 @@ macro_rules! print { ($($arg:tt)*) => { crate::status::output(|| std::print!($($
 
 mod asm;
 mod cimport_cmd;
+mod code_layout;
 mod doc_cmd;
 mod doctest_cmd;
 mod help;
@@ -911,6 +912,7 @@ struct BuildOpts {
     release: bool,
     /// Explicit `-g`: debug-only call-frame information, never loaded unwind tables.
     debug_frame: bool,
+    cold_functions: std::collections::BTreeSet<String>,
     emit: Emit,
     /// Where `.lu-cache/` lives; `None` disables persistence entirely
     /// (conform-run's native rung — corpus directories must not grow
@@ -972,6 +974,7 @@ impl BuildOpts {
             checked: false,
             release: false,
             debug_frame: false,
+            cold_functions: std::collections::BTreeSet::new(),
             emit: Emit::Bin,
             cache_root: None,
             lints: LintLevels::new(),
@@ -1093,6 +1096,7 @@ type UnitResult = Result<(Vec<u8>, Option<String>), BuildStop>;
 /// tier (s43 target 5) — plus its rebuild key. One shape, because the
 /// cache, the DWARF split, and the entry/trap-table rule are the same
 /// question either way; only the partition differs.
+#[derive(Clone)]
 struct ModUnit {
     /// Cache-friendly display name (`root` for the package root on the
     /// debug tier; `c00`, `c01`, … for release clusters).
@@ -1113,6 +1117,7 @@ struct ModUnit {
 /// profile environment, module source, direct-dep interface hashes,
 /// the printed-WIR codegen input, and — on the release tier — the
 /// whole-program summary state this unit rests on.
+#[derive(Clone)]
 struct KeyComps {
     env: String,
     src: String,
@@ -1400,6 +1405,7 @@ fn compile_native_inner(
     // — every stage inspectable. Deliberately BEFORE the mid-end: the
     // dump shows lowering's honest output; `--release --emit=llvm-ir`
     // shows the optimized module.
+    code_layout::select_cold(&mut module, &opts.cold_functions).map_err(BuildStop::Environment)?;
     if opts.emit == Emit::Wir {
         let text = wolf_wir::print_module(&module);
         std::fs::write(out, text)
@@ -1591,6 +1597,18 @@ fn compile_native_inner(
         Some(wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?)
     };
 
+    if target.is_freestanding() {
+        if !opts.cold_functions.is_empty() {
+            return Err(BuildStop::Environment("--cold-function requires a hosted layout; a freestanding build controls placement through its sections and linker script".into()));
+        }
+    } else {
+        code_layout::prepare(&mut module, &res.package).map_err(|reason| BuildStop::Refused {
+            phase: "wir",
+            reason,
+            span: None,
+        })?;
+    }
+
     // `--emit=llvm-ir` (s41): the release tier's whole-module IR, one
     // inspectable text — every stage inspectable, like `--emit=wir`.
     if opts.emit == Emit::LlvmIr {
@@ -1733,6 +1751,10 @@ fn compile_native_inner(
         },
         pgo_comp,
     );
+    env_comp.push_str(&format!(
+        " {}",
+        code_layout::cache_tag(&opts.cold_functions)
+    ));
     // Debug CFI changes object bytes independently of the selected tier.
     if opts.debug_frame {
         env_comp.push_str(" debug-frame-v1");
@@ -1956,6 +1978,47 @@ fn compile_native_inner(
         }
     }
 
+    // Mach-O has subsections via symbols, not separate function sections.
+    // Native cold definitions therefore get an object of their own. This is
+    // AFTER optimization: cluster membership and import decisions do not move.
+    if cfg!(target_os = "macos") && !opts.release && !target.is_freestanding() {
+        let mut split = Vec::new();
+        for mut unit in units {
+            let cold: Vec<_> = unit
+                .funcs
+                .iter()
+                .copied()
+                .filter(|&id| module.funcs[id].cold)
+                .collect();
+            if cold.is_empty() {
+                split.push(unit);
+                continue;
+            }
+            let mut cold_unit = unit.clone();
+            cold_unit.name.push_str("$cold");
+            cold_unit.key = sha256_hex(format!("{} cold", unit.key).as_bytes());
+            cold_unit.funcs = cold;
+            cold_unit.is_entry = shim.is_some_and(|id| cold_unit.funcs.contains(&id));
+            unit.funcs.retain(|id| !module.funcs[*id].cold);
+            unit.is_entry = shim.is_some_and(|id| unit.funcs.contains(&id));
+            if !unit.funcs.is_empty() {
+                cold_unit.statics_here = false;
+                split.push(unit);
+            }
+            split.push(cold_unit);
+        }
+        units = split;
+    }
+
+    // Physical definition order is stable even when optimization clusters change.
+    for unit in &mut units {
+        unit.funcs.sort_by(|a, b| {
+            let a = &module.funcs[*a];
+            let b = &module.funcs[*b];
+            (&a.code_home, &a.name).cmp(&(&b.code_home, &b.name))
+        });
+    }
+
     // Acquire object bytes per unit: cache hit or compile. Clusters
     // lower through the backend INDEPENDENTLY (s43 target 4), so the
     // release tier fans them out over the machine's cores — one
@@ -2169,6 +2232,8 @@ fn compile_native_inner(
         opts.verbose,
         trap_hook,
         opts.linker.as_deref(),
+        &module,
+        shim,
     )
 }
 
@@ -2317,7 +2382,10 @@ fn compile_unit(
         // kw09 (`[abi.link.section]`): per-function sections only for an
         // object that places a function — every other object is laid
         // out exactly as before.
-        let placed = u.funcs.iter().any(|&f| module.funcs[f].section.is_some());
+        let placed = u
+            .funcs
+            .iter()
+            .any(|&f| module.funcs[f].section.is_some() || module.funcs[f].code_home.is_some());
         Box::new(wolf_codegen_clif::ClifBackend::for_target_with(target, placed).map_err(refuse)?)
     };
     // The unit's source files as plain data — display path + line
@@ -2462,6 +2530,8 @@ fn link_objects(
     verbose: bool,
     trap_hook: bool,
     linker: Option<&Path>,
+    module: &wolf_wir::Module,
+    shim: Option<wolf_wir::FuncId>,
 ) -> Result<(), BuildStop> {
     let selected = link::selection(linker, std::env::var_os("WOLF_LD"));
     if selected.is_some() {
@@ -2499,12 +2569,16 @@ fn link_objects(
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
         paths.push(p);
     }
+    let layout_args =
+        code_layout::link_args(module, shim, &dir, objects).map_err(BuildStop::Environment)?;
     let result = if let Some(linker) = selected {
-        link::selected(&linker, &paths, out, &rt, verbose, trap_hook)
+        link::selected(&linker, &paths, out, &rt, verbose, trap_hook, &layout_args)
             .map_err(BuildStop::Environment)
     } else {
-        link_staged(&paths, out, &rt, &dir, verbose, trap_hook)
+        link_staged(&paths, out, &rt, &dir, verbose, trap_hook, &layout_args)
     };
+    let result = result
+        .and_then(|()| code_layout::verify(out, module, shim).map_err(BuildStop::Environment));
     let _ = std::fs::remove_dir_all(&dir);
     result
 }
@@ -2532,9 +2606,11 @@ fn link_staged(
     dir: &Path,
     verbose: bool,
     trap_hook: bool,
+    layout_args: &[std::ffi::OsString],
 ) -> Result<(), BuildStop> {
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let mut cmd = std::process::Command::new(&cc);
+    cmd.args(layout_args);
     // macOS determinism, both halves (s59): ZERO_AR_DATE zeroes the
     // debug map's N_OSO timestamps (ld64 honors it; dsymutil treats 0
     // as "no check" — the Rust archives already do this), and
@@ -2654,6 +2730,7 @@ fn link_staged(
     _dir: &Path,
     verbose: bool,
     trap_hook: bool,
+    layout_args: &[std::ffi::OsString],
 ) -> Result<(), BuildStop> {
     let linker = windows_linker()?;
     if verbose {
@@ -2664,6 +2741,7 @@ fn link_staged(
         );
     }
     let mut cmd = std::process::Command::new(&linker.path);
+    cmd.args(layout_args);
     cmd.args(linker.flavor);
     for (k, v) in &linker.env {
         cmd.env(k, v);
@@ -2940,6 +3018,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         checked: false,
         release: false,
         debug_frame: false,
+        cold_functions: std::collections::BTreeSet::new(),
         emit: Emit::Bin,
         cache_root: None,
         lints: LintLevels::new(),
@@ -3004,6 +3083,19 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 Ok(n) => opts.error_limit = n,
                 Err(_) => fail("--error-limit needs a count (0 for no limit)"),
             }
+        } else if a == "--cold-function" {
+            i += 1;
+            match args.get(i) {
+                Some(v) if !v.is_empty() => {
+                    opts.cold_functions.insert(v.clone());
+                }
+                _ => fail("--cold-function needs a qualified function name"),
+            }
+        } else if let Some(v) = a.strip_prefix("--cold-function=") {
+            if v.is_empty() {
+                fail("--cold-function needs a qualified function name");
+            }
+            opts.cold_functions.insert(v.to_string());
         } else if a == "--linker" {
             i += 1;
             match args.get(i) {

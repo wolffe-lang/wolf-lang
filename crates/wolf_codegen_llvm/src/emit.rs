@@ -3679,7 +3679,7 @@ impl<'a> Fx<'a> {
         // is deliberately NOT emitted: optimizing WITHIN the body is
         // welcome; dissolving the body's boundary is not.
         // A variadic register-save area belongs to this invocation only.
-        let noinline = if self.f.consttime.is_some() || si.variadic_fixed.is_some() {
+        let noinline = if self.f.consttime.is_some() || self.f.cold || si.variadic_fixed.is_some() {
             " noinline"
         } else {
             ""
@@ -3707,10 +3707,25 @@ impl<'a> Fx<'a> {
         };
         // kw09 (`[abi.link.section]`): the function's code in its named
         // section (an ELF target; `LlvmBackend` refused the rest).
-        let section = match &self.f.section {
-            Some(sec) => format!(" section \"{}\"", llvm_escape(sec)),
-            None => String::new(),
+        let placed = if self.f.section.is_some() {
+            self.f.section.clone()
+        } else if self.f.code_home.is_some()
+            && self.cx.opts.target == Some(crate::ReleaseTarget::MacosArm64)
+        {
+            Some(
+                if self.f.cold {
+                    "__TEXT,__wolf_cold"
+                } else {
+                    "__TEXT,__text"
+                }
+                .into(),
+            )
+        } else {
+            wolf_backend::code_layout::elf_section(self.f, symbol)
         };
+        let section = placed
+            .map(|sec| format!(" section \"{}\"", llvm_escape(&sec)))
+            .unwrap_or_default();
         let _ = writeln!(
             out,
             "define {linkage}{ret_ext}{} @\"{symbol}\"({}) nounwind{noinline}{target_attrs}{section} {{",

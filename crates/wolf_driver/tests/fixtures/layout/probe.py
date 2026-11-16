@@ -94,11 +94,15 @@ def text_origin(path, env, log):
     return int(match.group(1), 16)
 
 
-def build(wolf, path, tier, env):
+def build(wolf, path, tier, env, cold, linker):
     exe = path / "program"
     argv = [wolf, "build", path / "main.lu", "--verbose", "-o", exe]
     if tier == "release":
         argv.append("--release")
+    for name in cold:
+        argv.extend(["--cold-function", name])
+    if linker:
+        argv.extend(["--linker", linker])
     run(argv, path, env, path / "build")
     objects = sorted((path / ".lu-cache" / "obj").glob("*.o"))
     if not objects:
@@ -160,6 +164,8 @@ def main():
     parser.add_argument("--wolf", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--tier", choices=["native", "release"], default="release")
+    parser.add_argument("--cold-function", action="append", default=[])
+    parser.add_argument("--linker", type=Path)
     args = parser.parse_args()
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -172,9 +178,21 @@ def main():
     version = run([wolf, "--version"], root, env, root / "compiler")
     fixture(root / "before", False)
     fixture(root / "after", True)
-    before = build(wolf, root / "before", args.tier, env)
-    after = build(wolf, root / "after", args.tier, env)
+    linker = args.linker.resolve() if args.linker else None
+    before = build(wolf, root / "before", args.tier, env, args.cold_function, linker)
+    after = build(wolf, root / "after", args.tier, env, args.cold_function, linker)
     report = compare(before, after)
+    if args.cold_function:
+        for which, image in [("before", before), ("after", after)]:
+            linked = image["linked"]
+            cold_rows = [linked[name] for name in args.cold_function]
+            hot_rows = [row for name, row in linked.items() if name not in args.cold_function]
+            cold_sections = {row["section"] for row in cold_rows}
+            separate = len(cold_sections) == 1 and all(row["section"] not in cold_sections for row in hot_rows)
+            trailing = min(row["address"] for row in cold_rows) >= max(row["address"] + row["size"] for row in hot_rows)
+            report[which + "_cold_separate_trailing"] = separate and trailing
+            report["pass"] = report["pass"] and separate and trailing
+        print(("PASS" if report["pass"] else "FAIL") + " cold-function-placement", flush=True)
     (root / "evidence.json").write_text(json.dumps(dict(
         compiler=version.strip(), compiler_sha256=hashlib.sha256(wolf.read_bytes()).hexdigest(),
         tier=args.tier, before=before, after=after, comparison=report), indent=2) + "\n")

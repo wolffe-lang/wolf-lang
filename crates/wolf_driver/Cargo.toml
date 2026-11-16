@@ -45,7 +45,7 @@ rayon.workspace = true
 # .debug_* presence (the ledger's readelf-style check, tool-free).
 # kw12: `archive` reads the freestanding runtime's members
 # (freestanding_alloc.rs), tool-free on every host.
-object = { version = "0.39", default-features = false, features = ["read_core", "elf", "archive", "std"] }
+object = { version = "0.39", default-features = false, features = ["read_core", "elf", "macho", "archive", "std"] }
 
 # s60a: the windows link step's MSVC/SDK discovery — the same crate
 # rustc's own `cc` uses to find `link.exe` and the import libraries
