@@ -17,6 +17,7 @@
 //! holds the edge (`wir ← backend ← codegen_clif ← driver`).
 
 pub mod abi;
+pub mod code_layout;
 pub mod dwarf;
 mod dwarf_types;
 pub mod frame_decode;
