@@ -121,7 +121,22 @@ pub fn link_args(
     if cfg!(windows) {
         return Err("stable function layout on COFF is not supported".into());
     }
-    let mut args = vec![OsString::from("-Wl,--sort-section=name")];
+    // An explicit SORT clause is required: lld's synthesized default script
+    // can retain LLVM cluster order even with --sort-section=name. Collect
+    // Wolf inputs before the default .text wildcard can consume them.
+    let hot = dir.join("hot.ld");
+    std::fs::write(
+        &hot,
+        "SECTIONS { .text.wolf : { *(SORT_BY_NAME(.text.wolf.*)) } } INSERT BEFORE .text;\n",
+    )
+    .map_err(|e| e.to_string())?;
+    let mut args = vec![
+        OsString::from("-Wl,--sort-section=name"),
+        "-Xlinker".into(),
+        "-T".into(),
+        "-Xlinker".into(),
+        hot.into_os_string(),
+    ];
     if module.funcs.values().any(|f| f.cold) {
         let path = dir.join("cold.ld");
         std::fs::write(&path,
@@ -159,6 +174,9 @@ pub fn verify(exe: &Path, module: &Module, shim: Option<FuncId>) -> Result<(), S
         }
     }
     placed.sort();
+    if !wanted.is_empty() && placed.is_empty() {
+        return Err("linker output has no function symbols to validate stable layout".into());
+    }
     for pair in placed.windows(2) {
         if pair[0].1 > pair[1].1 {
             return Err(format!(
