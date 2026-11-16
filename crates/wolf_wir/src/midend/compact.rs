@@ -41,6 +41,8 @@ pub(crate) fn compact(f: &Function) -> CompactOut {
     nf.consttime = f.consttime.clone();
     // kw09 [abi.link.section]: so does the function's placement.
     nf.section = f.section.clone();
+    nf.cold = f.cold;
+    nf.code_home = f.code_home.clone();
     // Callee table: copied wholesale so `ExtFunc` ids stay stable and
     // `Aux::Callee` payloads copy verbatim.
     for ef in f.ext_funcs.values() {

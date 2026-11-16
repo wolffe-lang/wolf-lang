@@ -140,7 +140,7 @@ pub fn dedup(m: &mut Module) -> DedupStats {
         stats.bodies_seen += 1;
         let h = body_hash(m, f);
         all_hashes.insert(h.clone());
-        if f.export || f.name == "main" || pinned.contains(&f.name) {
+        if f.export || f.cold || f.name == "main" || pinned.contains(&f.name) {
             continue;
         }
         classes.entry(h).or_default().push(f.name.clone());

@@ -312,6 +312,11 @@ pub struct Function {
     /// target's text section. Canonical and hash-bearing: textually
     /// `section ".name" fn @name…`.
     pub section: Option<String>,
+    /// Build-only placement policy, not source syntax or canonical WIR. The
+    /// driver keys these inputs separately from body hashes. `cold` is set
+    /// before optimization; source ownership is filled after optimization.
+    pub cold: bool,
+    pub code_home: Option<String>,
     pub blocks: PrimaryMap<Block, BlockData>,
     pub insts: PrimaryMap<Inst, InstData>,
     pub values: PrimaryMap<Value, ValueData>,
@@ -349,6 +354,8 @@ impl Function {
             ret_ext: Mode::Val,
             consttime: None,
             section: None,
+            cold: false,
+            code_home: None,
             blocks: PrimaryMap::new(),
             insts: PrimaryMap::new(),
             values: PrimaryMap::new(),
