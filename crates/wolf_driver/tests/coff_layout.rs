@@ -1,5 +1,7 @@
-//! COFF keeps its existing native behavior; it must not silently claim the
-//! ELF/Mach-O layout guarantee or accept an unsupported cold request.
+//! COFF keeps its existing native behavior; it must not claim the ELF/Mach-O
+//! layout guarantee or accept an unsupported cold request. An ordinary build
+//! stays silent on stderr; `--verbose` notes the missing guarantee, and a cold
+//! request is refused by name whatever the verbosity.
 #![cfg(windows)]
 
 use std::path::Path;
@@ -35,24 +37,63 @@ fn ordinary_coff_still_runs_and_cold_requests_are_refused_by_name() {
         String::from_utf8_lossy(&built.stderr)
     );
     assert!(
-        String::from_utf8_lossy(&built.stderr).contains("layout guarantee does not apply to COFF")
+        !String::from_utf8_lossy(&built.stderr).contains("layout guarantee"),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
     );
     let run = Command::new(&exe).output().unwrap();
     assert!(run.status.success());
     assert_eq!(String::from_utf8_lossy(&run.stdout).trim(), "17");
-    let rejected = root.join("cold.exe");
-    let built = Command::new(env!("CARGO_BIN_EXE_wolf"))
+    // The object path runs through the same placement decision: silent.
+    let object = Command::new(env!("CARGO_BIN_EXE_wolf"))
+        .arg("build")
+        .arg(&source)
+        .arg("--emit=obj")
+        .arg("-o")
+        .arg(root.join("ordinary.obj"))
+        .output()
+        .unwrap();
+    assert!(object.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&object.stderr),
+        "",
+        "an ordinary build is silent"
+    );
+    let verbose = Command::new(env!("CARGO_BIN_EXE_wolf"))
         .arg("build")
         .arg(&source)
         .arg("-o")
-        .arg(&rejected)
-        .args(["--cold-function", "helper"])
+        .arg(root.join("verbose.exe"))
+        .arg("--verbose")
         .output()
         .unwrap();
-    assert!(!built.status.success());
+    assert!(verbose.status.success());
     assert!(
-        String::from_utf8_lossy(&built.stderr)
-            .contains("cold function placement on COFF is not supported")
+        String::from_utf8_lossy(&verbose.stderr)
+            .contains("wolf build: note: the stable layout guarantee does not apply to COFF"),
+        "{}",
+        String::from_utf8_lossy(&verbose.stderr)
     );
-    assert!(!rejected.exists());
+    for verbose in [false, true] {
+        let rejected = root.join("cold.exe");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_wolf"));
+        command
+            .arg("build")
+            .arg(&source)
+            .arg("-o")
+            .arg(&rejected)
+            .args(["--cold-function", "helper"]);
+        if verbose {
+            command.arg("--verbose");
+        }
+        let built = command.output().unwrap();
+        assert!(!built.status.success());
+        assert!(
+            String::from_utf8_lossy(&built.stderr)
+                .contains("cold function placement on COFF is not supported"),
+            "verbose={verbose}: {}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+        assert!(!rejected.exists());
+    }
 }
