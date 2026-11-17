@@ -82,11 +82,20 @@ mod linux {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
-    fn tool(dir: &Path, body: &str) -> PathBuf {
-        let path = dir.join("linker with spaces and 'quote");
+    fn script(at: &Path, name: &str, body: &str) -> PathBuf {
+        std::fs::create_dir_all(at).unwrap();
+        let path = at.join(name);
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         path
+    }
+
+    /// The seam's own tool: an executable named `ligature`, under a
+    /// directory whose name has spaces and a quote. ligature cannot order
+    /// input sections yet (ligature#38), so it receives exactly the
+    /// cc-shaped argv these rows assert, and objects in today's layout.
+    fn tool(dir: &Path, body: &str) -> PathBuf {
+        script(&dir.join("linker with spaces and 'quote"), "ligature", body)
     }
 
     fn success(out: Output) {
@@ -337,6 +346,216 @@ mod linux {
                     "-Wl,--defsym=wolf_trap=__wolf_rt_trap_at"
                 ]
             );
+        }
+    }
+
+    /// Two functions, so a cold request names something besides the entry.
+    const HELPER: &str = "fn helper() -> int { 7 }\nfn main() -> int { helper() }\n";
+
+    /// A recording driver: its argv, a copy of each staged object and each
+    /// generated linker script (they exist only during the link), then cc.
+    const RECORD: &str = "printf '%s\\n' \"$@\" > argv.txt\nrm -rf seen\nmkdir seen\nfor a in \"$@\"; do case $a in *.o|*.ld) cp \"$a\" \"seen/${a##*/}\";; esac; done\nexec cc \"$@\"";
+
+    /// `build` with the object cache on.
+    fn cached(dir: &Path) -> Command {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_wolf"));
+        c.current_dir(dir)
+            .env_remove("WOLF_LD")
+            .env_remove("CC")
+            .args(["build", "main.lu", "-o", "output program"]);
+        c
+    }
+
+    fn argv(dir: &Path) -> Vec<String> {
+        std::fs::read_to_string(dir.join("argv.txt"))
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect()
+    }
+
+    /// The cc-shaped line from `-o` on, exactly as before stable layout.
+    fn assert_cc_shaped(args: &[String], all: &str) {
+        assert_eq!(&args[..2], ["-o", "output program"], "{all}");
+        assert!(args[2].ends_with("00-root.o"), "{all}");
+        assert!(args[3].ends_with("libwolf_rt.a"), "{all}");
+        assert_eq!(
+            &args[4..],
+            ["-lpthread", "-ldl", "-lm", "-Wl,--gc-sections"],
+            "{all}"
+        );
+    }
+
+    /// Stable-layout input sections (hot or cold) in one staged object.
+    fn ordered_sections(path: &Path) -> usize {
+        use object::{Object, ObjectSection};
+        let bytes = std::fs::read(path).unwrap();
+        let file = object::File::parse(&*bytes).unwrap();
+        file.sections()
+            .filter(|s| {
+                s.name()
+                    .is_ok_and(|n| n.starts_with(".text.wolf.") || n.starts_with(".wolf.cold."))
+            })
+            .count()
+    }
+
+    fn runs_seven(dir: &Path) {
+        assert_eq!(
+            Command::new(dir.join("output program"))
+                .status()
+                .unwrap()
+                .code(),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn ligature_refuses_cold_requests_by_name_whatever_the_verbosity() {
+        let dir = package("ligature cold");
+        std::fs::write(dir.join("main.lu"), HELPER).unwrap();
+        let path = tool(&dir, "touch ligature-was-called\nexec cc \"$@\"");
+        for (verbose, environment) in [(false, false), (true, false), (false, true), (true, true)] {
+            let mut c = build(&dir);
+            c.args(["--cold-function", "helper"])
+                .env("CC", fallback(&dir));
+            if environment {
+                c.env("WOLF_LD", &path);
+            } else {
+                c.arg("--linker").arg(&path);
+            }
+            if verbose {
+                c.arg("--verbose");
+            }
+            let out = c.output().unwrap();
+            let err = String::from_utf8_lossy(&out.stderr);
+            assert_eq!(
+                out.status.code(),
+                Some(4),
+                "verbose={verbose} environment={environment}: {err}"
+            );
+            assert!(
+                err.contains(
+                    "cold function placement with ligature is not supported (`--cold-function`)"
+                ),
+                "{err}"
+            );
+            assert!(!dir.join("ligature-was-called").exists());
+            assert!(!dir.join("cc-was-called").exists());
+            assert!(!dir.join("output program").exists());
+        }
+    }
+
+    #[test]
+    fn ligature_keeps_todays_layout_and_notes_it_only_under_verbose() {
+        let dir = package("ligature layout");
+        std::fs::write(dir.join("main.lu"), HELPER).unwrap();
+        let ligature = tool(&dir, RECORD);
+        let system = script(&dir.join("system driver"), "system cc", RECORD);
+        // Through the object cache, both ways: a system driver's ordered
+        // objects never reach ligature, and ligature's never reach the driver.
+        for round in 0..2 {
+            success(cached(&dir).arg("--linker").arg(&system).output().unwrap());
+            assert!(
+                ordered_sections(&dir.join("seen/00-root.o")) > 0,
+                "round {round}: a system driver links ordered objects"
+            );
+            let out = cached(&dir)
+                .arg("--linker")
+                .arg(&ligature)
+                .output()
+                .unwrap();
+            let err = String::from_utf8_lossy(&out.stderr).into_owned();
+            assert!(out.status.success(), "{err}");
+            assert_eq!(
+                err, "",
+                "round {round}: an ordinary ligature build is silent"
+            );
+            let args = argv(&dir);
+            assert_cc_shaped(&args, &args.join("\n"));
+            assert_eq!(
+                ordered_sections(&dir.join("seen/00-root.o")),
+                0,
+                "round {round}: ligature receives today's layout"
+            );
+            assert!(!dir.join("seen/hot.ld").exists() && !dir.join("seen/cold.ld").exists());
+            runs_seven(&dir);
+        }
+        let out = build(&dir)
+            .arg("--verbose")
+            .arg("--linker")
+            .arg(&ligature)
+            .output()
+            .unwrap();
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert!(out.status.success(), "{err}");
+        assert_eq!(
+            err.matches("wolf build: note: the stable layout guarantee does not apply to ligature")
+                .count(),
+            1,
+            "{err}"
+        );
+        runs_seven(&dir);
+    }
+
+    #[test]
+    fn system_linker_paths_receive_the_ordering_scripts() {
+        let dir = package("system layout");
+        std::fs::write(dir.join("main.lu"), HELPER).unwrap();
+        let driver = script(
+            &dir.join("linker with spaces and 'quote"),
+            "system cc",
+            RECORD,
+        );
+        for (default_path, cold) in [(false, false), (false, true), (true, false), (true, true)] {
+            let mut c = build(&dir);
+            if default_path {
+                c.env("CC", &driver);
+            } else {
+                c.arg("--linker").arg(&driver).env("CC", "/missing/cc");
+            }
+            if cold {
+                c.args(["--cold-function", "helper"]);
+            }
+            success(c.output().unwrap());
+            let args = argv(&dir);
+            let all = format!("default={default_path} cold={cold}\n{}", args.join("\n"));
+            // The ordering block first: section sorting, then each script.
+            assert_eq!(
+                &args[..4],
+                ["-Wl,--sort-section=name", "-Xlinker", "-T", "-Xlinker"],
+                "{all}"
+            );
+            assert!(args[4].ends_with("/hot.ld"), "{all}");
+            let mut rest = &args[5..];
+            if cold {
+                assert_eq!(&rest[..3], ["-Xlinker", "-T", "-Xlinker"], "{all}");
+                assert!(rest[3].ends_with("/cold.ld"), "{all}");
+                rest = &rest[4..];
+            }
+            // Then the cc-shaped line unchanged; the default link may ask for lld.
+            if default_path && rest.last().is_some_and(|a| a == "-fuse-ld=lld") {
+                rest = &rest[..rest.len() - 1];
+            }
+            assert_cc_shaped(rest, &all);
+            let hot = std::fs::read_to_string(dir.join("seen/hot.ld")).unwrap();
+            assert!(
+                hot.contains("*(SORT_BY_NAME(.text.wolf.*))")
+                    && hot.contains("INSERT BEFORE .text"),
+                "{hot}"
+            );
+            let cold_script = dir.join("seen/cold.ld");
+            if cold {
+                let text = std::fs::read_to_string(&cold_script).unwrap();
+                assert!(
+                    text.contains("*(SORT_BY_NAME(.wolf.cold.*))")
+                        && text.contains("INSERT AFTER .text"),
+                    "{text}"
+                );
+            } else {
+                assert!(!cold_script.exists(), "{all}");
+            }
+            assert!(ordered_sections(&dir.join("seen/00-root.o")) > 0, "{all}");
+            runs_seven(&dir);
         }
     }
 
