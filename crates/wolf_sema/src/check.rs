@@ -15358,6 +15358,100 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![int_, int_],
             rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
         ),
+        // wolf-std#156 (`[os.fs.cursor.open]`): a cursor over a held
+        // directory under four limits (entries, name bytes in all, the
+        // longest name, records read) — the cursor's number; `budget` the
+        // live-cursor ceiling, `invalid` a limit below zero or a handle that
+        // is no directory, `unsupported` windows.
+        "fs_dir_cursor_open" => (
+            vec![int_, int_, int_, int_, int_],
+            rowed(
+                table,
+                int_,
+                &[
+                    "budget",
+                    "denied",
+                    "invalid",
+                    "not_found",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // wolf-std#156 (`[os.fs.cursor.next]`): the next admitted entry,
+        // `[kind] ++ name bytes`; `budget` an entry past a limit (consumed),
+        // `eof` the end and only the end.
+        "fs_dir_cursor_next" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_],
+                rowed(table, list_byte, &["budget", "eof", "io"]),
+            )
+        }
+        // wolf-std#156 (`[os.fs.cursor.close]`): the stream closed, the
+        // number retired; a closed or forged cursor `io`.
+        "fs_dir_cursor_close" => (vec![int_], rowed(table, unit, &["io"])),
+        // wolf-std#156 (`[os.fs.component.lstat]`): `fs_lstat_at`'s record and
+        // rows for ONE component given as bytes; `invalid` also a name that
+        // is not exactly one component.
+        "fs_lstat_component" => {
+            let list_byte = byte_list(table);
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![int_, list_byte],
+                rowed(
+                    table,
+                    list_int,
+                    &["not_found", "denied", "invalid", "unsupported", "io"],
+                ),
+            )
+        }
+        // wolf-std#156 (`[os.fs.component.open]`): ONE component opened for
+        // reading, held to the device and inode the caller expects —
+        // `changed` when they differ before or after the open; `invalid` a
+        // link, a fifo, a socket or a device (never opened), an open word
+        // that is not a read.
+        "fs_open_component" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, list_byte, int_, int_, int_],
+                rowed(
+                    table,
+                    int_,
+                    &[
+                        "changed",
+                        "not_found",
+                        "denied",
+                        "invalid",
+                        "unsupported",
+                        "io",
+                    ],
+                ),
+            )
+        }
+        // wolf-std#156 (`[os.fs.component.readlink]`): the target of the link
+        // ONE component names, under a maximum — `budget` a longer target,
+        // never a shorter one; `changed` a different identity before or
+        // after the read.
+        "fs_read_link_component" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, list_byte, int_, int_, int_],
+                rowed(
+                    table,
+                    list_byte,
+                    &[
+                        "budget",
+                        "changed",
+                        "not_found",
+                        "denied",
+                        "invalid",
+                        "unsupported",
+                        "io",
+                    ],
+                ),
+            )
+        }
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag

@@ -272,6 +272,17 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_link_at"),
     host("fs_read_dir_entries_at"),
     host("fs_set_mode_fd"),
+    // wolf-std#156: the bounded inventory calls — a cursor that admits each
+    // entry against the caller's limits before it copies a name
+    // (`[os.fs.cursor]`), and one validated byte component at a held
+    // directory: its record, its open by identity, its link's target under a
+    // maximum (`[os.fs.component]`). `fs`.
+    host("fs_dir_cursor_open"),
+    host("fs_dir_cursor_next"),
+    host("fs_dir_cursor_close"),
+    host("fs_lstat_component"),
+    host("fs_open_component"),
+    host("fs_read_link_component"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),
