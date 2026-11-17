@@ -102,8 +102,8 @@ Hosted ELF and Mach-O builds place functions in module/name/ABI order across
 codegen units. `--cold-function NAME` is repeatable and must match one qualified
 lowered function exactly. It keeps that body out of hot inlining/deduplication
 and puts it in a separate region; ELF cold code owns whole pages, separate
-from startup sections. Names from `--codegen-report` can be used here. Missing
-names and conflicts with `#[section]` are errors. Cold placement can change
+from startup sections. `--emit=wir` exposes lowered names; `--codegen-report`
+lists optimized survivors. Missing names and conflicts with `#[section]` are errors. Cold placement can change
 hot geometry and increase RSS: measure enabled and disabled paths on the
 actual program. The layout version and selection key the object cache.
 COFF keeps its existing ordinary build behavior and reports that the layout

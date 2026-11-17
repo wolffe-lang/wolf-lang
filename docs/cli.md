@@ -17,8 +17,9 @@ placement rules.
 
 `--cold-function <qualified-name>` selects an out-of-line cold function. Repeat
 it to select several functions; duplicate names and option order do not change
-the result. Each name must match exactly one lowered function, using the names
-shown by `--codegen-report`. A missing match, an empty option, or a conflict
+the result. Each name must match exactly one function after lowering, before
+optimization. `--emit=wir` exposes these qualified names; `--codegen-report`
+lists the optimized survivors. A missing match, an empty option, or a conflict
 with `#[section]` is an error. It is a build/run option, not a language
 attribute or an interpreter option.
 
@@ -52,7 +53,9 @@ section therefore does not promise lower RSS or faster execution. Keep total
 RSS accounting, count every executable mapping rather than only `.text`, and
 compare both enabled and disabled paths. The layout-policy version and the
 cold selection are part of object-cache keys; warm and uncached builds use
-the same placement rules.
+the same placement rules. Whole-script executable cache keys also include
+the code-generation policy, so a warm script cannot ignore a changed cold
+request or compilation tier.
 
 ## Progress
 
