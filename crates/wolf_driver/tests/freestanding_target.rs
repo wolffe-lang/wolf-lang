@@ -814,6 +814,50 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_set_mode_fd`",
             "hosted runtime",
         ),
+        // wolf-std#156: the cursor and the component calls — each a hosted
+        // symbol.
+        (
+            "fs_dir_cursor_open",
+            "",
+            "let c = fs_dir_cursor_open(3, 1, 1, 1, 1) else |e| {\n        return 0\n    }\n    c",
+            "`fs_dir_cursor_open`",
+            "hosted runtime",
+        ),
+        (
+            "fs_dir_cursor_next",
+            "",
+            "let r = fs_dir_cursor_next(1) else |e| {\n        return 0\n    }\n    r.len",
+            "`fs_dir_cursor_next`",
+            "hosted runtime",
+        ),
+        (
+            "fs_dir_cursor_close",
+            "",
+            "fs_dir_cursor_close(1) else |e| {\n        return 0\n    }\n    1",
+            "`fs_dir_cursor_close`",
+            "hosted runtime",
+        ),
+        (
+            "fs_lstat_component",
+            "",
+            "let r = fs_lstat_component(3, List[byte]()) else |e| {\n        return 0\n    }\n    r.len",
+            "`fs_lstat_component`",
+            "hosted runtime",
+        ),
+        (
+            "fs_open_component",
+            "",
+            "let h = fs_open_component(3, List[byte](), 0, 0, 0) else |e| {\n        return 0\n    }\n    h",
+            "`fs_open_component`",
+            "hosted runtime",
+        ),
+        (
+            "fs_read_link_component",
+            "",
+            "let t = fs_read_link_component(3, List[byte](), 8, 0, 0) else |e| {\n        return 0\n    }\n    t.len",
+            "`fs_read_link_component`",
+            "hosted runtime",
+        ),
         // s272 (#686, #921, #922, #975): the file system's record, the root,
         // the nice value and its set, a meaning's action — each a hosted
         // symbol.
