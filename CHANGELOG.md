@@ -12,6 +12,36 @@
   programs are outside the gated corpus until compiler support lands.
   This entry records the specification, not support in the current compiler.
 
+- **A bounded directory cursor and calls on one byte component at a held
+  directory** (wolf-std#156; `[os.fs.cursor]`, `[os.fs.component]`), for a
+  backup inventory that must hold a whole tree in fixed memory, refuse what
+  it cannot answer, and never follow a source link.
+  - **`fs_dir_cursor_open(dir, max_entries, max_bytes, max_name, max_scan)`**
+    answers a cursor over a held directory, with its own offset (two cursors
+    on one handle never share one). **`fs_dir_cursor_next(cursor)`** answers
+    one entry a call, `[kind] ++ name bytes`, and checks it against the four
+    limits before it copies the name: an entry one past a limit is
+    `budget` and is consumed, the record one past `max_scan` is `budget`
+    for good, and `eof` is the end and only the end. The kind is the
+    directory's no-follow answer for the name, never the entry's type hint;
+    255 when that lookup fails, with the name still answered.
+    **`fs_dir_cursor_close(cursor)`** retires it. At most 64 cursors are
+    live; the sixty-fifth open is `budget`.
+  - **`fs_lstat_component(dir, name)`**, **`fs_open_component(dir, name,
+    open, dev, ino)`** and **`fs_read_link_component(dir, name, max, dev,
+    ino)`** take the name as a `List[byte]` and refuse it `invalid`, before
+    the host, unless it is one component (not empty, `.` or `..`; no `/`
+    or NUL; at most 255 bytes). The open reads only a file or a directory
+    whose device and inode are the ones given (`changed` otherwise, before
+    and after the open); a link, a fifo, a socket or a device is never
+    opened. The link read answers a target of `max` bytes or fewer whole
+    and a longer one `budget`, never a shorter target.
+  - Two new marks, `budget` and `changed`, produced only by these calls.
+    The checked machine serves all six on its own handles; comptime refuses
+    them and the freestanding target refuses them by name; windows answers
+    `unsupported`. Host table 192 to 198 lines, prelude 209 functions and
+    21 marks, runtime symbols 291.
+
 - `wolf lsp` keeps navigation in an imported file in the context of an open
   package entry that actually imports it. References and rename now include
   the package's uses of enum variants instead of losing them when the
