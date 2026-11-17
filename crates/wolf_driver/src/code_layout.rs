@@ -80,6 +80,29 @@ fn order(module: &Module, shim: Option<FuncId>) -> BTreeMap<String, (bool, Strin
     result
 }
 
+fn elf_page_size() -> Result<u64, String> {
+    #[cfg(unix)]
+    {
+        // Hosted links target this host; freestanding builds use their own script.
+        let bytes = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        let bytes = u64::try_from(bytes).map_err(|_| "cannot determine ELF page size")?;
+        if !bytes.is_power_of_two() {
+            return Err("ELF page size is not a positive power of two".into());
+        }
+        Ok(bytes)
+    }
+    #[cfg(not(unix))]
+    Err("ELF page isolation is unavailable on this host".into())
+}
+
+fn cold_script(page: u64) -> String {
+    // Reserve the entire last page too: subsequent .init/.fini/.plt output
+    // sections must not make a cold page resident merely during startup.
+    format!(
+        "SECTIONS {{ .wolf.cold : ALIGN({page}) {{ *(SORT_BY_NAME(.wolf.cold.*)) . = ALIGN({page}); }} }} INSERT AFTER .text;\n"
+    )
+}
+
 /// Arguments are passed separately, never interpolated into a shell command.
 /// The same policy reaches the default C driver and an explicitly selected one.
 pub fn link_args(
@@ -139,9 +162,7 @@ pub fn link_args(
     ];
     if module.funcs.values().any(|f| f.cold) {
         let path = dir.join("cold.ld");
-        std::fs::write(&path,
-            "SECTIONS { .wolf.cold : ALIGN(4096) { *(SORT_BY_NAME(.wolf.cold.*)) } } INSERT AFTER .text;\n")
-            .map_err(|e| e.to_string())?;
+        std::fs::write(&path, cold_script(elf_page_size()?)).map_err(|e| e.to_string())?;
         args.extend([
             "-Xlinker".into(),
             "-T".into(),
@@ -155,7 +176,7 @@ pub fn link_args(
 /// Refuse a linker which accepted the arguments but did not honor placement.
 /// Missing symbols may have been eliminated; compare the surviving definitions.
 pub fn verify(exe: &Path, module: &Module, shim: Option<FuncId>) -> Result<(), String> {
-    use object::{Object, ObjectSymbol};
+    use object::{Object, ObjectSection, ObjectSymbol};
     let bytes = std::fs::read(exe).map_err(|e| e.to_string())?;
     let file = object::File::parse(&*bytes).map_err(|e| e.to_string())?;
     let wanted = order(module, shim);
@@ -185,12 +206,64 @@ pub fn verify(exe: &Path, module: &Module, shim: Option<FuncId>) -> Result<(), S
             ));
         }
     }
+    if file.format() == object::BinaryFormat::Elf && placed.iter().any(|((cold, _), _, _)| *cold) {
+        let bad = |message: &str| format!("linker did not honor cold page isolation: {message}");
+        let cold = file
+            .section_by_name(".wolf.cold")
+            .ok_or_else(|| bad("missing .wolf.cold section"))?;
+        let page = elf_page_size()?;
+        if !matches!(cold.flags(), object::SectionFlags::Elf { sh_flags } if sh_flags & 4 != 0) {
+            return Err(bad("cold section is not executable"));
+        }
+        let start = cold.address();
+        let end = start
+            .checked_add(cold.size())
+            .ok_or_else(|| bad("cold range overflow"))?;
+        if cold.size() == 0 || start % page != 0 || end % page != 0 {
+            return Err(bad("cold section must own whole pages"));
+        }
+        for section in file.sections() {
+            if section.index() == cold.index() || section.size() == 0 {
+                continue;
+            }
+            let executable = matches!(section.flags(), object::SectionFlags::Elf { sh_flags } if sh_flags & 4 != 0);
+            if !executable {
+                continue;
+            }
+            let section_end = section
+                .address()
+                .checked_add(section.size())
+                .ok_or_else(|| bad("section range overflow"))?;
+            if section.address() / page <= (end - 1) / page
+                && (section_end - 1) / page >= start / page
+            {
+                return Err(bad(&format!(
+                    ".wolf.cold shares a page with {}",
+                    section.name().unwrap_or("an executable section")
+                )));
+            }
+        }
+        for ((is_cold, _), address, name) in &placed {
+            if *is_cold && !(*address >= start && *address < end) {
+                return Err(bad(&format!("`{name}` is outside .wolf.cold")));
+            }
+        }
+    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cold_output_reserves_both_page_boundaries() {
+        for page in [4096, 16384, 65536] {
+            let script = cold_script(page);
+            assert_eq!(script.matches(&format!("ALIGN({page})")).count(), 2);
+            assert!(script.contains(&format!(". = ALIGN({page});")));
+        }
+    }
+
     #[test]
     fn cold_selection_is_exact_and_cache_order_independent() {
         let src = "fn @a(i64) -> i64 {\nb0(%0: i64):\n  ret %0\n}\n";
