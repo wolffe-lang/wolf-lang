@@ -37,10 +37,16 @@ arguments, an incorrect final order, or shared cold/startup pages fail the
 build rather than silently losing the policy. An external consumer of
 `--emit=obj` must provide equivalent ordering when it links the objects.
 
+A selected executable named `ligature` (through `--linker` or `WOLF_LD`) is
+the exception, because ligature cannot order input sections yet. It receives
+the cc-shaped link line without the ordering arguments, the objects keep the
+existing placement, `--verbose` notes that the stable layout guarantee does
+not apply, and `--cold-function` is refused by name.
+
 On Mach-O, an order file arranges function atoms across objects and
 `__TEXT,__wolf_cold` holds selected bodies. Native cold definitions can add an
 emission object; this happens after optimization. COFF keeps its existing
-native compilation and linking behavior, with a build note that the stable
+native compilation and linking behavior; `--verbose` notes that the stable
 layout guarantee does not apply. `--cold-function` is refused by name there.
 Freestanding builds use their existing sections and linker scripts instead
 of this option.
@@ -51,9 +57,9 @@ helpers, code sizes, and hot-code offsets. Moving even a small amount of code
 changes page boundaries and neighboring faulted-in pages. A separate cold
 section therefore does not promise lower RSS or faster execution. Keep total
 RSS accounting, count every executable mapping rather than only `.text`, and
-compare both enabled and disabled paths. The layout-policy version and the
-cold selection are part of object-cache keys; warm and uncached builds use
-the same placement rules. Whole-script executable cache keys also include
+compare both enabled and disabled paths. The layout-policy version, the cold
+selection, and whether the objects are ordered are part of object-cache
+keys; warm and uncached builds use the same placement rules. Whole-script executable cache keys also include
 the code-generation policy, so a warm script cannot ignore a changed cold
 request or compilation tier.
 
@@ -70,8 +76,7 @@ unit (otherwise the package phase), not a sum of all workers' progress.
 Narrow terminals shorten the line. Diagnostics clear it before printing.
 The line is removed on completion, rejection, refusal, and terminal interrupt.
 
-When stderr is not a terminal, the progress reporter adds **no output** during
-fast builds; compiler notes and diagnostics remain visible. After 30 seconds
+When stderr is not a terminal, fast builds add **no output**. After 30 seconds
 without compiler or tool output, stderr receives a heartbeat:
 
 ```text
