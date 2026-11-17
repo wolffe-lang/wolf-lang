@@ -106,9 +106,10 @@ from startup sections. `--emit=wir` exposes lowered names; `--codegen-report`
 lists optimized survivors. Missing names and conflicts with `#[section]` are errors. Cold placement can change
 hot geometry and increase RSS: measure enabled and disabled paths on the
 actual program. The layout version and selection key the object cache.
-COFF keeps its existing ordinary build behavior and reports that the layout
-guarantee does not apply; cold requests are refused. Freestanding builds use
-their own sections and linker scripts. See docs/cli.md for the layout rules.
+COFF, and a link through a selected ligature, keep the existing placement
+(`--verbose` notes that the layout guarantee does not apply); cold requests
+are refused there by name. Freestanding builds use their own sections and
+linker scripts. See docs/cli.md for the layout rules.
 
 `--assembler PATH` (or `--assembler=PATH`) overrides `WOLF_AS` for
 root-manifest assembly sources. The selected program receives `--64`
@@ -118,11 +119,13 @@ CC/cc (hosted) or WOLF_CLANG/clang (freestanding) driver. This does not
 replace the linker or the release backend's clang IR compilation, and
 it does not enable hosted Windows assembly or foreign hosted targets.
 `--linker PATH` (or `--linker=PATH`) overrides nonempty `WOLF_LD`
-for native Linux ELF links. The selected tool receives the cc-shaped
+for native Linux ELF links. The selected tool receives section-ordering
+arguments and generated supplemental linker scripts, then the cc-shaped
 link line: `-o OUTPUT OBJECTS RUNTIME -lpthread -ldl -lm
--Wl,--gc-sections`, section-ordering arguments, generated supplemental linker
-scripts, and trap aliases when needed. Unsupported layout arguments or an
-incorrect linked layout fail the build. It is one executable
+-Wl,--gc-sections`, and trap aliases when needed. Unsupported layout
+arguments or an incorrect linked layout fail the build. An executable named
+`ligature` receives only the cc-shaped line, since it cannot order input
+sections yet. It is one executable
 path, not shell text or a raw ld command. Failure or malformed/foreign
 ELF output is final. Without either choice, the existing CC/cc, macOS
 and Windows link tool selections are unchanged: on Linux the cc link asks for lld
