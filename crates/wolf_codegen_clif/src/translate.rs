@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 285] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 291] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -289,6 +289,19 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 285] = [
     ("__wolf_rt_fs_link_at", 7, true),
     ("__wolf_rt_fs_read_dir_entries_at", 2, true),
     ("__wolf_rt_fs_set_mode_fd", 2, true),
+    // wolf-std#156 (`[os.fs.cursor]`, `[os.fs.component]`): the cursor's
+    // open (handle, four limits; the number or the negated code), next
+    // (cursor, the entry through the 8-byte slot) and close (cursor); one
+    // component's record (handle, the name header, the slot), open (handle,
+    // the name header, open word, device, inode; the handle or the negated
+    // code) and link read (handle, the name header, maximum, device, inode,
+    // the slot).
+    ("__wolf_rt_fs_dir_cursor_open", 5, true),
+    ("__wolf_rt_fs_dir_cursor_next", 2, true),
+    ("__wolf_rt_fs_dir_cursor_close", 1, true),
+    ("__wolf_rt_fs_lstat_component", 3, true),
+    ("__wolf_rt_fs_open_component", 5, true),
+    ("__wolf_rt_fs_read_link_component", 6, true),
     ("__wolf_rt_os_umask", 1, true),
     // s199 (#426): the handle's offset — seek (fd, off, whence, out),
     // tell (fd, out), and the positional read (fd, off, max, out).
