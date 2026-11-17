@@ -1609,9 +1609,11 @@ fn compile_native_inner(
                     reason,
                     span: None,
                 })?;
-        if !ordered {
+        // Informational only, so an ordinary build stays silent on stderr;
+        // a refused cold request is reported above whatever the verbosity.
+        if !ordered && opts.verbose {
             eprintln!(
-                "wolf build: note: the stable layout guarantee does not apply to COFF; keeping the target's existing placement"
+                "wolf build: note: the stable layout guarantee does not apply to COFF; keeping the existing function placement"
             );
         }
     }
