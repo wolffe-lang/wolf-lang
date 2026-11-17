@@ -7,6 +7,14 @@ pub fn selection(cli: Option<&Path>, env: Option<std::ffi::OsString>) -> Option<
         .or_else(|| env.filter(|value| !value.is_empty()).map(PathBuf::from))
 }
 
+/// ligature, the linker this seam was built for, cannot order input sections
+/// yet (ligature#38). A selection whose executable is named `ligature` gets
+/// the cc-shaped line below unchanged and objects in today's layout; any other
+/// selected driver receives the stable-layout arguments.
+pub fn is_ligature(path: &Path) -> bool {
+    path.file_name() == Some(std::ffi::OsStr::new("ligature"))
+}
+
 pub fn supported() -> Result<(), String> {
     if cfg!(windows) {
         Err("selected linker: hosted Windows is unsupported by the cc-shaped ELF seam; use the existing WOLF_LINKER COFF path".into())
@@ -92,6 +100,15 @@ pub fn selected(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ligature_is_recognized_by_its_executable_name_only() {
+        assert!(is_ligature(Path::new("ligature")));
+        assert!(is_ligature(Path::new("tools with spaces/ligature")));
+        assert!(!is_ligature(Path::new("cc")));
+        assert!(!is_ligature(Path::new("ligature-wrapper")));
+        assert!(!is_ligature(Path::new("ligature/cc")));
+    }
 
     #[test]
     fn linker_cli_over_environment_over_default() {
