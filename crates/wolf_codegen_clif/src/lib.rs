@@ -330,7 +330,11 @@ impl Backend for ClifBackend {
             si.clif.params.push(cranelift_codegen::ir::AbiParam::new(
                 cranelift_codegen::ir::types::I64,
             ));
-            let core_name = format!("_W.va.core.{symbol}");
+            let core_name = if module.funcs[id].code_home.is_some() {
+                format!("_W.va.core.{symbol}")
+            } else {
+                format!("_W.va.core.{}", id.as_u32())
+            };
             let f = &module.funcs[id];
             let section = if self.non_elf_format() == Some("Mach-O") && f.code_home.is_some() {
                 Some(if f.cold { "__wolf_cold" } else { "__text" }.to_string())

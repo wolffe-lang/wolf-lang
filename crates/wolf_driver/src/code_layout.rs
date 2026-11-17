@@ -39,16 +39,27 @@ pub fn cache_tag(selected: &BTreeSet<String>) -> String {
     tag
 }
 
-pub fn prepare(module: &mut Module, package: &wolf_sema::Package) -> Result<(), String> {
+pub fn prepare(
+    module: &mut Module,
+    package: &wolf_sema::Package,
+    cold_requested: bool,
+) -> Result<bool, String> {
     if cfg!(windows) {
-        return Err("stable function layout on COFF is not supported; object and executable emission are refused rather than silently using cluster order".into());
+        if cold_requested {
+            return Err(
+                "cold function placement on COFF is not supported (`--cold-function`)".into(),
+            );
+        }
+        // Keep the established Windows backend and linker path. The driver
+        // explicitly says that this target has no new placement guarantee.
+        return Ok(false);
     }
     let homes = wolf_wir::midend::summary::Homes::from_package(package, module);
     for id in module.funcs.keys() {
         let f = &mut module.funcs[id];
         f.code_home = Some(homes.home_of(&f.name).to_string());
     }
-    Ok(())
+    Ok(true)
 }
 
 fn symbol(module: &Module, id: FuncId, shim: Option<FuncId>) -> String {
@@ -111,6 +122,9 @@ pub fn link_args(
     dir: &Path,
     objects: &[(String, Vec<u8>)],
 ) -> Result<Vec<OsString>, String> {
+    if module.funcs.values().all(|f| f.code_home.is_none()) {
+        return Ok(Vec::new());
+    }
     if cfg!(target_os = "macos") {
         use object::{Object, ObjectSymbol};
         let wanted = order(module, shim);
@@ -177,9 +191,12 @@ pub fn link_args(
 /// Missing symbols may have been eliminated; compare the surviving definitions.
 pub fn verify(exe: &Path, module: &Module, shim: Option<FuncId>) -> Result<(), String> {
     use object::{Object, ObjectSection, ObjectSymbol};
+    let wanted = order(module, shim);
+    if wanted.is_empty() {
+        return Ok(());
+    }
     let bytes = std::fs::read(exe).map_err(|e| e.to_string())?;
     let file = object::File::parse(&*bytes).map_err(|e| e.to_string())?;
-    let wanted = order(module, shim);
     let mut placed = Vec::new();
     for s in file.symbols().filter(|s| s.is_definition()) {
         let Ok(raw) = s.name() else {

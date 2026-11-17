@@ -1602,11 +1602,18 @@ fn compile_native_inner(
             return Err(BuildStop::Environment("--cold-function requires a hosted layout; a freestanding build controls placement through its sections and linker script".into()));
         }
     } else {
-        code_layout::prepare(&mut module, &res.package).map_err(|reason| BuildStop::Refused {
-            phase: "wir",
-            reason,
-            span: None,
-        })?;
+        let ordered =
+            code_layout::prepare(&mut module, &res.package, !opts.cold_functions.is_empty())
+                .map_err(|reason| BuildStop::Refused {
+                    phase: "wir",
+                    reason,
+                    span: None,
+                })?;
+        if !ordered {
+            eprintln!(
+                "wolf build: note: the stable layout guarantee does not apply to COFF; keeping the target's existing placement"
+            );
+        }
     }
 
     // `--emit=llvm-ir` (s41): the release tier's whole-module IR, one
@@ -2012,6 +2019,13 @@ fn compile_native_inner(
 
     // Physical definition order is stable even when optimization clusters change.
     for unit in &mut units {
+        if !unit
+            .funcs
+            .iter()
+            .any(|&id| module.funcs[id].code_home.is_some())
+        {
+            continue;
+        }
         unit.funcs.sort_by(|a, b| {
             let a = &module.funcs[*a];
             let b = &module.funcs[*b];
