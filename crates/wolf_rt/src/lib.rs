@@ -37,6 +37,11 @@ pub mod fs_gaps;
 // calls relative to a held directory and the mode set on a handle —
 // `[os.fs.at]` and its clauses, `[os.fs.mode.fd]`.
 pub mod fs_at;
+// wolf-std#156: the bounded inventory calls — a directory cursor that admits
+// each entry before it copies a name, one validated byte component at a held
+// directory, and a link read with a maximum — `[os.fs.cursor]`,
+// `[os.fs.component]`.
+pub mod fs_cursor;
 // s253 (wolf-lang#819): which OS and architecture the program runs on, as
 // the kernel answers — `[os.uname]`.
 pub mod host;
