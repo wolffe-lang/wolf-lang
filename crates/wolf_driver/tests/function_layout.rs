@@ -12,7 +12,7 @@
 use std::path::Path;
 use std::process::Command;
 
-fn placement(tier: &str, cold: bool, linker: Option<&str>) {
+fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
     static RUNTIME: std::sync::Once = std::sync::Once::new();
     RUNTIME.call_once(|| {
         let status = Command::new(env!("CARGO"))
@@ -39,6 +39,9 @@ fn placement(tier: &str, cold: bool, linker: Option<&str>) {
         .arg("--output")
         .arg(&root)
         .args(["--tier", tier]);
+    if cache {
+        command.arg("--check-cache");
+    }
     if cold {
         command.args(["--cold-function", "m00.f00", "--cold-function", "m04.f04"]);
     }
@@ -69,18 +72,18 @@ fn placement(tier: &str, cold: bool, linker: Option<&str>) {
 
 #[test]
 fn release_function_placement_is_local_under_additions() {
-    placement("release", false, None);
+    placement("release", false, None, false);
 }
 
 #[test]
 fn native_function_placement_is_local_under_additions() {
-    placement("native", false, None);
+    placement("native", false, None, false);
 }
 
 #[test]
 fn cold_functions_are_in_a_separate_trailing_region_on_both_tiers() {
     for tier in ["native", "release"] {
-        placement(tier, true, None);
+        placement(tier, true, None, false);
     }
 }
 
@@ -89,7 +92,70 @@ fn cold_functions_are_in_a_separate_trailing_region_on_both_tiers() {
 fn explicitly_selected_gnu_and_lld_links_keep_the_same_layout_contract() {
     for linker in ["bfd", "lld"] {
         for tier in ["native", "release"] {
-            placement(tier, true, Some(linker));
+            placement(tier, true, Some(linker), false);
         }
     }
+}
+
+#[test]
+fn removal_and_cache_preserve_placement_and_cold_policy() {
+    for tier in ["native", "release"] {
+        placement(tier, true, None, true);
+    }
+}
+
+#[test]
+fn invalid_cold_requests_are_named_errors_not_ignored() {
+    let root =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cold-invalid-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let src = root.join("main.lu");
+    std::fs::write(
+        &src,
+        "fn helper(x: int) -> int { x }\nfn main() -> int { helper(0) }\n",
+    )
+    .unwrap();
+    for flags in [
+        vec!["--cold-function"],
+        vec!["--cold-function="],
+        vec!["--cold-function", "absent"],
+    ] {
+        let out = Command::new(env!("CARGO_BIN_EXE_wolf"))
+            .arg("build")
+            .arg(&src)
+            .args(flags)
+            .output()
+            .unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(String::from_utf8_lossy(&out.stderr).contains("--cold-function"));
+    }
+    std::fs::write(&src, "#[section(\".text.custom\")]\nfn helper(x: int) -> int { x }\nfn main() -> int { helper(0) }\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_wolf"))
+        .arg("build")
+        .arg(&src)
+        .args(["--cold-function", "helper"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("conflicts with its explicit section"));
+    std::fs::write(&src, "export fn helper(x: i64) -> i64 { x }\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_wolf"))
+        .arg("build")
+        .arg(&src)
+        .args([
+            "--target",
+            "x86_64-unknown-none",
+            "--emit=obj",
+            "--cold-function",
+            "helper",
+        ])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("requires a hosted layout"));
 }

@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import struct
 import sys
@@ -30,7 +31,7 @@ def run(argv, cwd, env, log, inspect_layout_refusal=False):
     # A deliberate ordering plant can also trip the compiler's linked-image
     # verifier. Still inspect its actual emitted executable; no other build
     # error is accepted, and the symbol comparison must independently fail.
-    layout_refusal = inspect_layout_refusal and b"wolf build: linker did not honor stable function layout:" in result.stderr
+    layout_refusal = inspect_layout_refusal and any(prefix in result.stderr for prefix in [b"wolf build: linker did not honor stable function layout:", b"wolf build: linker did not honor cold page isolation:"])
     if result.returncode and not layout_refusal:
         raise RuntimeError(f"{argv}: exit {result.returncode}\n"
                            + result.stderr.decode(errors="replace"))
@@ -186,8 +187,12 @@ def cold_pages(path, env, log):
     return dict(passed=aligned and not overlaps, page_size=page, cold=cold, overlaps=overlaps)
 
 
-def build(wolf, path, tier, env, cold, linker):
+def rebuild(wolf, path, tier, env, cold, linker, label, no_cache=False):
     exe = path / "program"
+    if exe.exists():
+        if not (path / "program.initial").exists():
+            shutil.copyfile(exe, path / "program.initial")
+        exe.unlink()
     argv = [wolf, "build", path / "main.lu", "--verbose", "-o", exe]
     if tier == "release":
         argv.append("--release")
@@ -195,40 +200,58 @@ def build(wolf, path, tier, env, cold, linker):
         argv.extend(["--cold-function", name])
     if linker:
         argv.extend(["--linker", linker])
-    run(argv, path, env, path / "build", inspect_layout_refusal=True)
-    objects = sorted((path / ".lu-cache" / "obj").glob("*.o"))
+    if no_cache:
+        argv.append("--no-cache")
+    run(argv, path, env, path / label, inspect_layout_refusal=True)
+    return dict(sha256=hashlib.sha256(exe.read_bytes()).hexdigest(),
+                exit=int((path / (label + ".exit")).read_text()),
+                stderr=(path / (label + ".stderr")).read_text())
+
+
+def build(wolf, path, tier, env, cold, linker, label="build"):
+    built = rebuild(wolf, path, tier, env, cold, linker, label)
+    exe = path / "program"
+    # Inactive cache entries (for example a former Mach-O cold unit) are not
+    # this link's inputs. Resolve exactly the units the driver just reported.
+    active = re.findall(r"^wolf build: (\S+): (?:compiled \(|reused object)", built["stderr"], re.M)
+    objects = []
+    for name in active:
+        manifest = json.loads((path / ".lu-cache" / "modules" / (name + ".json")).read_text())
+        objects.append(path / ".lu-cache" / "obj" / (name + "-" + manifest["key"][:16] + ".o"))
     if not objects:
         raise RuntimeError("no real relocatable objects found")
     if tier == "release" and len(objects) < 2:
         raise RuntimeError("fixture did not exercise multiple release clusters")
     object_symbols = {}
     for index, obj in enumerate(objects):
-        rows = symbols(obj, env, path / f"object-{index:02}-symbols")
+        rows = symbols(obj, env, path / f"{label}-object-{index:02}-symbols")
         for name, row in rows.items():
             if name in object_symbols:
                 raise RuntimeError(f"duplicate object definition of {name}")
             object_symbols[name] = dict(row, object=obj.name)
-    linked = symbols(exe, env, path / "linked-symbols")
-    origin = text_origin(exe, env, path / "linked-sections")
+    linked = symbols(exe, env, path / (label + "-linked-symbols"))
+    origin = text_origin(exe, env, path / (label + "-linked-sections"))
     for name, row in linked.items():
         if name not in object_symbols:
             raise RuntimeError(f"linked {name} has no object definition")
         if row["symbol"] != object_symbols[name]["symbol"]:
             raise RuntimeError(f"object/linked identity mismatch for {name}")
         row["offset"] = row["address"] - origin
-    output = run([exe, "one", "two"], path, env, path / "run")
-    expected = "54\n" if path.name == "after" else "48\n"
+    output = run([exe, "one", "two"], path, env, path / (label + "-run"))
+    expected = "54\n" if "m00.f99(depth)" in (path / "main.lu").read_text() else "48\n"
     if output != expected:
         raise RuntimeError(f"fixture computed {output!r}, expected {expected!r}")
     return dict(objects=object_symbols, linked=linked, object_count=len(objects),
-                build_exit=int((path / "build.exit").read_text()),
+                build_exit=built["exit"],
                 text_origin=origin, output=output,
                 executable_sha256=hashlib.sha256(exe.read_bytes()).hexdigest())
 
 
-def compare(before, after):
+def compare(before, after, removal=False):
     left, right = before["linked"], after["linked"]
-    inserted = right.get("m00.f99")
+    inserted = (left if removal else right).get("m00.f99")
+    if "m00.f99" in (right if removal else left):
+        raise RuntimeError("added/removed function survived in the wrong image")
     if inserted is None or not 0 < inserted["size"] < PAGE // 2:
         raise RuntimeError(f"inserted function not retained or too large: {inserted}")
     expected = {f"m{m:02}.f{f:02}" for m in range(1, MODULES)
@@ -245,7 +268,8 @@ def compare(before, after):
     after_order = sorted(common, key=lambda n: (right[n]["address"], n))
     deltas = {n: right[n]["offset"] - left[n]["offset"] for n in same_size}
     moved = {n: d for n, d in deltas.items() if abs(d) > PAGE}
-    report = dict(inserted_bytes=inserted["size"], compared=len(common),
+    report = dict(inserted_bytes=0 if removal else inserted["size"],
+                  removed_bytes=inserted["size"] if removal else 0, compared=len(common),
                   unchanged_size=len(same_size), changed_size=changed_size,
                   relative_order_unchanged=before_order == after_order,
                   max_absolute_displacement=max(map(abs, deltas.values())),
@@ -255,6 +279,52 @@ def compare(before, after):
     return report
 
 
+
+def cache_and_removal(wolf, root, tier, env, cold, linker, added):
+    path = root / "after"
+    checks = {}
+    warm = rebuild(wolf, path, tier, env, list(reversed(cold)) + cold, linker, "warm")
+    checks["warm_identical"] = warm["exit"] == 0 and warm["sha256"] == added["executable_sha256"]
+    checks["warm_reused"] = "reused object" in warm["stderr"] and not re.search(r"^wolf build: \S+: compiled \(", warm["stderr"], re.M)
+    manifests = list((path / ".lu-cache/modules").glob("*.json"))
+    checks["cache_layout_version"] = bool(manifests) and all("function-layout-v1" in json.loads(p.read_text())["env"] for p in manifests)
+
+    # Delete only the added definition and its root call, in the SAME project.
+    source = path / "m00/code.lu"
+    suffix = "\n" + body(0, 99)
+    text = source.read_text()
+    assert text.endswith(suffix)
+    source.write_text(text[:-len(suffix)])
+    source = path / "main.lu"
+    call = "    answer = answer ^ m00.f99(depth)\n"
+    text = source.read_text()
+    assert text.count(call) == 1
+    source.write_text(text.replace(call, ""))
+    removed = build(wolf, path, tier, env, cold, linker, label="removed")
+    removal = compare(added, removed, removal=True)
+    checks["removal"] = removal["pass"] and removed["build_exit"] == 0
+    checks["removed_symbol_absent"] = "m00.f99" not in removed["linked"]
+
+    uncached = rebuild(wolf, path, tier, env, cold, linker, "uncached", no_cache=True)
+    checks["uncached_identical"] = uncached["exit"] == 0 and uncached["sha256"] == removed["executable_sha256"]
+    if cold:
+        cleared = rebuild(wolf, path, tier, env, [], linker, "cleared")
+        checks["selection_change_rebuilds"] = cleared["exit"] == 0 and bool(re.search(r"^wolf build: \S+: compiled \(", cleared["stderr"], re.M))
+        exe = path / "program"
+        if exe.read_bytes()[:4] == b"\xcf\xfa\xed\xfe":
+            sections, _ = macho_table(exe)
+            names = {s["name"] for s in sections.values()}
+        else:
+            text = run(["readelf", "--wide", "--section-headers", exe], path, env, path / "cleared-sections")
+            names = set(re.findall(r"\[\s*\d+\]\s+(\S+)", text))
+        checks["cleared_cold_section_absent"] = not any(n.startswith(".wolf.cold") or n == "__wolf_cold" for n in names)
+        restored = rebuild(wolf, path, tier, env, cold, linker, "restored")
+        checks["restored_identical"] = restored["exit"] == 0 and restored["sha256"] == removed["executable_sha256"]
+    print(("PASS" if checks["removal"] else "FAIL") + " function-placement-removal", flush=True)
+    print(("PASS" if all(checks.values()) else "FAIL") + " function-layout-cache", flush=True)
+    return dict(checks=checks, removal=removal, removed=removed, passed=all(checks.values()))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wolf", required=True, type=Path)
@@ -262,6 +332,7 @@ def main():
     parser.add_argument("--tier", choices=["native", "release"], default="release")
     parser.add_argument("--cold-function", action="append", default=[])
     parser.add_argument("--linker", type=Path)
+    parser.add_argument("--check-cache", action="store_true")
     args = parser.parse_args()
     root = args.output.resolve()
     root.mkdir(parents=True, exist_ok=False)
@@ -299,9 +370,13 @@ def main():
         if page_results:
             print(("PASS" if all(page_results) else "FAIL") + " cold-page-isolation", flush=True)
         print(("PASS" if report["pass"] else "FAIL") + " cold-function-placement", flush=True)
+    cache = None
+    if args.check_cache and report["pass"]:
+        cache = cache_and_removal(wolf, root, args.tier, env, args.cold_function, linker, after)
+        report["pass"] = report["pass"] and cache["passed"]
     (root / "evidence.json").write_text(json.dumps(dict(
         compiler=version.strip(), compiler_sha256=hashlib.sha256(wolf.read_bytes()).hexdigest(),
-        tier=args.tier, before=before, after=after, comparison=report), indent=2) + "\n")
+        tier=args.tier, before=before, after=after, comparison=report, cache=cache), indent=2) + "\n")
     print(json.dumps(report, sort_keys=True), flush=True)
     verdict = "PASS" if report["pass"] else "FAIL"
     print(f"{verdict} {ROW}", flush=True)
