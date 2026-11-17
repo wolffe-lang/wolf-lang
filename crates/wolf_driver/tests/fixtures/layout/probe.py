@@ -163,6 +163,29 @@ def text_origin(path, env, log):
     return int(match.group(1), 16)
 
 
+def cold_pages(path, env, log):
+    if path.read_bytes()[:4] != b"\x7fELF":
+        return None  # Mach-O has a different section contract, tested separately.
+    raw = run(["readelf", "--wide", "--section-headers", path], path.parent, env, log)
+    sections = []
+    for line in raw.splitlines():
+        match = re.match(r"\s*\[\s*\d+\]\s+(\S+)\s+\S+\s+([0-9a-fA-F]+)\s+\S+\s+([0-9a-fA-F]+)\s+\S+\s+(\S+)", line)
+        if match and "X" in match[4]:
+            sections.append(dict(name=match[1], address=int(match[2], 16), size=int(match[3], 16)))
+    cold = [section for section in sections if section["name"] == ".wolf.cold"]
+    if len(cold) != 1:
+        return dict(passed=False, reason="expected one .wolf.cold section")
+    cold = cold[0]
+    page = os.sysconf("SC_PAGESIZE")
+    def pages(section):
+        if not section["size"]:
+            return set()
+        return set(range(section["address"] // page, (section["address"] + section["size"] + page - 1) // page))
+    overlaps = [section["name"] for section in sections if section["name"] != ".wolf.cold" and pages(section) & pages(cold)]
+    aligned = cold["address"] % page == 0 and cold["size"] % page == 0
+    return dict(passed=aligned and not overlaps, page_size=page, cold=cold, overlaps=overlaps)
+
+
 def build(wolf, path, tier, env, cold, linker):
     exe = path / "program"
     argv = [wolf, "build", path / "main.lu", "--verbose", "-o", exe]
@@ -258,6 +281,7 @@ def main():
     report["compiler_verified"] = before["build_exit"] == after["build_exit"] == 0
     report["pass"] = report["pass"] and report["compiler_verified"]
     if args.cold_function:
+        page_results = []
         for which, image in [("before", before), ("after", after)]:
             linked = image["linked"]
             cold_rows = [linked[name] for name in args.cold_function]
@@ -267,6 +291,13 @@ def main():
             trailing = min(row["address"] for row in cold_rows) >= max(row["address"] + row["size"] for row in hot_rows)
             report[which + "_cold_separate_trailing"] = separate and trailing
             report["pass"] = report["pass"] and separate and trailing
+            pages = cold_pages(root / which / "program", env, root / which / "cold-pages")
+            if pages is not None:
+                page_results.append(pages["passed"])
+                report[which + "_cold_page_isolation"] = pages
+                report["pass"] = report["pass"] and pages["passed"]
+        if page_results:
+            print(("PASS" if all(page_results) else "FAIL") + " cold-page-isolation", flush=True)
         print(("PASS" if report["pass"] else "FAIL") + " cold-function-placement", flush=True)
     (root / "evidence.json").write_text(json.dumps(dict(
         compiler=version.strip(), compiler_sha256=hashlib.sha256(wolf.read_bytes()).hexdigest(),
