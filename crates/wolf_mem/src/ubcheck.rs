@@ -1564,6 +1564,11 @@ struct Machine<'t> {
     /// Open file handles (s38 fs tier): index = the `int` fd wolf code
     /// holds; `None` after close.
     files: Vec<Option<std::fs::File>>,
+    /// wolf-std#156 (`[os.fs.cursor]`): the live cursors by number, at most
+    /// [`checked_cursor::LIVE`]; a number is never reused (`next_cursor`
+    /// only goes up), so a closed one misses and answers `io`.
+    cursors: Vec<(i64, checked_cursor::Cursor)>,
+    next_cursor: i64,
     /// Open sockets (s39 net tier): a separate handle namespace from
     /// `files`, same discipline — index = the `int` fd, `None` after
     /// close, forged/foreign fds are the `io` row.
@@ -3045,6 +3050,8 @@ impl<'t> Machine<'t> {
             stdin: String::new(),
             stdin_pos: 0,
             files: Vec::new(),
+            cursors: Vec::new(),
+            next_cursor: 1,
             socks: Vec::new(),
             sock_deadlines: HashMap::new(),
             ready_sets: Vec::new(),
@@ -8198,6 +8205,228 @@ impl<'t> Machine<'t> {
                     Ok(tag("unsupported"))
                 }
             }
+            // wolf-std#156 (`[os.fs.cursor.open]`): a cursor over a held
+            // directory — the limits, the live ceiling, then the host
+            // (`wolf_rt::fs_cursor`'s order).
+            "fs_dir_cursor_open" => {
+                let (Some(dir), Some(a), Some(b), Some(c), Some(d)) =
+                    (int_arg(0), int_arg(1), int_arg(2), int_arg(3), int_arg(4))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if [a, b, c, d].iter().any(|v| *v < 0) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    if self.cursors.len() >= checked_cursor::LIVE {
+                        return Ok(tag("budget"));
+                    }
+                    let r = {
+                        let Some(h) = self.fs_handle(dir) else {
+                            return Ok(tag("io"));
+                        };
+                        checked_cursor::open(h.as_raw_fd(), [a, b, c, d])
+                    };
+                    match r {
+                        Err(e) => Ok(tag(&at_errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(cur) => {
+                            let id = self.next_cursor;
+                            self.next_cursor += 1;
+                            self.cursors.push((id, cur));
+                            Ok(Flow::Val(Value::Int(id)))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = dir;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // wolf-std#156 (`[os.fs.cursor.next]`): the next admitted entry,
+            // `[kind] ++ name bytes`; `budget` past a limit, `eof` the end.
+            "fs_dir_cursor_next" => {
+                let Some(c) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                #[cfg(unix)]
+                {
+                    let r = {
+                        let Some((_, cur)) = self.cursors.iter_mut().find(|(n, _)| *n == c) else {
+                            return Ok(tag("io"));
+                        };
+                        checked_cursor::next(cur)
+                    };
+                    match r {
+                        Err(checked_cursor::Refusal::Tag(t, e)) => {
+                            if let Some(e) = e {
+                                fs_host_error(&e);
+                            }
+                            Ok(tag(t))
+                        }
+                        Err(checked_cursor::Refusal::At(e) | checked_cursor::Refusal::Plain(e)) => {
+                            Ok(tag(&errtag(&e, &["io"])))
+                        }
+                        Ok(None) => Ok(tag("eof")),
+                        Ok(Some(row)) => {
+                            self.charge_mem(row.len() as u64)?;
+                            Ok(Flow::Val(self.byte_list_value(&row, span)?))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = c;
+                    Ok(tag("io"))
+                }
+            }
+            // wolf-std#156 (`[os.fs.cursor.close]`): the stream closed, the
+            // number retired; a closed or forged cursor `io`.
+            "fs_dir_cursor_close" => {
+                let Some(c) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match self.cursors.iter().position(|(n, _)| *n == c) {
+                    Some(i) => {
+                        // The stream closes as the entry drops.
+                        let _closed = self.cursors.swap_remove(i);
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    None => Ok(tag("io")),
+                }
+            }
+            // wolf-std#156 (`[os.fs.component.lstat]`, `[os.fs.component.open]`,
+            // `[os.fs.component.readlink]`): one component given as bytes —
+            // its shape first, then the host relative to the held handle.
+            "fs_lstat_component" | "fs_open_component" | "fs_read_link_component" => {
+                let Some(dir) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(bytes) = self.bytes_of(argv.get(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let rest = (int_arg(2), int_arg(3), int_arg(4));
+                let word = match (name, rest.0) {
+                    ("fs_open_component", Some(open)) => match checked_cursor::open_word(open) {
+                        Some(w) => Some(w),
+                        None => return Ok(tag("invalid")),
+                    },
+                    ("fs_lstat_component", _) => None,
+                    ("fs_read_link_component", Some(max)) => {
+                        if !(0..=checked_cursor::LINK_MAX).contains(&max) {
+                            return Ok(tag("invalid"));
+                        }
+                        None
+                    }
+                    _ => return self.refuse("this fs call shape", span),
+                };
+                let Ok(bytes) = bytes else {
+                    return Ok(tag("invalid"));
+                };
+                if !checked_cursor::component_ok(&bytes) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let Ok(c) = std::ffi::CString::new(bytes) else {
+                        return Ok(tag("invalid"));
+                    };
+                    let declared: &[&str] = &["not_found", "denied", "io"];
+                    let refused = |r: checked_cursor::Refusal| -> Flow {
+                        match r {
+                            checked_cursor::Refusal::Tag(t, e) => {
+                                if let Some(e) = e {
+                                    fs_host_error(&e);
+                                }
+                                tag(t)
+                            }
+                            checked_cursor::Refusal::At(e) => tag(&at_errtag(&e, declared)),
+                            checked_cursor::Refusal::Plain(e) => tag(&errtag(&e, declared)),
+                        }
+                    };
+                    match name {
+                        "fs_lstat_component" => {
+                            let r = {
+                                let Some(d) = self.fs_handle(dir) else {
+                                    return Ok(tag("io"));
+                                };
+                                checked_at::stat_words(d.as_raw_fd(), &c, false)
+                            };
+                            let w = match r {
+                                Err(e) => return Ok(tag(&at_errtag(&e, declared))),
+                                Ok(w) => w,
+                            };
+                            let Some(rec) = checked_at::record_of(&w) else {
+                                return Ok(tag("io"));
+                            };
+                            self.charge_mem(8 * rec.len() as u64)?;
+                            let items: Vec<Value> = rec.into_iter().map(Value::Int).collect();
+                            let id = self.mint_list(items, span)?;
+                            Ok(Flow::Val(Value::List(id)))
+                        }
+                        "fs_open_component" => {
+                            let (Some(dev), Some(ino)) = (rest.1, rest.2) else {
+                                return self.refuse("this fs call shape", span);
+                            };
+                            let r = {
+                                let Some(d) = self.fs_handle(dir) else {
+                                    return Ok(tag("io"));
+                                };
+                                checked_cursor::open_component(
+                                    d.as_raw_fd(),
+                                    &c,
+                                    word.unwrap_or((false, false)),
+                                    dev,
+                                    ino,
+                                )
+                            };
+                            match r {
+                                Err(r) => Ok(refused(r)),
+                                Ok(f) => {
+                                    if self.files.len() < FS_FIRST_HANDLE {
+                                        self.files.resize_with(FS_FIRST_HANDLE, || None);
+                                    }
+                                    let fd = self.files.len() as i64;
+                                    self.files.push(Some(f));
+                                    Ok(Flow::Val(Value::Int(fd)))
+                                }
+                            }
+                        }
+                        _ => {
+                            let (Some(max), Some(dev), Some(ino)) = rest else {
+                                return self.refuse("this fs call shape", span);
+                            };
+                            let r = {
+                                let Some(d) = self.fs_handle(dir) else {
+                                    return Ok(tag("io"));
+                                };
+                                checked_cursor::read_link_component(
+                                    d.as_raw_fd(),
+                                    &c,
+                                    max,
+                                    dev,
+                                    ino,
+                                )
+                            };
+                            match r {
+                                Err(r) => Ok(refused(r)),
+                                Ok(target) => {
+                                    self.charge_mem(target.len() as u64)?;
+                                    Ok(Flow::Val(self.byte_list_value(&target, span)?))
+                                }
+                            }
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = (dir, word, rest);
+                    Ok(tag("unsupported"))
+                }
+            }
             // s277 (#1033, `[os.fs.mode.fd]`): `fchmod` — the mode of the
             // file a handle holds (std's `set_permissions`), the bits first.
             "fs_set_mode_fd" => {
@@ -13260,7 +13489,10 @@ impl<'t> Machine<'t> {
             // a held directory and the mode set on a handle.
             | "fs_open_at" | "fs_stat_at" | "fs_lstat_at" | "fs_remove_at"
             | "fs_remove_dir_at" | "fs_create_dir_at" | "fs_symlink_at" | "fs_link_at"
-            | "fs_read_dir_entries_at" | "fs_set_mode_fd" => {
+            | "fs_read_dir_entries_at" | "fs_set_mode_fd"
+            // wolf-std#156: the cursor and the component calls.
+            | "fs_dir_cursor_open" | "fs_dir_cursor_next" | "fs_dir_cursor_close"
+            | "fs_lstat_component" | "fs_open_component" | "fs_read_link_component" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -17935,6 +18167,15 @@ mod checked_at {
         btime: Option<(i64, i64)>,
     }
 
+    /// wolf-std#156 (`[os.fs.component]`): a stat's kind and identity, the
+    /// record's words 0, 9 and 10 — `wolf_rt::fs_at::Words::identity`.
+    #[cfg(unix)]
+    impl Words {
+        pub(super) fn identity(&self) -> (i64, i64, i64) {
+            (kind_of_mode(self.mode), self.dev, self.ino)
+        }
+    }
+
     /// Milliseconds from the epoch for a `timespec`, toward zero on either
     /// side — `fs_modified_ms`'s word.
     #[cfg(unix)]
@@ -18168,7 +18409,7 @@ mod checked_at {
 
     /// Clear `errno`, so `readdir(3)`'s end and its failure can be told apart.
     #[cfg(unix)]
-    fn errno_clear() {
+    pub(super) fn errno_clear() {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         // SAFETY: the calling thread's own errno word.
         unsafe {
@@ -18245,6 +18486,283 @@ mod checked_at {
         // SAFETY: the stream, closed once (its descriptor with it).
         unsafe { libc::closedir(dp) };
         result.map(|()| rows)
+    }
+}
+
+/// wolf-std#156 (`[os.fs.cursor]`, `[os.fs.component]`): the bounded
+/// inventory calls on the machine's own handles — `wolf_rt::fs_cursor`'s
+/// twin, step for step: the same limits, the same live-cursor ceiling, the
+/// same order of refusals.
+mod checked_cursor {
+    /// Cursors open at once; one more is `budget`.
+    #[cfg(unix)]
+    pub(super) const LIVE: usize = 64;
+    /// The longest component, in bytes.
+    const COMPONENT_MAX: usize = 255;
+    /// The largest maximum a link read accepts.
+    pub(super) const LINK_MAX: i64 = 65536;
+
+    /// Is `name` exactly one component — `wolf_rt::fs_cursor::component_ok`.
+    pub(super) fn component_ok(name: &[u8]) -> bool {
+        !name.is_empty()
+            && name.len() <= COMPONENT_MAX
+            && name != b"."
+            && name != b".."
+            && !name.contains(&b'/')
+            && !name.contains(&0)
+    }
+
+    /// The open word a component open accepts: `(nonblocking, directory)`,
+    /// or `None` for `invalid`.
+    pub(super) fn open_word(open: i64) -> Option<(bool, bool)> {
+        let directory = open & super::FS_DIRECTORY != 0;
+        match open & !(super::FS_NOFOLLOW | super::FS_DIRECTORY) {
+            0 => Some((false, directory)),
+            5 => Some((true, directory)),
+            _ => None,
+        }
+    }
+
+    /// Why a call refused: a tag the call decides (`invalid`, `changed`,
+    /// `budget`; with the host's number when one caused it), or a host
+    /// error mapped at a handle (`ENOTDIR`/`ELOOP` `invalid`) or plainly.
+    #[cfg(unix)]
+    pub(super) enum Refusal {
+        Tag(&'static str, Option<std::io::Error>),
+        At(std::io::Error),
+        Plain(std::io::Error),
+    }
+
+    #[cfg(unix)]
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Stream {
+        Open,
+        Ended,
+        Spent,
+        Failed,
+    }
+
+    /// One cursor: its own stream and the caller's limits.
+    #[cfg(unix)]
+    pub(super) struct Cursor {
+        dir: *mut libc::DIR,
+        limits: [i64; 4],
+        entries: i64,
+        bytes: i64,
+        scanned: i64,
+        stream: Stream,
+    }
+
+    /// No cursor is ever made where the calls are `unsupported`.
+    #[cfg(not(unix))]
+    pub(super) enum Cursor {}
+
+    // SAFETY: the stream is only touched through `&mut Cursor`, by the one
+    // thread that runs the machine at a time; a `DIR` is not tied to the
+    // thread that opened it.
+    #[cfg(unix)]
+    unsafe impl Send for Cursor {}
+
+    #[cfg(unix)]
+    impl Drop for Cursor {
+        fn drop(&mut self) {
+            // SAFETY: the stream this cursor owns, closed once.
+            unsafe { libc::closedir(self.dir) };
+        }
+    }
+
+    /// A cursor over the directory `dirfd` holds: `openat` of `.` (a
+    /// description of its own), then `fdopendir`. `limits` is entries,
+    /// name bytes, the longest name, records read.
+    #[cfg(unix)]
+    pub(super) fn open(dirfd: libc::c_int, limits: [i64; 4]) -> std::io::Result<Cursor> {
+        let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+        // SAFETY: a live descriptor and a NUL-terminated name.
+        let raw = unsafe { libc::openat(dirfd, c".".as_ptr(), flags) };
+        if raw < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: a descriptor this call owns; on success the stream owns it.
+        let dp = unsafe { libc::fdopendir(raw) };
+        if dp.is_null() {
+            let e = std::io::Error::last_os_error();
+            // SAFETY: still ours: fdopendir failed.
+            unsafe { libc::close(raw) };
+            return Err(e);
+        }
+        Ok(Cursor {
+            dir: dp,
+            limits,
+            entries: 0,
+            bytes: 0,
+            scanned: 0,
+            stream: Stream::Open,
+        })
+    }
+
+    /// One step: an admitted `[kind] ++ name` row, `None` at the end, or the
+    /// refusal (`budget`, or the host's read error as `io`).
+    #[cfg(unix)]
+    pub(super) fn next(c: &mut Cursor) -> Result<Option<Vec<u8>>, Refusal> {
+        let [max_entries, max_bytes, max_name, max_scan] = c.limits;
+        loop {
+            match c.stream {
+                Stream::Open => {}
+                Stream::Ended => return Ok(None),
+                Stream::Spent => return Err(Refusal::Tag("budget", None)),
+                Stream::Failed => return Err(Refusal::Tag("io", None)),
+            }
+            super::checked_at::errno_clear();
+            // SAFETY: a live stream.
+            let ent = unsafe { libc::readdir(c.dir) };
+            if ent.is_null() {
+                let e = std::io::Error::last_os_error();
+                if e.raw_os_error().unwrap_or(0) != 0 {
+                    c.stream = Stream::Failed;
+                    return Err(Refusal::Tag("io", Some(e)));
+                }
+                c.stream = Stream::Ended;
+                return Ok(None);
+            }
+            c.scanned += 1;
+            if c.scanned > max_scan {
+                c.stream = Stream::Spent;
+                return Err(Refusal::Tag("budget", None));
+            }
+            // SAFETY: the entry the stream answered, valid until the next
+            // read; its name NUL-terminated inside the record.
+            let name = unsafe { std::ffi::CStr::from_ptr((*ent).d_name.as_ptr()) };
+            let raw = name.to_bytes();
+            if raw == b"." || raw == b".." {
+                continue;
+            }
+            let len = raw.len() as i64;
+            if len > max_name || c.entries >= max_entries || len > max_bytes - c.bytes {
+                return Err(Refusal::Tag("budget", None));
+            }
+            c.entries += 1;
+            c.bytes += len;
+            // SAFETY: the stream's own descriptor, live.
+            let fd = unsafe { libc::dirfd(c.dir) };
+            let kind = super::checked_at::stat_words(fd, name, false)
+                .map_or(255u8, |w| w.identity().0 as u8);
+            let mut row = Vec::with_capacity(raw.len() + 1);
+            row.push(kind);
+            row.extend_from_slice(raw);
+            return Ok(Some(row));
+        }
+    }
+
+    /// The kind and identity of an open descriptor (`fstat`).
+    #[cfg(unix)]
+    fn identity_fd(fd: libc::c_int) -> std::io::Result<(i64, i64, i64)> {
+        // SAFETY: `stat` is plain integers; all-zero is a valid value.
+        let mut st: libc::stat = unsafe { std::mem::zeroed() };
+        // SAFETY: a live descriptor and a writable stat.
+        if unsafe { libc::fstat(fd, &mut st) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok((
+            super::checked_at::kind_of_mode(st.st_mode),
+            st.st_dev as i64,
+            st.st_ino as i64,
+        ))
+    }
+
+    /// One component opened for reading by identity —
+    /// `wolf_rt::fs_cursor::__wolf_rt_fs_open_component`'s steps.
+    #[cfg(unix)]
+    pub(super) fn open_component(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        word: (bool, bool),
+        dev: i64,
+        ino: i64,
+    ) -> Result<std::fs::File, Refusal> {
+        use std::os::fd::FromRawFd as _;
+        let (nonblocking, directory) = word;
+        let (kind, d0, i0) = super::checked_at::stat_words(dirfd, name, false)
+            .map(|w| w.identity())
+            .map_err(Refusal::At)?;
+        if (kind != 0 && kind != 1) || (directory && kind != 1) {
+            return Err(Refusal::Tag("invalid", None));
+        }
+        if (d0, i0) != (dev, ino) {
+            return Err(Refusal::Tag("changed", None));
+        }
+        let mut flags = libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC;
+        if directory {
+            flags |= libc::O_DIRECTORY;
+        }
+        // SAFETY: a live descriptor and a NUL-terminated name.
+        let raw = unsafe { libc::openat(dirfd, name.as_ptr(), flags) };
+        if raw < 0 {
+            let e = std::io::Error::last_os_error();
+            if matches!(e.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR)) {
+                return Err(Refusal::Tag("changed", Some(e)));
+            }
+            return Err(Refusal::Plain(e));
+        }
+        // SAFETY: the descriptor the host just answered, owned from here.
+        let file = unsafe { std::fs::File::from_raw_fd(raw) };
+        let (k1, d1, i1) = identity_fd(raw).map_err(Refusal::Plain)?;
+        if (d1, i1) != (dev, ino) || (k1 != 0 && k1 != 1) {
+            return Err(Refusal::Tag("changed", None));
+        }
+        if !nonblocking {
+            // SAFETY: a live descriptor; F_GETFL/F_SETFL take and return ints.
+            let fl = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+            if fl < 0 || unsafe { libc::fcntl(raw, libc::F_SETFL, fl & !libc::O_NONBLOCK) } < 0 {
+                return Err(Refusal::Plain(std::io::Error::last_os_error()));
+            }
+        }
+        Ok(file)
+    }
+
+    /// A link's target under a maximum —
+    /// `wolf_rt::fs_cursor::__wolf_rt_fs_read_link_component`'s steps.
+    #[cfg(unix)]
+    pub(super) fn read_link_component(
+        dirfd: libc::c_int,
+        name: &std::ffi::CStr,
+        max: i64,
+        dev: i64,
+        ino: i64,
+    ) -> Result<Vec<u8>, Refusal> {
+        let (kind, d0, i0) = super::checked_at::stat_words(dirfd, name, false)
+            .map(|w| w.identity())
+            .map_err(Refusal::At)?;
+        if kind != 3 {
+            return Err(Refusal::Tag("invalid", None));
+        }
+        if (d0, i0) != (dev, ino) {
+            return Err(Refusal::Tag("changed", None));
+        }
+        let cap = max as usize + 1;
+        let mut buf = vec![0u8; cap];
+        // SAFETY: a live descriptor, a NUL-terminated name, `cap` bytes.
+        let n = unsafe { libc::readlinkat(dirfd, name.as_ptr(), buf.as_mut_ptr().cast(), cap) };
+        if n < 0 {
+            let e = std::io::Error::last_os_error();
+            if e.raw_os_error() == Some(libc::EINVAL) {
+                return Err(Refusal::Tag("changed", Some(e)));
+            }
+            return Err(Refusal::Plain(e));
+        }
+        match super::checked_at::stat_words(dirfd, name, false).map(|w| w.identity()) {
+            Ok((3, d1, i1)) if (d1, i1) == (dev, ino) => {}
+            Ok(_) => return Err(Refusal::Tag("changed", None)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(Refusal::Tag("changed", Some(e)));
+            }
+            Err(e) => return Err(Refusal::At(e)),
+        }
+        let n = n as usize;
+        if n > max as usize {
+            return Err(Refusal::Tag("budget", None));
+        }
+        buf.truncate(n);
+        Ok(buf)
     }
 }
 
