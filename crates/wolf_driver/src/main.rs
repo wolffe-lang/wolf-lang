@@ -3566,6 +3566,32 @@ fn run_script(cli: &mut BuildCli, text: &str) -> ! {
             script = script_cmd::prepare(&path, &text, cli.script, &mut sm, &mut sources);
         }
     }
+    let profile_hash = cli
+        .opts
+        .profile_use
+        .as_ref()
+        .and_then(|path| std::fs::read(path).ok())
+        .map(|bytes| blake3::hash(&bytes).to_hex().to_string());
+    let policy = format!(
+        "{:?}",
+        (
+            BUILD_COMMIT,
+            (cli.opts.release, cli.opts.checked, cli.opts.debug_frame),
+            (&cli.opts.target, &cli.std_root, &cli.opts.lints),
+            (
+                &cli.opts.assembler,
+                &cli.opts.linker,
+                std::env::var_os("CC"),
+                std::env::var_os("WOLF_AS"),
+                std::env::var_os("WOLF_LD"),
+                std::env::var_os("WOLF_CLANG"),
+                std::env::var_os("WOLF_RT_LIB")
+            ),
+            (&cli.opts.profile_gen, &cli.opts.profile_use, profile_hash),
+            code_layout::cache_tag(&cli.opts.cold_functions),
+        )
+    );
+    script.codegen_policy(&policy);
     let out = cli.out.clone().unwrap_or_else(|| script.binary());
     let exec = |out: &Path| -> ! {
         let status = std::process::Command::new(out)

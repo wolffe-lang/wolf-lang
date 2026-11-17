@@ -266,18 +266,18 @@ fn frontmatter_record(abs: &Path, fm: Option<&script::Frontmatter>) -> String {
     out
 }
 
-/// `hash(script bytes, frontmatter record, resolved dep addresses,
-/// toolchain, target, profile)` — s53 §4's build key. A cached artifact
-/// under this key is valid for exactly the world that produced it.
+/// Base key for script bytes, pinned resolution and host toolchain. The
+/// requested code-generation policy is added before the executable warm check;
+/// otherwise that fast path could bypass a changed tier or cold selection.
 fn build_key(text: &str, fm_record: &str, project: Option<&Project>) -> String {
     let mut h = blake3::Hasher::new();
-    h.update(b"wolf-script-build/0\n");
+    h.update(b"wolf-script-build/1\n");
     h.update(env!("CARGO_PKG_VERSION").as_bytes());
     h.update(b"\n");
     h.update(std::env::consts::ARCH.as_bytes());
     h.update(b"-");
     h.update(std::env::consts::OS.as_bytes());
-    h.update(b"\ndebug\n");
+    h.update(b"\n");
     h.update(text.as_bytes());
     h.update(b"\n");
     h.update(fm_record.as_bytes());
@@ -306,6 +306,22 @@ fn build_key(text: &str, fm_record: &str, project: Option<&Project>) -> String {
 }
 
 impl Script {
+    /// Add the requested code-generation policy after dependency resolution,
+    /// before testing the whole-script executable cache. Object-cache keys
+    /// alone cannot protect a warm path that skips compilation entirely.
+    pub fn codegen_policy(&mut self, policy: &str) {
+        let mut hash = blake3::Hasher::new();
+        hash.update(b"wolf-script-codegen/1\n");
+        hash.update(self.build_key.as_bytes());
+        hash.update(policy.as_bytes());
+        self.build_key = hash.finalize().to_hex()[..32].to_string();
+        self.build_dir = self
+            .build_dir
+            .parent()
+            .expect("script builds root")
+            .join(&self.build_key);
+    }
+
     /// The cached executable's path.
     pub fn binary(&self) -> PathBuf {
         let stem = self
