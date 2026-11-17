@@ -81,13 +81,24 @@ linker or the release compiler's LLVM path. See `wolf build --help` and
 On native Linux, `--linker PATH` (or `WOLF_LD`) selects a cc-shaped
 linker such as ligature. CLI selection wins over the environment; a
 failed tool or invalid ELF output is not retried through cc. Without
-selection the platform's existing link path remains unchanged: on Linux
+selection the platform's default link tool selection remains unchanged: on Linux
 the cc link asks for lld whenever an `ld.lld` is on PATH, and the build
 names that ld.lld in a note; `WOLF_LD=cc` keeps the system linker. Ligature
 needs a matching musl runtime (`WOLF_RT_LIB`) and sysroot
 (`LIGATURE_SYSROOT`); the flag does not replace either. This does not
 add hosted Windows, Mach-O or foreign-target linking. See
 [linker control](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/04-abi.md#7-linker-control-abilink).
+
+Source builds now enforce module/name/ABI function order across codegen units
+on hosted ELF and Mach-O. `--cold-function <qualified-name>` can be repeated
+to place selected out-of-line functions in a separate region. ELF cold code
+occupies whole pages, separate from startup code. Cold placement can change
+hot-code geometry and RSS in either direction: measure it per program rather
+than assuming a smaller working set. Selected ELF linkers must accept the
+ordering scripts. Ordinary COFF builds remain available, with a note that
+this layout guarantee does not apply; cold requests are refused by name.
+See [function placement](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/cli.md#function-placement)
+for the target rules, cache behavior, and measurement caveats.
 
 From 0.2.37, long compilations show the current unit and phase on a terminal.
 Non-interactive builds add no output until 30 seconds without output, then
@@ -127,7 +138,7 @@ source debug information and refuses `-g`.
 ### Building from source
 
 ```sh
-cargo build --release -p wolf_driver
+cargo build --release -p wolf_driver -p wolf_rt
 ./target/release/wolf run corpus/hello.lu
 ```
 
