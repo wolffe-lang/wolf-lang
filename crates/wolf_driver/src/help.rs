@@ -76,6 +76,7 @@ pub const COMMANDS: &[Cmd] = &[
         usage: &[
             "build <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]",
             "[--verbose] [--checked] [-g] [--release] [--codegen-report]",
+            "[--cold-function <qualified-name>]",
             "[-q|--quiet] [--timings|--timings=json:<file>]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
@@ -97,6 +98,18 @@ introduced. Unknown teardown forms are reported as CFI_GAP and left uncovered
 rather than described with a wrong rule. The release tier does not yet emit
 source debug information and refuses `-g`.
 
+Hosted ELF and Mach-O builds place functions in module/name/ABI order across
+codegen units. `--cold-function NAME` is repeatable and must match one qualified
+lowered function exactly. It keeps that body out of hot inlining/deduplication
+and puts it in a separate region; ELF cold code owns whole pages, separate
+from startup sections. Names from `--codegen-report` can be used here. Missing
+names and conflicts with `#[section]` are errors. Cold placement can change
+hot geometry and increase RSS: measure enabled and disabled paths on the
+actual program. The layout version and selection key the object cache.
+COFF keeps its existing ordinary build behavior and reports that the layout
+guarantee does not apply; cold requests are refused. Freestanding builds use
+their own sections and linker scripts. See docs/cli.md for the layout rules.
+
 `--assembler PATH` (or `--assembler=PATH`) overrides `WOLF_AS` for
 root-manifest assembly sources. The selected program receives `--64`
 (on x86-64), `-o OUTPUT SOURCE`; it is a path, not a shell command.
@@ -107,10 +120,12 @@ it does not enable hosted Windows assembly or foreign hosted targets.
 `--linker PATH` (or `--linker=PATH`) overrides nonempty `WOLF_LD`
 for native Linux ELF links. The selected tool receives the cc-shaped
 link line: `-o OUTPUT OBJECTS RUNTIME -lpthread -ldl -lm
--Wl,--gc-sections` and trap aliases when needed. It is one executable
+-Wl,--gc-sections`, section-ordering arguments, generated supplemental linker
+scripts, and trap aliases when needed. Unsupported layout arguments or an
+incorrect linked layout fail the build. It is one executable
 path, not shell text or a raw ld command. Failure or malformed/foreign
 ELF output is final. Without either choice, the existing CC/cc, macOS
-and Windows link paths are unchanged: on Linux the cc link asks for lld
+and Windows link tool selections are unchanged: on Linux the cc link asks for lld
 (`-fuse-ld=lld`) whenever an `ld.lld` is on PATH, and the build names
 that ld.lld and its version in a note, since the output's bytes depend
 on it; `WOLF_LD=cc` (or `--linker cc`) keeps the system linker. macOS
@@ -141,6 +156,7 @@ hosted runtime, allocates, or uses a float is refused by name.",
         usage: &[
             "run <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache]",
             "[--verbose] [--checked] [-g] [--release] [--codegen-report]",
+            "[--cold-function <qualified-name>]",
             "[-q|--quiet] [--timings|--timings=json:<file>]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
