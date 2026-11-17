@@ -236,7 +236,7 @@ pub fn verify(exe: &Path, module: &Module, shim: Option<FuncId>) -> Result<(), S
         let end = start
             .checked_add(cold.size())
             .ok_or_else(|| bad("cold range overflow"))?;
-        if cold.size() == 0 || start % page != 0 || end % page != 0 {
+        if cold.size() == 0 || !start.is_multiple_of(page) || !end.is_multiple_of(page) {
             return Err(bad("cold section must own whole pages"));
         }
         for section in file.sections() {
@@ -261,7 +261,7 @@ pub fn verify(exe: &Path, module: &Module, shim: Option<FuncId>) -> Result<(), S
             }
         }
         for ((is_cold, _), address, name) in &placed {
-            if *is_cold && !(*address >= start && *address < end) {
+            if *is_cold && !(start..end).contains(address) {
                 return Err(bad(&format!("`{name}` is outside .wolf.cold")));
             }
         }

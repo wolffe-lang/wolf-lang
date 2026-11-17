@@ -28,13 +28,12 @@ pub(crate) fn place(bytes: &mut [u8], placed: &[(String, String)]) -> Result<(),
             let section = sym
                 .section_index()
                 .ok_or_else(|| fail(format!("`{symbol}` has no section")))?;
-            if let Some(previous) = names.insert(section.0, name.clone()) {
-                if previous != *name {
-                    return Err(fail(
-                        "native Mach-O hot and cold definitions must be split before emission"
-                            .into(),
-                    ));
-                }
+            if let Some(previous) = names.insert(section.0, name.clone())
+                && previous != *name
+            {
+                return Err(fail(
+                    "native Mach-O hot and cold definitions must be split before emission".into(),
+                ));
             }
         }
     }
