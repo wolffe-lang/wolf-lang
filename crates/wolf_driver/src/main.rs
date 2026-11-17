@@ -1602,18 +1602,30 @@ fn compile_native_inner(
             return Err(BuildStop::Environment("--cold-function requires a hosted layout; a freestanding build controls placement through its sections and linker script".into()));
         }
     } else {
-        let ordered =
-            code_layout::prepare(&mut module, &res.package, !opts.cold_functions.is_empty())
-                .map_err(|reason| BuildStop::Refused {
-                    phase: "wir",
-                    reason,
-                    span: None,
-                })?;
+        // A link through ligature keeps its cc-shaped line and today's
+        // objects until it can order input sections (ligature#38).
+        let ligature = opts.emit == Emit::Bin
+            && link::selection(opts.linker.as_deref(), std::env::var_os("WOLF_LD"))
+                .as_deref()
+                .is_some_and(link::is_ligature);
+        let existing = code_layout::prepare(
+            &mut module,
+            &res.package,
+            !opts.cold_functions.is_empty(),
+            ligature,
+        )
+        .map_err(|reason| BuildStop::Refused {
+            phase: "wir",
+            reason,
+            span: None,
+        })?;
         // Informational only, so an ordinary build stays silent on stderr;
         // a refused cold request is reported above whatever the verbosity.
-        if !ordered && opts.verbose {
+        if let Some(name) = existing
+            && opts.verbose
+        {
             eprintln!(
-                "wolf build: note: the stable layout guarantee does not apply to COFF; keeping the existing function placement"
+                "wolf build: note: the stable layout guarantee does not apply to {name}; keeping the existing function placement"
             );
         }
     }
@@ -1760,9 +1772,12 @@ fn compile_native_inner(
         },
         pgo_comp,
     );
+    // Ordered objects (sections and definition order) differ from today's,
+    // which COFF and ligature keep: a cached object never crosses between them.
     env_comp.push_str(&format!(
-        " {}",
-        code_layout::cache_tag(&opts.cold_functions)
+        " {} ordered={}",
+        code_layout::cache_tag(&opts.cold_functions),
+        module.funcs.values().any(|f| f.code_home.is_some())
     ));
     // Debug CFI changes object bytes independently of the selected tier.
     if opts.debug_frame {

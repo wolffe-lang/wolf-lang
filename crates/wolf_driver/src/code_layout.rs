@@ -39,27 +39,38 @@ pub fn cache_tag(selected: &BTreeSet<String>) -> String {
     tag
 }
 
+/// Gives every function its stable layout home, or names what keeps today's
+/// placement instead: COFF, or a link through ligature, which cannot order
+/// input sections yet (ligature#38). Either one refuses a cold request by name.
 pub fn prepare(
     module: &mut Module,
     package: &wolf_sema::Package,
     cold_requested: bool,
-) -> Result<bool, String> {
-    if cfg!(windows) {
+    ligature: bool,
+) -> Result<Option<&'static str>, String> {
+    let existing = if cfg!(windows) {
+        Some(("COFF", "on COFF"))
+    } else if ligature {
+        Some(("ligature", "with ligature"))
+    } else {
+        None
+    };
+    if let Some((name, placement)) = existing {
         if cold_requested {
-            return Err(
-                "cold function placement on COFF is not supported (`--cold-function`)".into(),
-            );
+            return Err(format!(
+                "cold function placement {placement} is not supported (`--cold-function`)"
+            ));
         }
-        // Keep the established Windows backend and linker path. The driver
-        // explicitly says that this target has no new placement guarantee.
-        return Ok(false);
+        // Keep the established backend and link line: no ordering sections,
+        // scripts or order file, and no linked-image check.
+        return Ok(Some(name));
     }
     let homes = wolf_wir::midend::summary::Homes::from_package(package, module);
     for id in module.funcs.keys() {
         let f = &mut module.funcs[id];
         f.code_home = Some(homes.home_of(&f.name).to_string());
     }
-    Ok(true)
+    Ok(None)
 }
 
 fn symbol(module: &Module, id: FuncId, shim: Option<FuncId>) -> String {
