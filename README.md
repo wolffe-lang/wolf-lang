@@ -95,8 +95,10 @@ to place selected out-of-line functions in a separate region. ELF cold code
 occupies whole pages, separate from startup code. Cold placement can change
 hot-code geometry and RSS in either direction: measure it per program rather
 than assuming a smaller working set. Selected ELF linkers must accept the
-ordering scripts. Ordinary COFF builds remain available, with a note that
-this layout guarantee does not apply; cold requests are refused by name.
+ordering scripts, except ligature, which cannot order input sections yet: a
+link through it keeps the existing placement. Ordinary COFF builds remain
+available without this layout guarantee too. In both cases `--verbose` says
+so, and cold requests are refused by name.
 See [function placement](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/cli.md#function-placement)
 for the target rules, cache behavior, and measurement caveats.
 
