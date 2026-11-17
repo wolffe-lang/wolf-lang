@@ -172,7 +172,11 @@ fn build(row: &str, entry: &Path, dir: &Path, stem: &str, release: bool) -> Path
     let tier = if release { "release" } else { "native" };
     let exe = dir.join(format!("{stem}-{tier}"));
     let mut c = command(Path::new(env!("CARGO_BIN_EXE_wolf")), dir);
-    c.arg("build").arg(entry).arg("--no-cache").arg("-o").arg(&exe);
+    c.arg("build")
+        .arg(entry)
+        .arg("--no-cache")
+        .arg("-o")
+        .arg(&exe);
     if release {
         c.arg("--release");
     }
@@ -206,7 +210,10 @@ fn checked(row: &str, entry: &Path, dir: &Path) -> String {
     let Some(rec) = rec else {
         fail(
             row,
-            &format!("checked: no record\nstdout={out}\nstderr={}", text(&o.stderr)),
+            &format!(
+                "checked: no record\nstdout={out}\nstderr={}",
+                text(&o.stderr)
+            ),
         );
     };
     let verdict = rec["verdict"].as_str().unwrap_or("").to_string();
@@ -215,7 +222,10 @@ fn checked(row: &str, entry: &Path, dir: &Path) -> String {
     if verdict != "exit(0)" {
         fail(
             row,
-            &format!("checked verdict {verdict}: {rec}\nstderr={}", text(&o.stderr)),
+            &format!(
+                "checked verdict {verdict}: {rec}\nstderr={}",
+                text(&o.stderr)
+            ),
         );
     }
     stdout
@@ -284,7 +294,11 @@ fn mkfifo(p: &Path) {
     use std::os::unix::ffi::OsStrExt as _;
     let c = std::ffi::CString::new(p.as_os_str().as_bytes()).unwrap();
     // SAFETY: a NUL-terminated path this test owns.
-    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0, "mkfifo {p:?}");
+    assert_eq!(
+        unsafe { libc::mkfifo(c.as_ptr(), 0o600) },
+        0,
+        "mkfifo {p:?}"
+    );
 }
 
 /// One past each limit refuses as `budget` and consumes the record; exactly
@@ -319,7 +333,9 @@ fn fs_directory_entry_and_byte_limit_one_past() {
                 longest: budget budget eof ok\n\
                 scan: budget budget ok\n\
                 none: budget budget eof ok\n";
-    every_machine(row, &d, body, want, &|d| fresh(d, &[(b"a", b"x"), (b"b", b"y")]));
+    every_machine(row, &d, body, want, &|d| {
+        fresh(d, &[(b"a", b"x"), (b"b", b"y")])
+    });
 }
 
 /// Two cursors on one held directory read independently; a name that is
@@ -617,7 +633,11 @@ fn fs_directory_admission_before_allocation() {
     // cursor's admission at the same two widths.
     let mut peaks = Vec::new();
     for (stem, helpers, body) in &programs {
-        let entry = program(&d, stem, *helpers, body);
+        // Each program in a directory of its own: the files of one
+        // directory are one module, and each declares `main`.
+        let src = d.join(format!("src-{stem}"));
+        std::fs::create_dir_all(&src).unwrap();
+        let entry = program(&src, "main", *helpers, body);
         let mut exes = Vec::new();
         for release in [false, true] {
             let tier = if release { "release" } else { "native" };
@@ -648,11 +668,15 @@ fn fs_directory_admission_before_allocation() {
                         .unwrap()
                 };
                 let grown = at(40_000).saturating_sub(at(2_000));
-                eprintln!("REPORT {row} {tier}: the whole listing grew {grown} KiB from 2000 to 40000 entries");
+                eprintln!(
+                    "REPORT {row} {tier}: the whole listing grew {grown} KiB from 2000 to 40000 entries"
+                );
                 if grown < 4096 {
                     fail(
                         row,
-                        &format!("{tier}: the whole listing grew only {grown} KiB: the fixture is too narrow to see"),
+                        &format!(
+                            "{tier}: the whole listing grew only {grown} KiB: the fixture is too narrow to see"
+                        ),
                     );
                 }
             }
@@ -672,7 +696,9 @@ fn fs_directory_admission_before_allocation() {
         if admit > 512 || over_base > 1024 {
             fail(
                 row,
-                &format!("{tier}: the cursor's peak moved {admit} KiB with the width, {over_base} KiB over the base"),
+                &format!(
+                    "{tier}: the cursor's peak moved {admit} KiB with the width, {over_base} KiB over the base"
+                ),
             );
         }
         eprintln!(
