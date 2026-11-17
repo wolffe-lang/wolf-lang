@@ -325,7 +325,7 @@ fn step(c: &mut Cursor) -> Result<Option<(u8, Vec<u8>)>, i64> {
             continue;
         }
         let len = raw.len() as i64;
-        if len > c.max_name || c.entries >= c.max_entries || len > c.max_bytes - c.bytes {
+        if len > c.max_name || c.entries > c.max_entries || len > c.max_bytes - c.bytes {
             return Err(code::BUDGET);
         }
         c.entries += 1;
