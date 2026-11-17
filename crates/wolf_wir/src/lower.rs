@@ -10856,6 +10856,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_link_at"
                 | "fs_read_dir_entries_at"
                 | "fs_set_mode_fd"
+                // wolf-std#156: the cursor and the component calls.
+                | "fs_dir_cursor_open"
+                | "fs_dir_cursor_next"
+                | "fs_dir_cursor_close"
+                | "fs_lstat_component"
+                | "fs_open_component"
+                | "fs_read_link_component"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -13133,6 +13140,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // non-blocking handle that takes nothing; only `fs_lock` and
             // `fs_write_some` produce it and each declares it.
             (11, "busy", false),
+            // wolf-std#156: `budget` (a limit the caller set, one past it)
+            // and `changed` (an identity that is not the one expected) —
+            // only the cursor and component calls produce them, and each
+            // declares the ones it produces.
+            (12, "budget", false),
+            (13, "changed", false),
         ]
         .into_iter()
         .map(|(c, name, coarsen)| {
@@ -14652,16 +14665,36 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // `fs_lstat_at`; the shim mints the `List[int]`.
             // (`[os.fs.at.readdir]`) the held directory's listing,
             // `fs_fstat_record`'s shape with a listing for a record.
-            "fs_stat_at" | "fs_lstat_at" | "fs_read_dir_entries_at" => {
+            // wolf-std#156 (`[os.fs.cursor.next]`, `[os.fs.component.lstat]`,
+            // `[os.fs.component.readlink]`): the cursor's next entry, one
+            // component's record and its link's target, the same shape — the
+            // `List[byte]` name header through the foreign chain, the result
+            // minted by the shim through the slot.
+            "fs_stat_at" | "fs_lstat_at" | "fs_read_dir_entries_at" | "fs_dir_cursor_next"
+            | "fs_lstat_component" | "fs_read_link_component" => {
                 let dir = arg(0)?;
                 let (region, slot) = self.rt_slot(8);
-                let (sym, args): (&'static str, Vec<Value>) = if name == "fs_read_dir_entries_at" {
-                    ("__wolf_rt_fs_read_dir_entries_at", vec![dir])
-                } else {
-                    let s = arg(1)?;
-                    let (p, l) = self.str_parts(s);
-                    let follow = self.b.iconst(types::I64, i64::from(name == "fs_stat_at"));
-                    ("__wolf_rt_fs_stat_at", vec![dir, p, l, follow])
+                let (sym, args): (&'static str, Vec<Value>) = match name {
+                    "fs_read_dir_entries_at" => ("__wolf_rt_fs_read_dir_entries_at", vec![dir]),
+                    "fs_dir_cursor_next" => ("__wolf_rt_fs_dir_cursor_next", vec![dir]),
+                    "fs_lstat_component" => {
+                        let hdr = arg(1)?;
+                        ("__wolf_rt_fs_lstat_component", vec![dir, hdr])
+                    }
+                    "fs_read_link_component" => {
+                        let hdr = arg(1)?;
+                        let (max, dev, ino) = (arg(2)?, arg(3)?, arg(4)?);
+                        (
+                            "__wolf_rt_fs_read_link_component",
+                            vec![dir, hdr, max, dev, ino],
+                        )
+                    }
+                    _ => {
+                        let s = arg(1)?;
+                        let (p, l) = self.str_parts(s);
+                        let follow = self.b.iconst(types::I64, i64::from(name == "fs_stat_at"));
+                        ("__wolf_rt_fs_stat_at", vec![dir, p, l, follow])
+                    }
                 };
                 let rc = self
                     .rt_call_foreign(sym, &args, Some((slot, region)), Some(types::I64))
@@ -14721,8 +14754,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s277 (#707, #1029, #1030, #1031, #1033): the changes relative
             // to a held directory and the mode on a handle, the same shape.
             | "fs_remove_at" | "fs_remove_dir_at" | "fs_create_dir_at" | "fs_symlink_at"
-            | "fs_link_at" | "fs_set_mode_fd" => {
+            | "fs_link_at" | "fs_set_mode_fd"
+            // wolf-std#156 (`[os.fs.cursor.close]`): the cursor, the same
+            // shape.
+            | "fs_dir_cursor_close" => {
                 let rc = match name {
+                    "fs_dir_cursor_close" => {
+                        let c = arg(0)?;
+                        self.rt_call("__wolf_rt_fs_dir_cursor_close", &[c], Some(types::I64))
+                    }
                     // s277 (`[os.fs.at.remove]`, `[os.fs.at.remove.dir]`):
                     // the handle, the name pair, `rmdir`.
                     "fs_remove_at" | "fs_remove_dir_at" => {
@@ -14986,9 +15026,35 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s277 (#707, `[os.fs.at.open]`): `fs_open_at` answers a handle
             // the same way, from the held directory, the name, the open
             // word and the permission.
+            //
+            // wolf-std#156 (`[os.fs.cursor.open]`, `[os.fs.component.open]`):
+            // the cursor's number and the component's handle the same way —
+            // the held directory and the four limits; the held directory, the
+            // `List[byte]` name header (read by the shim: the foreign chain),
+            // the open word and the identity expected.
             "fs_open" | "fs_create" | "fs_open_mode" | "fs_open_perm" | "os_umask" | "fs_adopt"
-            | "fs_open_at" => {
+            | "fs_open_at" | "fs_dir_cursor_open" | "fs_open_component" => {
                 let rc = match name {
+                    "fs_dir_cursor_open" => {
+                        let dir = arg(0)?;
+                        let limits = [arg(1)?, arg(2)?, arg(3)?, arg(4)?];
+                        self.rt_call(
+                            "__wolf_rt_fs_dir_cursor_open",
+                            &[dir, limits[0], limits[1], limits[2], limits[3]],
+                            Some(types::I64),
+                        )
+                    }
+                    "fs_open_component" => {
+                        let dir = arg(0)?;
+                        let hdr = arg(1)?;
+                        let (open, dev, ino) = (arg(2)?, arg(3)?, arg(4)?);
+                        self.rt_call_foreign(
+                            "__wolf_rt_fs_open_component",
+                            &[dir, hdr, open, dev, ino],
+                            None,
+                            Some(types::I64),
+                        )
+                    }
                     "fs_open_at" => {
                         let dir = arg(0)?;
                         let (np, nl) = self.str_parts(arg(1)?);
