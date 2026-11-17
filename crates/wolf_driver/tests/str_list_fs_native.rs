@@ -858,6 +858,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_link_at",
         "__wolf_rt_fs_read_dir_entries_at",
         "__wolf_rt_fs_set_mode_fd",
+        // wolf-std#156: `[os.fs.cursor]`, `[os.fs.component]`.
+        "__wolf_rt_fs_dir_cursor_open",
+        "__wolf_rt_fs_dir_cursor_next",
+        "__wolf_rt_fs_dir_cursor_close",
+        "__wolf_rt_fs_lstat_component",
+        "__wolf_rt_fs_open_component",
+        "__wolf_rt_fs_read_link_component",
         // s290: `[os.proc.session]`, `[os.term.session]`.
         "__wolf_rt_os_spawn_session",
         "__wolf_rt_os_setsid",
@@ -902,7 +909,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        285,
+        291,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
