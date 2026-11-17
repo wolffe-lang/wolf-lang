@@ -200,7 +200,7 @@ fn ms_of(sec: i64, nsec: i64) -> Option<i64> {
 
 /// The record's kind for a `st_mode`'s file type bits.
 #[cfg(unix)]
-fn kind_of_mode(mode: libc::mode_t) -> i64 {
+pub(crate) fn kind_of_mode(mode: libc::mode_t) -> i64 {
     match mode & libc::S_IFMT {
         libc::S_IFREG => stat_kind::FILE,
         libc::S_IFDIR => stat_kind::DIR,
@@ -215,7 +215,7 @@ fn kind_of_mode(mode: libc::mode_t) -> i64 {
 
 /// The host's words of one stat, before they are a record.
 #[cfg(unix)]
-struct Words {
+pub(crate) struct Words {
     mode: libc::mode_t,
     size: i64,
     nlink: i64,
@@ -231,12 +231,21 @@ struct Words {
     btime: Option<(i64, i64)>,
 }
 
+/// wolf-std#156 (`[os.fs.component]`): a stat's kind and identity, the
+/// record's words 0, 9 and 10, as the inventory calls compare them.
+#[cfg(unix)]
+impl Words {
+    pub(crate) fn identity(&self) -> (i64, i64, i64) {
+        (kind_of_mode(self.mode), self.dev, self.ino)
+    }
+}
+
 /// `[os.fs.stat]`'s twenty words from a stat's words — [`crate::fs::stat_record`]'s
 /// words, kinds, units and `have` bits, built from the host's integers where
 /// that one is built from a `Metadata`. `None` is the family's `io`: a
 /// modification time outside `i64` milliseconds.
 #[cfg(unix)]
-fn record_of(w: &Words) -> Option<[i64; stat_word::WORDS]> {
+pub(crate) fn record_of(w: &Words) -> Option<[i64; stat_word::WORDS]> {
     use stat_word as s;
     let mut r = [0i64; s::WORDS];
     r[s::KIND] = kind_of_mode(w.mode);
@@ -350,7 +359,11 @@ const STATX_BTIME: u32 = 0x800;
 /// keeps one; `fstatat(2)` where the kernel refuses the call (`ENOSYS`, or
 /// `EPERM` from a filter that predates it).
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn stat_words(dirfd: libc::c_int, name: &std::ffi::CStr, follow: bool) -> std::io::Result<Words> {
+pub(crate) fn stat_words(
+    dirfd: libc::c_int,
+    name: &std::ffi::CStr,
+    follow: bool,
+) -> std::io::Result<Words> {
     let mut x = Statx::default();
     let mut flags = libc::AT_NO_AUTOMOUNT;
     if !follow {
@@ -394,7 +407,11 @@ fn stat_words(dirfd: libc::c_int, name: &std::ffi::CStr, follow: bool) -> std::i
 }
 
 #[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
-fn stat_words(dirfd: libc::c_int, name: &std::ffi::CStr, follow: bool) -> std::io::Result<Words> {
+pub(crate) fn stat_words(
+    dirfd: libc::c_int,
+    name: &std::ffi::CStr,
+    follow: bool,
+) -> std::io::Result<Words> {
     fstatat_words(dirfd, name, follow)
 }
 
@@ -672,7 +689,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_link_at(
 /// Clear the C library's `errno`, so `readdir(3)`'s end and its failure can
 /// be told apart (both answer a null entry).
 #[cfg(unix)]
-fn errno_clear() {
+pub(crate) fn errno_clear() {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     // SAFETY: the calling thread's own errno word.
     unsafe {
