@@ -12,7 +12,7 @@
 use std::path::Path;
 use std::process::Command;
 
-fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
+fn ensure_runtime() {
     static RUNTIME: std::sync::Once = std::sync::Once::new();
     RUNTIME.call_once(|| {
         let status = Command::new(env!("CARGO"))
@@ -21,6 +21,10 @@ fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
             .expect("build the hosted runtime");
         assert!(status.success(), "hosted runtime build failed");
     });
+}
+
+fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
+    ensure_runtime();
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "function-layout-{tier}-{}-{}",
         std::process::id(),
@@ -158,4 +162,38 @@ fn invalid_cold_requests_are_named_errors_not_ignored() {
         .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("requires a hosted layout"));
+}
+
+#[test]
+fn cold_exports_and_callable_slots_cross_emission_objects() {
+    ensure_runtime();
+    let root =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("cold-calls-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let source = root.join("main.lu");
+    std::fs::write(&source, "export fn foreign(x: i64) -> i64 { x + 1 }\nfn helper(x: int) -> int { x + 1 }\nfn main() { let f = helper; let a = f(3); let b = foreign(4); print(\"{a} {b}\") }\n").unwrap();
+    for release in [false, true] {
+        let exe = root.join(if release { "release" } else { "native" });
+        let mut command = Command::new(env!("CARGO_BIN_EXE_wolf"));
+        command.arg("build").arg(&source).arg("-o").arg(&exe).args([
+            "--cold-function",
+            "foreign",
+            "--cold-function",
+            "helper",
+            "--cold-function",
+            "helper.fv",
+        ]);
+        if release {
+            command.arg("--release");
+        }
+        let built = command.output().unwrap();
+        assert!(
+            built.status.success(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+        let run = Command::new(exe).output().unwrap();
+        assert!(run.status.success());
+        assert_eq!(String::from_utf8_lossy(&run.stdout), "4 5\n");
+    }
 }
