@@ -24,7 +24,7 @@ jobs:
   proptest-large:
     name: property tests, large case count
     if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'proptest-large'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       PROPTEST_CASES: "4096"
       # deep blast-radius sweep (s09): 100x the PR-time mutation budget
@@ -66,7 +66,7 @@ jobs:
   fuzz-long:
     name: fuzz (15m/target)
     if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'fuzz-long'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@nightly
@@ -88,7 +88,7 @@ jobs:
   fmt-fuzz-long:
     name: fmt idempotence sweep (4 x 30m)
     if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'fmt-fuzz-long'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -124,7 +124,7 @@ jobs:
   bench-full:
     name: full benchmarks -> bench-data branch
     if: github.event_name == 'schedule' || inputs.jobs == 'all' || inputs.jobs == 'bench-full'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

@@ -136,7 +136,7 @@ jobs:
   # run's log says why it has the jobs it has.
   plan:
     name: plan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       tier: ${{ steps.plan.outputs.tier }}
@@ -173,7 +173,7 @@ jobs:
     name: the planner's own test
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'plan-test')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
@@ -189,7 +189,7 @@ jobs:
     name: CLI failure details (checked, native, release)
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'tool-details')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       WOLF_TEST_NATIVE_REQUIRE: "1"
@@ -210,7 +210,7 @@ jobs:
     name: lint + test + corpus (linux x86-64)
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'lint-test')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # s226: trunk ran 29m42s at 7d85c701 with bench smoke (~4–5 min) after the gauntlet, and s226's checked-machine rows add ~3.5 min.
     # s255: 45 timed out twice on docs-only commits (the job ran 44:43 green at 0c041c2d; trunk's gauntlet step 28 min, s255's 32–37; the setup steps swing 1–11 min).
     # ld02b: six real static links run once in the gauntlet (ligature#12).
@@ -429,7 +429,7 @@ jobs:
     name: C variadics (linux x86-64 and freestanding)
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'variadic-abi')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Planted ABI defects may fault only the witness processes in this
     # container, never a runner-host process. The oracle has no host state.
@@ -468,7 +468,7 @@ jobs:
     name: static entry (cc + glibc; ld.lld and GNU ld + musl)
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'static-entry')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       CARGO_INCREMENTAL: "0"
@@ -594,7 +594,7 @@ jobs:
     name: fuzz smoke (60s/target)
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'fuzz-smoke')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -675,7 +675,7 @@ jobs:
     name: cross-check (freebsd x86-64, tier-2)
     needs: plan
     if: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix')) && (contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'freebsd-check')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -707,7 +707,7 @@ jobs:
       - fuzz-smoke
       - build-test
       - freebsd-check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
@@ -726,7 +726,7 @@ jobs:
     name: nightly red, an issue
     needs: tier
     if: ${{ failure() && github.event_name == 'schedule' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

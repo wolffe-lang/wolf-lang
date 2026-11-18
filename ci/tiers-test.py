@@ -292,7 +292,7 @@ say("    needs: tier\n" in n and "    if: ${{ failure() && github.event_name == 
     and "      issues: write\n" in n and "        run: ci/nightly-red.sh\n" in n and "WORKFLOW: ${{ github.workflow }}" in n,
     "T4 a red nightly, and only a red nightly, runs ci/nightly-red.sh with issues: write")
 runs_on = {j: re.findall(r"^    runs-on: (.*)$", blocks[j], re.M) for j in PR_JOBS}
-say(all(v == ["ubuntu-latest"] for v in runs_on.values()), "T4 every pull-request job runs on ubuntu (%s)" % runs_on)
+say(all(v == ["ubuntu-24.04"] for v in runs_on.values()), "T4 every pull-request job runs on ubuntu (%s)" % runs_on)
 
 expect("variadic plants run only their selected job", plan(event="workflow_dispatch", jobs="variadic-abi"), "partial", ["variadic-abi"])
 expect("lane evidence remains a PR-class input", plan(["notes/s263-evidence/reproducer.sh"], **pr), "pr", PR_JOBS)
