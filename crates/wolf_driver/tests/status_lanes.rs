@@ -193,3 +193,25 @@ fn controlling_pty_cleanup_and_slow_non_tty_heartbeat() {
     );
     eprintln!("{}", String::from_utf8_lossy(&out.stdout));
 }
+#[cfg(target_os = "linux")]
+#[test]
+fn tool_output_row_holds_when_the_linker_is_slow() {
+    // A loaded host stretches the link after the tool's last output: the row
+    // must not depend on how long that takes.
+    let dir = fixture("pty-slow-link");
+    let out = Command::new("python3")
+        .arg("-I")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/status/pty.py"))
+        .arg(wolf())
+        .arg(&dir)
+        .arg("idle-reset")
+        .env("PTY_TOOL_TAIL", "1.5")
+        .output()
+        .expect("python3 for real pty witness");
+    assert!(
+        out.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

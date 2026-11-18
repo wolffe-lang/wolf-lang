@@ -48,7 +48,9 @@ print('PASS run reporter finishes before program execution')
 
 # Actual external-tool output resets the idle clock and keeps its original stream.
 chatty = root / 'chatty-cc'
-chatty.write_text('#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(0.6)\nsys.stdout.write("tool stdout\\n");sys.stdout.flush()\nsys.stderr.write("tool stderr\\n");sys.stderr.flush()\ntime.sleep(0.6)\nos.execvp("cc", ["cc", *sys.argv[1:]])\n')
+# PTY_TOOL_TAIL stands in for a loaded host: seconds the tool still spends after its last output.
+tail = float(os.environ.get('PTY_TOOL_TAIL', '0'))
+chatty.write_text('#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(0.6)\nsys.stdout.write("tool stdout\\n");sys.stdout.flush()\nsys.stderr.write("tool stderr\\n");sys.stderr.flush()\ntime.sleep(%r)\nos.execvp("cc", ["cc", *sys.argv[1:]])\n' % (0.6 + tail))
 chatty.chmod(0o755)
 chatty_args = [str(chatty) if a == str(linker) else a for a in args]
 for extra in [[], ['--quiet']]:
@@ -57,6 +59,8 @@ for extra in [[], ['--quiet']]:
     assert result.stdout == b'tool stdout\n', result.stdout
     assert result.stderr == b'tool stderr\n', result.stderr
 print('PASS tool output resets idle deadline, preserves both streams, and survives quiet')
+if sys.argv[3:] == ['idle-reset']:
+    sys.exit(0)
 
 # Tiny terminal catches wrapped live-line residue; reserve room for echoed ^C.
 def screen(data, width=40):
