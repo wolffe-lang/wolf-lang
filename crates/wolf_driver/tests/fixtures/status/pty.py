@@ -46,18 +46,23 @@ assert b'wolf run: still in link of main' in result.stderr, result.stderr
 assert b'wolf run: finished native in ' in result.stderr, result.stderr
 print('PASS run reporter finishes before program execution')
 
-# Actual external-tool output resets the idle clock and keeps its original stream.
-chatty = root / 'chatty-cc'
-# PTY_TOOL_TAIL stands in for a loaded host: seconds the tool still spends after its last output.
+# Actual external-tool output resets the idle clock and keeps its original stream, and a
+# non-tty stderr then carries exactly the tool's bytes: no heartbeat, no final line.
+# The idle deadline here is 3 s. The tool writes at 1.6 s and 3.2 s, so without the reset a
+# heartbeat would land at 3.0 s, between its writes. After its last write the link has 3 s
+# to finish, so a loaded host cannot add a heartbeat. PTY_TOOL_TAIL stands in for such a
+# host: seconds the tool still spends after its last output.
 tail = float(os.environ.get('PTY_TOOL_TAIL', '0'))
-chatty.write_text('#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(0.6)\nsys.stdout.write("tool stdout\\n");sys.stdout.flush()\nsys.stderr.write("tool stderr\\n");sys.stderr.flush()\ntime.sleep(%r)\nos.execvp("cc", ["cc", *sys.argv[1:]])\n' % (0.6 + tail))
+chatty = root / 'chatty-cc'
+chatty.write_text('#!/usr/bin/env python3\nimport os,sys,time\ntime.sleep(1.6)\nsys.stdout.write("tool stdout\\n");sys.stdout.flush()\nsys.stderr.write("tool stderr\\n");sys.stderr.flush()\ntime.sleep(1.6)\nsys.stderr.write("tool stderr\\n");sys.stderr.flush()\ntime.sleep(%r)\nos.execvp("cc", ["cc", *sys.argv[1:]])\n' % tail)
 chatty.chmod(0o755)
 chatty_args = [str(chatty) if a == str(linker) else a for a in args]
+chatty_env = dict(env, WOLF_STATUS_AFTER='3')
 for extra in [[], ['--quiet']]:
-    result = subprocess.run([wolf, *chatty_args, *extra], env=env, capture_output=True, timeout=30)
+    result = subprocess.run([wolf, *chatty_args, *extra], env=chatty_env, capture_output=True, timeout=30)
     assert result.returncode == 0, result.stderr
     assert result.stdout == b'tool stdout\n', result.stdout
-    assert result.stderr == b'tool stderr\n', result.stderr
+    assert result.stderr == b'tool stderr\n' * 2, result.stderr
 print('PASS tool output resets idle deadline, preserves both streams, and survives quiet')
 if sys.argv[3:] == ['idle-reset']:
     sys.exit(0)
