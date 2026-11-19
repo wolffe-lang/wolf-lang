@@ -1,12 +1,16 @@
 //! s280 (#1003, #894): runtime indexing, not std.map.get's pairs walk.
-//! Linux-only wall gates: median of three paired samples, RLIMIT_AS 3 GiB,
-//! 240 s per child, output checked on every run. A 2x workload may cost
-//! at most 2.5x; 100k and 236k may cost at most 20x the same-run C bar.
+//! Linux-only gates: RLIMIT_AS 3 GiB, 240 s per child, output checked on
+//! every run. A 2x workload may cost at most 2.5x, by the child's own CPU
+//! time and the minimum of seven interleaved pairs, so a busy host cannot
+//! turn a linear index red and a quadratic one (4x) stays red. 100k and
+//! 236k may cost at most 20x the same-run C bar, by the median of three
+//! paired wall samples.
 //! Runtime unit tests separately gate equality-comparison counts.
 #![cfg(target_os = "linux")]
 
 mod lane_exit;
 
+use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -48,7 +52,20 @@ fn build(dir: &Path) -> Option<PathBuf> {
     Some(exe)
 }
 
-fn sample(exe: &Path, n: usize) -> f64 {
+/// One child's cost: wall seconds, and the CPU seconds (user plus system)
+/// the kernel charged to it. A child kept off the CPU by a busy host grows
+/// in wall time only.
+#[derive(Clone, Copy)]
+struct Cost {
+    wall: f64,
+    cpu: f64,
+}
+
+fn seconds(t: libc::timeval) -> f64 {
+    t.tv_sec as f64 + t.tv_usec as f64 / 1e6
+}
+
+fn sample(exe: &Path, n: usize) -> Cost {
     let mut cmd = Command::new(exe);
     cmd.arg(n.to_string())
         .stdin(Stdio::null())
@@ -70,9 +87,22 @@ fn sample(exe: &Path, n: usize) -> f64 {
     }
     let start = Instant::now();
     let mut child = cmd.spawn().expect("spawn capped map witness");
-    loop {
-        if child.try_wait().expect("poll map witness").is_some() {
-            break;
+    let pid = child.id() as libc::pid_t;
+    // wait4 reaps the child here, with its rusage; std never waits on it.
+    let (status, usage) = loop {
+        let mut status = 0;
+        // SAFETY: an all-zero rusage is a valid value of that plain C struct.
+        let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+        // SAFETY: status and usage are live out-parameters, and pid names
+        // this function's own child, which nothing else reaps.
+        let got = unsafe { libc::wait4(pid, &mut status, libc::WNOHANG, &mut usage) };
+        assert!(
+            got == 0 || got == pid,
+            "wait4: {}",
+            std::io::Error::last_os_error()
+        );
+        if got == pid {
+            break (status, usage);
         }
         if start.elapsed() > Duration::from_secs(240) {
             child.kill().expect("kill only the timed-out witness pid");
@@ -84,22 +114,32 @@ fn sample(exe: &Path, n: usize) -> f64 {
             );
         }
         std::thread::sleep(Duration::from_millis(1));
-    }
-    let seconds = start.elapsed().as_secs_f64();
-    let out = child.wait_with_output().expect("reap map witness");
+    };
+    let cost = Cost {
+        wall: start.elapsed().as_secs_f64(),
+        cpu: seconds(usage.ru_utime) + seconds(usage.ru_stime),
+    };
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    child
+        .stdout
+        .take()
+        .expect("piped stdout")
+        .read_to_string(&mut stdout)
+        .expect("read map witness stdout");
+    child
+        .stderr
+        .take()
+        .expect("piped stderr")
+        .read_to_string(&mut stderr)
+        .expect("read map witness stderr");
     assert!(
-        out.status.success(),
-        "{} N={n}: {:?} {}",
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        "{} N={n}: wait status {status:#x} {stderr}",
         exe.display(),
-        out.status,
-        String::from_utf8_lossy(&out.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout).trim(),
-        n.to_string(),
-        "all values round-trip"
-    );
-    seconds
+    assert_eq!(stdout.trim(), n.to_string(), "all values round-trip");
+    cost
 }
 
 #[test]
@@ -153,18 +193,40 @@ fn median(mut samples: [f64; 3]) -> f64 {
     samples[1]
 }
 
+/// Host noise only ever adds time, so the least of several samples is the
+/// best estimate of what the code itself costs.
+fn least(samples: &[f64]) -> f64 {
+    samples.iter().copied().fold(f64::INFINITY, f64::min)
+}
+
+/// Interleaved pairs per take: a slow spell of the host lands on both sizes.
+const DOUBLING_PAIRS: usize = 7;
+/// Below this the 50k point is too close to the CPU clock's grain to divide by.
+const DOUBLING_FLOOR_SECONDS: f64 = 0.005;
+
 #[test]
 fn native_string_index_doubling_costs_at_most_two_point_five() {
     let dir = scratch("doubling");
     let Some(exe) = build(&dir) else { return };
-    let mut small = [0.0; 3];
-    let mut large = [0.0; 3];
-    for i in 0..3 {
-        small[i] = sample(&exe, 50_000);
-        large[i] = sample(&exe, 100_000);
+    let mut small = Vec::with_capacity(DOUBLING_PAIRS);
+    let mut large = Vec::with_capacity(DOUBLING_PAIRS);
+    let mut walls = Vec::with_capacity(2 * DOUBLING_PAIRS);
+    for _ in 0..DOUBLING_PAIRS {
+        let s = sample(&exe, 50_000);
+        let l = sample(&exe, 100_000);
+        small.push(s.cpu);
+        large.push(l.cpu);
+        walls.push((s.wall, l.wall));
     }
-    let ratio = median(large) / median(small);
-    eprintln!("REPORT map-index doubling: 50k={small:?} 100k={large:?} ratio={ratio:.4} bound=2.5");
+    let ratio = least(&large) / least(&small);
+    eprintln!(
+        "REPORT map-index doubling: cpu 50k={small:?} 100k={large:?} ratio={ratio:.4} bound=2.5 wall pairs={walls:?}"
+    );
+    assert!(
+        least(&small) >= DOUBLING_FLOOR_SECONDS,
+        "50k costs {:.6} s of CPU, under the {DOUBLING_FLOOR_SECONDS} s floor: grow both sizes",
+        least(&small)
+    );
     assert!(
         ratio <= 2.5,
         "native string index is not linear: ratio={ratio:.4}, bound=2.5"
@@ -191,8 +253,8 @@ fn native_string_index_stays_within_twenty_times_same_run_c() {
         let mut wolf = [0.0; 3];
         let mut reference = [0.0; 3];
         for i in 0..3 {
-            reference[i] = sample(&c, n);
-            wolf[i] = sample(&exe, n);
+            reference[i] = sample(&c, n).wall;
+            wolf[i] = sample(&exe, n).wall;
         }
         let ratio = median(wolf) / median(reference);
         eprintln!(
