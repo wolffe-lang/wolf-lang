@@ -1,10 +1,11 @@
 //! member: false
 //! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) — a one-arm `select`
-//! one frame down, the same gap.
+//! one frame down, the same gap. `inner` carries a row: a select with
+//! no timeout arm leaves through it when cancelled ([conc.select.ready]).
 //! The clause: the killed proc runs no further user code, so nothing it
 //! would print after the park appears; the join answers `killed`.
 
-fn inner() -> int {
+fn inner() -> !int {
     let ch = channel[int](0)
     var got = 0
     select {
@@ -14,7 +15,7 @@ fn inner() -> int {
 }
 
 fn parked() -> int {
-    let v = inner()
+    let v = inner() else 0
     print("after-park-ran {v}")
     0
 }
