@@ -12,6 +12,22 @@
   programs are outside the gated corpus until compiler support lands.
   This entry records the specification, not support in the current compiler.
 
+- An error payload built inside a `region` block can no longer leave the block
+  by `?`. A callee builds its error where its caller allocates
+  (`[mem.region.create.3]`), so inside `region r { … f()? … }` the payload of
+  `f`'s error lives in `r`, and the `?` handed it to the caller after `r` was
+  freed: native and release read the freed bytes. That `?` is now E1010 at
+  the try expression (`[mem.region.escape]`, wolf-lang#1115). Only the
+  payload is judged, through a summary of each callee's own payloads: a
+  literal payload, a row of payload-free tags, a `?` before the block and the
+  ok value's allocations in the block are unaffected. The repair is to make
+  the call before the block, or to handle the error inside it and raise one
+  built outside.
+
+- A closure parameter written without a mode is `read`, as a function's is,
+  so assigning it is E1014 (`[gram.expr.closure]`, `[mem.tier0.mode.read]`,
+  wolf-lang#1076). Every machine used to run the write.
+
 - `wolf lsp` keeps navigation in an imported file in the context of an open
   package entry that actually imports it. References and rename now include
   the package's uses of enum variants instead of losing them when the
