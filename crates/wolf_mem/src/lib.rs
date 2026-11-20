@@ -517,8 +517,14 @@ fn lower_all<'a>(
         }
     }
     let mut table: lower::MutClean = HashMap::new();
+    // wolf-lang#1115: each fn's error-payload summary, callees first,
+    // beside the `mut`-clean table and by the same fixpoint.
+    let mut payloads: lower::PayloadTable = HashMap::new();
     let mut results: Vec<Option<Result<Lowered, NotYet>>> = (0..n).map(|_| None).collect();
-    let lower_one = |i: usize, table: &lower::MutClean| -> Option<Result<Lowered, NotYet>> {
+    let lower_one = |i: usize,
+                     table: &lower::MutClean,
+                     payloads: &lower::PayloadTable|
+     -> Option<Result<Lowered, NotYet>> {
         let nd = &nodes[i];
         lower_body(
             pkg,
@@ -528,18 +534,22 @@ fn lower_all<'a>(
             is_proc_entry(tc, &nd.outcome.body),
             statics,
             table,
+            payloads,
         )
     };
     for comp in &sccs {
         let cyclic = comp.len() > 1 || comp.iter().any(|&v| edges[v].contains(&v));
         // The optimistic start: every `mut` parameter of the component
         // clean, so a recursive call inside it reads "clean" first.
+        // wolf-lang#1115: and every member's payloads static, which the
+        // rounds can only grow.
         if cyclic {
             for &i in comp {
                 if let Some(k) = nodes[i].key {
                     for &pi in &nodes[i].mut_params {
                         table.insert((k, pi), Ok(()));
                     }
+                    payloads.insert(k, lower::PayloadOut::default());
                 }
             }
         }
@@ -548,7 +558,7 @@ fn lower_all<'a>(
             rounds += 1;
             let mut moved = false;
             for &i in comp {
-                let r = lower_one(i, &table);
+                let r = lower_one(i, &table, &payloads);
                 if let (Some(Ok(l)), Some(k)) = (&r, nodes[i].key) {
                     for &(pi, ref verdict) in &l.mut_clean {
                         let prev = table.get(&(k, pi)).cloned();
@@ -556,6 +566,10 @@ fn lower_all<'a>(
                             moved = true;
                             table.insert((k, pi), *verdict);
                         }
+                    }
+                    if payloads.get(&k) != Some(&l.payload_out) {
+                        moved = true;
+                        payloads.insert(k, l.payload_out);
                     }
                 }
                 results[i] = r;
@@ -571,10 +585,17 @@ fn lower_all<'a>(
                             let at = k;
                             table.insert((k, pi), Err(at));
                         }
+                        payloads.insert(
+                            k,
+                            lower::PayloadOut {
+                                built: true,
+                                views: true,
+                            },
+                        );
                     }
                 }
                 for &i in comp {
-                    results[i] = lower_one(i, &table);
+                    results[i] = lower_one(i, &table, &payloads);
                 }
                 break;
             }
@@ -605,6 +626,9 @@ fn body_fn_node<'a>(
     (node.kind == SyntaxKind::FnDecl).then_some((node, outer))
 }
 
+// The callee tables (`mut_clean`, `payloads`) are separate fixpoints
+// beside the body's own inputs; bundling them buys nothing at one caller.
+#[allow(clippy::too_many_arguments)]
 fn lower_body(
     pkg: &Package,
     sigs: &SigTables,
@@ -613,6 +637,7 @@ fn lower_body(
     proc_entry: bool,
     statics: &std::collections::HashSet<wolf_span::Span>,
     mut_clean: &lower::MutClean,
+    payloads: &lower::PayloadTable,
 ) -> Option<Result<Lowered, NotYet>> {
     let _progress = wolf_span::progress::span(
         "unit",
@@ -631,7 +656,8 @@ fn lower_body(
     };
     let lowerer = lower::Lowerer::new(pkg, sigs, tb, body.module, body.file)
         .with_static_strs(statics)
-        .with_mut_clean(mut_clean);
+        .with_mut_clean(mut_clean)
+        .with_payload_table(payloads);
     match node.kind {
         SyntaxKind::FnDecl => {
             let d = wolf_ast::FnDecl::cast(node)?;

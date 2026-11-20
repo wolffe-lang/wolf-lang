@@ -91,7 +91,44 @@ pub(crate) struct Val {
     /// that may send; handing it to a callee, returning it or sending
     /// it is refused where it would become a fn value nobody can ask.
     sends: Option<String>,
+    /// wolf-lang#1115 (`[mem.region.escape]`): where the ERROR PAYLOAD
+    /// this row value may carry lives — never the ok value's sites,
+    /// which `sites` keeps as before. A callee builds its error where
+    /// its caller allocates (D12, `[mem.region.create.3]`), so a call
+    /// whose row carries a payload with bytes records the region ambient
+    /// at the call; a payload may also share an argument's bytes, or (in
+    /// the body that raises it) a payload expression's own. Read only
+    /// where a payload leaves the frame: the `?` edge, a `return`, the
+    /// tail. Nothing else reads it, so no placement, promotion or other
+    /// escape fact moves. Deduped.
+    payload: Vec<PayloadFrom>,
 }
+
+/// One provenance of an error payload (see [`Val::payload`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PayloadFrom {
+    /// Built by the callee of the call at `call`, in `region`: the
+    /// region that was ambient there.
+    Built { region: RegionId, call: Span },
+    /// The payload may share this site's bytes.
+    Site(SiteId),
+}
+
+/// wolf-lang#1115: what a fn's error payloads may name when they leave
+/// it — by `return`, by its tail or by a `?` — read off its own lowering
+/// and handed to its callers' lowering (callees first, as the
+/// `mut`-clean table is). Neither flag set: every payload is static (a
+/// literal), names no bytes, or never leaves.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PayloadOut {
+    /// A payload may name bytes built in the fn's caller's region.
+    pub(crate) built: bool,
+    /// A payload may share bytes of the fn's own arguments.
+    pub(crate) views: bool,
+}
+
+/// The fn name span (a `CallSig::decl_span`) to its [`PayloadOut`].
+pub(crate) type PayloadTable = HashMap<Span, PayloadOut>;
 
 impl Val {
     fn none() -> Val {
@@ -108,12 +145,22 @@ impl Val {
             borrowed: Vec::new(),
             lent: Vec::new(),
             sends: None,
+            payload: Vec::new(),
+        }
+    }
+
+    fn add_payload(&mut self, p: PayloadFrom) {
+        if !self.payload.contains(&p) {
+            self.payload.push(p);
         }
     }
 
     fn merge(&mut self, other: Val) {
         if self.sends.is_none() {
             self.sends = other.sends;
+        }
+        for p in other.payload {
+            self.add_payload(p);
         }
         for (p, sp) in other.lent {
             if !self.lent.iter().any(|&(q, _)| q == p) {
@@ -353,6 +400,9 @@ pub struct Lowered {
     /// move) that keeps such a value. Read by [`check_package`]'s
     /// fixpoint into the [`MutClean`] table the callers consult.
     pub(crate) mut_clean: Vec<(u32, Result<(), Span>)>,
+    /// wolf-lang#1115: what this body's error payloads may name when
+    /// they leave it (see [`PayloadOut`]).
+    pub(crate) payload_out: PayloadOut,
 }
 
 /// s255 (`[mem.region.outer-write]`): the package's ambient-clean
@@ -580,6 +630,19 @@ pub(crate) struct Lowerer<'t> {
     /// so a rebinding that is later replaced and then escapes is a
     /// conservative refusal (`copy` at the move is the fix either way).
     lent_holds: BTreeMap<u32, BTreeMap<u32, Span>>,
+    /// wolf-lang#1115: may-hold for error payloads — root local -> where
+    /// a row value bound there may carry its payload ([`Val::payload`]).
+    /// Monotone like `holds`.
+    payload_holds: BTreeMap<u32, Vec<PayloadFrom>>,
+    /// wolf-lang#1115: what this fn's error payloads may name when they
+    /// leave it (its own exits only: a closure's or a nested fn's
+    /// `return` leaves that body), exported for its callers.
+    payload_out: PayloadOut,
+    /// wolf-lang#1115: the callee summaries computed so far (see
+    /// [`PayloadOut`]); a callee it does not know is assumed to build.
+    payload_table: Option<&'t PayloadTable>,
+    /// The body's own exit block, to tell its exits from a closure's.
+    fn_exit: Option<BlockId>,
     /// s165 (#366): `(parameter, escape span)` pairs already reported.
     lent_escapes: std::collections::HashSet<(u32, Span)>,
     /// Region-typed locals with statically-known identity (`None`:
@@ -1099,6 +1162,16 @@ impl<'t> Lowerer<'t> {
             borrowed: Vec::new(),
             lent: Vec::new(),
             sends,
+            payload: self.payload_of_place(place),
+        }
+    }
+
+    /// wolf-lang#1115: where a row value read from this place may carry
+    /// its error payload (keyed by the root local, as `sites_of_place`).
+    fn payload_of_place(&self, place: PlaceId) -> Vec<PayloadFrom> {
+        match self.places.get(place).base {
+            Base::Local(l) => self.payload_holds.get(&l).cloned().unwrap_or_default(),
+            Base::Global(..) => Vec::new(),
         }
     }
 
@@ -1117,6 +1190,19 @@ impl<'t> Lowerer<'t> {
     }
 
     fn hold(&mut self, local: u32, val: &Val, span: Span) {
+        // wolf-lang#1115: a row value's payload provenance rides into its
+        // binding, so `let res = f(); res?` is judged as `f()?` is.
+        if !val.payload.is_empty()
+            && self.tys[local as usize]
+                .is_none_or(|t| !matches!(t.kind(), TyKind::Prim(_) | TyKind::Unit))
+        {
+            let entry = self.payload_holds.entry(local).or_default();
+            for &p in &val.payload {
+                if !entry.contains(&p) {
+                    entry.push(p);
+                }
+            }
+        }
         // A `Copy` local holds a copy, never the lent value itself.
         if !val.lent.is_empty() && !self.locals[local as usize].is_copy {
             let entry = self.lent_holds.entry(local).or_default();
@@ -1411,6 +1497,7 @@ impl<'t> Lowerer<'t> {
     }
 
     fn demand_outlives_frame_how(&mut self, val: &Val, span: Span, how: &'static str) {
+        self.demand_payload_outlives_frame(val, span, how);
         self.refuse_lent_escape(val, span, how);
         self.refuse_sending_closure_leaving(val, span, how);
         self.claim_closure_leaving(val, span);
@@ -1520,6 +1607,112 @@ impl<'t> Lowerer<'t> {
         if let Some(r) = val.region {
             self.moved_region[r.0 as usize] = true;
         }
+    }
+
+    /// wolf-lang#1115 (`[mem.region.escape]`): a row value's ERROR
+    /// PAYLOAD leaving the frame — by `?` (`how` = "propagated"), a
+    /// `return`, the tail, or a send. A payload built in a region this
+    /// frame owns would reach the caller after that region is freed:
+    /// E1010, once per leaving value. Anything else it names is the
+    /// caller's (or static), and on the body's own exits it is recorded
+    /// for the callers ([`PayloadOut`]). Only the payload's provenance
+    /// is read: the ok value's sites are `sites`, judged where the ok
+    /// value goes, so `region r { let v = make()?; use(v) }` with a
+    /// literal payload stays legal however `make` builds its list.
+    fn demand_payload_outlives_frame(&mut self, val: &Val, span: Span, how: &'static str) {
+        if val.payload.is_empty() {
+            return;
+        }
+        let own_exit = how != "sent" && self.fn_exit.is_some_and(|x| x == self.exit);
+        let mut refused = false;
+        for p in val.payload.clone() {
+            let (region, call, alloc, param) = match p {
+                PayloadFrom::Built { region, call } => (region, Some(call), None, false),
+                PayloadFrom::Site(s) => {
+                    // Frozen data and `shared` cells outlive every frame.
+                    if self.frozen_site.contains_key(&s) || self.shared_site.contains(&s) {
+                        continue;
+                    }
+                    let site = &self.sites[s.0 as usize];
+                    (site.region, None, Some(site.span), site.kind.is_param())
+                }
+            };
+            match self.rt.binding(region) {
+                Some(Binding::Static) => {}
+                Some(Binding::Local(rid)) if !param => {
+                    if refused {
+                        continue;
+                    }
+                    refused = true;
+                    self.refuse_payload_escape(region, rid, call, alloc, span, how);
+                }
+                _ => {
+                    if own_exit {
+                        if param {
+                            self.payload_out.views = true;
+                        } else {
+                            self.payload_out.built = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn refuse_payload_escape(
+        &mut self,
+        region: RegionId,
+        rid: RegionId,
+        call: Option<Span>,
+        alloc: Option<Span>,
+        span: Span,
+        how: &'static str,
+    ) {
+        self.conflicted = true;
+        self.tainted_region[rid.0 as usize] = true;
+        let shown = self.show_region(region);
+        let reader = if how == "sent" { "receiver" } else { "caller" };
+        let mut d = Diagnostic::error(
+            codes::E1010,
+            span,
+            format!(
+                "this error's payload is allocated in {shown}, which is freed before the \
+                 {reader} could ever use it"
+            ),
+        )
+        .with_label(if how == "propagated" {
+            format!("`?` hands the payload to the caller after {shown} is freed")
+        } else {
+            "the error's payload would outlive its region".to_string()
+        });
+        if let Some(call) = call {
+            d = d.with_secondary(
+                call,
+                format!("this call builds the error, in {shown}: a callee builds where its caller allocates"),
+            );
+        }
+        if let Some(alloc) = alloc {
+            d = d.with_secondary(
+                alloc,
+                format!("the payload's bytes are allocated here, into {shown}"),
+            );
+        }
+        if let Some((name, intro)) = self.region_span(region) {
+            d = d.with_secondary(
+                intro,
+                format!(
+                    "region `{name}` is created here and freed with its scope — everything in \
+                     it is freed wholesale"
+                ),
+            );
+        }
+        d = d.with_note(
+            "an error is built in the region its caller allocates in [mem.region.create.3], \
+             so it cannot leave the frame that owns that region [mem.region.escape]. Make the \
+             call before the block opens, or handle the error inside the block (`else |e| …`) \
+             and raise one built outside it.",
+        );
+        self.diags.push(d);
     }
 
     /// A store into module state: the target is `ρ_static`.
@@ -5039,6 +5232,10 @@ impl<'t> Lowerer<'t> {
                         if v.sends.is_some() {
                             v.origin = Some(e.span);
                         }
+                        // wolf-lang#1115: a row value is `Copy` when its
+                        // payloads are (`int ! {Failed(str)}`), and its
+                        // payload provenance still rides the read.
+                        v.payload = self.payload_of_place(place);
                         v
                     } else {
                         self.val_of_place(place, e.span)
@@ -5211,10 +5408,19 @@ impl<'t> Lowerer<'t> {
             }
             SyntaxKind::TryExpr => {
                 let d = wolf_ast::TryExpr::cast(e).expect("kind");
-                let val = match d.expr() {
+                let mut val = match d.expr() {
                     Some(inner) => self.eval_value(inner)?,
                     None => Val::none(),
                 };
+                // wolf-lang#1115 (`[mem.region.escape]`): the error edge
+                // hands the caller the payload, so the payload — and
+                // only the payload — must outlive the frame, as a
+                // returned value must. A callee builds its error where
+                // its caller allocates, so `region r { inner()? }` would
+                // hand back bytes `r` frees at its close: E1010 here.
+                self.demand_payload_outlives_frame(&val, e.span, "propagated");
+                // The ok edge carries no error.
+                val.payload.clear();
                 // `?` is a branch (D30): the error edge leaves the
                 // function, running errdefers + defers (LIFO).
                 let err = self.new_block();
@@ -5419,6 +5625,7 @@ impl<'t> Lowerer<'t> {
             borrowed: Vec::new(),
             lent: Vec::new(),
             sends: None,
+            payload: Vec::new(),
         })
     }
 
@@ -5624,6 +5831,7 @@ impl<'t> Lowerer<'t> {
             borrowed: Vec::new(),
             lent: Vec::new(),
             sends: None,
+            payload: Vec::new(),
         })
     }
 
@@ -6344,6 +6552,7 @@ impl<'t> Lowerer<'t> {
             borrowed,
             lent: Vec::new(),
             sends,
+            payload: Vec::new(),
         })
     }
 
@@ -6801,6 +7010,27 @@ impl<'t> Lowerer<'t> {
             None => base,
         };
         self.is_str_expr(recv.span)
+    }
+
+    /// wolf-lang#1115: is this a row whose error payload can name bytes
+    /// — a tag carrying a `str` or anything with storage, or a row with
+    /// an open tail (unknown, so yes)? Marks and scalar payloads name
+    /// none, and their `?` demands nothing.
+    fn row_payload_has_bytes(&self, t: Ty<'t>) -> bool {
+        let TyKind::ErrUnion(_, row) = t.kind() else {
+            return false;
+        };
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.table.kind(*row) {
+            TyKind::Row { tags, tail } => {
+                tail.is_some()
+                    || tags
+                        .iter()
+                        .flat_map(|(_, ps)| ps.iter())
+                        .any(|&p| !self.scalar_only(sub(p), 0))
+            }
+            _ => true,
+        }
     }
 
     /// Is the expression at `span` typed `str`, or `str` behind an
@@ -7276,7 +7506,11 @@ impl<'t> Lowerer<'t> {
         let d = ElseExpr::cast(e).expect("kind");
         let mut out = Val::none();
         if let Some(s) = d.scrutinized() {
-            out.merge(self.eval_value(s)?);
+            let mut sv = self.eval_value(s)?;
+            // wolf-lang#1115: the handled value is the ok one; the
+            // error, payload and all, went to the handler.
+            sv.payload.clear();
+            out.merge(sv);
         }
         let fallback = self.new_block();
         let join = self.new_block();
@@ -7613,6 +7847,30 @@ impl<'t> Lowerer<'t> {
         // `List[handle Node]` bracket form), not a value — nothing to
         // evaluate.
         let is_ctor = cs.map(|c| c.ctor).unwrap_or(false);
+        // wolf-lang#1115: an error-row tag raised with a payload
+        // (`Failed("bound {n}")`): sema checks it against the expected
+        // row and records no call signature, the callee names no local,
+        // and the name is one of the value's row's tags (a host stub
+        // such as `str_from_utf8` is typed as a row too, but its name is
+        // no tag). Its payload's sites are the payload's provenance
+        // ([`Val::payload`]).
+        let tag_ctor = cs.is_none()
+            && d.callee()
+                .filter(|c| c.kind == SyntaxKind::PathExpr)
+                .and_then(PathExpr::cast)
+                .and_then(|p| p.ident())
+                .map(|t| self.text(t.span))
+                .is_some_and(|name| {
+                    self.lookup(&name).is_none()
+                        && self.expr_ty(e.span).is_some_and(|t| match t.kind() {
+                            TyKind::ErrUnion(_, row) => match t.table.kind(*row) {
+                                TyKind::Row { tags, .. } => tags.iter().any(|(n, _)| *n == name),
+                                _ => false,
+                            },
+                            _ => false,
+                        })
+                });
+        let mut tag_payload: Vec<SiteId> = Vec::new();
         // s229 (#665): the called closure's capture that reaches a
         // channel carrying bytes, when there is one.
         let mut callee_sink: Option<SentFlow> = None;
@@ -7804,12 +8062,21 @@ impl<'t> Lowerer<'t> {
                             sites.extend(self.views_of_place(place));
                             sites.extend(self.captured_sites(v, None));
                         }
+                        if tag_ctor {
+                            tag_payload
+                                .extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
+                            tag_payload.extend(self.views_of_place(place));
+                        }
                     } else {
                         let av = self.eval_value(v)?;
                         if callee_sink.is_some() {
                             sites.extend(av.sites.iter().copied());
                             sites.extend(av.views.iter().copied());
                             sites.extend(self.captured_sites(v, Some(&av)));
+                        }
+                        if tag_ctor {
+                            tag_payload.extend(av.sites.iter().copied());
+                            tag_payload.extend(av.views.iter().copied());
                         }
                     }
                     // s229 (#665): a closure that captured a channel is
@@ -8161,6 +8428,53 @@ impl<'t> Lowerer<'t> {
                 None
             },
         );
+        // wolf-lang#1115 (`[mem.region.escape]`, `[mem.region.create.3]`):
+        // where this call's error payload lives. A raised tag's payload
+        // is its operands' bytes. A call to a fn or fn value whose row
+        // carries a payload with bytes gets them where its callee builds
+        // (this frame's ambient region, D12) and from what its arguments
+        // name, as far as the callee's own lowering says
+        // ([`PayloadOut`]); a callee nobody summarized is assumed to do
+        // both. Builtins, host stubs and the C membrane raise payload-free
+        // marks.
+        if tag_ctor {
+            for s in tag_payload {
+                out.add_payload(PayloadFrom::Site(s));
+            }
+        } else if let Some(c) = cs
+            && !c.ctor
+            && !c.c_call
+            && !builtin_method
+            && !self.is_host_builtin_call(&d, cs)
+            && ret_ty.is_some_and(|t| self.row_payload_has_bytes(t))
+        {
+            let summary = c
+                .decl_span
+                .and_then(|ds| self.payload_table.and_then(|t| t.get(&ds)))
+                .copied()
+                .unwrap_or(PayloadOut {
+                    built: true,
+                    views: true,
+                });
+            if summary.built {
+                out.add_payload(PayloadFrom::Built {
+                    region: ambient_here,
+                    call: e.span,
+                });
+            }
+            if summary.views {
+                let named: Vec<SiteId> = carry
+                    .iter()
+                    .chain(read_sites.iter())
+                    .chain(recv_sites.iter())
+                    .chain(arg_views.iter())
+                    .copied()
+                    .collect();
+                for s in named {
+                    out.add_payload(PayloadFrom::Site(s));
+                }
+            }
+        }
         // s229 (wolf-lang#665, `[mem.region.escape]`,
         // `[conc.chan.payload]`): what the callee may SEND of what it is
         // handed. A builtin method sends nothing but `send`'s own
@@ -9577,6 +9891,10 @@ impl<'t> Lowerer<'t> {
             view_lists: BTreeSet::new(),
             lent_params: BTreeSet::new(),
             lent_holds: BTreeMap::new(),
+            payload_holds: BTreeMap::new(),
+            payload_out: PayloadOut::default(),
+            payload_table: None,
+            fn_exit: None,
             lent_escapes: std::collections::HashSet::new(),
             region_local: HashMap::new(),
             moved_region: Vec::new(),
@@ -9617,6 +9935,14 @@ impl<'t> Lowerer<'t> {
             param_locals: Vec::new(),
             call_unclean: HashMap::new(),
         }
+    }
+
+    /// wolf-lang#1115: the package's callee-payload summaries, consulted
+    /// at every call whose row carries a payload with bytes (see
+    /// [`PayloadOut`]).
+    pub(crate) fn with_payload_table(mut self, table: &'t PayloadTable) -> Self {
+        self.payload_table = Some(table);
+        self
     }
 
     /// s255 (`[mem.region.outer-write]`): the package's ambient-clean
@@ -9661,6 +9987,9 @@ impl<'t> Lowerer<'t> {
         );
         self.ambient.push(caller);
         self.push_scope();
+        // wolf-lang#1115: this body's own exits, told apart from a
+        // closure's (each closure body swaps `exit` for its own).
+        self.fn_exit = Some(self.exit);
         for (pi, p) in params.iter().enumerate() {
             let pi = pi as u32;
             let ty = Ty {
@@ -9912,6 +10241,7 @@ impl<'t> Lowerer<'t> {
             rc_cells,
             procs: self.procs,
             mut_clean,
+            payload_out: self.payload_out,
         }
     }
 }
