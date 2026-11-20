@@ -1,8 +1,8 @@
 //! s280 (#1003, #894): runtime indexing, not std.map.get's pairs walk.
 //! Linux-only gates: RLIMIT_AS 3 GiB, 240 s per child, output checked on
 //! every run. A 2x workload may cost at most 2.5x, by the child's own CPU
-//! time and the minimum of seven interleaved pairs, so a busy host cannot
-//! turn a linear index red and a quadratic one (4x) stays red. 100k and
+//! time and the median of seven interleaved pairs' own ratios, so a busy
+//! host cannot turn a linear index red and a quadratic one (4x) stays red. 100k and
 //! 236k may cost at most 20x the same-run C bar, by the median of three
 //! paired wall samples.
 //! Runtime unit tests separately gate equality-comparison counts.
@@ -199,14 +199,19 @@ fn median(mut samples: [f64; 3]) -> f64 {
 }
 
 /// Host noise only ever adds time, so the least of several samples is the
-/// best estimate of what the code itself costs.
+/// best estimate of what the code itself costs (used for the floor).
 fn least(samples: &[f64]) -> f64 {
     samples.iter().copied().fold(f64::INFINITY, f64::min)
 }
 
-/// The doubling ratio of a take: the large size's cost over the small size's.
+/// The doubling ratio of a take: the median of each interleaved pair's own
+/// large-over-small ratio. A pair shares its host conditions, and the median
+/// of seven shrugs off one pair, so a lone fast or slow sample at either size
+/// cannot move it, while a quadratic (every pair near 4x) stays red.
 fn doubling_ratio(small: &[f64], large: &[f64]) -> f64 {
-    least(large) / least(small)
+    let mut pairs: Vec<f64> = small.iter().zip(large).map(|(s, l)| l / s).collect();
+    pairs.sort_by(f64::total_cmp);
+    pairs[pairs.len() / 2]
 }
 
 /// Interleaved pairs per take: a slow spell of the host lands on both sizes.
@@ -256,6 +261,15 @@ fn one_fast_outlier_does_not_turn_linear_doubling_red() {
     ];
     let ratio = doubling_ratio(&small, &large);
     assert!(ratio <= 2.5, "linear take read as {ratio:.4}, bound=2.5");
+}
+
+/// A quadratic doubles to four times in every pair, whatever one sample does.
+#[test]
+fn a_quadratic_take_stays_red_with_an_outlier() {
+    let small = [0.05, 0.05, 0.02, 0.05, 0.05, 0.05, 0.05];
+    let large = [0.20, 0.21, 0.20, 0.20, 0.19, 0.40, 0.20];
+    let ratio = doubling_ratio(&small, &large);
+    assert!(ratio > 2.5, "quadratic take read as {ratio:.4}");
 }
 
 #[test]
