@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: gram.expr.closure
+//!
+//! wolf-lang#1076's control: a closure parameter declared `mut` may be
+//! assigned in the closure's body, as a named function's may.
+//! `closure_param_read_assign.lu` is the refusal without the mode.
+
+fn main() -> int {
+    let g = fn(mut a: int) {
+        a = a + 1
+        a
+    }
+    print("{g(1)}")
+    0
+}

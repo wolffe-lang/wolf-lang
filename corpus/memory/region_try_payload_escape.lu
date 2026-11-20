@@ -1,0 +1,54 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! wolf-lang#1115. `inner` builds its error payload, an interpolated
+//! `str`, where its caller allocates: the `region r` block that is
+//! ambient at the call ([mem.region.create.3]). The `?` hands that
+//! payload on to `outer`'s caller, out of the frame that owns `r`,
+//! after `r` is freed ([mem.region.escape]), so the `?` is E1010.
+//! Before the fix this compiled; native and release printed
+//! `changed 0: 79 bytes` because the next region reused the bytes,
+//! the checked machine kept the message, and lupin trapped
+//! `region-fault`. The controls are `region_try_payload_literal.lu`
+//! (a literal payload is no allocation) and
+//! `region_try_payload_outside.lu` (the `?` outside the block).
+
+fn inner(n: int) -> int ! {Failed(str)} {
+    return Failed(
+        "bound {n} exceeded by the request, which asked for more rows than the table holds",
+    )
+}
+
+fn outer() -> int ! {Failed(str)} {
+    var total = 0
+    region r {
+        let v = inner(3)?
+        total += v
+    }
+    total
+}
+
+fn main() -> int {
+    var msg = "none"
+    let got = outer() else |e| match e {
+        Failed(m) => {
+            msg = m
+            0
+        },
+    }
+    for k in 0..8 {
+        region q {
+            let s = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY {k}"
+            if s.len == 0 {
+                print("never")
+            }
+        }
+    }
+    if msg.starts_with("bound 3 exceeded") {
+        print("intact {got}: {msg}")
+        return 0
+    }
+    print("changed {got}: {msg.len} bytes")
+    3
+}

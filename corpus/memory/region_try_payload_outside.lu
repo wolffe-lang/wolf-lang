@@ -1,0 +1,48 @@
+//! check: run(exit=0, stdout="intact 0: bound 3 exceeded by the request, which asked for more rows than the table holds\n")
+//! phase: run
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! wolf-lang#1115's control: the `?` comes before the `region r` block,
+//! where the ambient region is the caller's own, so the payload `inner`
+//! builds there outlives `outer`'s frame and the propagation is legal.
+//! `region_try_payload_escape.lu` is the refusal.
+
+fn inner(n: int) -> int ! {Failed(str)} {
+    return Failed(
+        "bound {n} exceeded by the request, which asked for more rows than the table holds",
+    )
+}
+
+fn outer() -> int ! {Failed(str)} {
+    let v = inner(3)?
+    var total = v
+    region r {
+        let s = "{total} rows"
+        total += s.len
+    }
+    total
+}
+
+fn main() -> int {
+    var msg = "none"
+    let got = outer() else |e| match e {
+        Failed(m) => {
+            msg = m
+            0
+        },
+    }
+    for k in 0..8 {
+        region q {
+            let s = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY {k}"
+            if s.len == 0 {
+                print("never")
+            }
+        }
+    }
+    if msg.starts_with("bound 3 exceeded") {
+        print("intact {got}: {msg}")
+        return 0
+    }
+    print("changed {got}: {msg.len} bytes")
+    3
+}

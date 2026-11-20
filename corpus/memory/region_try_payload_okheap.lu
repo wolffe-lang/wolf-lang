@@ -1,0 +1,55 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! wolf-lang#1115 with a `List` on the ok edge: the `?` is judged by the
+//! error payload alone. `make` builds the payload in `region r`, the
+//! ambient region at the call, so the `?` out of the block is E1010.
+//! Before the fix native and release read the freed bytes and lupin
+//! trapped `region-fault`. `region_try_payload_okheap_literal.lu` is the
+//! same shape with a literal payload, and runs: the ok half's list in
+//! `r` never leaves by the `?`.
+
+fn make(n: int) -> List[int] ! {Failed(str)} {
+    if n > 2 {
+        return Failed(
+            "bound {n} exceeded by the request, which asked for more rows than the table holds",
+        )
+    }
+    var xs = List[int]()
+    (mut xs).push(n)
+    xs
+}
+
+fn outer() -> int ! {Failed(str)} {
+    var total = 0
+    region r {
+        let v = make(3)?
+        total += v[0]
+    }
+    total
+}
+
+fn main() -> int {
+    var msg = "none"
+    let got = outer() else |e| match e {
+        Failed(m) => {
+            msg = m
+            0
+        },
+    }
+    for k in 0..8 {
+        region q {
+            let s = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY {k}"
+            if s.len == 0 {
+                print("never")
+            }
+        }
+    }
+    if msg.starts_with("bound 3 exceeded") {
+        print("intact {got}: {msg}")
+        return 0
+    }
+    print("changed {got}: {msg.len} bytes")
+    3
+}
