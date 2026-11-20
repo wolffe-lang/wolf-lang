@@ -88,7 +88,9 @@ fn sample(exe: &Path, n: usize) -> Cost {
     let start = Instant::now();
     let mut child = cmd.spawn().expect("spawn capped map witness");
     let pid = child.id() as libc::pid_t;
-    // wait4 reaps the child here, with its rusage; std never waits on it.
+    // wait4 reaps the child here, with its rusage, because std's wait does not
+    // return one. The timeout branch reaps through std; the normal path hands
+    // the Child over once its pipes are read (see below).
     let (status, usage) = loop {
         let mut status = 0;
         // SAFETY: an all-zero rusage is a valid value of that plain C struct.
@@ -133,6 +135,9 @@ fn sample(exe: &Path, n: usize) -> Cost {
         .expect("piped stderr")
         .read_to_string(&mut stderr)
         .expect("read map witness stderr");
+    // wait4 already reaped the pid, so std's Child owns nothing live; dropping
+    // it here, after the pipes are read, closes the handle on every path.
+    drop(child);
     assert!(
         libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
         "{} N={n}: wait status {status:#x} {stderr}",
