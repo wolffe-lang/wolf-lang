@@ -1,5 +1,8 @@
 # Loops, queries and guards
 
+These idioms are also part of the [agents' guide](agents-guide.md), which
+covers the rest of what a writer of wolf needs, every example checked.
+
 Use a range when the bounds are fixed for the walk. Use `for x in xs`
 when you need the elements, and `for i in 0..xs.len` when you need indices.
 A range stores endpoints; it does not build a list of indices. The upper
