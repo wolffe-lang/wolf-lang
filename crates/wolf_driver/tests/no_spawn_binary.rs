@@ -107,6 +107,7 @@ fn no_spawn_binary_has_no_scheduler_symbols() {
         "__wolf_rt_proc_link",
         "__wolf_rt_proc_kill",
         "__wolf_rt_proc_cancel",
+        "__wolf_rt_proc_owe",
         "__wolf_rt_region_adopt",
         // The s73 native-lowering additions (conc_abi.rs + the chan/
         // sync/select seams): same law — a no-spawn binary links none
