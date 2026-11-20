@@ -97,6 +97,15 @@ on every PR push. Lane evidence under `notes/` is PR-class, not prose.
 - Pinned in `rust-toolchain.toml` (rustup/CI) and `rust-version` (everyone).
   Bump it in its own commit, with CI green.
 
+## Releases
+- Before the tag, check the agents' guide against the release's own
+  archives: `WOLF=<wolf from the archive> LUPIN=<the paired lupin>
+  docs/agents-guide-check.sh docs/agents-guide.md` exits 0, and the guide's
+  version line names the release, its lupin and its bundled std. A fence
+  whose verdict moved is the language changing under the guide: rewrite
+  that section in the release PR, never delete the fence to make the check
+  pass. New surface the release ships gets its fence in the same PR.
+
 ## Where the plan lives
 - `.docs/` (untracked): sprint plan, decision log, research reports. The
   sprint files under `.docs/sprints/` are the implementation contract; the
