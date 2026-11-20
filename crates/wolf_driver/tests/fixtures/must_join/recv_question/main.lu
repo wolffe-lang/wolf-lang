@@ -1,0 +1,29 @@
+// Control for wolf-lang#1143: a cancellation at a receive with `?`.
+fn wait_one(ch: channel[int]) -> !int {
+    let v = ch.recv()?
+    print("after recv {v}")
+    v
+}
+
+fn worker(n: int) -> int {
+    let ch = channel[int](0)
+    let r = wait_one(ch) else |e| {
+        print("wait_one raised {e}")
+        9
+    }
+    print("worker got {r}")
+    n
+}
+
+fn main() -> !int {
+    let p = spawn proc worker(7)
+    let m = p.monitor()
+    time_sleep_ms(100)
+    p.cancel()
+    select {
+        exit(reason) from m => {
+            print("reason {reason}")
+        },
+    }
+    0
+}
