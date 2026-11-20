@@ -71,6 +71,10 @@ type AssertionOperands = [(Value, TyId, Span); 2];
 struct LoweringContext<'t> {
     byteviews: Lender<'t>,
     assertion_details: bool,
+    /// wolf-lang#730 (`[conc.proc.kill]` step 2): the spawns that raise
+    /// `[conc.proc.arg]`'s obligation (`wolf_mem::owed_spawns`), whose
+    /// procs the runtime records on their spawner.
+    owed_spawns: std::collections::HashSet<Span>,
 }
 
 /// The result of lowering one package.
@@ -201,6 +205,7 @@ fn lower_package_impl(
     let lender = LoweringContext {
         byteviews: Lender::new(pkg, &tc.sigs),
         assertion_details,
+        owed_spawns: wolf_mem::owed_spawns(pkg, tc),
     };
     // s89: free-function bodies by their qualified WIR name, so a view
     // specialization requested at a call site can find the body to
@@ -8421,6 +8426,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Some(types::I64),
             )
             .expect("proc id");
+        // wolf-lang#730 (`[conc.proc.kill]` step 2): a spawn that raises
+        // `[conc.proc.arg]`'s obligation records its proc on the
+        // spawning proc before the spawner can park, so a kill or a
+        // contained trap of the spawner kills and waits it out before
+        // the spawner's regions free. Nothing for any other spawn.
+        if self.lender.owed_spawns.contains(&e.span) {
+            self.rt_call("__wolf_rt_proc_owe", &[id], None);
+        }
         Ok(Flow::Val(Some(id)))
     }
 
@@ -8561,15 +8574,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .one();
         self.b.ins_br(is_t, timeout_bb, &[], other_bb, &[]);
         self.b.gvn_pop_scope();
-        self.b.seal_block(timeout_bb);
         self.b.seal_block(other_bb);
-        // other: CANCELLED (or an unexpected verdict) — teardown
-        // check, then the escape path.
+        // other: CANCELLED (or an unexpected verdict) — the teardown
+        // check, then `[conc.select.ready]`'s cancelled select
+        // (wolf-lang#1143): a cancellation is the earliest deadline, so
+        // a select with a timeout arm runs that arm; one without leaves
+        // as `?` would, through the function's row (sema refuses the
+        // shape where there is none).
         self.b.switch_to_block(other_bb);
         self.b.gvn_push_scope();
         self.kill_teardown_branch(e.span)?;
-        self.cancel_escape(e.span)?;
+        if timeout_arm.is_some() {
+            self.b.ins_jmp(timeout_bb, &[]);
+        } else {
+            self.cancel_escape(e.span)?;
+        }
         self.b.gvn_pop_scope();
+        self.b.seal_block(timeout_bb);
         // timeout arm body.
         self.b.switch_to_block(timeout_bb);
         self.b.gvn_push_scope();
