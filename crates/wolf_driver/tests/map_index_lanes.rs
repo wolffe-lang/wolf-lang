@@ -204,6 +204,11 @@ fn least(samples: &[f64]) -> f64 {
     samples.iter().copied().fold(f64::INFINITY, f64::min)
 }
 
+/// The doubling ratio of a take: the large size's cost over the small size's.
+fn doubling_ratio(small: &[f64], large: &[f64]) -> f64 {
+    least(large) / least(small)
+}
+
 /// Interleaved pairs per take: a slow spell of the host lands on both sizes.
 const DOUBLING_PAIRS: usize = 7;
 /// Below this the 50k point is too close to the CPU clock's grain to divide by.
@@ -223,7 +228,7 @@ fn native_string_index_doubling_costs_at_most_two_point_five() {
         large.push(l.cpu);
         walls.push((s.wall, l.wall));
     }
-    let ratio = least(&large) / least(&small);
+    let ratio = doubling_ratio(&small, &large);
     eprintln!(
         "REPORT map-index doubling: cpu 50k={small:?} 100k={large:?} ratio={ratio:.4} bound=2.5 wall pairs={walls:?}"
     );
@@ -236,6 +241,21 @@ fn native_string_index_doubling_costs_at_most_two_point_five() {
         ratio <= 2.5,
         "native string index is not linear: ratio={ratio:.4}, bound=2.5"
     );
+}
+
+/// A take recorded beside a CPU hog: six 50k samples near 0.0855 s and one
+/// fast one at 0.0721 s, with every 100k sample near 0.183 s. Linear code,
+/// and one lone fast sample must not turn it red.
+#[test]
+fn one_fast_outlier_does_not_turn_linear_doubling_red() {
+    let small = [
+        0.085516, 0.072079, 0.084538, 0.084883, 0.085633, 0.085593, 0.085799,
+    ];
+    let large = [
+        0.183548, 0.184557, 0.183019, 0.183419, 0.180776, 0.184297, 0.181577,
+    ];
+    let ratio = doubling_ratio(&small, &large);
+    assert!(ratio <= 2.5, "linear take read as {ratio:.4}, bound=2.5");
 }
 
 #[test]
