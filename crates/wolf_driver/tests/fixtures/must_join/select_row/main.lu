@@ -1,0 +1,35 @@
+// wolf-lang#1143: a cancellation reaching a select with no timeout arm, in a function with a
+// row, leaves the select as `?` would: `wait_one` raises `cancelled` to `worker`.
+fn wait_one(ch: channel[int]) -> !int {
+    var got = 0
+    select {
+        v from ch => {
+            got = v
+        },
+    }
+    print("after select {got}")
+    got
+}
+
+fn worker(n: int) -> int {
+    let ch = channel[int](0)
+    let r = wait_one(ch) else |e| {
+        print("wait_one raised {e}")
+        9
+    }
+    print("worker got {r}")
+    n
+}
+
+fn main() -> !int {
+    let p = spawn proc worker(7)
+    let m = p.monitor()
+    time_sleep_ms(100)
+    p.cancel()
+    select {
+        exit(reason) from m => {
+            print("reason {reason}")
+        },
+    }
+    0
+}

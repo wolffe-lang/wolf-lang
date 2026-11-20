@@ -1,0 +1,47 @@
+// wolf-lang#1143 and the must-join rule: `helper` waits for its proc's exit in a select on the
+// monitor with no timeout arm. A cancellation leaves that select as `?` would, so `helper` can
+// return with `child` still running on `s`: the call inside `region pass` is E1010.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(400)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str) -> !int {
+    let w = spawn proc child(s, 0)
+    let m = w.monitor()
+    var cls = 3
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() {
+                cls = 0
+            } else {
+                cls = 1
+            }
+        },
+    }
+    cls
+}
+
+fn outer(n: int) -> int {
+    region pass {
+        let s = "built in pass, {n} uses"
+        let r = helper(s) else 9
+        print("helper {r}")
+    }
+    0
+}
+
+fn main() -> !int {
+    let p = spawn proc outer(7)
+    let pm = p.monitor()
+    time_sleep_ms(100)
+    p.cancel()
+    select {
+        exit(reason) from pm => {
+            print("outer reason {reason}")
+        },
+    }
+    time_sleep_ms(700)
+    0
+}
