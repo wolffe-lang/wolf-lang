@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 285] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 286] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -575,6 +575,8 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 285] = [
     ("__wolf_rt_proc_join", 1, true),
     ("__wolf_rt_proc_kill", 1, false),
     ("__wolf_rt_proc_cancel", 1, false),
+    // wolf-lang#730 (`[conc.proc.kill]` step 2): an owed spawn's record.
+    ("__wolf_rt_proc_owe", 1, false),
     ("__wolf_rt_proc_link", 2, false),
 ];
 

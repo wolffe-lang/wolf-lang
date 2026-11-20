@@ -892,6 +892,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // compared values, retained for the trap report.
         "__wolf_rt_assert_buf",
         "__wolf_rt_assert_detail",
+        // wolf-lang#730 (`[conc.proc.kill]` step 2): the record of a
+        // spawn that raises `[conc.proc.arg]`'s obligation.
+        "__wolf_rt_proc_owe",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -902,7 +905,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        285,
+        286,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
