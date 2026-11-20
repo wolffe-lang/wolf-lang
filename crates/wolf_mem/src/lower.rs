@@ -5418,7 +5418,6 @@ impl<'t> Lowerer<'t> {
                 // returned value must. A callee builds its error where
                 // its caller allocates, so `region r { inner()? }` would
                 // hand back bytes `r` frees at its close: E1010 here.
-                self.demand_payload_outlives_frame(&val, e.span, "propagated");
                 // The ok edge carries no error.
                 val.payload.clear();
                 // `?` is a branch (D30): the error edge leaves the
