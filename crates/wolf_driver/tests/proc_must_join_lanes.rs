@@ -49,23 +49,26 @@ struct Obs {
     stdout: String,
     version: String,
     codes: Vec<String>,
+    /// Each diagnostic's code and the byte its span starts at.
+    spans: Vec<(String, u64)>,
 }
 
 fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     let rec: serde_json::Value =
         serde_json::from_slice(bytes).unwrap_or_else(|e| panic!("{what} record parses: {e}"));
+    let diags = rec["diagnostics"].as_array().cloned().unwrap_or_default();
     Obs {
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
         version: rec["impl_version"].as_str().unwrap_or("").to_string(),
-        codes: rec["diagnostics"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|d| d["code"].as_str().map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default(),
+        codes: diags
+            .iter()
+            .filter_map(|d| d["code"].as_str().map(str::to_string))
+            .collect(),
+        spans: diags
+            .iter()
+            .filter_map(|d| Some((d["code"].as_str()?.to_string(), d["span"][0].as_u64()?)))
+            .collect(),
     }
 }
 
@@ -227,6 +230,121 @@ fn runs(name: &str, want: Option<&str>) {
             );
         }
     }
+}
+
+/// The byte offset of `needle` in the fixture `name`, plus `skip`: where
+/// a refusal must point.
+fn offset_in(name: &str, needle: &str, skip: usize) -> u64 {
+    let src = std::fs::read_to_string(fixture(name)).expect("fixture reads");
+    let at = src
+        .find(needle)
+        .unwrap_or_else(|| panic!("`{needle}` is not in fixture {name}"));
+    (at + skip) as u64
+}
+
+/// Checked, native and release refuse the program with `code` and
+/// nothing else but warnings, and one `code` diagnostic starts at byte
+/// `at`; lupin's verdict is logged.
+fn refused_at(name: &str, code: &str, at: u64, issue: &str) {
+    let entry = fixture(name);
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            assert_ne!(flag, "--checked", "the checked lane always runs");
+            continue;
+        };
+        assert_eq!(
+            obs.verdict,
+            format!("fail({code})"),
+            "{flag} on {} ({issue})",
+            entry.display()
+        );
+        assert!(
+            obs.codes.iter().all(|c| c == code || c.starts_with('W')),
+            "{flag} refused {} with an error besides {code}: {:?}",
+            entry.display(),
+            obs.codes
+        );
+        assert!(
+            obs.spans.iter().any(|(c, lo)| c == code && *lo == at),
+            "{flag} refused {} but no {code} starts at byte {at}: {:?} ({issue})",
+            entry.display(),
+            obs.spans
+        );
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        eprintln!(
+            "OBSERVED: lupin {} answers {} printing {:?} on {}",
+            lupin.version,
+            lupin.verdict,
+            lupin.stdout,
+            entry.display()
+        );
+    }
+}
+
+/// The must-join runtime's sound rows: checked, native and release run
+/// the program to `exit(0)` printing exactly `want`. lupin's answer is
+/// logged, not asserted, until the reference interpreter carries the
+/// same rule (its released answer differs on these shapes, and the gate
+/// finds it through the org checkout).
+fn runs_pre_mirror(name: &str, want: &str, issue: &str) {
+    let entry = fixture(name);
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            assert_ne!(flag, "--checked", "the checked lane always runs");
+            continue;
+        };
+        assert_eq!(
+            obs.verdict,
+            "exit(0)",
+            "{flag} on {}: {:?} ({issue})",
+            entry.display(),
+            obs.codes
+        );
+        assert_eq!(
+            obs.stdout,
+            want,
+            "{flag} stdout on {} ({issue})",
+            entry.display()
+        );
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        eprintln!(
+            "OBSERVED: lupin {} answers {} printing {:?} on {}",
+            lupin.version,
+            lupin.verdict,
+            lupin.stdout,
+            entry.display()
+        );
+    }
+}
+
+/// Every lane, lupin included, ends the program with `verdict` and
+/// prints nothing.
+fn ends_with(name: &str, verdict: &str) {
+    let entry = fixture(name);
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            assert_ne!(flag, "--checked", "the checked lane always runs");
+            continue;
+        };
+        assert_eq!(obs.verdict, verdict, "{flag} on {}", entry.display());
+        assert_eq!(obs.stdout, "", "{flag} stdout on {}", entry.display());
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        assert_eq!(
+            lupin.verdict,
+            verdict,
+            "lupin {} on {}",
+            lupin.version,
+            entry.display()
+        );
+    }
+}
+
+/// The eight `scribble` lines the reuse fixtures print after their join.
+fn scribbles() -> String {
+    (0..8).map(|k| format!("scribble {k} 28 690\n")).collect()
 }
 
 // ---- refused: the proc may outlive the bytes it reads ----
@@ -483,4 +601,139 @@ fn a_bool_flag_deciding_the_join_still_runs() {
 #[test]
 fn lobo_s_serving_chain_still_runs() {
     runs("sound_lobo_chain", None);
+}
+
+// ---- the must-join runtime: paths no static rule over the frame can see ----
+//
+// A trap ending a path meets nothing, and a kill can land at any park:
+// what keeps an owed proc from outliving its spawner's regions is the
+// killed-proc sequence, which kills and waits out the procs the dying
+// proc still owes before its regions free (`[conc.proc.kill]` step 2,
+// wolf-lang#730). A join returns only once its proc has exited and
+// forwards its own task's cancellation (`[conc.proc.join]`,
+// wolf-lang#732). A cancellation that reaches a blocked `select` runs
+// its timeout arm, or leaves as `?` would, and has to have a row to
+// leave through (`[conc.select.ready]`, wolf-lang#1143). Every row here
+// printed a `child` line, read freed bytes, trapped `assert` inside the
+// native select or was accepted, on at least one of checked, native and
+// release, before the rule. The process rows run under `taskset -c 0-3`
+// and `taskset -c 0` too in the records.
+
+/// A trap between the spawn and its join, inside a proc: the trap is
+/// contained, and the proc it owes dies before `pass` frees.
+#[test]
+fn a_trap_between_spawn_and_join_in_a_proc_kills_the_owed_proc() {
+    runs_pre_mirror(
+        "trap_owed",
+        &format!("outer 9 reclaimed true\n{}", scribbles()),
+        "wolf-lang#730",
+    );
+}
+
+/// The spawner killed while it waits in the join: the same harm with no
+/// trap at all.
+#[test]
+fn a_killed_spawner_waits_out_its_owed_proc() {
+    runs_pre_mirror(
+        "kill_owed",
+        &format!("outer joined 20 reclaimed true\n{}", scribbles()),
+        "wolf-lang#730",
+    );
+}
+
+/// A cancelled joiner: the join forwards the cancellation and returns
+/// only once `child` has exited, so `child` reads `pass` while it lives.
+#[test]
+fn a_cancelled_joiner_waits_for_its_proc() {
+    runs_pre_mirror(
+        "cancel_join",
+        &format!(
+            "child wakes\nchild sees: built in pass, 7 uses\nhelper 0\nouter returns\n\
+             outer joined 0 reclaimed true\n{}",
+            scribbles()
+        ),
+        "wolf-lang#732",
+    );
+}
+
+/// lobo's `run` shape: the cancellation runs the timeout arm, whose
+/// cleanup kills and joins the proc before `pass` frees.
+#[test]
+fn a_cancelled_select_with_a_timeout_runs_the_timeout_arm() {
+    runs_pre_mirror(
+        "cancel_select_timeout",
+        "cls 4\nouter reason normal(0)\n",
+        "wolf-lang#1143",
+    );
+}
+
+/// No timeout arm, in a function with a row: the cancellation leaves
+/// the select as `?` would.
+#[test]
+fn a_cancelled_select_in_a_row_function_propagates() {
+    runs_pre_mirror(
+        "select_row",
+        "wait_one raised cancelled\nworker got 9\nreason normal(7)\n",
+        "wolf-lang#1143",
+    );
+}
+
+/// A monitor select with no timeout arm carries the cancellation's `?`
+/// edge, on which the frame returns with its proc running: `helper` is a
+/// sink, and the call in `region pass` is E1010 at its argument.
+#[test]
+fn a_monitor_select_without_a_timeout_is_a_sink() {
+    refused_at(
+        "select_sink",
+        "E1010",
+        offset_in("select_sink", "helper(s) else 9", "helper(".len()),
+        "wolf-lang#1143",
+    );
+}
+
+/// A select that can block, with no timeout arm, in a function with no
+/// row: the cancellation would have nowhere to go.
+#[test]
+fn a_blockable_select_without_a_timeout_or_a_row_is_refused() {
+    refused_at(
+        "select_no_row",
+        "E0604",
+        offset_in("select_no_row", "    select {", 4),
+        "wolf-lang#1143",
+    );
+}
+
+/// A killed proc's regions free before its reason is delivered, on the
+/// checked machine too (wolf-lang#1141).
+#[test]
+fn a_killed_proc_is_reclaimed_before_its_reason() {
+    runs_pre_mirror(
+        "kill_reclaim",
+        "joined 20 reclaimed true\n",
+        "wolf-lang#1141",
+    );
+}
+
+/// Control: the same trap in the root domain is process death.
+#[test]
+fn a_trap_between_spawn_and_join_in_main_ends_the_process() {
+    ends_with("trap_in_root", "trap(bounds)");
+}
+
+/// Control: a cancellation at a receive with `?`.
+#[test]
+fn a_cancelled_receive_with_a_question_mark_propagates() {
+    runs(
+        "recv_question",
+        Some("wait_one raised cancelled\nworker got 9\nreason normal(7)\n"),
+    );
+}
+
+/// Control: a cancellation at a receive handled by `else`.
+#[test]
+fn a_cancelled_receive_with_else_is_handled_in_place() {
+    runs(
+        "recv_else",
+        Some("recv raised cancelled\nafter recv 5\nworker got 5\nreason normal(7)\n"),
+    );
 }
