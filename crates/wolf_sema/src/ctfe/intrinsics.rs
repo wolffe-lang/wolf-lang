@@ -183,6 +183,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_open_at" | "fs_stat_at" | "fs_lstat_at" | "fs_remove_at" | "fs_remove_dir_at"
         | "fs_create_dir_at" | "fs_symlink_at" | "fs_link_at" | "fs_read_dir_entries_at"
         | "fs_set_mode_fd"
+        // wolf-std#156: the cursor and the component calls read the
+        // filesystem — `fs`, with the family.
+        | "fs_dir_cursor_open" | "fs_dir_cursor_next" | "fs_dir_cursor_close"
+        | "fs_lstat_component" | "fs_open_component" | "fs_read_link_component"
         // s253 (#815): an inherited descriptor made an fs handle — `fs`.
         | "fs_adopt" => {
             SandboxCategory::Fs

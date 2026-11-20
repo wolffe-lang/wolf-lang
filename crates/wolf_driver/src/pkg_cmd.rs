@@ -1527,6 +1527,13 @@ mod builtin_cap_tests {
             ("fs_link_at", Cap::Fs),
             ("fs_read_dir_entries_at", Cap::Fs),
             ("fs_set_mode_fd", Cap::Fs),
+            // wolf-std#156: the cursor and the component calls — `fs`.
+            ("fs_dir_cursor_open", Cap::Fs),
+            ("fs_dir_cursor_next", Cap::Fs),
+            ("fs_dir_cursor_close", Cap::Fs),
+            ("fs_lstat_component", Cap::Fs),
+            ("fs_open_component", Cap::Fs),
+            ("fs_read_link_component", Cap::Fs),
             // s248 (#795): the wait over several descriptors is signal
             // control, `exec` with `os_signal_wait_fd`.
             ("os_signal_wait_fds", Cap::Exec),

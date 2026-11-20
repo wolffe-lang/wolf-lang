@@ -57,14 +57,14 @@ fn the_list_by_kind() {
         [
             ("builtin_type", 18),
             ("type", 9),
-            ("function", 203),
+            ("function", 209),
             ("intrinsic", 8),
             ("provisional", 6),
-            ("mark", 19),
+            ("mark", 21),
             // s289 (wolf-lang#708): `min` and `zip` cite `[type.min]` and
             // `[type.min.zip]`, and the free `zip` draws no W0304.
             ("unanchored", 28),
-            ("w0304", 235),
+            ("w0304", 241),
         ],
         "the prelude moved"
     );
