@@ -265,6 +265,32 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     out
 }
 
+/// wolf-lang#730 (`[conc.proc.kill]` step 2): the span of every `spawn
+/// proc` that raises `[conc.proc.arg]`'s obligation — its arguments can
+/// name a parameter's bytes or the caller region's (inside a closure,
+/// any bytes that are not a literal's). The runtime records each such
+/// proc on its spawner, and a spawner that dies by a kill or a contained
+/// trap kills and waits out the procs it still owes before its regions
+/// free. The must-join check's own record of the spawns
+/// (`procjoin::SpawnOb`), read by `wolf_wir`'s lowering as
+/// [`byteview`] is; met or not on the frame's paths, a spawn here raises
+/// the obligation (a trap ends a path anywhere). A package with no
+/// `spawn proc` lowers nothing.
+pub fn owed_spawns(pkg: &Package, tc: &Typecheck) -> std::collections::HashSet<Span> {
+    fn spawns(node: &GreenNode) -> bool {
+        node.kind == SyntaxKind::SpawnExpr || node.nodes().any(spawns)
+    }
+    if !pkg.files.iter().any(|f| spawns(&f.parse.root)) {
+        return std::collections::HashSet::new();
+    }
+    let statics = strres::static_str_fns(pkg, tc);
+    lower_all(pkg, tc, &statics)
+        .into_iter()
+        .filter_map(|(_, lowered)| lowered.ok())
+        .flat_map(|l| l.procs.spawns.into_iter().map(|s| s.span))
+        .collect()
+}
+
 /// Run every path-sensitive pass over one check CFG (the moves, call
 /// exclusivity, and loan analyses) and return its diagnostics. The
 /// fuzz/property surface: deterministic for a given CFG, never
