@@ -140,6 +140,14 @@ impl WaitCell {
     /// self-committing through the same exactly-once gate, so a peer
     /// commit that wins the race is honored and never torn.
     fn wait(&self, deadline: Option<Instant>) -> (u32, Committed) {
+        self.wait_ended_by(deadline, false)
+    }
+
+    /// [`Self::wait`], with `kill_only`: then a polite cancellation of
+    /// the waiting task does not end the wait, and only a kill of its
+    /// proc does — the join's wait once it has forwarded its task's
+    /// cancellation (`[conc.proc.join]`, wolf-lang#732).
+    fn wait_ended_by(&self, deadline: Option<Instant>, kill_only: bool) -> (u32, Committed) {
         // det (s36): a deadline in the det domain becomes a VIRTUAL
         // timer — it fires when the scheduler decides (whole-domain
         // quiescence), never off the real clock; no real sleeping.
@@ -156,7 +164,14 @@ impl WaitCell {
                 if let Some(c) = *st {
                     return c;
                 }
-                if scope.as_ref().is_some_and(|s| s.is_cancelled()) {
+                let ended = scope.as_ref().is_some_and(|s| {
+                    if kill_only {
+                        s.is_killed()
+                    } else {
+                        s.is_cancelled()
+                    }
+                });
+                if ended {
                     *st = Some((ARM_NONE, Committed::Cancelled));
                     sched_point(SchedEvent::CancelCheck {
                         scope: scope.as_ref().map_or(0, |s| s.id()),
@@ -405,6 +420,18 @@ impl Chan {
     /// closed error (`[conc.chan.close]`); blocks when empty (a
     /// cancellation point); `Err(Closed)` on drained-closed.
     pub fn recv(&self) -> Result<u64, ChanErr> {
+        self.recv_ended_by(false)
+    }
+
+    /// [`Self::recv`], but a polite cancellation of the receiving task
+    /// does not end the wait; only a kill of its proc does
+    /// (`Err(Cancelled)` then). The join's second wait, after it has
+    /// forwarded its task's cancellation (`[conc.proc.join]`).
+    pub fn recv_unless_killed(&self) -> Result<u64, ChanErr> {
+        self.recv_ended_by(true)
+    }
+
+    fn recv_ended_by(&self, kill_only: bool) -> Result<u64, ChanErr> {
         let mut st = self.st.lock().unwrap();
         if let Some(v) = st.buf.pop_front() {
             // Backfill from a blocked sender: its payload takes the
@@ -440,7 +467,7 @@ impl Chan {
             phase: ChanPhase::Block,
         });
         drop(st);
-        let (_, c) = cell.wait(None);
+        let (_, c) = cell.wait_ended_by(None, kill_only);
         match c {
             Committed::RecvOk(v) => {
                 sched_point(SchedEvent::ChanRecv {
