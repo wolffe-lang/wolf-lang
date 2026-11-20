@@ -85,6 +85,66 @@ fn e0604_try_in_infallible_fn() {
     );
 }
 
+/// `wait_one` waits in a `select` with one receive arm (plus `tail`'s
+/// arms) behind the signature `-> sig`; `main` calls it, with `else 0`
+/// when `sig` carries a row.
+fn select_in(sig: &str, tail: &str) -> String {
+    let call = if sig.contains('!') {
+        "wait_one(ch) else 0"
+    } else {
+        "wait_one(ch)"
+    };
+    format!(
+        "fn wait_one(ch: channel[int]) -> {sig} {{\n    var got = 0\n    select {{\n        \
+         v from ch => {{\n            got = v\n        }},\n{tail}    }}\n    got\n}}\n\n\
+         fn main() -> !int {{\n    let ch = channel[int](1)\n    ch.send(4)?\n    \
+         let r = {call}\n    r - 4\n}}\n"
+    )
+}
+
+/// wolf-lang#1143 (`[conc.select.ready]`): a cancellation that reaches a
+/// select with no timeout arm leaves it as `?` would, so a select that
+/// can block, has no timeout arm and sits in a function with no row has
+/// nowhere to send it: E0604 at the `select`, with the row to add.
+#[test]
+fn e0604_select_without_a_timeout_or_a_row() {
+    snap_one(
+        "e0604_select_without_a_timeout_or_a_row",
+        &select_in("int", ""),
+    );
+}
+
+/// The same select behind a declared row that lacks `cancelled`: E0602,
+/// with the edit that extends the row.
+#[test]
+fn e0602_select_without_a_timeout_in_a_row_without_cancelled() {
+    snap_one(
+        "e0602_select_without_a_timeout_in_a_row_without_cancelled",
+        &select_in("int ! {io}", ""),
+    );
+}
+
+/// The shapes that carry the cancellation: an inferred row (it gains
+/// `cancelled`), a declared row that names it, and a timeout arm (the
+/// cancellation runs it) in a function with no row.
+#[test]
+fn a_select_whose_cancellation_has_somewhere_to_go_is_accepted() {
+    for (sig, tail) in [
+        ("!int", ""),
+        ("int ! {cancelled}", ""),
+        (
+            "int",
+            "        timeout(5.s) => {\n            got = 4\n        },\n",
+        ),
+    ] {
+        assert_eq!(
+            render_rows(&select_in(sig, tail)),
+            "",
+            "`-> {sig}` with {tail:?}"
+        );
+    }
+}
+
 // ---------------------------------------------------------- E0605 -----
 
 #[test]
