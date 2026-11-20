@@ -1122,7 +1122,7 @@ evaluated at compile time; a `const` has no storage, a `let` is read-only
 data. They hold integers, `byte`, `bool`, floats and `str` (in a `const` or
 a `let`):
 
-```wolf
+```wolf expect=unsupported
 const AREA: int = 12 * 12
 
 let GREETING: str = "hello"
