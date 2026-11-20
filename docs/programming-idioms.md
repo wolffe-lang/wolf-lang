@@ -12,6 +12,7 @@ fn index(xs: List[int], needle: int) -> int {
     }
     -1
 }
+
 fn main() {
     var xs = [2, 4, 6]
     for i in 0..xs.len {
@@ -100,13 +101,16 @@ fn positive(n: int) -> int ! {negative} {
     if n < 0 then return negative
     n
 }
+
 fn twice(n: int) -> int ! {negative} {
     positive(n)? * 2
 }
+
 fn or_zero(n: int) -> int {
     let value = twice(n) else return 0
     value
 }
+
 fn main() {
     print("{or_zero(-1)} {or_zero(3)} {twice(-1) else 0}")
 }
