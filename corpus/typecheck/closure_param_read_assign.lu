@@ -1,0 +1,18 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: gram.expr.closure, mem.tier0.mode.read
+//!
+//! wolf-lang#1076. A closure parameter takes the same modes a function
+//! parameter does ([gram.expr.closure]: `param_mode? IDENT`), and one
+//! written without a mode is `read`, immutable for the call
+//! ([mem.tier0.mode.read]). The assignment to `a` is E1014, as it is in
+//! a named function. Before the fix every machine ran it and exited 2
+//! with no diagnostic. `closure_param_mut_assign.lu` is the control.
+
+fn main() -> int {
+    let g = fn(a: int) {
+        a = a + 1
+        a
+    }
+    g(1)
+}

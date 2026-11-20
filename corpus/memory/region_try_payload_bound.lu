@@ -1,0 +1,51 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! wolf-lang#1115 through a binding: the row value is bound inside
+//! `region r` and propagated from the binding. Its payload was built in
+//! `r` at the call, and the binding carries that fact to the `?`, which
+//! is E1010 as the direct `inner(3)?` is. Before the fix native and
+//! release read the freed bytes and lupin trapped `region-fault`.
+//! Bound before the block, the same `?` is legal: the payload then
+//! lives in the caller's region.
+
+fn inner(n: int) -> int ! {Failed(str)} {
+    return Failed(
+        "bound {n} exceeded by the request, which asked for more rows than the table holds",
+    )
+}
+
+fn outer() -> int ! {Failed(str)} {
+    var total = 0
+    region r {
+        let res = inner(3)
+        let v = res?
+        total += v
+    }
+    total
+}
+
+fn main() -> int {
+    var msg = "none"
+    let got = outer() else |e| match e {
+        Failed(m) => {
+            msg = m
+            0
+        },
+    }
+    for k in 0..8 {
+        region q {
+            let s = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY {k}"
+            if s.len == 0 {
+                print("never")
+            }
+        }
+    }
+    if msg.starts_with("bound 3 exceeded") {
+        print("intact {got}: {msg}")
+        return 0
+    }
+    print("changed {got}: {msg.len} bytes")
+    3
+}

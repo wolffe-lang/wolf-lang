@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="intact 0: bound 3 exceeded by the request, which asked for more rows than the table holds\n")
+//! phase: run
+//! conforms: mem.region.escape
+//!
+//! wolf-lang#1115's control with a `List` on the ok edge: the ok value is
+//! allocated in `region r` and used there, and the payload is a literal.
+//! Only the payload leaves by the `?`, and it names no bytes `r` owns,
+//! so this runs with the message intact on every machine.
+
+fn make(n: int) -> List[int] ! {Failed(str)} {
+    if n > 2 {
+        return Failed(
+            "bound 3 exceeded by the request, which asked for more rows than the table holds",
+        )
+    }
+    var xs = List[int]()
+    (mut xs).push(n)
+    xs
+}
+
+fn outer() -> int ! {Failed(str)} {
+    var total = 0
+    region r {
+        let v = make(3)?
+        total += v[0]
+    }
+    total
+}
+
+fn main() -> int {
+    var msg = "none"
+    let got = outer() else |e| match e {
+        Failed(m) => {
+            msg = m
+            0
+        },
+    }
+    for k in 0..8 {
+        region q {
+            let s = "YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY {k}"
+            if s.len == 0 {
+                print("never")
+            }
+        }
+    }
+    if msg.starts_with("bound 3 exceeded") {
+        print("intact {got}: {msg}")
+        return 0
+    }
+    print("changed {got}: {msg.len} bytes")
+    3
+}
