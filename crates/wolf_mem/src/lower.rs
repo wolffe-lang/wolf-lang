@@ -6286,11 +6286,23 @@ impl<'t> Lowerer<'t> {
         self.deferred_depth += 1;
         self.push_scope();
         self.ret_depth = self.scopes.len() - 1;
+        // wolf-lang#1076 (`[gram.expr.closure]`: `param_mode? IDENT`): a
+        // closure parameter written without a mode is `read`, as a
+        // function's is, so a write to it is E1014 — the refusal
+        // `fn f(n: int) { n = n + 1 }` already gets. Until then the mode
+        // was dropped and every machine ran the write. Only the `read`
+        // mode is recorded: the `mut` and `take` rules that read
+        // `param_mode` (the caller's place, initialized at every exit)
+        // have no call-site half for a fn value, whose parameters sema
+        // types as `read` (E1007 refuses `g(mut n)`).
         if let Some(params) = d.params() {
             for p in params.params() {
                 if let Some(n) = p.name() {
                     let nm = self.text(n.span);
-                    self.declare_init(&nm, n.span);
+                    let local = self.declare_init(&nm, n.span);
+                    if p.mode().is_none() {
+                        self.locals[local.0 as usize].param_mode = Some(None);
+                    }
                 }
             }
         }
