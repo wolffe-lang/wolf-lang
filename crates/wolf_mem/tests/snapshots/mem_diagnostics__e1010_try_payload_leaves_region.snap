@@ -1,0 +1,18 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: this error's payload is allocated in region `r`, which is freed before the caller could ever use it
+  --> mem:///main.lu:14:18
+   |
+10 |     region r {
+   |            - region `r` is created here and freed with its scope — everything in it is freed wholesale
+...
+14 |         total += inner(3)?
+   |                  -------- this call builds the error, in region `r`: a callee builds where its caller allocates
+   |                  ^^^^^^^^^ `?` hands the payload to the caller after region `r` is freed
+   |
+   = note: an error is built in the region its caller allocates in [mem.region.create.3], so it
+     cannot leave the frame that owns that region [mem.region.escape]. Make the call before
+     the block opens, or handle the error inside the block (`else |e| …`) and raise one built
+     outside it.

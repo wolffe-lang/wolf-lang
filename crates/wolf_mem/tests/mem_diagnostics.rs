@@ -456,6 +456,59 @@ fn e1010_region_block_value_escapes() {
     );
 }
 
+#[test]
+fn e1010_try_payload_leaves_region() {
+    // wolf-lang#1115: `inner` builds its error payload where its caller
+    // allocates, `region r`, and the `?` hands it on after `r` is freed.
+    // The refusal sits at the `?`; the literal payload of `lit` and the
+    // `?` before the block stay silent.
+    snap(
+        "e1010_try_payload_leaves_region",
+        r#"fn inner(n: int) -> int ! {Failed(str)} {
+    return Failed("bound {n} exceeded")
+}
+fn lit() -> int ! {Failed(str)} {
+    return Failed("bound exceeded")
+}
+fn outer() -> int ! {Failed(str)} {
+    let early = inner(1)?
+    var total = early
+    region r {
+        let s = "{total} rows"
+        total += s.len
+        total += lit()?
+        total += inner(3)?
+    }
+    total
+}
+fn main() -> int {
+    outer() else 0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1014_closure_param_read() {
+    // wolf-lang#1076: a closure parameter written without a mode is
+    // `read`, as a function's is; a `mut` one may be assigned.
+    snap(
+        "e1014_closure_param_read",
+        r#"fn main() -> int {
+    let g = fn(a: int) {
+        a = a + 1
+        a
+    }
+    let h = fn(mut b: int) {
+        b = b + 1
+        b
+    }
+    g(1) + h(1)
+}
+"#,
+    );
+}
+
 // ------------------------------------- conforming region shapes (s19) --
 
 #[test]
