@@ -298,6 +298,16 @@ struct Proc {
     links: Vec<usize>,
     /// The exit reason, once the proc has one (`[conc.proc.exit]`).
     exited: Option<Value>,
+    /// Procs a task of this proc spawned under `[conc.proc.arg]`'s
+    /// obligation (`[conc.proc.kill]` step 2, wolf-lang#730).
+    owed: Vec<usize>,
+    /// The proc that owes this one, if any.
+    owner: Option<usize>,
+    /// A kill or a contained trap decided this reason, and the proc has
+    /// not finished dying: its tasks unwind and the procs it owes die
+    /// first, then its regions free and the reason publishes
+    /// (`[conc.proc.kill]` steps 2-4; wolf-lang#1141, #730).
+    dying: Option<Value>,
 }
 
 struct Timer {
@@ -376,6 +386,9 @@ pub(super) struct Sched<'t> {
     /// finding, a refusal, a budget, `os_exit`): the root raises it.
     fatal: Option<Stop>,
     pending: Vec<PendingExit>,
+    /// wolf-lang#730: the spawns that raise `[conc.proc.arg]`'s
+    /// obligation (`crate::owed_spawns`), read at the first spawn.
+    owed_spawns: Option<std::collections::HashSet<Span>>,
     accesses: BTreeMap<RaceKey, Vec<Access>>,
     atomic_accesses: BTreeMap<RaceKey, Vec<Access>>,
     atomic_clocks: BTreeMap<(RaceKey, usize), Vec<u64>>,
@@ -490,7 +503,11 @@ impl<'t> Sched<'t> {
                 monitors: Vec::new(),
                 links: Vec::new(),
                 exited: None,
+                owed: Vec::new(),
+                owner: None,
+                dying: None,
             }],
+            owed_spawns: None,
             timers: Vec::new(),
             timer_seq: 0,
             sleeps: Vec::new(),
@@ -793,6 +810,11 @@ impl<'t> Sched<'t> {
                 regions.extend(self.kill_proc(linked));
             }
         }
+        // An owed proc's exit may be the last thing its dying owner was
+        // waiting out.
+        if let Some(owner) = self.procs[proc].owner {
+            regions.extend(self.finish_dying(owner));
+        }
         regions
     }
 
@@ -808,11 +830,22 @@ impl<'t> Sched<'t> {
         }
     }
 
-    /// `[conc.proc.kill]` steps 1 and 4; the returned regions are step 3.
+    /// `[conc.proc.kill]` step 1, and steps 2-4 once they can run: the
+    /// returned regions are step 3, freed by the caller before the
+    /// parked reasons publish. A killed proc's reason waits until every
+    /// task of it has unwound — the region blocks they had open free on
+    /// the way out (wolf-lang#1141) — and every proc it owes has died
+    /// (step 2, wolf-lang#730).
     fn kill_proc(&mut self, proc: usize) -> Vec<usize> {
-        if self.procs[proc].exited.is_some() {
+        if self.procs[proc].exited.is_some() || self.procs[proc].dying.is_some() {
             return Vec::new();
         }
+        self.kill_members(proc);
+        self.begin_dying(proc, tag("killed"))
+    }
+
+    /// Step 1: every live task of `proc` runs no further user code.
+    fn kill_members(&mut self, proc: usize) {
         let members: Vec<TaskId> = self
             .tasks
             .iter()
@@ -836,7 +869,55 @@ impl<'t> Sched<'t> {
                 TaskState::Running | TaskState::Done => {}
             }
         }
-        self.deliver_exit(proc, tag("killed"))
+    }
+
+    /// A kill or a contained trap decided `proc`'s reason: kill every
+    /// proc it still owes (`[conc.proc.kill]` step 2), then finish dying
+    /// if nothing is left to wait for.
+    fn begin_dying(&mut self, proc: usize, reason: Value) -> Vec<usize> {
+        self.procs[proc].dying = Some(reason);
+        let mut regions = Vec::new();
+        for owed in self.procs[proc].owed.clone() {
+            regions.extend(self.kill_proc(owed));
+        }
+        regions.extend(self.finish_dying(proc));
+        regions
+    }
+
+    /// Steps 3-4 for a dying proc whose tasks have all ended and whose
+    /// owed procs have all exited: deliver its reason (parked until the
+    /// returned regions are freed). Nothing while either is pending.
+    fn finish_dying(&mut self, proc: usize) -> Vec<usize> {
+        if self.procs[proc].exited.is_some() || self.procs[proc].dying.is_none() {
+            return Vec::new();
+        }
+        let live_task = self
+            .tasks
+            .iter()
+            .any(|t| t.proc == proc && t.state != TaskState::Done);
+        let live_owed = self.procs[proc]
+            .owed
+            .iter()
+            .any(|&o| self.procs[o].exited.is_none());
+        if live_task || live_owed {
+            return Vec::new();
+        }
+        let reason = self.procs[proc].dying.take().expect("dying");
+        self.deliver_exit(proc, reason)
+    }
+
+    /// `[conc.proc.cancel]` for every live task of `proc`.
+    fn cancel_proc(&mut self, proc: usize) {
+        let members: Vec<TaskId> = self
+            .tasks
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.proc == proc && t.state != TaskState::Done)
+            .map(|(id, _)| id)
+            .collect();
+        for task in members {
+            self.cancel_task(task);
+        }
     }
 
     fn all_done(&self, scope: usize) -> bool {
@@ -890,6 +971,9 @@ impl<'t> Sched<'t> {
             }
         }
         let proc = self.tasks[me].proc;
+        if proc != 0 && self.procs[proc].dying.is_some() {
+            return self.finish_dying(proc);
+        }
         if proc != 0 && self.procs[proc].root == me {
             let reason = match &end {
                 TaskEnd::Value(value) => Value::ErrTag {
@@ -908,6 +992,13 @@ impl<'t> Sched<'t> {
                 TaskEnd::Cancelled => tag("cancelled"),
                 TaskEnd::Killed => tag("killed"),
             };
+            // A contained trap runs the killed-proc sequence: the procs
+            // this proc owes die before its regions free
+            // (`[conc.proc.kill]` step 2, wolf-lang#730).
+            if matches!(end, TaskEnd::Trapped(_) | TaskEnd::Killed) {
+                self.kill_members(proc);
+                return self.begin_dying(proc, reason);
+            }
             return self.deliver_exit(proc, reason);
         }
         Vec::new()
@@ -1801,13 +1892,20 @@ impl<'t> Machine<'t> {
                 chan_arms.push((index, chan));
             }
         }
+        // `[conc.select.ready]` (wolf-lang#1143): a cancellation that
+        // reaches the select runs its timeout arm, as though its deadline
+        // had come; without one the `cancelled` error value leaves the
+        // function as `?` would (sema refuses the shape where the row
+        // cannot carry it). The task stays cancelled either way.
+        let timeout_arm = timeout.map(|(arm, _)| arm);
         if let Some(flow) = self.blocking_point()? {
-            // Cancellation at the `select`: the error value leaves the
-            // function by ordinary return (`[conc.cancel.defer]`).
-            return Ok(match flow {
-                Flow::Err(v, _) => Flow::Err(v, true),
-                other => other,
-            });
+            return match timeout_arm {
+                Some(arm) => self.run_select_arm(&arms, arm, None),
+                None => Ok(match flow {
+                    Flow::Err(v, _) => Flow::Err(v, true),
+                    other => other,
+                }),
+            };
         }
         let me = self.me();
         let mut ready: Vec<usize> = Vec::new();
@@ -1851,10 +1949,23 @@ impl<'t> Machine<'t> {
             }
             match self.park()? {
                 Wake::Arm(arm, value) => (arm, value),
-                Wake::Cancelled => return Ok(Flow::Err(tag("cancelled"), true)),
+                Wake::Cancelled => match timeout_arm {
+                    Some(arm) => (arm, None),
+                    None => return Ok(Flow::Err(tag("cancelled"), true)),
+                },
                 other => return self.wake_stop(other, e.span),
             }
         };
+        self.run_select_arm(&arms, arm, value)
+    }
+
+    /// Run the committed arm of a select, with its received value.
+    fn run_select_arm(
+        &mut self,
+        arms: &[wolf_ast::SelectArm<'t>],
+        arm: usize,
+        value: Option<Value>,
+    ) -> E<Flow> {
         let arm = arms[arm];
         self.push_scope();
         if let (Some(pat), Some(value)) = (arm.pattern(), value) {
@@ -2054,13 +2165,33 @@ impl<'t> Machine<'t> {
         });
         let me = self.me();
         let proc = self.sched.procs.len();
+        // wolf-lang#730 (`[conc.proc.kill]` step 2): a spawn that raises
+        // `[conc.proc.arg]`'s obligation records its proc on the
+        // spawning proc; nothing in the root domain.
+        if self.sched.owed_spawns.is_none() {
+            self.sched.owed_spawns = Some(crate::owed_spawns(self.pkg, self.tc));
+        }
+        let spawner = self.sched.tasks[me].proc;
+        let owner = (spawner != 0
+            && self
+                .sched
+                .owed_spawns
+                .as_ref()
+                .is_some_and(|o| o.contains(&e.span)))
+        .then_some(spawner);
         self.sched.procs.push(Proc {
             root: 0,
             region: Some(region),
             monitors: Vec::new(),
             links: Vec::new(),
             exited: None,
+            owed: Vec::new(),
+            owner,
+            dying: None,
         });
+        if let Some(owner) = owner {
+            self.sched.procs[owner].owed.push(proc);
+        }
         let root = self.sched.spawn_task(
             me,
             None,
@@ -2107,10 +2238,7 @@ impl<'t> Machine<'t> {
             // read synchronously — a monitor attached at the join.
             "join" => {
                 let chan = self.proc_monitor(proc);
-                let reason = match self.chan_recv(chan, e.span)? {
-                    Flow::Val(v) => v,
-                    other => return Ok(other),
-                };
+                let reason = self.join_recv(chan, proc, e.span)?;
                 match reason {
                     Value::ErrTag { tag, mut payload } if tag == "normal" => {
                         Ok(Flow::Val(payload.pop().unwrap_or(Value::Unit)))
@@ -2132,17 +2260,7 @@ impl<'t> Machine<'t> {
             // `[conc.proc.cancel]`: cooperative, at blocking points;
             // defers run.
             "cancel" => {
-                let members: Vec<TaskId> = self
-                    .sched
-                    .tasks
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, t)| t.proc == proc && t.state != TaskState::Done)
-                    .map(|(id, _)| id)
-                    .collect();
-                for task in members {
-                    self.sched.cancel_task(task);
-                }
+                self.sched.cancel_proc(proc);
                 Ok(Flow::Val(Value::Unit))
             }
             // `a.link(b)`; `w.link()` is `w.link(<the caller's proc>)`
@@ -2177,6 +2295,38 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Unit))
             }
             _ => self.refuse("this proc method", e.span),
+        }
+    }
+
+    /// `[conc.proc.join]` (wolf-lang#732): the join's receive on the
+    /// monitor. A cancellation of the joining task reaches it, but the
+    /// join forwards it to `proc` (`[conc.proc.cancel]`) and keeps
+    /// receiving, so it answers only once `proc` has exited; the joining
+    /// task stays cancelled. A kill still stops it.
+    fn join_recv(&mut self, chan: usize, proc: usize, span: Span) -> E<Value> {
+        let me = self.me();
+        if self.sched.tasks[me].killed {
+            return Err(Stop::Killed);
+        }
+        let mut forwarded = false;
+        loop {
+            if self.sched.tasks[me].cancelled && !forwarded {
+                forwarded = true;
+                self.sched.cancel_proc(proc);
+            }
+            self.sched.chans[chan].receivers.push_back(me);
+            self.sched.settle_chan(chan);
+            let wake = match self.sched.tasks[me].wake.take() {
+                Some(wake) => wake,
+                None => self.park()?,
+            };
+            match wake {
+                Wake::Ok(v) => return Ok(v),
+                // Taken off the receivers by the cancellation: forward it
+                // and wait again.
+                Wake::Cancelled => continue,
+                other => return self.wake_stop(other, span),
+            }
         }
     }
 
