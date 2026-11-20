@@ -1,0 +1,32 @@
+// wolf-lang#1143: a select that can block, has no timeout arm and sits in a function with no row
+// has nowhere to send a cancellation: refused at the select.
+fn wait_one(ch: channel[int]) -> int {
+    var got = 0
+    select {
+        v from ch => {
+            got = v
+        },
+    }
+    print("after select {got}")
+    got
+}
+
+fn worker(n: int) -> int {
+    let ch = channel[int](0)
+    let r = wait_one(ch)
+    print("worker got {r}")
+    n
+}
+
+fn main() -> !int {
+    let p = spawn proc worker(7)
+    let m = p.monitor()
+    time_sleep_ms(100)
+    p.cancel()
+    select {
+        exit(reason) from m => {
+            print("reason {reason}")
+        },
+    }
+    0
+}

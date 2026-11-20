@@ -1,0 +1,85 @@
+// wolf-lang#732: `main` cancels `outer` while `outer` waits in `helper`'s join of `child`,
+// which reads `outer`'s `pass` bytes. The join forwards the cancellation to `child` and keeps
+// waiting, so `helper` returns only after `child` has exited. A sleep is not a cancellation
+// point, so `child` finishes its sleep and its read before the join answers.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(400)
+    print("child wakes")
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str) -> int {
+    let w = spawn proc child(s, 0)
+    let r = w.join() else |e| match e {
+        killed => {
+            print("join answered killed")
+            2
+        },
+        cancelled => {
+            print("join answered cancelled")
+            3
+        },
+        error => {
+            print("join answered error")
+            4
+        },
+        fault => {
+            print("join answered fault")
+            5
+        },
+    }
+    r
+}
+
+fn outer(n: int) -> int {
+    region pass {
+        let s = "built in pass, {n} uses"
+        let r = helper(s)
+        print("helper {r}")
+    }
+    print("outer returns")
+    0
+}
+
+fn scribble(k: int) -> int {
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{k}ZZ"
+        var big = ""
+        for i in 0..200 {
+            big = big + "Z{i}"
+        }
+        time_sleep_ms(30)
+        print("scribble {k} {z.len} {big.len}")
+    }
+    k
+}
+
+fn main() -> int {
+    let before = live_region_bytes()
+    let p = spawn proc outer(7)
+    time_sleep_ms(100)
+    p.cancel()
+    let r = p.join() else |e| match e {
+        killed => {
+            20
+        },
+        cancelled => {
+            30
+        },
+        error => {
+            40
+        },
+        fault => {
+            50
+        },
+    }
+    let after = live_region_bytes()
+    print("outer joined {r} reclaimed {after == before}")
+    for k in 0..8 {
+        let q = spawn proc scribble(k)
+        let _v = q.join() else 0
+    }
+    time_sleep_ms(700)
+    0
+}
