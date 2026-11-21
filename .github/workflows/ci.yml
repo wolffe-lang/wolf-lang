@@ -652,6 +652,13 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/trunk' }}
       - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
         run: rustup target add x86_64-unknown-none
+      # wolf-lang#1155: clippy over every target on the macOS host, where the
+      # cfg(linux) test modules are dead code: a helper or import used only
+      # under such a cfg is a warning here and nowhere on linux. First, so a
+      # break stops this job in minutes, before the build and the tests.
+      - name: clippy, all targets, warnings denied (macOS)
+        if: runner.os == 'macOS'
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo build --workspace
       - if: matrix.leg != 'rung'
         run: cargo test --workspace
