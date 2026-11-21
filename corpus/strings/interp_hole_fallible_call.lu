@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="outside\noutside\n3\nnear outside\n")
+//! phase: run
+//! conforms: type.interp.union
+//!
+//! wolf-lang#1050: a fallible call written directly in an interpolation
+//! hole is read, not handled. `[type.interp.union]` renders a `!T`
+//! value as its ok payload when it holds one and as its row when it
+//! does not, wherever the value comes from: a binding, or the call
+//! itself in the hole. The checked machine used to let the call's row
+//! leave the string, so `main` reported `error: outside` and exited 1
+//! while native, release and lupin printed the row's name.
+
+fn bounded(value: int) -> int ! {outside} {
+    if value > 3 {
+        return outside
+    }
+    value
+}
+
+fn main() {
+    let bound = bounded(4)
+    print("{bound}")
+    print("{bounded(4)}")
+    print("{bounded(3)}")
+    print("near {bounded(9)}")
+}
