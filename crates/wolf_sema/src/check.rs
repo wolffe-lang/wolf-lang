@@ -3658,7 +3658,88 @@ impl<'a> Checker<'a> {
             }
             self.pop_scope();
         }
+        // `[conc.select.ready]` (wolf-lang#1143): a cancellation that
+        // reaches a blocked select with a timeout arm runs that arm; one
+        // with no timeout arm leaves the select as the `cancelled` error
+        // value of the enclosing function, exactly as `?` propagates it
+        // from a receive. So such a select is a `?` of the row
+        // `{cancelled}`: an inferred row (`-> !T`, a closure's) gains the
+        // tag, a declared row without it is E0602 at the `select`, and a
+        // function with no row is E0604 there.
+        let can_block_uncapped =
+            d.arms().any(|a| !a.is_timeout()) && !d.arms().any(|a| a.is_timeout());
+        if can_block_uncapped {
+            // The diagnostics point at the `select` keyword.
+            let at = e
+                .child_token(SyntaxKind::SelectKw)
+                .map_or(e.span, |t| t.span);
+            self.select_cancel_edge(at);
+        }
         Ok(self.lo.table.unit())
+    }
+
+    /// The `?`-shaped edge a cancellation takes out of a select with no
+    /// timeout arm (`[conc.select.ready]`): `{cancelled}` raised into the
+    /// enclosing row as `?` raises a receive's.
+    fn select_cancel_edge(&mut self, span: Span) {
+        let row = self
+            .lo
+            .table
+            .row(vec![("cancelled".to_string(), Vec::new())], None);
+        if self.in_closure {
+            // A closure's row is inferred: the innermost frame collects.
+            if let Some(frame) = self.closure_rows.last_mut()
+                && !frame.iter().any(|(n, _)| n == "cancelled")
+            {
+                frame.push(("cancelled".to_string(), Vec::new()));
+            }
+            return;
+        }
+        match self.caller_row() {
+            Some(crow) => {
+                let because = self.ret.as_ref().map(|(_, _, b)| *b);
+                self.require_row_widening(span, row, crow, because);
+            }
+            None => self.report_select_without_row(span),
+        }
+    }
+
+    /// E0604 at a select that can block, has no timeout arm and sits in
+    /// a function with no row: its cancellation has nowhere to go
+    /// (`[conc.select.ready]`, wolf-lang#1143).
+    fn report_select_without_row(&mut self, span: Span) {
+        if self.collect.is_some() {
+            return;
+        }
+        let fn_name = self
+            .ret
+            .as_ref()
+            .map(|(_, n, _)| n.clone())
+            .unwrap_or_else(|| "this function".to_string());
+        let mut d = Diagnostic::error(
+            codes::E0604,
+            span,
+            format!("this `select` can be cancelled while it waits, but `{fn_name}` cannot fail"),
+        )
+        .with_label("a cancellation here would have nowhere to go");
+        if let Some((_, _, because)) = self.ret.as_ref() {
+            d = d.with_secondary(*because, "the signature declares no error row");
+        }
+        if let Some(RowFix::AddRow { insert_at }) = self.row_fix {
+            d = d.with_suggestion(Suggestion::new(
+                format!("make `{fn_name}` fallible: `! {{cancelled}}`"),
+                vec![(insert_at, " ! {cancelled}".to_string())],
+                Applicability::Maybe,
+            ));
+        }
+        d = d.with_note(
+            "a cancellation that reaches a blocked `select` runs its `timeout(…)` arm when it \
+             has one, and otherwise leaves the `select` as the `cancelled` error value of the \
+             function, as `?` would from a receive [conc.select.ready]. Give the `select` a \
+             timeout arm, or give the function a row that admits `cancelled` (`-> !T` infers \
+             one).",
+        );
+        self.diags.push(d);
     }
 
     /// `when (a, b, …) { … }` — whole-set acquisition

@@ -1,0 +1,25 @@
+// wolf-lang#730's control: the same trap in the root domain is process death ([conc.proc.root]);
+// every live proc dies with the process, so `child` never reads `s`.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str, n: int) -> int {
+    let w = spawn proc child(s, 0)
+    let xs = [1, 2, 3]
+    print("index {xs[n]}")
+    w.join() else 1
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        let r = helper(s, 5)
+        print("helper {r}")
+    }
+    time_sleep_ms(700)
+    0
+}

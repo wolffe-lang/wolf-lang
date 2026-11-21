@@ -6581,6 +6581,21 @@ impl<'t> Lowerer<'t> {
             }
         }
         let fan = self.cur;
+        // `[conc.select.ready]` (wolf-lang#1143): with no timeout arm, a
+        // cancellation that reaches a select that can block leaves it as
+        // `?` would — an error edge out of the frame from the fan, running
+        // errdefers and defers (LIFO) — and the must-join dataflow counts
+        // it as a path out of the frame like any `?` (`[conc.proc.arg]`).
+        // The `cancelled` tag carries no payload.
+        if arms.iter().any(|a| !a.is_timeout()) && !arms.iter().any(|a| a.is_timeout()) {
+            let err = self.new_block();
+            self.goto(fan, err);
+            self.cur = err;
+            self.emit_defers(0, true)?;
+            let exit = self.exit;
+            self.goto(self.cur, exit);
+            self.cur = fan;
+        }
         let join = self.new_block();
         for arm in &arms {
             let arm_block = self.new_block();

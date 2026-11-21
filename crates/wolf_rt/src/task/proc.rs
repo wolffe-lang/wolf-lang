@@ -421,6 +421,15 @@ struct Registry {
     region_owner: HashMap<usize, u64>,
     /// Proc id → owned region handles.
     proc_regions: HashMap<u64, HashSet<usize>>,
+    /// Proc id → the live procs it OWES (`[conc.proc.kill]` step 2,
+    /// wolf-lang#730): procs a task of it spawned under
+    /// `[conc.proc.arg]`'s obligation, recorded by [`owe`]. A record
+    /// drops when its proc exits; a dying proc kills and waits out
+    /// what is left here before its regions free.
+    owed_by: HashMap<u64, HashSet<u64>>,
+    /// Owed proc id → the proc that owes it (the reverse of `owed_by`,
+    /// so an exit can drop its own record).
+    owner_of: HashMap<u64, u64>,
 }
 
 static REGISTRY: OnceLock<Mutex<Registry>> = OnceLock::new();
@@ -451,6 +460,8 @@ fn registry() -> &'static Mutex<Registry> {
             scope_to_proc: HashMap::new(),
             region_owner: HashMap::new(),
             proc_regions: HashMap::new(),
+            owed_by: HashMap::new(),
+            owner_of: HashMap::new(),
         })
     })
 }
@@ -640,10 +651,11 @@ fn reap(proc: &Arc<Proc>) {
         kind: reason.kind(),
     });
 
-    // Take the region ledger (both maps) — the slot stays Live and
-    // the phase stays Running until `publish`, so every observer
-    // still queues behind the teardown instead of reading around it.
-    let owned: Vec<usize> = {
+    // Take the region ledger (both maps) and the procs this proc still
+    // owes, under one lock — the slot stays Live and the phase stays
+    // Running until `publish`, so every observer still queues behind
+    // the teardown instead of reading around it.
+    let (owned, owed): (Vec<usize>, Vec<u64>) = {
         let mut reg = registry().lock().unwrap();
         reg.scope_to_proc.remove(&proc.scope.id());
         let owned = reg
@@ -655,8 +667,37 @@ fn reap(proc: &Arc<Proc>) {
         for h in &owned {
             reg.region_owner.remove(h);
         }
-        owned
+        let mut owed: Vec<u64> = reg
+            .owed_by
+            .remove(&proc.id)
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        owed.sort_unstable();
+        for id in &owed {
+            reg.owner_of.remove(id);
+        }
+        (owned, owed)
     };
+
+    // `[conc.proc.kill]` step (2) (wolf-lang#730): a proc that dies by a
+    // kill or a contained trap kills every proc it still owes and waits
+    // for that proc's own killed-proc sequence to end before step (3)
+    // frees anything — an owed proc reads bytes in this proc's regions,
+    // and a trap or a kill can land between a spawn and the join where
+    // no static rule over the frame can see it. Every other exit only
+    // drops its records: its frames met each obligation on the paths
+    // they took (`[conc.proc.arg]`'s must-join check), or the bytes
+    // outlive this proc.
+    if matches!(reason, ProcExit::Killed | ProcExit::Fault { .. }) && !owed.is_empty() {
+        let live: Vec<Arc<Proc>> = owed.iter().filter_map(|&id| live_proc(id).ok()).collect();
+        for p in &live {
+            kill_mark(p);
+        }
+        for p in &live {
+            wait_exited(p);
+        }
+    }
 
     // Publish the reason: the registry's word (late monitors read it),
     // then phase + cv (kill()/monitor() waiters), then the registered
@@ -668,6 +709,16 @@ fn reap(proc: &Arc<Proc>) {
             if let Some(i) = slot_index(proc.id) {
                 reg.live.remove(u64::from(i));
                 reg.exits.set(i as usize, reason.encode());
+            }
+            // An owed proc's record drops with its exit: nothing is left
+            // for its owner to wait out.
+            if let Some(owner) = reg.owner_of.remove(&proc.id)
+                && let Some(set) = reg.owed_by.get_mut(&owner)
+            {
+                set.remove(&proc.id);
+                if set.is_empty() {
+                    reg.owed_by.remove(&owner);
+                }
             }
         }
         let mut st = proc.st.lock().unwrap();
@@ -839,6 +890,34 @@ fn root_died(reason: ProcExit) {
     std::process::exit(ROOT_DEATH_EXIT);
 }
 
+/// A kill of a waiting task nudges every parked wait
+/// ([`super::parked::wake_all`]); one parked on a proc's exit re-checks.
+impl super::parked::Wake for Proc {
+    fn wake(&self) {
+        let _g = self.st.lock().unwrap();
+        self.cv.notify_all();
+    }
+}
+
+/// [`wait_exited`] for a task that may itself be killed meanwhile (the
+/// `kill` verb's wait): returns when `p` has exited, or when the calling
+/// task's own proc is killed — the caller then leaves at its shim. Two
+/// procs waiting on each other's ends (one owes the other and kills it,
+/// `[conc.proc.kill]` step 2) cannot then wait forever.
+fn wait_exited_unless_killed(p: &Arc<Proc>) {
+    let me = pool::current_scope();
+    pool::blocking(|| {
+        let _parked = me.is_some().then(|| super::parked::park_on(&**p));
+        let mut st = p.st.lock().unwrap();
+        loop {
+            if matches!(st.phase, Phase::Exited(_)) || me.as_ref().is_some_and(|s| s.is_killed()) {
+                return;
+            }
+            st = p.cv.wait(st).unwrap();
+        }
+    });
+}
+
 /// Block (with compensation) until `p`'s reaper records the reason.
 fn wait_exited(p: &Arc<Proc>) -> ProcExit {
     pool::blocking(|| {
@@ -869,8 +948,28 @@ pub fn kill(proc: u64) -> Result<(), ProcErr> {
     if current_proc() == Some(proc) {
         return Ok(()); // self-kill: the unwind reaches us shortly
     }
-    wait_exited(&p);
+    wait_exited_unless_killed(&p);
     Ok(())
+}
+
+/// Record `proc` as OWED by the calling task's proc (`[conc.proc.kill]`
+/// step 2, wolf-lang#730): compiled code calls this right after a spawn
+/// that raises `[conc.proc.arg]`'s obligation, before the spawner can
+/// park. Nothing is recorded in the root domain (its death is the
+/// process's, which takes every proc), nor for a proc that has already
+/// exited; the record drops when `proc` exits.
+pub fn owe(proc: u64) {
+    let Some(owner) = current_proc() else { return };
+    if owner == proc {
+        return;
+    }
+    let mut reg = registry().lock().unwrap();
+    let live = slot_index(proc).is_some_and(|i| reg.live.get(u64::from(i)).is_some());
+    if !live {
+        return;
+    }
+    reg.owed_by.entry(owner).or_default().insert(proc);
+    reg.owner_of.insert(proc, owner);
 }
 
 /// Deliver structured cancellation to `proc` (`[conc.proc.cancel]`):
@@ -916,24 +1015,37 @@ pub fn monitor(proc: u64) -> Result<Arc<Chan>, ProcErr> {
 /// reason (s170, wolf-lang#110 — BACKLOG B21 ruled the talk-back
 /// shape to be a typed result the supervisor collects at the join).
 ///
-/// It is [`monitor`] plus one receive, deliberately: the monitor
+/// It is [`monitor`] plus a receive, deliberately: the monitor
 /// channel already carries `[conc.proc.exit]`'s reason for a proc
 /// that is live AND for one that has already exited (the tombstone
-/// path), so a join after the exit is not a lost wakeup. The receive
-/// is a blocking point like any other, so cancellation of the JOINING
-/// task surfaces there under `[conc.cancel.points]` — the recv error
-/// is mapped to `cancelled` by the caller, which is why this returns
-/// the reason rather than a value.
+/// path), so a join after the exit is not a lost wakeup.
+///
+/// **A join returns only once `proc` has exited** (`[conc.proc.join]`,
+/// wolf-lang#732). The receive is a blocking point, and a cancellation
+/// of the JOINING task reaches it there, but the join forwards it
+/// instead of surfacing it: it delivers [`cancel`] to `proc` and keeps
+/// waiting, with a wait only a kill of the joiner ends, and answers the
+/// reason `proc` exits with. The joining task stays cancelled; its next
+/// blocking point surfaces that. A frame that joined on every path may
+/// then free the bytes `proc` was handed. A KILLED joiner still answers
+/// `cancelled` here and leaves at its shim (`[conc.proc.kill]`).
 ///
 /// A stale id is the caller's fault and reaches the C shim as a trap,
 /// exactly as `monitor`'s does.
 pub fn join(proc: u64) -> Result<ProcExit, ProcErr> {
     let ch = monitor(proc)?;
-    match ch.recv() {
+    // A monitor channel is never closed by anyone but its own delivery,
+    // so a failed receive is the JOINER being cancelled or torn down,
+    // never the observed proc vanishing.
+    if let Ok(word) = ch.recv() {
+        return Ok(ProcExit::decode(word));
+    }
+    if pool::current_scope().is_some_and(|s| s.is_killed()) {
+        return Ok(ProcExit::Cancelled);
+    }
+    let _ = cancel(proc);
+    match ch.recv_unless_killed() {
         Ok(word) => Ok(ProcExit::decode(word)),
-        // A monitor channel is never closed by anyone but its own
-        // delivery, so a failed receive is the JOINER being torn
-        // down, not the observed proc vanishing.
         Err(_) => Ok(ProcExit::Cancelled),
     }
 }
@@ -1360,6 +1472,15 @@ pub extern "C" fn __wolf_rt_proc_cancel(proc: u64) {
     }
 }
 
+/// Record `proc` as owed by the calling task's proc ([`owe`]):
+/// lowering emits this right after `__wolf_rt_proc_spawn_outcome` for a
+/// spawn that raises `[conc.proc.arg]`'s obligation, and for no other.
+/// Never parks, never traps.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_proc_owe(proc: u64) {
+    owe(proc);
+}
+
 // ---- acceptance tests ----------------------------------------------------
 
 #[cfg(test)]
@@ -1587,6 +1708,175 @@ mod tests {
         let m = monitor(w).unwrap();
         cancel(w).unwrap();
         assert_eq!(recv_reason(&m), ProcExit::Normal { value: 9 });
+    }
+
+    /// A proc that parks on a fresh channel until its proc is killed or
+    /// cancelled, then answers `value`.
+    fn parked_body(value: i64) -> impl FnOnce(&TaskCtx) -> ProcOutcome + Send + 'static {
+        move |_| {
+            let ch = Chan::new(0);
+            let _ = ch.recv();
+            ProcOutcome::Value(value)
+        }
+    }
+
+    /// `[conc.proc.kill]` step 2 (wolf-lang#730): a killed proc kills
+    /// the proc it owes and waits for that proc's end before its own
+    /// regions free and its reason is delivered — so by the time `kill`
+    /// returns, the owed proc has already exited `killed`, and its
+    /// record is gone.
+    #[test]
+    fn a_killed_proc_kills_and_waits_out_the_proc_it_owes() {
+        let child = Arc::new(Mutex::new(None::<u64>));
+        let slot = child.clone();
+        let p = spawn_proc("owing", move |ctx| {
+            let c = spawn_proc("owed", parked_body(1));
+            owe(c);
+            *slot.lock().unwrap() = Some(c);
+            parked_body(2)(ctx)
+        });
+        wait_until("the owed proc being spawned", || {
+            child.lock().unwrap().is_some()
+        });
+        let c = child.lock().unwrap().expect("spawned");
+        let mc = monitor(c).unwrap();
+        std::thread::sleep(Duration::from_millis(20)); // let both park
+        kill(p).unwrap();
+        assert_eq!(
+            exited_reason(c),
+            Ok(ProcExit::Killed),
+            "the owed proc must end before its owner's reason is published"
+        );
+        assert_eq!(recv_reason(&mc), ProcExit::Killed);
+        let reg = registry().lock().unwrap();
+        assert!(!reg.owner_of.contains_key(&c) && !reg.owed_by.contains_key(&p));
+    }
+
+    /// The rule reaches owed procs only: a proc spawned without the
+    /// obligation (scalars, frozen data, `main`'s bytes) may outlive its
+    /// spawner and keeps running when the spawner is killed.
+    #[test]
+    fn a_killed_proc_leaves_a_proc_it_does_not_owe_running() {
+        let child = Arc::new(Mutex::new(None::<u64>));
+        let slot = child.clone();
+        let p = spawn_proc("spawner", move |ctx| {
+            let c = spawn_proc("free", parked_body(1));
+            *slot.lock().unwrap() = Some(c);
+            parked_body(2)(ctx)
+        });
+        wait_until("the free proc being spawned", || {
+            child.lock().unwrap().is_some()
+        });
+        let c = child.lock().unwrap().expect("spawned");
+        std::thread::sleep(Duration::from_millis(20));
+        kill(p).unwrap();
+        assert!(
+            live_proc(c).is_ok(),
+            "a proc nobody owes outlives its spawner"
+        );
+        kill(c).unwrap();
+        assert_eq!(exited_reason(c), Ok(ProcExit::Killed));
+    }
+
+    /// The contained-trap half of step 2: a proc whose task traps kills
+    /// the proc it owes before its `fault(...)` reason is delivered.
+    #[test]
+    fn a_contained_trap_kills_the_proc_its_proc_owes() {
+        let child = Arc::new(Mutex::new(None::<u64>));
+        let slot = child.clone();
+        let p = spawn_proc("trapping", move |_| {
+            let c = spawn_proc("owed", parked_body(1));
+            owe(c);
+            *slot.lock().unwrap() = Some(c);
+            std::thread::sleep(Duration::from_millis(20));
+            let h = native::__wolf_rt_region_new();
+            // SAFETY: fresh live handle, proc-owned; the cap precedes any
+            // allocation, and the second charge is the breach.
+            unsafe {
+                native::__wolf_rt_region_set_cap(h, 64);
+                native::__wolf_rt_region_alloc(h, 64);
+                native::__wolf_rt_region_alloc(h, 1);
+            }
+            unreachable!("the breach must trap at the allocating site");
+        });
+        let m = monitor(p).unwrap();
+        assert_eq!(
+            recv_reason(&m),
+            ProcExit::Fault {
+                kind: native::trap_code::ALLOC_CONTRACT
+            }
+        );
+        let c = child.lock().unwrap().expect("spawned before the trap");
+        assert_eq!(
+            exited_reason(c),
+            Ok(ProcExit::Killed),
+            "the owed proc must end before the fault is delivered"
+        );
+    }
+
+    /// An owed proc that exits drops its record: a proc that spawns and
+    /// joins many owes nothing once each is joined.
+    #[test]
+    fn an_owed_proc_s_record_drops_when_it_exits() {
+        let p = spawn_proc("joining", |_| {
+            let go = Chan::new(0);
+            let rx = go.clone();
+            let c = spawn_proc("owed", move |_| {
+                let _ = rx.recv();
+                ProcOutcome::Value(3)
+            });
+            owe(c);
+            let owed_while_live = registry().lock().unwrap().owner_of.contains_key(&c);
+            go.send(1).expect("the owed proc receives");
+            let got = join(c);
+            let owed_after = registry().lock().unwrap().owner_of.contains_key(&c);
+            match (owed_while_live, got, owed_after) {
+                (true, Ok(ProcExit::Normal { value: 3 }), false) => ProcOutcome::Value(0),
+                other => panic!("record while live / join / record after: {other:?}"),
+            }
+        });
+        let m = monitor(p).unwrap();
+        assert_eq!(recv_reason(&m), ProcExit::Normal { value: 0 });
+    }
+
+    /// `[conc.proc.join]` (wolf-lang#732): a cancellation of the JOINING
+    /// task is forwarded to the joined proc, and the join keeps waiting
+    /// and answers that proc's own reason — here `normal(5)`, because the
+    /// joined proc completes despite the cancellation.
+    #[test]
+    fn a_cancelled_joiner_forwards_the_cancellation_and_waits_for_the_exit() {
+        let forwarded = Arc::new(AtomicBool::new(false));
+        let joined = Arc::new(Mutex::new(None::<u64>));
+        let (fw, slot) = (forwarded.clone(), joined.clone());
+        let joiner = spawn_proc("joiner", move |_| {
+            let c = spawn_proc("joined", move |_| {
+                let ch = Chan::new(0);
+                match ch.recv() {
+                    Err(ChanErr::Cancelled) => {
+                        fw.store(true, SeqCst);
+                        std::thread::sleep(Duration::from_millis(30));
+                        ProcOutcome::Value(5)
+                    }
+                    other => panic!("the joined proc expected the forwarded cancel: {other:?}"),
+                }
+            });
+            *slot.lock().unwrap() = Some(c);
+            match join(c) {
+                Ok(ProcExit::Normal { value }) => ProcOutcome::Value(value),
+                other => panic!("the join answered {other:?} before its proc exited"),
+            }
+        });
+        wait_until("the joined proc being spawned", || {
+            joined.lock().unwrap().is_some()
+        });
+        std::thread::sleep(Duration::from_millis(20)); // let the joiner park
+        let m = monitor(joiner).unwrap();
+        cancel(joiner).unwrap();
+        assert_eq!(recv_reason(&m), ProcExit::Normal { value: 5 });
+        assert!(
+            forwarded.load(SeqCst),
+            "the join forwards its task's cancellation"
+        );
     }
 
     /// A panicking proc task becomes `error(TRAP_ERROR_TAG)` — trap

@@ -1132,6 +1132,11 @@ infer their row from the body) or state the row explicitly with
 default, or `else |err| …` — so nothing needs to escape. A bare tag
 counts as an error-tag return when the function spells it in some row
 (a `let` annotation, a parameter's type) but its own signature has none.
+A `select` that can block and has no `timeout(…)` arm counts too: a
+cancellation that reaches it leaves the `select` as the `cancelled` error
+value of the function, as `?` would from a receive, so give the `select`
+a timeout arm (a cancellation runs it) or give the function a row that
+admits `cancelled`.
 "#);
 
 code!(E0605, "an exported function must state its error row", r#"

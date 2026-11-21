@@ -53,6 +53,36 @@
   and expression hover use the same context. Without a usable open entry,
   queries retain their standalone behavior; diagnostics are unchanged.
 
+- A proc that dies by a kill or a contained trap now kills every proc it
+  still owes, and waits for each to end, before its own regions free
+  (`[conc.proc.kill]` step 2, wolf-lang#730). A proc is owed when it was
+  spawned with a parameter's bytes or the caller region's and has not been
+  joined. A trap between such a spawn and its join, or a kill of the
+  spawner while it waited in that join, used to free the region the
+  spawned proc was still reading, and native and release printed the bytes
+  the next allocation left there. The record costs one entry per such spawn
+  and nothing for any other; runtime symbols 286 (`__wolf_rt_proc_owe`).
+
+- A join returns only once its proc has exited (`[conc.proc.join]`,
+  wolf-lang#732). A cancellation of the joining task is forwarded to the
+  proc, and the join answers the proc's own reason; the joining task stays
+  cancelled, and its next blocking point surfaces it. The join is now in
+  `[conc.cancel.points]`'s list.
+
+- A cancellation that reaches a blocked `select` runs its `timeout(…)` arm,
+  or, without one, leaves the `select` as `?` would (`[conc.select.ready]`,
+  wolf-lang#1143). A `select` that can block, has no timeout arm and sits
+  in a function with no row is E0604 at the `select`, and E0602 where a
+  declared row lacks `cancelled`; an inferred row gains `cancelled`. Native
+  and release used to trap `assert` inside such a `select`, and the checked
+  machine returned early with the row in an `int`. The must-join check
+  counts that exit as a path out of the function, so a proc waited for only
+  in such a `select` is not joined on every path (E1010 at the call that
+  hands it the caller's bytes).
+
+- The checked machine frees a killed proc's regions, the region blocks its
+  tasks had open included, before it delivers the reason (wolf-lang#1141).
+
 ## 0.2.40 — 2026-11-12
 
 Pairs with **lupin 0.1.62**, conformance pin

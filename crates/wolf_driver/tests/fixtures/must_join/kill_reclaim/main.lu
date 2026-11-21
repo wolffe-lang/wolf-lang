@@ -1,0 +1,20 @@
+// wolf-lang#1141: a killed proc's regions, `pass` included, are freed before its exit reason
+// is delivered, on every machine.
+fn work(n: int) -> int {
+    region pass {
+        let s = "built in pass, {n} uses"
+        time_sleep_ms(400)
+        print(s)
+    }
+    0
+}
+
+fn main() -> int {
+    let before = live_region_bytes()
+    let p = spawn proc work(7)
+    time_sleep_ms(100)
+    p.kill()
+    let r = p.join() else 20
+    print("joined {r} reclaimed {live_region_bytes() == before}")
+    0
+}

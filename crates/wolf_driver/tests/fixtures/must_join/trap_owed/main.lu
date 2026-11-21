@@ -1,0 +1,56 @@
+// wolf-lang#730 (sound since the killed-proc sequence waits out owed procs): `helper` spawns
+// `child` with its parameter's bytes, then traps (an index out of bounds) before its join.
+// `outer` runs it inside `region pass`, as a proc. The trap is contained at `outer`'s boundary;
+// `outer`'s regions, `pass` included, must not free while `child` can still read `s`, so the
+// sequence kills `child` first. After `outer` is joined, procs build same-sized strings so a
+// freed chunk would be handed out again before `child` woke.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(400)
+    print("child wakes")
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str, n: int) -> int {
+    let w = spawn proc child(s, 0)
+    let xs = [1, 2, 3]
+    print("index {xs[n]}")
+    w.join() else 1
+}
+
+fn outer(n: int) -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        let r = helper(s, n)
+        print("helper {r}")
+    }
+    0
+}
+
+fn scribble(k: int) -> int {
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{k}ZZ"
+        var big = ""
+        for i in 0..200 {
+            big = big + "Z{i}"
+        }
+        time_sleep_ms(50)
+        print("scribble {k} {z.len} {big.len}")
+    }
+    k
+}
+
+fn main() -> int {
+    let before = live_region_bytes()
+    let p = spawn proc outer(5)
+    let r = p.join() else 9
+    let after = live_region_bytes()
+    print("outer {r} reclaimed {after == before}")
+    for k in 0..8 {
+        let q = spawn proc scribble(k)
+        let _v = q.join() else 0
+    }
+    time_sleep_ms(700)
+    0
+}
