@@ -1735,7 +1735,12 @@ impl<'t> Machine<'t> {
     /// `Self` through `self_tys`, any other rigid through
     /// `frame_rigids` — so nested generic calls propagate.
     fn ty_concrete_name(&self, span: Span) -> Option<String> {
-        match self.expr_ty(span)? {
+        self.concrete_name_of(self.expr_ty(span)?)
+    }
+
+    /// [`Self::ty_concrete_name`] for a type already in hand.
+    fn concrete_name_of(&self, kind: &TyKind) -> Option<String> {
+        match kind {
             TyKind::Nominal { name, .. } => Some(name.clone()),
             // #119 (D49): a primitive is a dispatch target too —
             // `impl Ord for int` keys the trait index by the prim's
@@ -1744,6 +1749,78 @@ impl<'t> Machine<'t> {
             TyKind::Rigid(r) if r == "Self" => self.self_tys.last().cloned().flatten(),
             TyKind::Rigid(r) => self.frame_rigids.last().and_then(|m| m.get(r)).cloned(),
             _ => None,
+        }
+    }
+
+    /// wolf-lang#402 (`[type.generic.bind]`): bind the callee's type
+    /// parameters found anywhere inside one parameter's declared type
+    /// (`decl`, in the callee body's table `dtab`) against the
+    /// argument's checked type at the call site (`arg`, in this frame's
+    /// table): `T` itself, and `T` nested in `List[T]`, `Map[K, V]`, a
+    /// tuple, a fn type, a `!T`'s ok half or a generic nominal's
+    /// arguments. The first position that fixes a parameter binds it
+    /// (left to right, as the clause says); a shape that does not line
+    /// up binds nothing.
+    fn bind_rigids_in(
+        &self,
+        dtab: &TypeTable,
+        decl: TyId,
+        arg: TyId,
+        gnames: &[String],
+        map: &mut HashMap<String, String>,
+    ) {
+        let atab = &self.ctx().tb.table;
+        let akind = atab.kind(arg);
+        match (dtab.kind(decl), akind) {
+            (TyKind::Rigid(r), _) if gnames.contains(r) => {
+                if !map.contains_key(r)
+                    && let Some(c) = self.concrete_name_of(akind)
+                {
+                    map.insert(r.clone(), c);
+                }
+            }
+            (TyKind::List(d), TyKind::List(a))
+            | (TyKind::Pool(d), TyKind::Pool(a))
+            | (TyKind::Chan(d), TyKind::Chan(a))
+            | (TyKind::Mutex(d), TyKind::Mutex(a))
+            | (TyKind::Proc(d), TyKind::Proc(a))
+            | (TyKind::Range(d), TyKind::Range(a))
+            | (TyKind::Wrapping(d), TyKind::Wrapping(a))
+            | (TyKind::Shared(d), TyKind::Shared(a))
+            | (TyKind::Handle(d), TyKind::Handle(a))
+            | (TyKind::Weak(d), TyKind::Weak(a))
+            | (TyKind::Ptr(d), TyKind::Ptr(a))
+            | (TyKind::ErrUnion(d, _), TyKind::ErrUnion(a, _)) => {
+                self.bind_rigids_in(dtab, *d, *a, gnames, map);
+            }
+            (TyKind::Map(dk, dv), TyKind::Map(ak, av)) => {
+                self.bind_rigids_in(dtab, *dk, *ak, gnames, map);
+                self.bind_rigids_in(dtab, *dv, *av, gnames, map);
+            }
+            (TyKind::Tuple(ds), TyKind::Tuple(xs)) if ds.len() == xs.len() => {
+                for (d, a) in ds.iter().zip(xs) {
+                    self.bind_rigids_in(dtab, *d, *a, gnames, map);
+                }
+            }
+            (TyKind::Fn(dps, dr), TyKind::Fn(aps, ar)) if dps.len() == aps.len() => {
+                for (d, a) in dps.iter().zip(aps) {
+                    self.bind_rigids_in(dtab, *d, *a, gnames, map);
+                }
+                self.bind_rigids_in(dtab, *dr, *ar, gnames, map);
+            }
+            (
+                TyKind::Nominal {
+                    name: dn, args: ds, ..
+                },
+                TyKind::Nominal {
+                    name: an, args: xs, ..
+                },
+            ) if dn == an && ds.len() == xs.len() => {
+                for (d, a) in ds.iter().zip(xs) {
+                    self.bind_rigids_in(dtab, *d, *a, gnames, map);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -13678,15 +13755,32 @@ impl<'t> Machine<'t> {
                     .collect();
                 if !gnames.is_empty() {
                     let mut map: HashMap<String, String> = HashMap::new();
+                    let callee_tb: &'t TypedBody =
+                        self.ctxs[body].as_ref().expect("callable body has ctx").tb;
                     let mut arg_iter = args.iter().copied();
                     for pdecl in fd.params().into_iter().flat_map(|ps| ps.params()) {
                         let a = arg_iter.next();
-                        let (Some(tynode), Some(a)) = (pdecl.ty(), a) else {
+                        let (Some(tynode), Some(Some(v))) = (pdecl.ty(), a) else {
                             continue;
                         };
+                        // The parameter's declared type as the callee's
+                        // body typed it (its binding is the first local of
+                        // that name), matched against the argument's type
+                        // (wolf-lang#402: `T` nested in `List[T]` binds).
+                        let declared = pdecl.name().map(|t| slice(t.span)).and_then(|pname| {
+                            callee_tb
+                                .locals
+                                .iter()
+                                .find(|(n, _, _)| *n == pname)
+                                .map(|&(_, _, ty)| ty)
+                        });
+                        let argty = self.ctx().expr_tys.get(&v.span).copied();
+                        if let (Some(decl), Some(at)) = (declared, argty) {
+                            self.bind_rigids_in(&callee_tb.table, decl, at, &gnames, &mut map);
+                            continue;
+                        }
                         let tytext = slice(tynode.span);
                         if gnames.contains(&tytext)
-                            && let Some(v) = a
                             && let Some(c) = self.ty_concrete_name(v.span)
                         {
                             map.entry(tytext).or_insert(c);
