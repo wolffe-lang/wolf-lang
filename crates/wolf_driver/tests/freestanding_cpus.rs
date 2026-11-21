@@ -277,9 +277,10 @@ mod linux_x86_64 {
     }
 
     /// Link the boot stub (kw04's `start.S`), the kernel's objects and the
-    /// archive beside them; run the result with the deadline. `None` for the
-    /// exit status is a run the gate ended at the deadline.
-    fn link_and_run(dir: &Path, tier: &str, objs: &[PathBuf]) -> (Option<i32>, String) {
+    /// archive beside them; run the result with the deadline. The ending is
+    /// `exit N`, `signal N` (the kernel died: a fault, say) or `deadline`
+    /// (the gate killed it).
+    fn link_and_run(dir: &Path, tier: &str, objs: &[PathBuf]) -> (String, String) {
         let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
         let start = dir.join("start.o");
         let r = tool(
@@ -344,7 +345,15 @@ mod linux_x86_64 {
             let _ = so.read_to_end(&mut b);
             out = text(&b);
         }
-        (if stalled { None } else { status.code() }, out)
+        let ending = if stalled {
+            "deadline".to_string()
+        } else if let Some(code) = status.code() {
+            format!("exit {code}")
+        } else {
+            use std::os::unix::process::ExitStatusExt;
+            format!("signal {}", status.signal().unwrap_or(0))
+        };
+        (ending, out)
     }
 
     /// Every `key=value` word of the transcript.
@@ -371,13 +380,11 @@ mod linux_x86_64 {
     fn run(case: &str, mode: u32, pin: bool, pair: bool, tier: &str) -> String {
         let dir = staged(&format!("{case}_{tier}"), mode, pin, pair);
         let objs = build(&dir, tier);
-        let (code, out) = link_and_run(&dir, tier, &objs);
+        let (ending, out) = link_and_run(&dir, tier, &objs);
         let ctx = format!("{case} ({tier}, mode {mode}, pin {pin})");
         assert_eq!(
-            code,
-            Some(33),
-            "{ctx}: kmain returns 33 within {DEADLINE:?} (None: ended at the deadline); \
-             transcript:\n{out}"
+            ending, "exit 33",
+            "{ctx}: kmain returns 33 within {DEADLINE:?}; transcript:\n{out}"
         );
         let w = words(&out);
         assert!(flag(&w, "cpu1"), "{ctx}: processor 1 started:\n{out}");
