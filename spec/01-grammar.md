@@ -59,6 +59,17 @@ anywhere else), and any other `#` is a stray byte.
 IDENT ::= ('_' XID_Continue+) | (XID_Start XID_Continue*)
 ```
 
+`XID_Start` and `XID_Continue` are the properties of **Unicode
+17.0.0**, as its `DerivedCoreProperties.txt` defines them (SHA-256
+`24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08`).
+An implementation's identifier tables are that file's, whatever
+Unicode database the host or a library carries, so a program lexes the
+same everywhere. A later Unicode release is adopted by amending this
+paragraph, with a witness from that release. (Added for
+wolf-lang#1039; at wolf 0.2.40 and lupin 0.1.62 the four machines
+accepted identifiers new in 15.0, 15.1, 16.0 and 17.0 and refused the
+unassigned U+0378.)
+
 A bare `_` is the wildcard identifier (never a binding you can read);
 `_foo`-style identifiers are ordinary names, conventionally unused.
 Identifiers that collide with reserved keywords do not parse (`[gram.inv]`).
