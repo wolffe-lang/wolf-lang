@@ -1735,7 +1735,12 @@ impl<'t> Machine<'t> {
     /// `Self` through `self_tys`, any other rigid through
     /// `frame_rigids` — so nested generic calls propagate.
     fn ty_concrete_name(&self, span: Span) -> Option<String> {
-        match self.expr_ty(span)? {
+        self.concrete_name_of(self.expr_ty(span)?)
+    }
+
+    /// [`Self::ty_concrete_name`] for a type already in hand.
+    fn concrete_name_of(&self, kind: &TyKind) -> Option<String> {
+        match kind {
             TyKind::Nominal { name, .. } => Some(name.clone()),
             // #119 (D49): a primitive is a dispatch target too —
             // `impl Ord for int` keys the trait index by the prim's
@@ -1744,6 +1749,78 @@ impl<'t> Machine<'t> {
             TyKind::Rigid(r) if r == "Self" => self.self_tys.last().cloned().flatten(),
             TyKind::Rigid(r) => self.frame_rigids.last().and_then(|m| m.get(r)).cloned(),
             _ => None,
+        }
+    }
+
+    /// wolf-lang#402 (`[type.generic.bind]`): bind the callee's type
+    /// parameters found anywhere inside one parameter's declared type
+    /// (`decl`, in the callee body's table `dtab`) against the
+    /// argument's checked type at the call site (`arg`, in this frame's
+    /// table): `T` itself, and `T` nested in `List[T]`, `Map[K, V]`, a
+    /// tuple, a fn type, a `!T`'s ok half or a generic nominal's
+    /// arguments. The first position that fixes a parameter binds it
+    /// (left to right, as the clause says); a shape that does not line
+    /// up binds nothing.
+    fn bind_rigids_in(
+        &self,
+        dtab: &TypeTable,
+        decl: TyId,
+        arg: TyId,
+        gnames: &[String],
+        map: &mut HashMap<String, String>,
+    ) {
+        let atab = &self.ctx().tb.table;
+        let akind = atab.kind(arg);
+        match (dtab.kind(decl), akind) {
+            (TyKind::Rigid(r), _) if gnames.contains(r) => {
+                if !map.contains_key(r)
+                    && let Some(c) = self.concrete_name_of(akind)
+                {
+                    map.insert(r.clone(), c);
+                }
+            }
+            (TyKind::List(d), TyKind::List(a))
+            | (TyKind::Pool(d), TyKind::Pool(a))
+            | (TyKind::Chan(d), TyKind::Chan(a))
+            | (TyKind::Mutex(d), TyKind::Mutex(a))
+            | (TyKind::Proc(d), TyKind::Proc(a))
+            | (TyKind::Range(d), TyKind::Range(a))
+            | (TyKind::Wrapping(d), TyKind::Wrapping(a))
+            | (TyKind::Shared(d), TyKind::Shared(a))
+            | (TyKind::Handle(d), TyKind::Handle(a))
+            | (TyKind::Weak(d), TyKind::Weak(a))
+            | (TyKind::Ptr(d), TyKind::Ptr(a))
+            | (TyKind::ErrUnion(d, _), TyKind::ErrUnion(a, _)) => {
+                self.bind_rigids_in(dtab, *d, *a, gnames, map);
+            }
+            (TyKind::Map(dk, dv), TyKind::Map(ak, av)) => {
+                self.bind_rigids_in(dtab, *dk, *ak, gnames, map);
+                self.bind_rigids_in(dtab, *dv, *av, gnames, map);
+            }
+            (TyKind::Tuple(ds), TyKind::Tuple(xs)) if ds.len() == xs.len() => {
+                for (d, a) in ds.iter().zip(xs) {
+                    self.bind_rigids_in(dtab, *d, *a, gnames, map);
+                }
+            }
+            (TyKind::Fn(dps, dr), TyKind::Fn(aps, ar)) if dps.len() == aps.len() => {
+                for (d, a) in dps.iter().zip(aps) {
+                    self.bind_rigids_in(dtab, *d, *a, gnames, map);
+                }
+                self.bind_rigids_in(dtab, *dr, *ar, gnames, map);
+            }
+            (
+                TyKind::Nominal {
+                    name: dn, args: ds, ..
+                },
+                TyKind::Nominal {
+                    name: an, args: xs, ..
+                },
+            ) if dn == an && ds.len() == xs.len() => {
+                for (d, a) in ds.iter().zip(xs) {
+                    self.bind_rigids_in(dtab, *d, *a, gnames, map);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -5129,7 +5206,15 @@ impl<'t> Machine<'t> {
             None => d.scrutinee().and_then(|s| self.match_domain_names(s.span)),
         };
         let flow = match d.scrutinee() {
-            Some(s) => self.eval(s)?,
+            // wolf-lang#882: a place scrutinee is READ, not spent. Only
+            // assignment, initialization, `take` and `return` move
+            // (`[mem.tier0.move.1]`), so after a tag arm that does not
+            // match, a `_` arm may read the place again (std.json's
+            // `render_pretty` passes it on).
+            Some(s) => match found!(self.place_of(s)) {
+                Some(place) => Flow::Val(self.read_place(&place, s.span)?),
+                None => self.eval(s)?,
+            },
             None => Flow::Val(Value::Unit),
         };
         let (scrut, row_half, domain) = match (&fallible, flow) {
@@ -6664,10 +6749,18 @@ impl<'t> Machine<'t> {
             let ispan = i.syntax().span;
             let v = match i.expr() {
                 Some(hole) => {
+                    // wolf-lang#1050 (`[type.interp.union]`): a hole READS
+                    // a `!T` value, its ok payload or else its row, as a
+                    // binding does (#122): a raw row (a fallible call's own
+                    // failure) renders. Only a `?` that fired inside the
+                    // hole keeps unwinding.
                     let hv = if let Some(place) = found!(self.place_of(hole)) {
                         self.read_place(&place, hole.span)?
                     } else {
-                        val!(self.eval(hole))
+                        match self.eval(hole)? {
+                            Flow::Val(v) | Flow::Err(v, false) => v,
+                            other => return Ok(other),
+                        }
                     };
                     let rendered = self.render(&hv, self.ctx().expr_tys.get(&hole.span).copied());
                     match i.format_spec() {
@@ -13581,12 +13674,24 @@ impl<'t> Machine<'t> {
         let through_value = match by_decl {
             Some(_) => None,
             None => match d.callee() {
-                Some(callee) => match found!(self.place_of(callee)) {
-                    Some(place) => match self.read_place(&place, callee.span)? {
-                        Value::Fn(b) => Some(b),
+                Some(callee) => {
+                    let callee_value = match found!(self.place_of(callee)) {
+                        Some(place) => Some(self.read_place(&place, callee.span)?),
+                        // wolf-lang#828: a callee that is neither a name
+                        // nor a place (`offset()(10)`, `compose(f, g)(4)`)
+                        // is a value expression: it is evaluated, and the
+                        // fn or closure it yields is applied, as native
+                        // and lupin do.
+                        None if callee.kind != SyntaxKind::PathExpr => {
+                            Some(val!(self.eval(callee)))
+                        }
+                        None => None,
+                    };
+                    match callee_value {
+                        Some(Value::Fn(b)) => Some(b),
                         // s226: a closure value — its own frame, its
                         // captures bound in it.
-                        Value::Closure(cid) => {
+                        Some(Value::Closure(cid)) => {
                             let mut args = Vec::new();
                             for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
                                 let Some(v) = Arg::value(a) else { continue };
@@ -13600,9 +13705,8 @@ impl<'t> Machine<'t> {
                             return Ok(Flow::Val(out));
                         }
                         _ => None,
-                    },
-                    None => None,
-                },
+                    }
+                }
                 None => None,
             },
         };
@@ -13650,6 +13754,7 @@ impl<'t> Machine<'t> {
         // read through this frame's own bindings, so nesting
         // propagates. Spelled from the callee's source, not the
         // caller's (cross-file calls).
+        let mut rigids: Option<HashMap<String, String>> = None;
         {
             let callee_node = self.ctxs[body]
                 .as_ref()
@@ -13669,22 +13774,39 @@ impl<'t> Machine<'t> {
                     .collect();
                 if !gnames.is_empty() {
                     let mut map: HashMap<String, String> = HashMap::new();
+                    let callee_tb: &'t TypedBody =
+                        self.ctxs[body].as_ref().expect("callable body has ctx").tb;
                     let mut arg_iter = args.iter().copied();
                     for pdecl in fd.params().into_iter().flat_map(|ps| ps.params()) {
                         let a = arg_iter.next();
-                        let (Some(tynode), Some(a)) = (pdecl.ty(), a) else {
+                        let (Some(tynode), Some(Some(v))) = (pdecl.ty(), a) else {
                             continue;
                         };
+                        // The parameter's declared type as the callee's
+                        // body typed it (its binding is the first local of
+                        // that name), matched against the argument's type
+                        // (wolf-lang#402: `T` nested in `List[T]` binds).
+                        let declared = pdecl.name().map(|t| slice(t.span)).and_then(|pname| {
+                            callee_tb
+                                .locals
+                                .iter()
+                                .find(|(n, _, _)| *n == pname)
+                                .map(|&(_, _, ty)| ty)
+                        });
+                        let argty = self.ctx().expr_tys.get(&v.span).copied();
+                        if let (Some(decl), Some(at)) = (declared, argty) {
+                            self.bind_rigids_in(&callee_tb.table, decl, at, &gnames, &mut map);
+                            continue;
+                        }
                         let tytext = slice(tynode.span);
                         if gnames.contains(&tytext)
-                            && let Some(v) = a
                             && let Some(c) = self.ty_concrete_name(v.span)
                         {
                             map.entry(tytext).or_insert(c);
                         }
                     }
                     if !map.is_empty() {
-                        self.pending_rigids = Some(map);
+                        rigids = Some(map);
                     }
                 }
             }
@@ -13695,6 +13817,11 @@ impl<'t> Machine<'t> {
             let mode = sig.params.get(i).and_then(|p| p.mode);
             vals.push(val!(self.eval_arg(v, mode)));
         }
+        // wolf-lang#981: the bindings are handed to this callee's frame
+        // only now, after the arguments ran. Set before them, a call in
+        // an argument (`run(mut ed, seven())`) took them into its own
+        // frame and left this callee's `T` unbound.
+        self.pending_rigids = rigids;
         let out = self.call_body(body, vals)?;
         // A raised row tag crosses the call as the error flow — the
         // caller's `?`/`else`/`match` observes it (D30).
