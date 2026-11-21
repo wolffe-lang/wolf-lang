@@ -30,6 +30,17 @@
   programs are outside the gated corpus until compiler support lands.
   This entry records the specification, not support in the current compiler.
 
+- The checked machine (`wolf conform-run --checked`) no longer stops on a
+  program that dials past its own listener's backlog before it accepts
+  (wolf-lang#718). Its dial was one blocking connect on the machine's thread,
+  so once the kernel held a connect the task that would have accepted it never
+  ran: `waitwolf loop 0 130` ran until it was killed. A dial made while other
+  tasks exist now makes its connect on a host thread of its own and lets the
+  other tasks run while it waits, as an accept or a read does
+  (`[exec.checked.task]`, which now lists the dial and counts its thread). A
+  task killed while its dial waits ends at once, and the run's end does not
+  wait for the connect. Alone, the dial is the blocking connect it was.
+
 - An error payload built inside a `region` block can no longer leave the block
   by `?`. A callee builds its error where its caller allocates
   (`[mem.region.create.3]`), so inside `region r { … f()? … }` the payload of
