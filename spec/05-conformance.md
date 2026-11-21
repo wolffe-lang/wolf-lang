@@ -468,7 +468,16 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   always was. (Until the fix for wolf-lang#718 a dial was one blocking
   connect, so a program that dialled past its own listener's backlog
   before accepting never let the accepting task run —
-  `crates/wolf_driver/tests/checked_net_dials.rs`.)
+  `crates/wolf_driver/tests/checked_net_dials.rs`.) While a task waits
+  in any of these host calls, the virtual clock of `[exec.checked.sched]`
+  follows real elapsed time: before each turn the task hands on, the
+  clock is raised to where it stood when the wait began plus the real
+  time the wait has taken, never lowered, so a `timeout` arm beside a
+  task parked in a read fires once the read has waited that long, as on
+  the native tiers. (Until the fix for wolf-lang#728 the clock moved
+  only when no task was ready, and a waiting task is ready again at
+  once, so such an arm never fired —
+  `crates/wolf_driver/tests/checked_kill_parked_read.rs`.)
 - `[exec.checked.sched]` **The schedule is deterministic and a seed
   selects it.** The scheduler is the reference interpreter's
   (`sched-ev/0`, spec/07): a first-in-first-out ready queue; a spawn
@@ -487,10 +496,11 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   lowest). **Equal seeds are equal runs** — the same verdict and the
   same output bytes (`[sched.stable]`), and a record made under a seed
   says `"seeded": true` (`[proto.seed.flag]`). `timeout` arms run on a
-  virtual clock that advances only when no task is ready
-  (`[conc.select.timeout]`); when no task is ready and no timer is
-  pending the run is `trap(deadlock)` (`[conc.deadlock.trap]`), its
-  roster on stderr. **What it does not do:** it explores nothing. One
+  virtual clock that jumps to the earliest timer when no task is ready
+  and, while a task waits on host I/O, follows real elapsed time
+  (`[exec.checked.task]`, `[conc.select.timeout]`); when no task is
+  ready and no timer is pending the run is `trap(deadlock)`
+  (`[conc.deadlock.trap]`), its roster on stderr. **What it does not do:** it explores nothing. One
   seed is one interleaving, so a seed that passes says nothing about
   the schedules it did not take (`wolf test --schedules=N` on the
   native tier and lupin's explorer are the tools for that), and
