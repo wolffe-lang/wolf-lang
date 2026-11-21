@@ -1,0 +1,34 @@
+// The allocating body every region of the freestanding_cpus gate runs: per
+// round a List grown through several chunks, a Map, an interpolation and a
+// capturing closure, all in the ambient region. The answer is a checksum of
+// what was read back, so bytes that changed under it change the answer, and the
+// region's ledger after it is the same number on every run.
+fn work(rounds: int) -> int {
+    var total: int = 0
+    for r in 0..rounds {
+        var xs = List[int]()
+        for i in 0..200 {
+            (mut xs).push(i + r)
+        }
+        var m = Map[int, int]()
+        for i in 0..20 {
+            m[i] = i * r
+        }
+        let s = "round {r} of {rounds}"
+        for x in xs {
+            total += x
+        }
+        let v = m[7] else 0
+        total += v + s.len + closure_round(r)
+    }
+    total
+}
+
+/// One capturing closure, its record in the caller's ambient region: in a
+/// function of its own, since a closure that captures a loop's binding keeps
+/// it lent across the loop's next turn.
+fn closure_round(r: int) -> int {
+    let k = r
+    let f = fn(x) x + k
+    f(1)
+}

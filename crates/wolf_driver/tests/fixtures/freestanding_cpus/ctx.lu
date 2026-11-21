@@ -1,0 +1,124 @@
+// The freestanding_cpus gate's shared words and helpers. Every word another
+// processor reads lives in cpus.S's `kw_state`, read and written volatile; a
+// processor's own ambient region is its record's word, reached by the runtime
+// only through the program's pair (slot.S).
+extern "c" let kw_state: *u64
+extern "c" fn kw_cpu_init(i: u64) -> u64
+extern "c" fn kw_cpu_index() -> u64
+extern "c" fn kw_gs_word() -> u64
+extern "c" fn kw_cpu_start() -> i64
+extern "c" fn kw_wait_done()
+extern "c" fn kw_barrier(i: u64)
+extern "c" fn kw_yield()
+extern "c" fn kw_pin_one() -> u64
+extern "c" fn kw_arm_set(v: u64)
+extern "c" fn kw_book(i: u64) -> i64
+extern "c" fn kw_switch(save: *u64, next: u64)
+extern "c" fn kw_thread_sp(t: u64) -> u64
+extern "c" fn kw_outb(port: u16, v: u8)
+extern "c" fn wolf_rt_ambient_get() -> *u8
+extern "c" fn wolf_rt_ambient_set(p: *u8)
+
+// kw_state's words. Contexts: 0 processor 0's own, 1 processor 1's own,
+// 2 thread T, 3 thread U.
+let SP: u64 = 0 // 0..3: each context's saved %rsp
+let AMB: u64 = 4 // 4..7: each context's saved ambient region
+let VAL_A: u64 = 8 // the witness's two opaque values are these words' addresses
+let VAL_B: u64 = 9
+let SEEN_A: u64 = 10
+let SEEN_B: u64 = 11
+let SOLO: u64 = 12 // the ledger of work(ROUNDS) in a region of its own, alone
+let SOLO_SUM: u64 = 13
+let L64: u64 = 14 // the ledger of a 64-int List in a region of its own
+let RA: u64 = 15
+let SA: u64 = 16
+let RB: u64 = 17
+let SB: u64 = 18
+let KEEP_SUM: u64 = 19
+let RA_MID: u64 = 20
+let RT1: u64 = 21
+let RT: u64 = 22
+let ST: u64 = 23
+let SUMX: u64 = 24
+let RU: u64 = 25
+let SU: u64 = 26
+let T_PARKED: u64 = 27
+let T_RESUMED: u64 = 28
+let ABORT: u64 = 29
+let FIRED: u64 = 30
+let T_CPU0: u64 = 31
+let T_CPU1: u64 = 32
+let W0: u64 = 33 // each processor's ambient word when it is done
+let W1: u64 = 34
+let CPU1: u64 = 35 // 1 once processor 1 started
+
+fn at(i: u64) -> u64 {
+    // # Safety: the address of cpus.S's 1024-byte kw_state.
+    unsafe { kw_state as u64 + i * 8 }
+}
+
+fn peek(i: u64) -> u64 {
+    // # Safety: a word of kw_state.
+    unsafe { (at(i) as *u64).read_volatile() }
+}
+
+fn poke(i: u64, v: u64) {
+    // # Safety: a word of kw_state.
+    unsafe { (at(i) as *u64).write_volatile(v) }
+}
+
+fn barrier(i: u64) {
+    // # Safety: cpus.S's barrier; it touches only its own counter.
+    unsafe { kw_barrier(i) }
+}
+
+fn relax() {
+    // # Safety: sched_yield.
+    unsafe { kw_yield() }
+}
+
+fn cpu_index() -> u64 {
+    // # Safety: a word of this processor's record.
+    unsafe { kw_cpu_index() }
+}
+
+fn own_word() -> u64 {
+    // # Safety: this processor's ambient word, read and not dereferenced.
+    unsafe { kw_gs_word() }
+}
+
+fn book(i: u64) -> i64 {
+    // # Safety: a word of the allocator's books.
+    unsafe { kw_book(i) }
+}
+
+fn ambient() -> u64 {
+    // # Safety: the runtime's documented getter; the value is opaque.
+    unsafe { wolf_rt_ambient_get() as u64 }
+}
+
+fn set_ambient(p: u64) {
+    // # Safety: the runtime's documented setter; nothing allocates while a
+    // value that is not a region is ambient.
+    unsafe { wolf_rt_ambient_set(p as *u8) }
+}
+
+/// Switch from context `from` to context `to` on this processor, carrying the
+/// ambient region as a kernel's switch does: the outgoing context's value saved
+/// in its word, the incoming one's restored, then the stacks swapped.
+fn swap_to(from: u64, to: u64) {
+    poke(AMB + from, ambient())
+    set_ambient(peek(AMB + to))
+    // # Safety: cpus.S's switch; `to`'s word holds a %rsp that kw_switch or
+    // kw_thread_sp left.
+    unsafe { kw_switch(at(SP + from) as *u64, peek(SP + to)) }
+}
+
+fn start_cpu1() {
+    var tid: i64 = 0
+    // # Safety: cpus.S's clone; processor 1 runs kw_cpu1_main on its own stack.
+    unsafe {
+        tid = kw_cpu_start()
+    }
+    poke(CPU1, if tid > 0 { 1 } else { 0 })
+}

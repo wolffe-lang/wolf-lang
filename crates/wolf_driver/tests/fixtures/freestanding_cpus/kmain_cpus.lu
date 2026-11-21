@@ -1,0 +1,337 @@
+// The freestanding_cpus gate's kernel (wolf-lang#1111;
+// `[abi.target.none.ambient.storage]`, `[abi.target.none.ambient.concurrent]`).
+// Processor 0 is the thread `_start` runs on, processor 1 a second thread of the
+// process (cpus.S); each has its own record as its GS base, and with slot.S
+// each keeps its ambient region in that record's word. `mode.lu`, written by
+// the gate, sets MODE (the scenario) and PIN (the whole process on one CPU).
+// Nothing is printed until processor 1 has ended; every line but the witness's
+// is `key=value` words. kmain returns 33.
+//
+// Modes: 1 the issue's witness through wolf_rt_ambient_get/_set; 2 two regions
+// allocating at once; 3 one region ending while the other allocates; 4 a thread
+// of control moving to the other processor at a switch with its region open;
+// 5 the same thread moving in the middle of its region's entry.
+
+let ROUNDS: int = 40
+
+fn emit_line(s: str) {
+    for b in s.bytes() {
+        // # Safety: kw_outb is cpus.S's byte write (stdout here).
+        unsafe {
+            kw_outb(1016, b as int as u8)
+        }
+    }
+    // # Safety: as above.
+    unsafe {
+        kw_outb(1016, 10)
+    }
+}
+
+// Mode 1: processor 0 publishes A, processor 1 publishes B, then each reads.
+// The values are opaque: never dereferenced, and nothing allocates while they
+// are ambient.
+fn p0_witness() {
+    set_ambient(at(VAL_A))
+    start_cpu1()
+    barrier(0) // A is published
+    barrier(1) // B is published
+    poke(SEEN_A, ambient())
+    barrier(2)
+    barrier(3) // B has read
+    set_ambient(0)
+}
+
+fn p1_witness() {
+    barrier(0)
+    set_ambient(at(VAL_B))
+    barrier(1)
+    barrier(2) // A has read
+    poke(SEEN_B, ambient())
+    barrier(3)
+    set_ambient(0)
+}
+
+// Mode 2: processor 0 enters ra, then processor 1 enters rb, then both run
+// work() at once.
+fn p0_simultaneous() {
+    start_cpu1()
+    region ra {
+        barrier(0) // processor 0 is inside ra
+        barrier(1) // processor 1 is inside rb
+        let t = work(ROUNDS)
+        poke(SA, t as u64)
+        poke(RA, region_bytes(ra) as u64)
+        barrier(2)
+    }
+}
+
+fn p1_simultaneous() {
+    barrier(0)
+    region rb {
+        barrier(1)
+        let t = work(ROUNDS)
+        poke(SB, t as u64)
+        poke(RB, region_bytes(rb) as u64)
+        barrier(2)
+    }
+}
+
+// Mode 3: both build a List of 2000 in their own region; processor 1 leaves
+// rb (its blocks freed and poisoned) while processor 0 keeps allocating, then
+// processor 0 reads its List back.
+fn p0_one_ends() {
+    start_cpu1()
+    region ra {
+        barrier(0)
+        barrier(1)
+        var keep = List[int]()
+        for i in 0..2000 {
+            (mut keep).push(i)
+        }
+        poke(RA_MID, region_bytes(ra) as u64)
+        barrier(2) // processor 1 leaves rb now
+        let t = work(ROUNDS)
+        poke(SA, t as u64)
+        barrier(3) // rb is gone
+        var sum: int = 0
+        for x in keep {
+            sum += x
+        }
+        poke(KEEP_SUM, sum as u64)
+        poke(RA, region_bytes(ra) as u64)
+    }
+}
+
+fn p1_one_ends() {
+    barrier(0)
+    region rb {
+        barrier(1)
+        var mine = List[int]()
+        for i in 0..2000 {
+            (mut mine).push(i)
+        }
+        poke(RB, region_bytes(rb) as u64)
+        barrier(2)
+    }
+    barrier(3)
+}
+
+// Modes 4 and 5: thread T starts on processor 0 inside rt and parks; processor
+// 1 resumes it; then U runs on processor 0 inside ru while T, on processor 1,
+// allocates in rt. In mode 4 T parks at an ordinary switch; in mode 5 it parks
+// inside the load of its region entry (slot.S, armed), so the entry's store
+// runs on processor 1.
+fn p0_follow() {
+    // # Safety: cpus.S builds each thread's first frame on its own stack.
+    unsafe {
+        poke(SP + 2, kw_thread_sp(2))
+        poke(SP + 3, kw_thread_sp(3))
+    }
+    poke(AMB + 2, 0)
+    poke(AMB + 3, 0)
+    start_cpu1()
+    swap_to(0, 2) // T runs here until it parks
+    if peek(ABORT) == 0 {
+        swap_to(0, 3) // U runs here while processor 1 runs T
+    }
+}
+
+fn p1_follow() {
+    while peek(T_PARKED) == 0 && peek(ABORT) == 0 {
+        relax()
+    }
+    if peek(ABORT) == 0 {
+        swap_to(1, 2) // T, moved here; it ends by switching back
+    }
+}
+
+fn t_follow() {
+    region rt {
+        var xs = List[int]()
+        for i in 0..64 {
+            (mut xs).push(i)
+        }
+        poke(RT1, region_bytes(rt) as u64)
+        poke(T_CPU0, cpu_index())
+        poke(T_PARKED, 1)
+        swap_to(2, 0) // parked; processor 1 resumes it
+        poke(T_CPU1, cpu_index())
+        poke(T_RESUMED, 1)
+        barrier(0) // U is inside ru on processor 0
+        let t = work(ROUNDS)
+        poke(ST, t as u64)
+        var sum: int = 0
+        for x in xs {
+            sum += x
+        }
+        poke(SUMX, sum as u64)
+        poke(RT, region_bytes(rt) as u64)
+        barrier(1)
+    }
+    swap_to(2, 1)
+}
+
+fn t_inside() {
+    // # Safety: cpus.S's word; slot.S reads it at the next load through the pair.
+    unsafe {
+        kw_arm_set(1)
+    }
+    region rt {
+        // # Safety: as above; a runtime that never loads through the pair
+        // leaves it armed.
+        unsafe {
+            kw_arm_set(0)
+        }
+        poke(T_CPU1, cpu_index())
+        if peek(FIRED) == 0 {
+            poke(ABORT, 1)
+        } else {
+            poke(T_RESUMED, 1)
+            barrier(0)
+            let t = work(ROUNDS)
+            poke(ST, t as u64)
+            poke(RT, region_bytes(rt) as u64)
+            barrier(1)
+        }
+    }
+    if peek(FIRED) == 0 {
+        swap_to(2, 0)
+    } else {
+        swap_to(2, 1)
+    }
+}
+
+/// slot.S calls this from inside `wolf_ambient_load`, once, when armed: a region
+/// entry's load has just read this processor's word. The thread parks here, as
+/// a timer preemption would park it, and the processor that resumes it returns
+/// into the load.
+export fn kw_on_armed_load() {
+    poke(FIRED, 1)
+    poke(T_CPU0, cpu_index())
+    poke(T_PARKED, 1)
+    swap_to(2, 0)
+}
+
+fn u_follow() {
+    while peek(T_RESUMED) == 0 && peek(ABORT) == 0 {
+        relax()
+    }
+    if peek(ABORT) == 0 {
+        region ru {
+            barrier(0)
+            let t = work(ROUNDS)
+            poke(SU, t as u64)
+            poke(RU, region_bytes(ru) as u64)
+            barrier(1)
+        }
+    }
+    swap_to(3, 0)
+}
+
+/// cpus.S's kw_thread_entry lands here on a fresh thread's stack.
+export fn kw_thread_main(t: u64) {
+    if t == 2 {
+        if MODE == 5 {
+            t_inside()
+        } else {
+            t_follow()
+        }
+    } else {
+        u_follow()
+    }
+}
+
+/// Processor 1's entry (cpus.S's kw_cpu_start, after its record is its GS base).
+export fn kw_cpu1_main() {
+    if MODE == 1 {
+        p1_witness()
+    } else if MODE == 2 {
+        p1_simultaneous()
+    } else if MODE == 3 {
+        p1_one_ends()
+    } else {
+        p1_follow()
+    }
+    poke(W1, own_word())
+}
+
+fn witness_lines() {
+    let a = at(VAL_A)
+    let b = at(VAL_B)
+    let sa = peek(SEEN_A)
+    let sb = peek(SEEN_B)
+    if sa == a {
+        emit_line("PASS CPU-AMBIENT-ISOLATION A retains A")
+    } else if sa == b {
+        emit_line("FAIL CPU-AMBIENT-ISOLATION A reads B after concurrent CPU publication")
+    } else {
+        emit_line("FAIL CPU-AMBIENT-ISOLATION A reads an unexpected ambient pointer")
+    }
+    if sb == b {
+        emit_line("PASS CPU-AMBIENT-ISOLATION B retains B")
+    } else if sb == a {
+        emit_line("FAIL CPU-AMBIENT-ISOLATION B reads A after concurrent CPU publication")
+    } else {
+        emit_line("FAIL CPU-AMBIENT-ISOLATION B reads an unexpected ambient pointer")
+    }
+}
+
+export fn kmain() -> i64 {
+    var pinned = true
+    var gs: u64 = 0
+    // # Safety: cpus.S's set-up, before anything allocates.
+    unsafe {
+        if PIN {
+            pinned = kw_pin_one() == 0
+        }
+        gs = kw_cpu_init(0)
+    }
+    if gs != 0 {
+        return 41
+    }
+    let before = book(2)
+    let live0 = live_region_bytes()
+    region s1 {
+        let t = work(ROUNDS)
+        poke(SOLO_SUM, t as u64)
+        poke(SOLO, region_bytes(s1) as u64)
+    }
+    region s2 {
+        var xs = List[int]()
+        for i in 0..64 {
+            (mut xs).push(i)
+        }
+        poke(L64, region_bytes(s2) as u64)
+    }
+    if MODE == 1 {
+        p0_witness()
+    } else if MODE == 2 {
+        p0_simultaneous()
+    } else if MODE == 3 {
+        p0_one_ends()
+    } else {
+        p0_follow()
+    }
+    if peek(CPU1) == 1 {
+        // # Safety: cpus.S's wait for processor 1's end.
+        unsafe {
+            kw_wait_done()
+        }
+    }
+    let after = book(2)
+    let live1 = live_region_bytes()
+    poke(W0, own_word())
+    emit_line("mode={MODE} pin={PIN} pinned={pinned} cpu1={peek(CPU1) == 1}")
+    emit_line("solo={peek(SOLO)} solo_sum={peek(SOLO_SUM)} l64={peek(L64)}")
+    if MODE == 1 {
+        witness_lines()
+    } else if MODE == 2 {
+        emit_line("ra={peek(RA)} sa={peek(SA)} rb={peek(RB)} sb={peek(SB)}")
+    } else if MODE == 3 {
+        emit_line("ra_mid={peek(RA_MID)} ra={peek(RA)} sa={peek(SA)} rb={peek(RB)} keep_sum={peek(KEEP_SUM)}")
+    } else {
+        emit_line("fired={peek(FIRED) == 1} rt1={peek(RT1)} rt={peek(RT)} st={peek(ST)} sumx={peek(SUMX)} ru={peek(RU)} su={peek(SU)} t_cpu0={peek(T_CPU0)} t_cpu1={peek(T_CPU1)}")
+    }
+    emit_line("books_back={before == after} live_back={live0 == live1} bad={book(3)} w0={peek(W0)} w1={peek(W1)}")
+    33
+}
