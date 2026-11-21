@@ -1,0 +1,54 @@
+//! check: run(exit=0, stdout="1\n0\n12\n1\n")
+//! phase: run
+//! conforms: gram.pat, mem.tier0.move.1
+//!
+//! wolf-lang#882: a `match` over a place leaves the place as it was.
+//! Only assignment, initialization, `take` and `return` move
+//! (`[mem.tier0.move.1]`); a tag arm that does not match binds nothing,
+//! and a `_` arm binds nothing, so the scrutinee is still there for the
+//! arm's body to read again. The checked machine used to spend the
+//! scrutinee when it evaluated it, so a `_` arm that passed `v` on, or
+//! matched it a second time, met a value that was no longer the enum
+//! and answered `unsupported` ("a tag pattern over this value in
+//! checked execution"). std.json's `render_pretty` is this shape.
+
+enum Shape {
+    Dot,
+    Flag(bool),
+    Run(List[int]),
+}
+
+fn weight(s: Shape) -> int {
+    match s {
+        Dot => 0,
+        Flag(b) => if b then 1 else 2,
+        Run(xs) => xs.len,
+    }
+}
+
+fn outer(s: Shape) -> int {
+    match s {
+        Run(xs) => 10 + xs.len,
+        _ => weight(s),
+    }
+}
+
+fn nested(s: Shape) -> int {
+    match s {
+        Run(_) => 9,
+        _ => match s {
+            Flag(b) => if b then 1 else 2,
+            _ => 0,
+        },
+    }
+}
+
+fn main() {
+    print("{outer(Shape.Flag(true))}")
+    print("{outer(Shape.Dot)}")
+    var xs = List[int]()
+    (mut xs).push(4)
+    (mut xs).push(5)
+    print("{outer(Shape.Run(xs))}")
+    print("{nested(Shape.Flag(true))}")
+}
