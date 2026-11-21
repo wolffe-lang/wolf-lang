@@ -5206,7 +5206,15 @@ impl<'t> Machine<'t> {
             None => d.scrutinee().and_then(|s| self.match_domain_names(s.span)),
         };
         let flow = match d.scrutinee() {
-            Some(s) => self.eval(s)?,
+            // wolf-lang#882: a place scrutinee is READ, not spent. Only
+            // assignment, initialization, `take` and `return` move
+            // (`[mem.tier0.move.1]`), so after a tag arm that does not
+            // match, a `_` arm may read the place again (std.json's
+            // `render_pretty` passes it on).
+            Some(s) => match found!(self.place_of(s)) {
+                Some(place) => Flow::Val(self.read_place(&place, s.span)?),
+                None => self.eval(s)?,
+            },
             None => Flow::Val(Value::Unit),
         };
         let (scrut, row_half, domain) = match (&fallible, flow) {
