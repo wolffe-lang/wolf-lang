@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 657..713 name=Host
+  FnDecl 674..712 name=invoke
+StructDecl 715..748 name=Editor fields=1
+ImplDecl 750..870 path=Host for=Editor
+  FnDecl 777..868 name=invoke body=Block
+FnDecl 872..950 name=run body=Block
+FnDecl 952..979 name=seven body=Block
+FnDecl 981..1178 name=main body=Block
