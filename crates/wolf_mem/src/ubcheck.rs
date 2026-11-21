@@ -13666,12 +13666,24 @@ impl<'t> Machine<'t> {
         let through_value = match by_decl {
             Some(_) => None,
             None => match d.callee() {
-                Some(callee) => match found!(self.place_of(callee)) {
-                    Some(place) => match self.read_place(&place, callee.span)? {
-                        Value::Fn(b) => Some(b),
+                Some(callee) => {
+                    let callee_value = match found!(self.place_of(callee)) {
+                        Some(place) => Some(self.read_place(&place, callee.span)?),
+                        // wolf-lang#828: a callee that is neither a name
+                        // nor a place (`offset()(10)`, `compose(f, g)(4)`)
+                        // is a value expression: it is evaluated, and the
+                        // fn or closure it yields is applied, as native
+                        // and lupin do.
+                        None if callee.kind != SyntaxKind::PathExpr => {
+                            Some(val!(self.eval(callee)))
+                        }
+                        None => None,
+                    };
+                    match callee_value {
+                        Some(Value::Fn(b)) => Some(b),
                         // s226: a closure value — its own frame, its
                         // captures bound in it.
-                        Value::Closure(cid) => {
+                        Some(Value::Closure(cid)) => {
                             let mut args = Vec::new();
                             for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
                                 let Some(v) = Arg::value(a) else { continue };
@@ -13685,9 +13697,8 @@ impl<'t> Machine<'t> {
                             return Ok(Flow::Val(out));
                         }
                         _ => None,
-                    },
-                    None => None,
-                },
+                    }
+                }
                 None => None,
             },
         };
