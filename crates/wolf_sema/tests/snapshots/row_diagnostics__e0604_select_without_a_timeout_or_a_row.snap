@@ -9,12 +9,7 @@ error[E0604]: this `select` can be cancelled while it waits, but `wait_one` cann
   |                               ------ the signature declares no error row
 2 |     var got = 0
 3 |     select {
-  |     ^^^^^^^^
-4 |         v from ch => {
-5 |             got = v
-6 |         },
-7 |     }
-  | ^^^^^ a cancellation here would have nowhere to go
+  |     ^^^^^^ a cancellation here would have nowhere to go
   |
   = note: a cancellation that reaches a blocked `select` runs its `timeout(…)` arm when it has
     one, and otherwise leaves the `select` as the `cancelled` error value of the function,
