@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="nested 7\nbound 14\n")
+//! phase: run
+//! conforms: type.generic.bind
+//!
+//! wolf-lang#981: a generic call whose argument list holds an ordinary
+//! call. `T` binds once per call from the arguments
+//! (`[type.generic.bind]`); evaluating an argument that is itself a call
+//! must not lose that binding. The checked machine used to set the
+//! callee's bindings before it evaluated the arguments, so the nested
+//! call took them and the trait call inside the generic body answered
+//! `unsupported` ("trait dispatch on a non-nominal receiver"). Binding
+//! the argument first ran on every machine; both spellings are here.
+
+trait Host {
+    fn invoke(mut self, kind: int) -> int
+}
+
+struct Editor {
+    value: int,
+}
+
+impl Host for Editor {
+    fn invoke(mut self, kind: int) -> int {
+        self.value += kind
+        self.value
+    }
+}
+
+fn run[H: Host](mut host: H, kind: int) -> int {
+    (mut host).invoke(kind)
+}
+
+fn seven() -> int {
+    7
+}
+
+fn main() {
+    var ed = Editor { value: 0 }
+    let nested = run(mut ed, seven())
+    print("nested {nested}")
+    let kind = seven()
+    let bound = run(mut ed, kind)
+    print("bound {bound}")
+}
