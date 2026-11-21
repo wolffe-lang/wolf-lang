@@ -1736,6 +1736,16 @@ the C-style pointer arithmetic and two-phase patterns SB rejects.
   address without exposing the tag, `p.with_addr(a)` is `p`'s own
   provenance at address `a`, and `p.expose()` / `p.with_exposed(a)` are
   the two casts; `p.is_null()` compares the address with zero.
+  Today no program can observe whether `addr` exposes: every raw
+  pointer a program can hold is exposed already (a C function's result
+  is a wildcard, an integer cast's result is exposed, and `with_addr`
+  and `with_exposed` derive from those), so `p.with_exposed(p.addr())`
+  finds an exposed tag on every machine. The reading above is the
+  language's, and it takes effect when a program can hold a raw
+  pointer to one of wolf's own allocations; the witness that separates
+  the two readings is owed with that surface. (Amended for
+  wolf-lang#580: the reference interpreter exposes the tag on `addr`,
+  and no program can tell that apart from this clause's reading.)
   **Lowering** (K9(a), STATUS #31; kw06): every cast and method lowers
   on every compiling tier — `ptrtoint`/`inttoptr` on the release tier,
   the identity on the native tier's 64-bit pointers — and `with_addr`
