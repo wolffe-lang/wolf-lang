@@ -418,7 +418,8 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   cost, stated:** one host thread per task that has started and not
   finished, each with the tier's 64 MiB of reserved stack
   (`[exec.checked.budget]`), made at the task's first schedule and
-  gone at its end; the step and byte budgets are the run's, summed
+  gone at its end, and one for each dial waiting beside other tasks,
+  gone when it answers; the step and byte budgets are the run's, summed
   over its tasks. A host with no thread to give answers `unsupported`
   at the first schedule of a second task. A trap in a task is
   `[conc.task.fail]`'s failure, re-raised at its scope's exit, or the
@@ -429,7 +430,9 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   monitor as `error` — wolf-interp#228; ruled A (#63), 2026-10-11.) A run whose root domain is killed
   (`[conc.proc.root]`) exits 121, the native runtime's number. A host
   call that would park the machine's one running thread — an accept, a
-  read on a socket, a readiness wait over a set (`net_wait`), a write
+  read on a socket, a dial the kernel holds (`net_connect` to a
+  listener whose backlog is full), a readiness wait over a set
+  (`net_wait`), a write
   to a socket whose buffers are full (`net_write`, `net_write_bytes`,
   `net_writev`, `net_writev_head`), a signal wait, a sleep — waits a
   millisecond at a time while other tasks exist
@@ -448,7 +451,15 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   each write was one blocking call for all its bytes, so a write past
   the socket's buffers to a task of the same machine that would read
   them never let that task run — wolf-lang#777,
-  `crates/wolf_driver/tests/checked_net_write.rs`.)
+  `crates/wolf_driver/tests/checked_net_write.rs`.) A parked dial
+  makes its connect on that host thread of its own and asks for the
+  answer between waits; nothing joins the thread, so a task killed
+  while its dial waits ends at once and a run that ends first does not
+  wait for the connect; alone, the dial is the one blocking connect it
+  always was. (Until the fix for wolf-lang#718 a dial was one blocking
+  connect, so a program that dialled past its own listener's backlog
+  before accepting never let the accepting task run —
+  `crates/wolf_driver/tests/checked_net_dials.rs`.)
 - `[exec.checked.sched]` **The schedule is deterministic and a seed
   selects it.** The scheduler is the reference interpreter's
   (`sched-ev/0`, spec/07): a first-in-first-out ready queue; a spawn
