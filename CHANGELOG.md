@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The checked machine (`wolf conform-run --checked`, and so `wolf test`)
+  agrees with native, release and lupin on five shapes it used to answer
+  differently. A fallible call written directly in an interpolation hole
+  renders its row (`[type.interp.union]`); the machine used to let the row
+  leave the string, and `main` exited 1 with `error: <tag>` (wolf-lang#1050).
+  A generic call whose arguments include an ordinary call keeps its type
+  bindings (wolf-lang#981), and a type parameter binds from every position
+  of a parameter's type, `List[T]` included (`[type.generic.bind]`,
+  wolf-lang#402); both used to stop at "trait dispatch on a non-nominal
+  receiver". The value a call returns can be called at once, as in
+  `f(a)(b)` (wolf-lang#828, which stopped at "calls into unresolvable
+  bodies"). A `match` reads a place scrutinee instead of moving it, so a
+  `_` arm can read it again (`[mem.tier0.move.1]`, wolf-lang#882; std.json's
+  pretty printer stopped at "a tag pattern over this value").
+
 - **Language (planned for 0.2.41, after implementation):** scoped binding
   headers on braced `if` and `while`: `if let x = e; cond { ... }` and
   `while var x = e; cond { ... }` (both accept `let` or `var`). Exactly
