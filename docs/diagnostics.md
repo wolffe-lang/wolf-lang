@@ -1126,7 +1126,7 @@ do it explicitly: handle the error (`else |err| …`) and raise your own
 tag. Functions with an inferred row (`-> !T`, private only) never hit
 this error — their rows grow to fit their bodies.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__missing_tag.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__open_into_closed.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_large_rows.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_missing_tag.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__missing_tag.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__open_into_closed.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_large_rows.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_missing_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_select_without_a_timeout_in_a_row_without_cancelled.snap
 
 ## E0603 — `?` needs a fallible operand
 
@@ -1153,8 +1153,13 @@ infer their row from the body) or state the row explicitly with
 default, or `else |err| …` — so nothing needs to escape. A bare tag
 counts as an error-tag return when the function spells it in some row
 (a `let` annotation, a parameter's type) but its own signature has none.
+A `select` that can block and has no `timeout(…)` arm counts too: a
+cancellation that reaches it leaves the `select` as the `cancelled` error
+value of the function, as `?` would from a receive, so give the `select`
+a timeout arm (a cancellation runs it) or give the function a row that
+admits `cancelled`.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_known_cannot_fail.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0604_nonfallible_caller.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tag_known_cannot_fail.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0604_nonfallible_caller.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0604_select_without_a_timeout_or_a_row.snap
 
 ## E0605 — an exported function must state its error row
 
