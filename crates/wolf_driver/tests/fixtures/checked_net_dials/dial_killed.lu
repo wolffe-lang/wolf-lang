@@ -1,0 +1,39 @@
+//! member: false
+//! wolf-lang#718: a proc killed while its dial waits. The listener's
+//! backlog is 1 and nobody accepts from it, so after a dial or two the
+//! kernel holds the next one. The root kills the proc while that dial
+//! waits, joins it and returns with the listener still open: the dial's
+//! connect is still waiting when the run ends, and the run's end must not
+//! wait for it.
+
+fn dialer(addr: str) -> int {
+    var made = 0
+    for _ in 0..64 {
+        let c = net_connect(addr) else |_| -1
+        if c >= 0 {
+            made += 1
+        }
+    }
+    print("after-dials-ran {made}")
+    made
+}
+
+fn main() -> !int {
+    let l = net_listen_with("127.0.0.1:0", false, 1)?
+    let port = net_port(l)?
+    let w = spawn proc dialer("127.0.0.1:{port}")
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}
