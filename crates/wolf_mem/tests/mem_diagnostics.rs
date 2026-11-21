@@ -3313,6 +3313,47 @@ fn main() -> int {
 }
 
 #[test]
+fn e1010_a_select_without_a_timeout_is_a_path_out_of_the_frame() {
+    // wolf-lang#1143 (`[conc.select.ready]`): the helper waits for its
+    // proc's exit only in a select on the monitor with no timeout arm. A
+    // cancellation leaves that select as `?` would, so a path out of
+    // `helper` meets no wait and the call holds the frame rule; the same
+    // wait with a timeout arm is `clean_must_join`'s `run_small`.
+    snap(
+        "e1010_must_join_select",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn helper(s: str) -> !int {
+    let w = spawn proc child(s, 0)
+    let m = w.monitor()
+    var cls = 3
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() {
+                cls = 0
+            } else {
+                cls = 1
+            }
+        },
+    }
+    cls
+}
+fn main() -> int {
+    let n = 7
+    region pass {
+        let s = "built in pass, {n} uses"
+        let r = helper(s) else 9
+        print("helper {r}")
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
 fn procs_waited_for_on_every_path_stay_silent() {
     // s233: every path out of each helper waits for its proc — a join,
     // a deferred join, a join through a copy of the handle, an exit
