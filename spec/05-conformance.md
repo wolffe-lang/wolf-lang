@@ -126,7 +126,16 @@ parser contract):
   (duplicates are errors): `check:`, `phase:`, `conforms:`, `member:`.
 - `[conf.directive.check]` `check: pass | fail(CODE) | run(exit=N |
   exit=nonzero | exit=trap | exit=trap(kind) [, stdout="…"])` — kinds
-  from `[conf.trap.set]`; unknown kinds/phases are errors. A
+  from `[conf.trap.set]`; unknown kinds/phases are errors. `pass`
+  promises that the program completes the static ladder and nothing
+  about running it: a full run's `exit(N)`, `trap(kind)` and `ub(…)`
+  all match it, as `[proto.cmp.pass]` reads a `pass` record against a
+  dynamic verdict. A row that wants a dynamic claim spells `run(…)`.
+  (Amended for wolf-lang#603 and wolf-interp#202:
+  `conc/atomic_race_plain.lu` is a data race by design; the checked
+  machine and the reference interpreter detect it as
+  `[conc.mm.race.3]` permits, and the interpreter's corpus walk called
+  that a mismatch.) A
   `fail(CODE)` expectation matches the failing code exactly.
   `exit=nonzero` matches an `exit(N)` verdict whose N is not 0 and
   nothing else: not a trap (a trap is its own outcome class, spelled
