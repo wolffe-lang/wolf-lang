@@ -9,12 +9,7 @@ error[E0602]: this can also fail with `cancelled`, which `wait_one`'s row does n
   |                               ------------- the receiving row is declared here
 2 |     var got = 0
 3 |     select {
-  |     ^^^^^^^^
-4 |         v from ch => {
-5 |             got = v
-6 |         },
-7 |     }
-  | ^^^^^ the missing tag escapes here
+  |     ^^^^^^ the missing tag escapes here
   |
   = note: rows compose by union: `?` re-tags errors into the wider row by injection — there is no
     conversion to write, only tags to admit.
