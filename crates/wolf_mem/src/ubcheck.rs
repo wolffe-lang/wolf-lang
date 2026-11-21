@@ -9020,10 +9020,7 @@ impl<'t> Machine<'t> {
                 let Some(addr) = str_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
-                // wolf-lang#718: beside other tasks the dial waits as an
-                // accept does (`dial_parked`).
-                let dialled =
-                    self.dial_parked(move || std::net::TcpStream::connect(&addr), span)?;
+                let dialled = std::net::TcpStream::connect(&addr);
                 match dialled.and_then(|s| NetSock::Stream(s).under_posture()) {
                     Err(e) => Ok(tag(&coarse(&e, &["refused", "timeout", "io"]))),
                     Ok(s) => {
