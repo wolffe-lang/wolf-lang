@@ -19,6 +19,17 @@
 //! under a 20 s deadline and through the native tier (60 s, its build
 //! included). A run past its deadline is killed by its own child handle
 //! and FAILS the gate. Both must print the witness's line.
+//!
+//! A dial beside other tasks makes its connect on a host thread of its
+//! own. The second gate (unix; the checked machine) bounds that thread:
+//! `fixtures/checked_net_dials/dial_killed.lu` kills a proc while its
+//! dial waits on a listener nobody accepts from, and returns with the
+//! listener still open, so the connect is still waiting when the run
+//! ends. The run must end at once with `join: killed; kill prompt`; one
+//! that waited for the connect would wait out the kernel's connect
+//! timeout (75 s or more) and be killed at the deadline. windows is left
+//! out: its checked `net_listen_with` takes std's backlog, so nothing
+//! holds the dial there.
 
 mod lane_exit;
 
@@ -231,4 +242,37 @@ fn dials_past_the_backlog_before_accept() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A fixture of this file's own, as `main.lu` in a scratch directory (one
+/// module per directory).
+#[cfg(unix)]
+fn stage_fixture(name: &str) -> PathBuf {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/checked_net_dials")
+        .join(format!("{name}.lu"));
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("checked_net_dials")
+        .join(name);
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let entry = dir.join("main.lu");
+    std::fs::copy(&src, &entry).expect("stage the fixture");
+    entry
+}
+
+/// #718: a proc killed while its dial waits leaves nothing the run waits
+/// for at its end. The dial's host thread is still inside a connect the
+/// kernel holds when `main` returns.
+#[cfg(unix)]
+#[test]
+fn a_dial_killed_while_it_waits_leaves_nothing_to_join() {
+    let entry = stage_fixture("dial_killed");
+    let rec = match conform(&entry, "--checked", CHECKED_LIMIT) {
+        Ok(Some(rec)) => rec,
+        Ok(None) => unreachable!("the checked machine is never refused by the host"),
+        Err(why) => panic!("{why}"),
+    };
+    assert_eq!(rec["verdict"], "exit(0)", "{rec}");
+    assert_eq!(rec["stdout_inline"], "join: killed; kill prompt\n", "{rec}");
 }
