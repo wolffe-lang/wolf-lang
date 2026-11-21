@@ -9,9 +9,9 @@ decl @__wolf_rt_task_killed() -> i8
 
 fn @main() -> eu{i64} {
   fact deref %24 40 : op
-  fact deref %66 40 : op
+  fact deref %70 40 : op
   fact region %24 r0 : op
-  fact region %66 r1 : op
+  fact region %70 r1 : op
 b0:
   %0 = iconst.i64 1
   %1 = call @__wolf_rt_chan_new(%0)
@@ -73,108 +73,104 @@ b9:
   br %41, b10, b11
 b10:
   %42 = load.i64 %36, %40
-  jmp b13(%42)
+  jmp b16(%42)
 b11:
   %43 = iconst.i64 -2
   %44 = icmp.eq %39, %43
-  br %44, b12, b34
+  br %44, b15, b12
 b12:
-  %45 = iconst.i64 -1
-  jmp b13(%45)
-b13(%46: i64):
-  %47 = icmp.ne %46, %3
-  br %47, b14, b15
-b14:
-  %48: eu{i64} = eu.make.ok %0
+  %45 = call @__wolf_rt_task_killed()
+  %46 = icmp.ne %45, %34
+  br %46, b13, b14
+b13:
+  %47 = iconst.i64 2
+  %48: eu{i64} = eu.make.err %47
   ret %48
+b14:
+  jmp b15
 b15:
-  %49 = iconst.i64 9
-  %50 = call @__wolf_rt_chan_send(%2, %49)
-  %51 = icmp.eq %50, %5
-  br %51, b16, b17
-b16:
-  %52: eu{unit} = eu.make.ok
-  jmp b22(%52)
+  %49 = iconst.i64 -1
+  jmp b16(%49)
+b16(%50: i64):
+  %51 = icmp.ne %50, %3
+  br %51, b17, b18
 b17:
-  %53 = iconst.i32 1
-  %54 = icmp.eq %50, %53
-  br %54, b18, b19
+  %52: eu{i64} = eu.make.ok %0
+  ret %52
 b18:
-  %55: eu{unit} = eu.make.err %0
-  jmp b22(%55)
+  %53 = iconst.i64 9
+  %54 = call @__wolf_rt_chan_send(%2, %53)
+  %55 = icmp.eq %54, %5
+  br %55, b19, b20
 b19:
-  %56 = call @__wolf_rt_task_killed()
-  %57 = icmp.ne %56, %34
-  br %57, b20, b21
+  %56: eu{unit} = eu.make.ok
+  jmp b25(%56)
 b20:
-  %58 = iconst.i64 2
-  %59: eu{i64} = eu.make.err %58
-  ret %59
+  %57 = iconst.i32 1
+  %58 = icmp.eq %54, %57
+  br %58, b21, b22
 b21:
-  %60 = iconst.i64 2
-  %61: eu{unit} = eu.make.err %60
-  jmp b22(%61)
-b22(%62: eu{unit}):
-  %63: bool = eu.is_err %62
-  br %63, b23, b24
+  %59: eu{unit} = eu.make.err %0
+  jmp b25(%59)
+b22:
+  %60 = call @__wolf_rt_task_killed()
+  %61 = icmp.ne %60, %34
+  br %61, b23, b24
 b23:
-  %64: i64 = eu.err %62
-  %65: eu{i64} = eu.make.err %64
-  ret %65
+  %62 = iconst.i64 2
+  %63: eu{i64} = eu.make.err %62
+  ret %63
 b24:
-  %66: ptr, %67: mem.r1 = stack.alloc %23
-  %68 = store.ptr %2, %66, %67
-  %69 = ptr.off %66, %27, 1
-  %70 = store.i64 %22, %69, %68
-  %71 = ptr.off %66, %30, 1
-  %72 = store.i64 %22, %71, %70
-  %73 = ptr.off %66, %35, 1
-  %74 = ptr.off %66, %37, 1
-  %75, %76 = call @__wolf_rt_select(%66, %0, %33, %34, %73, %74, %72)
-  %77 = icmp.eq %75, %22
-  br %77, b25, b26
-b25:
-  %78 = load.i64 %73, %76
-  jmp b28(%78)
+  %64 = iconst.i64 2
+  %65: eu{unit} = eu.make.err %64
+  jmp b25(%65)
+b25(%66: eu{unit}):
+  %67: bool = eu.is_err %66
+  br %67, b26, b27
 b26:
-  %79 = iconst.i64 -2
-  %80 = icmp.eq %75, %79
-  br %80, b27, b31
+  %68: i64 = eu.err %66
+  %69: eu{i64} = eu.make.err %68
+  ret %69
 b27:
-  %81 = iconst.i64 -1
-  jmp b28(%81)
-b28(%82: i64):
-  %83 = icmp.ne %82, %49
-  br %83, b29, b30
+  %70: ptr, %71: mem.r1 = stack.alloc %23
+  %72 = store.ptr %2, %70, %71
+  %73 = ptr.off %70, %27, 1
+  %74 = store.i64 %22, %73, %72
+  %75 = ptr.off %70, %30, 1
+  %76 = store.i64 %22, %75, %74
+  %77 = ptr.off %70, %35, 1
+  %78 = ptr.off %70, %37, 1
+  %79, %80 = call @__wolf_rt_select(%70, %0, %33, %34, %77, %78, %76)
+  %81 = icmp.eq %79, %22
+  br %81, b28, b29
+b28:
+  %82 = load.i64 %77, %80
+  jmp b34(%82)
 b29:
-  %84 = iconst.i64 2
-  %85: eu{i64} = eu.make.ok %84
-  ret %85
+  %83 = iconst.i64 -2
+  %84 = icmp.eq %79, %83
+  br %84, b33, b30
 b30:
-  %86: eu{i64} = eu.make.ok %22
-  ret %86
+  %85 = call @__wolf_rt_task_killed()
+  %86 = icmp.ne %85, %34
+  br %86, b31, b32
 b31:
-  %87 = call @__wolf_rt_task_killed()
-  %88 = icmp.ne %87, %34
-  br %88, b32, b33
+  %87 = iconst.i64 2
+  %88: eu{i64} = eu.make.err %87
+  ret %88
 b32:
-  %89 = iconst.i64 2
-  %90: eu{i64} = eu.make.err %89
-  ret %90
+  jmp b33
 b33:
-  %91 = iconst.i64 2
-  %92: eu{i64} = eu.make.err %91
-  ret %92
-b34:
-  %93 = call @__wolf_rt_task_killed()
-  %94 = icmp.ne %93, %34
-  br %94, b35, b36
+  %89 = iconst.i64 -1
+  jmp b34(%89)
+b34(%90: i64):
+  %91 = icmp.ne %90, %53
+  br %91, b35, b36
 b35:
-  %95 = iconst.i64 2
-  %96: eu{i64} = eu.make.err %95
-  ret %96
+  %92 = iconst.i64 2
+  %93: eu{i64} = eu.make.ok %92
+  ret %93
 b36:
-  %97 = iconst.i64 2
-  %98: eu{i64} = eu.make.err %97
-  ret %98
+  %94: eu{i64} = eu.make.ok %22
+  ret %94
 }
