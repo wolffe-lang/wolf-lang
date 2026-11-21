@@ -1,0 +1,9 @@
+// The freestanding_cpus gate's kernel lists its assembly, so every call through a
+// bodyless `extern "c" fn` is judged by the roster ([abi.asm.roster]). slot.S is
+// the program's per-processor ambient storage. Its C declarations carry `ffi`.
+pkg {
+    name: "gate/cpus"
+    version: "0.0.1"
+    asm: ["cpus.S", "slot.S"]
+    capabilities: [ffi]
+}
