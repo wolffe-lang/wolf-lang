@@ -1,0 +1,8 @@
+// The control: the same kernel without slot.S, so the runtime's weak defaults
+// serve and both processors share its one ambient word.
+pkg {
+    name: "gate/cpus"
+    version: "0.0.1"
+    asm: ["cpus.S"]
+    capabilities: [ffi]
+}

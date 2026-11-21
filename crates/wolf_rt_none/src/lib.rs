@@ -28,17 +28,23 @@
 //! hosted contracts: 16-aligned grants, the ledger and its cap, the
 //! ambient slot, the root region that never frees.
 //!
-//! One CPU at a time. The language has no threads on this target
-//! (`spawn` is refused on it), but a kernel has its own: the ambient
-//! slot is one word for the thread of control running now, and the
-//! program's scheduler carries it across a switch with the documented
+//! Threads and processors. The language has no threads on this target
+//! (`spawn` is refused on it), but a kernel has its own. The runtime
+//! reaches the ambient region of the context running now only through
+//! `wolf_ambient_load` / `wolf_ambient_store`
+//! (`[abi.target.none.ambient.storage]`, wolf-lang#1111), which it
+//! defines WEAK over one word: a program that defines neither has one
+//! slot, which its scheduler carries across a switch with the documented
 //! pair `wolf_rt_ambient_get` / `wolf_rt_ambient_set`
-//! (`[abi.target.none.ambient]`, wolf-lang#611). Every other word the
-//! runtime keeps is a region's own (one thread's) or the live-bytes
-//! counter, moved by single read-modify-write instructions, so a switch
-//! may land anywhere inside the runtime on one CPU. A kernel that runs
-//! wolf code on several CPUs at once must not allocate from two of them
-//! concurrently — the runtime takes no lock.
+//! (`[abi.target.none.ambient]`, wolf-lang#611); a kernel that defines
+//! both (from each processor's record) gives every processor its own.
+//! Every other word the runtime keeps is a region's own (one thread's) or
+//! the live-bytes counter, moved by single atomic read-modify-write
+//! instructions, so a switch may land anywhere inside the runtime, and
+//! with per-processor storage two processors may allocate at once, each
+//! in its own regions (`[abi.target.none.ambient.concurrent]`). The
+//! runtime takes no lock: one region is never allocated into from two
+//! processors at once.
 
 #![no_std]
 

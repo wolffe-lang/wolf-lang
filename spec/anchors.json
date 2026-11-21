@@ -57,6 +57,8 @@
     "abi.target.none": "04-abi.md",
     "abi.target.none.alloc": "04-abi.md",
     "abi.target.none.ambient": "04-abi.md",
+    "abi.target.none.ambient.concurrent": "04-abi.md",
+    "abi.target.none.ambient.storage": "04-abi.md",
     "abi.target.none.codegen": "04-abi.md",
     "abi.target.none.hooks": "04-abi.md",
     "conc.cancel": "03-concurrency.md",

@@ -566,9 +566,13 @@ C membranes are extended: `import c` still admits only its modelled set
   (e) the freestanding runtime's ambient pair, `wolf_rt_ambient_get()
   -> *u8` and `wolf_rt_ambient_set(p: *u8)`, which the runtime defines
   and a program that switches threads calls
-  (`[abi.target.none.ambient]`). The program supplies (a), (b) and (d), in wolf (`export fn`) or
-  assembly; the freestanding runtime defines (b) as weak symbols, so a
-  program that defines its own wins at the link. On a hosted target
+  (`[abi.target.none.ambient]`); (f) the ambient storage pair,
+  `wolf_ambient_load() -> *u8` and `wolf_ambient_store(p: *u8)`, which
+  only the freestanding runtime calls and a program may define
+  (`[abi.target.none.ambient.storage]`). The program supplies (a), (b)
+  and (d), and may supply (f), in wolf (`export fn`) or assembly; the
+  freestanding runtime defines (b) and (f) as weak symbols, so a program
+  that defines its own wins at the link. On a hosted target
   `wolf_trap` is the runtime's own report-and-exit: a hosted program
   that imports it (a freestanding module's logic under a hosted test,
   say) links it as an alias of the runtime's sited reporter. The alias
@@ -596,10 +600,10 @@ C membranes are extended: `import c` still admits only its modelled set
   never with null — a region's chunks and header when the region is
   freed, an interpolation's build buffer when it finishes. A block
   allocated outside every `region` (the process root) is never freed.
-  The runtime keeps one ambient-region slot, the running thread of
-  control's (`[abi.target.none.ambient]`), and takes no lock: a program
-  that runs wolf code on several CPUs must not allocate from two at
-  once. A fault inside the runtime (a
+  The runtime reaches the running context's ambient region only through
+  the storage pair (`[abi.target.none.ambient.storage]`) and takes no
+  lock; what two processors may do at once is
+  `[abi.target.none.ambient.concurrent]`. A fault inside the runtime (a
   breached budget, a negative size) reaches `wolf_trap` with its kind
   and no site, `(null, 0, 0, 0)`. Still refused by name, as constructs
   the freestanding runtime does not carry: `Pool`, `freeze`, a boxed
@@ -618,7 +622,9 @@ C membranes are extended: `import c` still admits only its modelled set
   that leaves a `region` open must carry that thread's ambient region
   with it, or the next thread's allocations land in a region it never
   entered, whose exit frees them under it. The freestanding runtime
-  keeps the running thread's ambient region in one word and defines
+  keeps the running thread's ambient region where
+  `[abi.target.none.ambient.storage]` says (one word, unless the program
+  supplies its own storage) and defines
   two functions over it, with the C convention: `wolf_rt_ambient_get()
   -> *u8` returns it (null is the process root), and
   `wolf_rt_ambient_set(p: *u8)` makes `p` the running thread's. A
@@ -627,9 +633,9 @@ C membranes are extended: `import c` still admits only its modelled set
   the incoming thread's saved value, or with null for a thread that
   has not run yet, before that thread runs again. Passing `set`
   anything else is undefined. The value is opaque: the program
-  stores it and gives it back, and reads nothing through it. Both
-  functions read or write one word and never call a hook, so a switch
-  may call them with interrupts off. The runtime's other state is a
+  stores it and gives it back, and reads nothing through it. Each of
+  the two is one call to the storage pair and calls no other hook, so a
+  switch may call them with interrupts off. The runtime's other state is a
   region's own, which belongs to the thread inside it, or a counter
   moved by one atomic read-modify-write. So a switch may land anywhere
   inside a runtime call on one CPU. A program that never switches
@@ -644,6 +650,83 @@ C membranes are extended: `import c` still admits only its modelled set
   each inside its own `region` across the switch, on both tiers. With
   the pair, the List lands in its own thread's region. Without it
   (the control), the List lands in the other thread's.
+- `[abi.target.none.ambient.storage]` The freestanding runtime reads
+  and writes the running context's ambient region (a context is
+  whatever runs wolf code: a processor, or a thread of control on one)
+  only through two functions with the C convention:
+  `wolf_ambient_load() -> *u8` returns it (null is the process root),
+  and `wolf_ambient_store(p: *u8)` replaces it. It calls `load` at every
+  allocation that lands in the ambient region (a `List` or `Map`
+  header, an interpolation's result, a capturing closure's record),
+  `load` and then `store` at every `region` entry, `store` at every
+  exit, and one of them inside `wolf_rt_ambient_get` and
+  `wolf_rt_ambient_set` (`[abi.target.none.ambient]`). It never keeps
+  the value or the storage's address between calls. The runtime archive
+  defines both as weak symbols over one word of its own, null at load:
+  a program that defines neither has the one slot of
+  `[abi.target.none.ambient]`, and its object is the same as before. A
+  program that defines both, in wolf (`export fn`) or assembly, wins at
+  the link and gives each context its own storage; defining one and not
+  the other is undefined. The program's pair may be called on any
+  context that runs wolf code, any number of times in one runtime call,
+  with interrupts on or off, and on several processors at once; `load`
+  returns what the last `store` on the same context stored, or null
+  when none has. Neither may allocate, open a region, trap, block or
+  call into the runtime, and the value is opaque, as
+  `[abi.target.none.ambient]` says. A context's storage must read null
+  before the context first allocates or enters a region, and the pair
+  must work from the context's first runtime call on (a kernel that
+  reaches its storage through the GS base sets the base first). Where a
+  thread of control can be preempted inside a runtime call and resumed
+  on another processor, each `load` and `store` must reach the storage
+  of the thread running at the instant of the access. Two layouts do: a
+  word in the processor's own record, read or written by one
+  instruction (`mov %gs:N, %rax` and `mov %rdi, %gs:N`), which the
+  program's switch moves in and out with `wolf_rt_ambient_get` and
+  `wolf_rt_ambient_set` with interrupts off; and a word in the running
+  thread's own record, which needs no move at a switch. A
+  per-processor word reached in two steps (the record's address, then
+  the word) is correct only where the thread cannot move between them.
+  Because the runtime does each access through the pair, a region entry
+  split by such a move still loads the thread's own value and stores
+  on the processor the thread now runs on. The hosted runtime keeps the
+  slot per thread itself and neither defines nor calls the pair.
+  Witness: `crates/wolf_driver/tests/freestanding_cpus.rs`, whose
+  kernel runs on two processors (two threads of one process, each with
+  its own record as its GS base) and keeps each processor's ambient
+  region in its record, one instruction a load or a store; the same
+  kernel built without its pair keeps the runtime's single word, and
+  the two processors read each other's value.
+- `[abi.target.none.ambient.concurrent]` With per-context storage
+  (`[abi.target.none.ambient.storage]`), two contexts may run wolf code
+  and allocate at the same time. Each allocation lands in its own
+  context's ambient region or in the process root. Two regions share no
+  runtime word but the live-bytes counter, which moves by one atomic
+  read-modify-write, so `live_region_bytes()` counts the live regions of
+  every context, as on a hosted target. An interpolation's build buffer
+  is its own block, and a container's growth lands in the region it was
+  born in. A region's exit frees that region's blocks alone: a region
+  open on another context stays usable. A root grant is its own
+  `wolf_alloc` block and is never freed, so root allocation on several
+  contexts at once is safe exactly when the program's allocator is; the
+  runtime then calls `wolf_alloc` and `wolf_free` from several
+  processors at once, and the program's pair must allow it. Not
+  guaranteed: allocating into one region from two contexts at once (a
+  region, and every container born in it, belongs to the context that
+  entered it, and growing such a container from another context is
+  undefined, since the runtime takes no lock); any data the program
+  shares between contexts; a handler that allocates on a context that
+  was inside a region, which allocates into that region unless it saves
+  the storage, stores null and restores it on its way out; and any of
+  this with the runtime's default pair, which is one word for the whole
+  program. Witness: `crates/wolf_driver/tests/freestanding_cpus.rs`, on
+  both tiers: two regions allocating at once on two processors, each
+  ledger equal to that of the same work done alone; one region ending,
+  its blocks poisoned, while the other allocates and then reads its own
+  data back whole; a thread of control moved to the other processor
+  with its region open, at a switch and in the middle of its region's
+  entry, while another thread allocates in its own region; and the
+  same with both processors on one CPU.
 - `[abi.target.none.codegen]` Code generated for `x86_64-unknown-none`
   uses no red zone, no x87/MMX/SSE/AVX register (apart from the narrowly
   guarded C variadic entry saves below) and no stack protector,

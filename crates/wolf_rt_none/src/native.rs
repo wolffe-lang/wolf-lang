@@ -26,7 +26,10 @@
 //!   which is the hosted meaning of the process root.
 //!
 //! Neither hook is ever called re-entrantly by the runtime, and nothing
-//! here calls them from a context the program did not enter.
+//! here calls them from a context the program did not enter. A program
+//! that gives each processor its own ambient storage (below) may run
+//! wolf code on several processors at once, and then the runtime calls
+//! both hooks from several processors at once: the pair must allow that.
 //!
 //! # The region
 //!
@@ -41,7 +44,9 @@
 //! are inside that capacity).
 
 use core::ffi::c_void;
-use core::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
+#[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
+use core::sync::atomic::AtomicPtr;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Trap kind codes — `[conf.trap.set]`'s runtime numbering, the
 /// hosted `wolf_rt::native::trap_code` values.
@@ -132,17 +137,90 @@ const REGION_HDR: usize = (core::mem::size_of::<Region>() + ALIGN - 1) & !(ALIGN
 
 static LIVE_REGION_BYTES: AtomicUsize = AtomicUsize::new(0);
 
-/// The ambient region (`[mem.region.create.3]`); null = the process
-/// root. One word for the thread of control running now: a program
-/// that switches threads saves and restores it per thread through
-/// [`wolf_rt_ambient_get`] / [`wolf_rt_ambient_set`]
-/// (`[abi.target.none.ambient]`, wolf-lang#611).
-static AMBIENT_REGION: AtomicPtr<c_void> = AtomicPtr::new(core::ptr::null_mut());
+// The ambient region (`[mem.region.create.3]`; null = the process root)
+// of the context running now. The runtime keeps no word for it: it reads
+// and writes it only through `wolf_ambient_load() -> *u8` and
+// `wolf_ambient_store(p: *u8)` (`[abi.target.none.ambient.storage]`,
+// wolf-lang#1111), which a program may supply. The archive defines both
+// WEAK over one word of its own, so a program that defines neither keeps
+// one slot, switched per thread with `wolf_rt_ambient_get`/`_set`
+// (wolf-lang#611); a program that defines both (a kernel, from each
+// processor's record) gives each processor or thread its own, and two
+// processors may allocate at once (`[abi.target.none.ambient.concurrent]`).
+// The value is never cached: every access is one call.
+#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+unsafe extern "C" {
+    fn wolf_ambient_load() -> *mut c_void;
+    fn wolf_ambient_store(p: *mut c_void);
+}
+
+// The weak defaults. Their word is a local symbol of this block, reached
+// by nothing else. A weak symbol is never bound in place, so the runtime's
+// calls go through relocations and a program's own definitions win at the
+// link (ld.lld and GNU ld alike).
+#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+core::arch::global_asm!(
+    ".pushsection .text.wolf_ambient_load,\"ax\",@progbits",
+    ".weak wolf_ambient_load",
+    ".type wolf_ambient_load,@function",
+    "wolf_ambient_load:",
+    "    movq __wolf_rt_ambient_word(%rip), %rax",
+    "    ret",
+    ".size wolf_ambient_load, .-wolf_ambient_load",
+    ".popsection",
+    ".pushsection .text.wolf_ambient_store,\"ax\",@progbits",
+    ".weak wolf_ambient_store",
+    ".type wolf_ambient_store,@function",
+    "wolf_ambient_store:",
+    "    movq %rdi, __wolf_rt_ambient_word(%rip)",
+    "    ret",
+    ".size wolf_ambient_store, .-wolf_ambient_store",
+    ".popsection",
+    ".pushsection .bss.__wolf_rt_ambient_word,\"aw\",@nobits",
+    ".p2align 3",
+    "__wolf_rt_ambient_word:",
+    "    .zero 8",
+    ".popsection",
+    options(att_syntax)
+);
+
+/// The running context's ambient region, through the storage pair.
+#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+#[inline(always)]
+fn ambient_load() -> *mut c_void {
+    // SAFETY: the pair's contract (`[abi.target.none.ambient.storage]`):
+    // it takes nothing and returns an opaque word.
+    unsafe { wolf_ambient_load() }
+}
+
+/// Make `p` the running context's ambient region, through the pair.
+#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+#[inline(always)]
+fn ambient_store(p: *mut c_void) {
+    // SAFETY: as above; the pair keeps the word and reads nothing
+    // through it.
+    unsafe { wolf_ambient_store(p) }
+}
+
+// A host build (the rlib this crate's own tests link) has no program to
+// supply the pair: the same single word, in Rust.
+#[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
+static AMBIENT_WORD: AtomicPtr<c_void> = AtomicPtr::new(core::ptr::null_mut());
+
+#[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
+fn ambient_load() -> *mut c_void {
+    AMBIENT_WORD.load(Ordering::Relaxed)
+}
+
+#[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
+fn ambient_store(p: *mut c_void) {
+    AMBIENT_WORD.store(p, Ordering::Relaxed)
+}
 
 /// The ambient region, or null for the process root (read by the
 /// shared list/map source).
 pub(crate) fn ambient_region() -> *mut c_void {
-    AMBIENT_REGION.load(Ordering::Relaxed)
+    ambient_load()
 }
 
 /// `region.new` — a fresh, empty, uncapped region.
@@ -275,7 +353,12 @@ pub extern "C" fn __wolf_rt_live_region_bytes() -> i64 {
 /// `handle` is a live region for as long as it stays ambient.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_ambient_enter(handle: *mut c_void) -> *mut c_void {
-    AMBIENT_REGION.swap(handle, Ordering::Relaxed)
+    // A load then a store, two calls: a thread moved to another processor
+    // between them stores on the one it now runs on, and the value it
+    // loaded was its own (`[abi.target.none.ambient.storage]`).
+    let prev = ambient_load();
+    ambient_store(handle);
+    prev
 }
 
 /// Restore the ambient region a matching enter returned.
@@ -285,21 +368,23 @@ pub unsafe extern "C" fn __wolf_rt_region_ambient_enter(handle: *mut c_void) -> 
 /// `prev` is what the matching enter returned.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_ambient_leave(prev: *mut c_void) {
-    AMBIENT_REGION.store(prev, Ordering::Relaxed);
+    ambient_store(prev);
 }
 
 /// `wolf_rt_ambient_get() -> *u8` (`[abi.target.none.ambient]`): the
 /// running thread's ambient region, null for the process root. A
-/// scheduler stores it in the outgoing thread's record at a switch.
+/// scheduler stores it in the outgoing thread's record at a switch. One
+/// call to `wolf_ambient_load`, the program's or the default.
 #[unsafe(no_mangle)]
 pub extern "C" fn wolf_rt_ambient_get() -> *mut c_void {
-    AMBIENT_REGION.load(Ordering::Relaxed)
+    ambient_load()
 }
 
 /// `wolf_rt_ambient_set(p: *u8)` (`[abi.target.none.ambient]`): make
 /// `p` the running thread's ambient region. A scheduler passes the
 /// incoming thread's saved value at a switch — null for a thread that
-/// has not run yet (the process root).
+/// has not run yet (the process root). One call to
+/// `wolf_ambient_store`, the program's or the default.
 ///
 /// # Safety
 ///
@@ -307,7 +392,7 @@ pub extern "C" fn wolf_rt_ambient_get() -> *mut c_void {
 /// thread now being resumed, whose region is still open there.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wolf_rt_ambient_set(p: *mut c_void) {
-    AMBIENT_REGION.store(p, Ordering::Relaxed);
+    ambient_store(p);
 }
 
 /// A capturing closure's record, in the ambient region
