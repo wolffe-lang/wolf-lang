@@ -651,43 +651,11 @@ fn reap(proc: &Arc<Proc>) {
         kind: reason.kind(),
     });
 
-    // `[conc.proc.kill]` step (2) (wolf-lang#730): a proc that dies by a
-    // kill or a contained trap first kills every proc it still owes and
-    // waits for that proc's own killed-proc sequence to end — an owed
-    // proc reads bytes in this proc's regions, which step (3) is about
-    // to free, and a trap or a kill can land between a spawn and the
-    // join no static rule over the frame can see. Every other exit only
-    // drops its records: its frames met each obligation on the paths
-    // they took (`[conc.proc.arg]`'s must-join check), or the bytes
-    // outlive this proc.
-    let owed: Vec<u64> = {
-        let mut reg = registry().lock().unwrap();
-        let mut owed: Vec<u64> = reg
-            .owed_by
-            .remove(&proc.id)
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
-        owed.sort_unstable();
-        for id in &owed {
-            reg.owner_of.remove(id);
-        }
-        owed
-    };
-    if matches!(reason, ProcExit::Killed | ProcExit::Fault { .. }) {
-        let live: Vec<Arc<Proc>> = owed.iter().filter_map(|&id| live_proc(id).ok()).collect();
-        for p in &live {
-            kill_mark(p);
-        }
-        for p in &live {
-            wait_exited(p);
-        }
-    }
-
-    // Take the region ledger (both maps) — the slot stays Live and
-    // the phase stays Running until `publish`, so every observer
-    // still queues behind the teardown instead of reading around it.
-    let owned: Vec<usize> = {
+    // Take the region ledger (both maps) and the procs this proc still
+    // owes, under one lock — the slot stays Live and the phase stays
+    // Running until `publish`, so every observer still queues behind
+    // the teardown instead of reading around it.
+    let (owned, owed): (Vec<usize>, Vec<u64>) = {
         let mut reg = registry().lock().unwrap();
         reg.scope_to_proc.remove(&proc.scope.id());
         let owned = reg
@@ -699,8 +667,37 @@ fn reap(proc: &Arc<Proc>) {
         for h in &owned {
             reg.region_owner.remove(h);
         }
-        owned
+        let mut owed: Vec<u64> = reg
+            .owed_by
+            .remove(&proc.id)
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        owed.sort_unstable();
+        for id in &owed {
+            reg.owner_of.remove(id);
+        }
+        (owned, owed)
     };
+
+    // `[conc.proc.kill]` step (2) (wolf-lang#730): a proc that dies by a
+    // kill or a contained trap kills every proc it still owes and waits
+    // for that proc's own killed-proc sequence to end before step (3)
+    // frees anything — an owed proc reads bytes in this proc's regions,
+    // and a trap or a kill can land between a spawn and the join where
+    // no static rule over the frame can see it. Every other exit only
+    // drops its records: its frames met each obligation on the paths
+    // they took (`[conc.proc.arg]`'s must-join check), or the bytes
+    // outlive this proc.
+    if matches!(reason, ProcExit::Killed | ProcExit::Fault { .. }) && !owed.is_empty() {
+        let live: Vec<Arc<Proc>> = owed.iter().filter_map(|&id| live_proc(id).ok()).collect();
+        for p in &live {
+            kill_mark(p);
+        }
+        for p in &live {
+            wait_exited(p);
+        }
+    }
 
     // Publish the reason: the registry's word (late monitors read it),
     // then phase + cv (kill()/monitor() waiters), then the registered
