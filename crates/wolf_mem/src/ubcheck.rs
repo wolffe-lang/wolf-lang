@@ -6757,10 +6757,7 @@ impl<'t> Machine<'t> {
                     let hv = if let Some(place) = found!(self.place_of(hole)) {
                         self.read_place(&place, hole.span)?
                     } else {
-                        match self.eval(hole)? {
-                            Flow::Val(v) | Flow::Err(v, false) => v,
-                            other => return Ok(other),
-                        }
+                        val!(self.eval(hole))
                     };
                     let rendered = self.render(&hv, self.ctx().expr_tys.get(&hole.span).copied());
                     match i.format_spec() {
