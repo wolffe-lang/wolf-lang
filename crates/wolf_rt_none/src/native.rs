@@ -220,7 +220,7 @@ fn ambient_store(p: *mut c_void) {
 /// The ambient region, or null for the process root (read by the
 /// shared list/map source).
 pub(crate) fn ambient_region() -> *mut c_void {
-    ambient_load()
+    core::ptr::null_mut()
 }
 
 /// `region.new` — a fresh, empty, uncapped region.
