@@ -9113,9 +9113,11 @@ impl<'t> Machine<'t> {
                 let Some(addr) = str_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
-                match std::net::TcpStream::connect(&addr)
-                    .and_then(|s| NetSock::Stream(s).under_posture())
-                {
+                // wolf-lang#718: beside other tasks the dial waits as an
+                // accept does (`dial_parked`).
+                let dialled =
+                    self.dial_parked(move || std::net::TcpStream::connect(&addr), span)?;
+                match dialled.and_then(|s| NetSock::Stream(s).under_posture()) {
                     Err(e) => Ok(tag(&coarse(&e, &["refused", "timeout", "io"]))),
                     Ok(s) => {
                         let fd = self.socks.len() as i64;
@@ -9525,6 +9527,55 @@ impl<'t> Machine<'t> {
             }
             if !self.yield_now(span)? {
                 return Ok(false);
+            }
+        }
+    }
+
+    /// wolf-lang#718: a dial beside other tasks waits as an accept or a
+    /// read does (`net_park`, `[exec.checked.task]`). Until #718 the dial
+    /// was one blocking connect on the thread that holds the baton, so a
+    /// dial the kernel held (a listener whose backlog was full) held the
+    /// whole machine, and the task whose accept would have made room never
+    /// ran: `waitwolf loop 0 130` stopped. Now the connect is made on a
+    /// host thread of its own, as the runtime makes its dial beside a
+    /// waiting worker, and the task asks for the answer a millisecond at a
+    /// time while the other tasks run between asks. That thread holds the
+    /// connect and its end of a channel, nothing of the machine. It is
+    /// detached, outside the run's thread scope, so nothing ever joins
+    /// it: a task killed while its dial waits drops the other end and
+    /// unwinds at once, the thread finishes when the connect answers and
+    /// the socket it made closes, and a run that ends first does not wait
+    /// for it (`checked_net_dials.rs`). Alone, or with no thread to give,
+    /// the dial is the one blocking connect it always was.
+    fn dial_parked<S: Send + 'static>(
+        &mut self,
+        dial: impl FnOnce() -> std::io::Result<S> + Clone + Send + 'static,
+        span: Span,
+    ) -> E<std::io::Result<S>> {
+        if !self.sched.concurrent {
+            return Ok(dial());
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let job = dial.clone();
+        let made = std::thread::Builder::new()
+            .name("wolf-checked-dial".into())
+            .spawn(move || {
+                let _ = tx.send(job());
+            });
+        if made.is_err() {
+            return Ok(dial());
+        }
+        let lost = || std::io::Error::other("the dial's host thread ended without an answer");
+        loop {
+            match rx.recv_timeout(std::time::Duration::from_millis(1)) {
+                Ok(answer) => return Ok(answer),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(Err(lost())),
+            }
+            if !self.yield_now(span)? {
+                // Nobody else to run: wait for the answer, as the one
+                // blocking connect did.
+                return Ok(rx.recv().unwrap_or_else(|_| Err(lost())));
             }
         }
     }
