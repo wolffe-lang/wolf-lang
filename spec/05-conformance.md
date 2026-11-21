@@ -129,7 +129,7 @@ parser contract):
   from `[conf.trap.set]`; unknown kinds/phases are errors. `pass`
   promises that the program completes the static ladder and nothing
   about running it: a full run's `exit(N)`, `trap(kind)` and `ub(…)`
-  all match it, as `[proto.cmp.pass]` reads a `pass` record against a
+  all match it, as `[proto.cmp.passes]` reads a `pass` record against a
   dynamic verdict. A row that wants a dynamic claim spells `run(…)`.
   (Amended for wolf-lang#603 and wolf-interp#202:
   `conc/atomic_race_plain.lu` is a data race by design; the checked
