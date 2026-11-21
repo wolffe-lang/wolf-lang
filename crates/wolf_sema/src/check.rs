@@ -3669,7 +3669,11 @@ impl<'a> Checker<'a> {
         let can_block_uncapped =
             d.arms().any(|a| !a.is_timeout()) && !d.arms().any(|a| a.is_timeout());
         if can_block_uncapped {
-            self.select_cancel_edge(e.span);
+            // The diagnostics point at the `select` keyword.
+            let at = e
+                .child_token(SyntaxKind::SelectKw)
+                .map_or(e.span, |t| t.span);
+            self.select_cancel_edge(at);
         }
         Ok(self.lo.table.unit())
     }
