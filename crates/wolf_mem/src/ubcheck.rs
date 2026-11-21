@@ -6664,10 +6664,18 @@ impl<'t> Machine<'t> {
             let ispan = i.syntax().span;
             let v = match i.expr() {
                 Some(hole) => {
+                    // wolf-lang#1050 (`[type.interp.union]`): a hole READS
+                    // a `!T` value, its ok payload or else its row, as a
+                    // binding does (#122): a raw row (a fallible call's own
+                    // failure) renders. Only a `?` that fired inside the
+                    // hole keeps unwinding.
                     let hv = if let Some(place) = found!(self.place_of(hole)) {
                         self.read_place(&place, hole.span)?
                     } else {
-                        val!(self.eval(hole))
+                        match self.eval(hole)? {
+                            Flow::Val(v) | Flow::Err(v, false) => v,
+                            other => return Ok(other),
+                        }
                     };
                     let rendered = self.render(&hv, self.ctx().expr_tys.get(&hole.span).copied());
                     match i.format_spec() {
