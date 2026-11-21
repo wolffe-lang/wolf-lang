@@ -100,7 +100,8 @@ on every PR push. Lane evidence under `notes/` is PR-class, not prose.
 ## Releases
 - Before the tag, check the agents' guide against the release's own
   archives: `WOLF=<wolf from the archive> LUPIN=<the paired lupin>
-  docs/agents-guide-check.sh docs/agents-guide.md` exits 0, and the guide's
+  docs/agents-guide-check.sh docs/agents-guide.md` exits 0 (lupin takes the
+  wolf archive's `std/`, found beside `wolf` or named by `LUPIN_STD`), and the guide's
   version line names the release, its lupin and its bundled std. A fence
   whose verdict moved is the language changing under the guide: rewrite
   that section in the release PR, never delete the fence to make the check

@@ -23,6 +23,10 @@ the released toolchain actually does.
 WOLF=path/to/wolf LUPIN=path/to/lupin docs/agents-guide-check.sh docs/agents-guide.md
 ```
 
+The lupin archive bundles no std, so lupin reads the wolf archive's `std/`:
+the check finds the `std/` beside the `wolf` binary, or takes `LUPIN_STD` (for
+lupin alone) or `WOLF_STD` (for both machines), each the std directory itself.
+
 A fence header uses `expect=` for the compiler's verdict (default `exit:0`),
 `lupin=` for the interpreter's (default: the same), `args=` and `stdin=` for
 the program's input, `warn=` for a warning the build must print, and `nofmt`
