@@ -53,6 +53,22 @@
   and expression hover use the same context. Without a usable open entry,
   queries retain their standalone behavior; diagnostics are unchanged.
 
+- **Freestanding:** a kernel can give each processor its own ambient
+  region, so wolf code can allocate on several processors at once
+  (wolf-lang#1111). The freestanding runtime now reaches the ambient region
+  only through `wolf_ambient_load()` and `wolf_ambient_store(p)`, which
+  `libwolf_rt_none.a` defines as weak symbols over its own single word. A
+  program that defines both, for example as one `%gs`-relative load and
+  store on a word of each processor's record, gets per-processor storage;
+  `wolf_rt_ambient_get` and `wolf_rt_ambient_set` keep their meaning and go
+  through the same pair. A program that defines neither builds the same
+  objects and keeps one slot, as before. `[abi.target.none.ambient.storage]`
+  and `[abi.target.none.ambient.concurrent]` state the pair's contract, what
+  two processors may do at once, and what stays undefined (two processors
+  allocating into one region). The hosted runtime is unchanged. Witness:
+  `crates/wolf_driver/tests/freestanding_cpus.rs`, two processors on both
+  tiers.
+
 ## 0.2.40 — 2026-11-12
 
 Pairs with **lupin 0.1.62**, conformance pin
