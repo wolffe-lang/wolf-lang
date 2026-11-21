@@ -689,7 +689,7 @@ fn reap(proc: &Arc<Proc>) {
     // drops its records: its frames met each obligation on the paths
     // they took (`[conc.proc.arg]`'s must-join check), or the bytes
     // outlive this proc.
-    if matches!(reason, ProcExit::Killed | ProcExit::Fault { .. }) && !owed.is_empty() {
+    if matches!(reason, ProcExit::Killed) && !owed.is_empty() {
         let live: Vec<Arc<Proc>> = owed.iter().filter_map(|&id| live_proc(id).ok()).collect();
         for p in &live {
             kill_mark(p);
