@@ -45,6 +45,16 @@
   programs are outside the gated corpus until compiler support lands.
   This entry records the specification, not support in the current compiler.
 
+- On the checked machine (`wolf conform-run --checked`) a `select`'s
+  `timeout` arm beside a task waiting on host I/O now fires when the wait
+  has lasted that long (wolf-lang#728). The machine's timers run on a
+  virtual clock that moved only when no task was ready, and a task parked
+  in a read is ready again every millisecond, so a 300 ms timeout beside a
+  60 s read never fired: lobo's kill-on-patience shape took the exit arm a
+  minute later. While a task waits on host I/O the clock now follows real
+  elapsed time (`[exec.checked.task]`, `[exec.checked.sched]`); with no
+  host wait pending it stays virtual.
+
 - The checked machine (`wolf conform-run --checked`) no longer stops on a
   program that dials past its own listener's backlog before it accepts
   (wolf-lang#718). Its dial was one blocking connect on the machine's thread,
