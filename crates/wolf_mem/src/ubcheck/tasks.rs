@@ -317,6 +317,14 @@ struct Timer {
     arm: usize,
 }
 
+/// When a host wait began, on both clocks (wolf-lang#728,
+/// `[exec.checked.task]`): while it lasts, the virtual clock is held at
+/// or past `virtual_ns` plus the real time since `real`.
+pub(super) struct HostWait {
+    real: std::time::Instant,
+    virtual_ns: u128,
+}
+
 struct RealSleep {
     due: std::time::Instant,
     seq: u64,
@@ -640,6 +648,21 @@ impl<'t> Sched<'t> {
             return false;
         };
         self.clock = self.clock.max(earliest);
+        self.fire_due_timers()
+    }
+
+    /// wolf-lang#728 (`[exec.checked.task]`): while a task waits on host
+    /// I/O the virtual clock follows real elapsed time. It is raised to
+    /// `floor`, never lowered, and the timers that makes due fire.
+    fn raise_clock(&mut self, floor: u128) {
+        if floor > self.clock {
+            self.clock = floor;
+            self.fire_due_timers();
+        }
+    }
+
+    /// Fires every timer the clock has reached, in deadline order.
+    fn fire_due_timers(&mut self) -> bool {
         let clock = self.clock;
         let (mut due, keep): (Vec<Timer>, Vec<Timer>) =
             self.timers.drain(..).partition(|t| t.deadline <= clock);
@@ -2384,14 +2407,31 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// The start of a host wait, on both clocks (`yield_now`).
+    pub(super) fn host_wait(&self) -> HostWait {
+        HostWait {
+            real: std::time::Instant::now(),
+            virtual_ns: self.sched.clock,
+        }
+    }
+
     /// A host call that would block the whole machine (an accept, a
     /// read) polls instead and lets the other tasks run between polls.
-    /// `false`: there is nobody else to wait for.
-    pub(super) fn yield_now(&mut self, span: Span) -> E<bool> {
+    /// `false`: there is nobody else to wait for. wolf-lang#728: first the
+    /// virtual clock is raised to the wait's start plus the real time it
+    /// has taken, so a `timeout` arm beside the wait fires once the wait
+    /// has lasted that long, as it does on the native tiers. Until #728
+    /// the clock moved only when no task was ready, and a task waiting
+    /// here is ready again at once, so such an arm never fired.
+    pub(super) fn yield_now(&mut self, wait: &HostWait, span: Span) -> E<bool> {
         let me = self.me();
         if self.sched.tasks[me].killed {
             return Err(Stop::Killed);
         }
+        self.sched.raise_clock(
+            wait.virtual_ns
+                .saturating_add(wait.real.elapsed().as_nanos()),
+        );
         let others = self
             .sched
             .tasks

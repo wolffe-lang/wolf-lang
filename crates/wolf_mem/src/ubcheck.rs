@@ -9026,6 +9026,7 @@ impl<'t> Machine<'t> {
                 // and hands nothing on, as lupin's does; with nobody else
                 // to run, the rest of the deadline is one poll, as before.
                 let started = std::time::Instant::now();
+                let wait = self.host_wait();
                 let mut alone = !self.sched.concurrent || deadline == 0;
                 loop {
                     // Re-read each pass: a task that ran between polls
@@ -9066,7 +9067,7 @@ impl<'t> Machine<'t> {
                         let id = self.mint_list(ready, span)?;
                         return Ok(Flow::Val(Value::List(id)));
                     }
-                    if !self.yield_now(span)? {
+                    if !self.yield_now(&wait, span)? {
                         alone = true;
                     }
                 }
@@ -9512,6 +9513,7 @@ impl<'t> Machine<'t> {
             return Ok(false);
         }
         let started = std::time::Instant::now();
+        let wait = self.host_wait();
         loop {
             let ready = match self.sock(fd) {
                 Some(s) => s.poll_readable(1),
@@ -9525,7 +9527,7 @@ impl<'t> Machine<'t> {
             if budget.is_some_and(|b| started.elapsed() >= b) {
                 return Ok(true);
             }
-            if !self.yield_now(span)? {
+            if !self.yield_now(&wait, span)? {
                 return Ok(false);
             }
         }
@@ -9566,13 +9568,14 @@ impl<'t> Machine<'t> {
             return Ok(dial());
         }
         let lost = || std::io::Error::other("the dial's host thread ended without an answer");
+        let wait = self.host_wait();
         loop {
             match rx.recv_timeout(std::time::Duration::from_millis(1)) {
                 Ok(answer) => return Ok(answer),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(Err(lost())),
             }
-            if !self.yield_now(span)? {
+            if !self.yield_now(&wait, span)? {
                 // Nobody else to run: wait for the answer, as the one
                 // blocking connect did.
                 return Ok(rx.recv().unwrap_or_else(|_| Err(lost())));
@@ -9607,6 +9610,7 @@ impl<'t> Machine<'t> {
             .collect();
         let mut bufs: &mut [std::io::IoSlice<'_>] = &mut slices;
         let mut moved = std::time::Instant::now();
+        let wait = self.host_wait();
         while !bufs.is_empty() {
             let Some(s) = self.sock(fd) else {
                 return Ok(None);
@@ -9638,7 +9642,7 @@ impl<'t> Machine<'t> {
                     std::io::ErrorKind::WouldBlock,
                 ))));
             }
-            if !self.yield_now(span)? {
+            if !self.yield_now(&wait, span)? {
                 // Nobody else to run: the rest blocks, as it always did.
                 let rest: Vec<Vec<u8>> = bufs.iter().map(|b| b.to_vec()).collect();
                 let Some(s) = self.sock(fd) else {
@@ -9746,6 +9750,7 @@ impl<'t> Machine<'t> {
         let end = u64::try_from(deadline)
             .ok()
             .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
+        let wait = self.host_wait();
         loop {
             let mut meaning = 0;
             if want != 0 {
@@ -9763,7 +9768,7 @@ impl<'t> Machine<'t> {
             let others = if left_ms == Some(0) {
                 false
             } else {
-                self.yield_now(span)?
+                self.yield_now(&wait, span)?
             };
             let timeout = match (left_ms, others) {
                 (Some(0), _) => 0,
@@ -11136,7 +11141,8 @@ impl<'t> Machine<'t> {
                 }
                 // s226: beside other tasks the waiter lets them run
                 // — one of them may raise — and looks again.
-                while self.yield_now(span)? {
+                let wait = self.host_wait();
+                while self.yield_now(&wait, span)? {
                     if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
                         let m = self.signal_queue.remove(pos).expect("just found it");
                         return Ok(Flow::Val(Value::Int(m)));
@@ -11197,6 +11203,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 let want = mask;
+                let wait = self.host_wait();
                 loop {
                     checked_sig::settle(self.signal_listening);
                     if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
@@ -11206,7 +11213,7 @@ impl<'t> Machine<'t> {
                     if let Some(m) = checked_sig::take(want & self.signal_listening) {
                         return Ok(Flow::Val(Value::Int(m)));
                     }
-                    let others = self.yield_now(span)?;
+                    let others = self.yield_now(&wait, span)?;
                     match checked_sig::wait_readable(
                         &f,
                         want & self.signal_listening,
@@ -11458,6 +11465,7 @@ impl<'t> Machine<'t> {
                     .ok()
                     .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
                 let want = mask;
+                let wait = self.host_wait();
                 loop {
                     checked_sig::settle(self.signal_listening);
                     if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
@@ -11473,7 +11481,7 @@ impl<'t> Machine<'t> {
                     let others = if left_ms == Some(0) {
                         false
                     } else {
-                        self.yield_now(span)?
+                        self.yield_now(&wait, span)?
                     };
                     let timeout = match (left_ms, others) {
                         (Some(0), _) => 0,
