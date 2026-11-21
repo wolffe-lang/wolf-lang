@@ -412,7 +412,17 @@ premise by construction.
   kind the region-cap contract pins (`[mem.region.cap.3]`,
   wolf-lang#187: the budget breach lobo's per-request 503 matches
   on). In the root domain a trap remains process death
-  (`[conc.proc.root]`, `[conf.trap.exit]`).
+  (`[conc.proc.root]`, `[conf.trap.exit]`). **What containment costs,
+  stated.** On native and release the trapped task's thread is parked
+  for the life of the process, because its frames can be neither
+  unwound nor resumed (`[abi.native.nounwind]`). Each contained trap
+  holds one OS thread and the stack pages it touched (measured: about
+  14.5 kB on linux x86-64 and about 53 kB on macOS arm64), and the
+  process ends when the host refuses another thread. The checked
+  machine and the reference interpreter keep no thread for a trap.
+  (Stated for wolf-lang#670: the runtime is to return the thread once
+  every task of the proc has finished, and until it does, this is
+  what each contained trap costs.)
 - `[conc.proc.join]` `p.join()` blocks the calling task until `p`
   exits and yields its result: `T ! {error, killed, cancelled, fault}`,
   where the ok half is `[conc.proc.exit]`'s `normal(value)` read as a
