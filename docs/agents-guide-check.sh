@@ -12,9 +12,12 @@
 # Environment:
 #   WOLF       the wolf binary (default: `wolf` on PATH)
 #   LUPIN      the lupin binary (default: `lupin` on PATH)
-#   WOLF_STD   a directory holding `std/`, passed to both machines as
-#              --std-root. Unset, each machine uses the std its archive
-#              bundles.
+#   WOLF_STD   the std directory itself (the archive's `std/`), passed to
+#              both machines as --std-root; the same meaning the compiler
+#              gives the variable. Unset, wolf uses the std its archive
+#              bundles, and lupin, which bundles none, uses LUPIN_STD if
+#              that is set and otherwise the `std/` beside the wolf binary.
+#   LUPIN_STD  the std directory for lupin alone (read by lupin itself).
 #   GUIDE_CHECK_KEEP=1   keep the scratch directory and print its path.
 #
 # The fence language. A checked fence opens with ```wolf and may carry
@@ -67,12 +70,26 @@ case "$GUIDE" in /*) ;; *) GUIDE="$(pwd)/$GUIDE" ;; esac
 case "$WOLF" in */*) case "$WOLF" in /*) ;; *) WOLF="$(pwd)/$WOLF" ;; esac ;; esac
 case "$LUPIN" in */*) case "$LUPIN" in /*) ;; *) LUPIN="$(pwd)/$LUPIN" ;; esac ;; esac
 STDARG=""
+LUPIN_STDARG=""
 STDNOTE="bundled"
 if [ -n "$STD" ]; then
-    [ -d "$STD/std" ] || { echo "agents-guide-check: WOLF_STD=$STD has no std/ directory" >&2; exit 2; }
+    [ -d "$STD" ] || { echo "agents-guide-check: WOLF_STD=$STD is not a directory (name the std directory itself)" >&2; exit 2; }
     case "$STD" in /*) ;; *) STD="$(pwd)/$STD" ;; esac
     STDARG="--std-root $STD"
+    LUPIN_STDARG="$STDARG"
     STDNOTE="WOLF_STD"
+elif [ -n "${LUPIN_STD:-}" ]; then
+    STDNOTE="wolf bundled, lupin LUPIN_STD"
+else
+    # lupin's archive bundles no std: give it the one beside the wolf binary
+    WOLF_PATH="$(command -v "$WOLF")"
+    if [ -d "$(dirname "$WOLF_PATH")/std" ]; then
+        LUPIN_STDARG="--std-root $(dirname "$WOLF_PATH")/std"
+        STDNOTE="wolf bundled, lupin $(dirname "$WOLF_PATH")/std"
+    else
+        echo "agents-guide-check: lupin has no std: set WOLF_STD or LUPIN_STD to the archive's std/ directory, or run wolf from an archive that keeps std/ beside it" >&2
+        exit 2
+    fi
 fi
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/agents-guide-check.XXXXXX")" || exit 2
@@ -212,7 +229,7 @@ while [ "$i" -lt "$COUNT" ]; do
     fi
 
     # --- lupin
-    ( cd "$d" && "$LUPIN" run --json $STDARG main.lu < stdin > lupin.json 2> lupin.err )
+    ( cd "$d" && "$LUPIN" run --json $LUPIN_STDARG main.lu < stdin > lupin.json 2> lupin.err )
     lverdict="$(jq -r '.verdict' "$d/lupin.json" 2>/dev/null)"
     case "$lverdict" in
         exit\(*\)) lgot="exit:$(echo "$lverdict" | sed 's/exit(\(.*\))/\1/')" ;;
