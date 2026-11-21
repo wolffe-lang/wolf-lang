@@ -2428,10 +2428,6 @@ impl<'t> Machine<'t> {
         if self.sched.tasks[me].killed {
             return Err(Stop::Killed);
         }
-        self.sched.raise_clock(
-            wait.virtual_ns
-                .saturating_add(wait.real.elapsed().as_nanos()),
-        );
         let others = self
             .sched
             .tasks
