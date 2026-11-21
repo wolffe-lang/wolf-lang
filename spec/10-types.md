@@ -44,7 +44,15 @@ system.
   literal never satisfies an integer expectation (`let n: int = 0.0` is
   refused, E0401), because `0.0` is not an integer denotation. Adoption
   is a property of **literals only**; a concrete value never adopts
-  (§`[type.numlit.value]`).
+  (§`[type.numlit.value]`). **A literal never adopts a `distinct`
+  type.** `type Col = distinct u8` keeps a meaning apart from its base,
+  so `let c: Col = 7`, a `Col` argument written `7` and a literal
+  pattern over a `Col` are all E0401 at the literal. The spelling is
+  the adapter's cast, `7 as Col`: the literal takes the base type
+  there and must fit it, so `300 as Col` is E0415 at the literal, as
+  `let b: u8 = 300` is. (Added for wolf-interp#350: the reference
+  interpreter let the literal adopt the adapter, then held 300 in a
+  `distinct u8`.)
 
 - `[type.numlit.propagate]` **Adoption propagates through an arithmetic
   or comparison term.** The operators `+ - * / %` and `< <= > >= == !=`
