@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 674..686 path=std.cmp
+FnDecl 687..744 name=ord_less body=Block
+FnDecl 746..830 name=first_two_ordered body=Block
+FnDecl 832..932 name=corners_ordered body=Block
+FnDecl 934..1297 name=main body=Block
