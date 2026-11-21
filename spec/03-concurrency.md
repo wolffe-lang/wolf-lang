@@ -418,16 +418,33 @@ premise by construction.
   where the ok half is `[conc.proc.exit]`'s `normal(value)` read as a
   VALUE and each row tag is one abnormal class read as a tag. This is
   the proc's talk-back channel: before it, a proc could report only
-  its exit class and its stdout. The join is a blocking point, so
-  cancellation of the JOINING task surfaces at it
-  (`[conc.cancel.points]`); it is not a second delivery of the exit
-  reason, but the same one `w.monitor()` carries, read
-  synchronously — a join after the proc has already exited answers
-  immediately and never blocks. The row is payload-free at v1: an
-  `error(tag)`'s tag rides the monitor channel, and a caller that
-  needs it reads the reason there. (Added 2026-09-18, s170 — BACKLOG
-  B21's ruling on wolf-lang#110: a typed result the supervisor
-  collects at the join, NOT a channel handle as a proc parameter.)
+  its exit class and its stdout. **A join returns only once `p` has
+  exited.** The join is a blocking point, and cancellation of the
+  JOINING task reaches it there (`[conc.cancel.points]`), but the join
+  forwards it instead of surfacing it: the join delivers `p.cancel()`
+  (`[conc.proc.cancel]`) and keeps waiting, then answers the reason
+  `p` exits with — `cancelled`, or `normal(value)` when `p` completes
+  despite the cancellation. The joining task stays cancelled, and its
+  next blocking point surfaces the cancellation as usual. So a join
+  that has returned always means `p` has exited, which
+  `[conc.proc.arg]`'s obligation counts on: a join its own task's
+  cancellation cut short would let the frame free bytes `p` still
+  reads. A kill of the joining task is `[conc.proc.kill]`'s case. The
+  join is not a second delivery of the exit reason, but the same one
+  `w.monitor()` carries, read synchronously — a join after the proc
+  has already exited answers immediately and never blocks. **The cost,
+  stated.** Nothing when no cancellation arrives. A cancelled joiner
+  waits for `p`'s cancellation to finish instead of leaving at once,
+  and `p` receives one cancellation it would not otherwise have.
+  (Amended for wolf-lang#732: the join used to return on its own
+  task's cancellation with `p` still running, so a frame that joined
+  on every path could still return, and its caller free, the bytes `p`
+  was reading; native and release printed reused bytes in every run.)
+  The row is payload-free at v1: an `error(tag)`'s tag rides the
+  monitor channel, and a caller that needs it reads the reason there.
+  (Added 2026-09-18, s170 — BACKLOG B21's ruling on wolf-lang#110: a
+  typed result the supervisor collects at the join, NOT a channel
+  handle as a proc parameter.)
 - `[conc.proc.arg]` A `spawn proc` argument crosses into a domain
   that outlives the spawner, so it is **moved** — with one exception:
   FROZEN data is **shared, not moved**. `[mem.region.freeze.1]` makes
@@ -484,10 +501,21 @@ premise by construction.
   that meets it on every path of its own. A kill meets nothing
   (wolf-lang#683). "Every path" is a forward dataflow over the memory
   checker's control-flow graph: `return`, `?`, `defer` and loop edges
-  included, a trap ending the path; an `int` or `bool` local assigned
-  a literal is carried across an `if` on it, so lobo's `cls = 4` on a
-  `select`'s timeout arm followed by `if cls == 4 { end_body(w) }` is
-  read path by path. A proc whose handle is rebound, stored, returned
+  included. **A path that ends in a trap meets nothing, and the
+  dataflow does not ask it to:** a trap can end almost any path, so
+  what keeps the proc from outliving the bytes on that path is the
+  runtime, not the frame. In the root domain the trap ends the process
+  and every proc in it (`[conc.proc.root]`); a trap contained at a
+  proc boundary runs the killed-proc sequence, whose step (2) stops
+  every proc the dying domain still owes before its regions free
+  (`[conc.proc.kill]`). A kill of the spawning proc is the same case.
+  A cancellation that reaches a `select` with no timeout arm leaves it
+  as `?` would leave a receive (`[conc.select.ready]`), so that edge
+  is a path out of the frame like any `?`. An `int` or `bool` local
+  assigned a literal is carried across an `if` on it, so lobo's
+  `cls = 4` on a `select`'s timeout arm followed by
+  `if cls == 4 { end_body(w) }` is read path by path. A proc whose
+  handle is rebound, stored, returned
   or spawned again while the first is open is never met. A function
   that misses an obligation **leaves a proc running** with those
   parameters (or its caller's region): a per-callee summary, the least
@@ -524,12 +552,31 @@ premise by construction.
 - `[conc.proc.kill]` **Killed-proc sequence, in order** (the decided
   rule): (1) the proc's task tree is cancelled *without running any
   further user code* — pending `defer`/`errdefer` in the killed proc
-  **do not run**; (2) external frames are waited out or fenced (§4);
-  (3) the proc's regions bulk-free; (4) exit reasons deliver.
-  Consequence, stated normatively: resources shared *across* proc
-  boundaries must be owned by channels/supervisors (release-on-exit
-  messages), never by defers inside the proc. Contrast
-  `[conc.cancel.defer]`.
+  **do not run**; (2) external frames are waited out or fenced (§4),
+  **and every proc the dying proc still owes is killed and its own
+  killed-proc sequence runs to its end**: a proc it owes is one a task
+  of the dying proc spawned under `[conc.proc.arg]`'s obligation and
+  has not yet met (not joined, its exit not received); (3) the proc's
+  regions bulk-free; (4) exit reasons deliver. So no proc reads a
+  region after the domain that owns the region has died: an owed proc
+  has stopped before step (3) frees the bytes it was handed. An owed
+  proc killed in step (2) exits `killed`, as any killed proc does, and
+  the procs it owes in turn go first. **The cost, stated.** A spawn
+  that raises the obligation records its proc on the spawning proc,
+  and meeting the obligation removes the record: one entry per such
+  spawn and nothing for a spawn that raises none. A kill, or a trap
+  contained at the boundary, waits for its owed procs' teardown before
+  its own regions free and its reason is delivered, bounded as step
+  (2)'s fencing bounds any teardown. Consequence, stated normatively:
+  resources shared *across* proc boundaries must be owned by
+  channels/supervisors (release-on-exit messages), never by defers
+  inside the proc. Contrast `[conc.cancel.defer]`. (Amended for
+  wolf-lang#730: before step (2) waited out owed procs, a trap
+  contained between a spawn and its join, or a kill of a proc waiting
+  in that join, freed the region whose bytes the spawned proc was
+  still reading, and native and release printed the bytes the next
+  allocation left there. Witnesses: the gate `proc_must_join_lanes`'s
+  trap and kill rows, each run on all four machines.)
 - `[conc.proc.cancel]` `w.cancel()` delivers **structured
   cancellation** to a proc: its task tree is cancelled cooperatively
   at `[conc.cancel.points]` blocking points, and its defers run
@@ -757,8 +804,28 @@ premise by construction.
 ### Select `[conc.select]`
 
 - `[conc.select.ready]` `select` evaluates readiness of its arms;
-  exactly one ready arm's body runs. With no ready arm, `select` blocks
-  (cancellation point).
+  exactly one ready arm's body runs. With no ready arm, `select`
+  blocks (cancellation point). **A cancellation that reaches a blocked
+  `select`** ends the wait without running a channel arm. If the
+  select has a `timeout(…)` arm, that arm runs, as though its deadline
+  had come: a cancellation is the earliest deadline. The task stays
+  cancelled, so its next blocking point surfaces the cancellation
+  again. A select without a timeout arm has no arm for it. There the
+  cancellation leaves the select as the `cancelled` error value of the
+  enclosing function, exactly as `?` would propagate it from a
+  receive, so the function's row must admit `cancelled`. A select that
+  can block, has no timeout arm and sits in a function whose row
+  cannot carry `cancelled` is refused at the `select` with the code
+  `?` reports there: **E0604** when the function has no row, **E0602**
+  when its declared row lacks `cancelled` (an inferred row gains it).
+  A `select` whose arms include one that is always ready (a
+  drained-closed receive, `[conc.select.closed]`) cannot block and is
+  unaffected. **The cost, stated.** Nothing when no cancellation
+  arrives. A refusal at compile time for the one shape that had no
+  answer. (Added for wolf-lang#1143: the compiled tiers trapped
+  `assert` inside the select, and the checked machine and the
+  reference interpreter returned early from a function typed `int`
+  with the row in its result.)
 - `[conc.select.fair]` Among simultaneously-ready arms the choice is
   **pseudo-random, seeded by the scheduler** — a recorded decision
   (`[conc.det.events]`), never wall-clock incidental. This wording is
@@ -867,9 +934,11 @@ schedule deadlocks"; `unsupported` was honest and insufficient.)
 - `[conc.cancel.points]` Cancellation is cooperative, delivered at
   **runtime-owned blocking points**, closed set: channel send/receive,
   `select`, `Mutex`/`when` acquisition, I/O completion waits, timer
-  waits, and explicit `checkpoint()`. `--checked` builds additionally
-  poll at function entry and loop back-edges; release builds do not
-  (the kernel preempts for scheduling, not cancellation).
+  waits, a proc join (which forwards the cancellation to the proc,
+  `[conc.proc.join]`), and explicit `checkpoint()`. `--checked` builds
+  additionally poll at function entry and loop back-edges; release
+  builds do not (the kernel preempts for scheduling, not
+  cancellation).
 - `[conc.cancel.defer]` A **cancelled task** runs its own frames'
   `defer`/`errdefer` as its frames unwind-by-return (no unwinding
   mechanism — cancellation surfaces as an error value at blocking
