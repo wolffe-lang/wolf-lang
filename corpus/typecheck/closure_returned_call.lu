@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="14\n9\n12\n")
+//! phase: run
+//! conforms: type.fn.value, type.closure
+//!
+//! wolf-lang#828: calling the value a call returned, `f(a)(b)`. The
+//! callee of the outer call is not a name or a place: it is a call
+//! whose result is a function value (a fn item's, a capture-free
+//! closure's, or a capturing closure's), applied at once. The checked
+//! machine used to look for a body by name only and answered
+//! `unsupported` ("calls into unresolvable bodies") where native,
+//! release and lupin ran all three.
+
+fn offset() -> fn(int) -> int {
+    fn(x: int) { x + 4 }
+}
+
+fn scale(k: int) -> fn(int) -> int {
+    fn(x: int) { x * k }
+}
+
+fn main() -> !int {
+    print("{offset()(10)}")
+    let compose = fn(f, g) fn(x) f(g(x))
+    let inc = fn(n) n + 1
+    let dbl = fn(n) n * 2
+    let nine = compose(inc, dbl)(4)
+    print("{nine}")
+    let twelve = scale(3)(4)
+    print("{twelve}")
+    0
+}
