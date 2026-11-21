@@ -84,7 +84,7 @@ else
     # lupin's archive bundles no std: give it the one beside the wolf binary
     WOLF_PATH="$(command -v "$WOLF")"
     if [ -d "$(dirname "$WOLF_PATH")/std" ]; then
-        LUPIN_STDARG="--std-root $(dirname "$WOLF_PATH")/std"
+        LUPIN_STDARG="--std-root $(dirname "$WOLF_PATH")"
         STDNOTE="wolf bundled, lupin $(dirname "$WOLF_PATH")/std"
     else
         echo "agents-guide-check: lupin has no std: set WOLF_STD or LUPIN_STD to the archive's std/ directory, or run wolf from an archive that keeps std/ beside it" >&2
