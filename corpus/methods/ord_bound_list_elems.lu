@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="true\nfalse\ntrue\n")
+//! phase: run
+//! conforms: type.generic.bind, type.trait.op
+//!
+//! wolf-lang#402: `<` under a `T: cmp.Ord` bound where `T` is bound
+//! through a parameter typed `List[T]`. `[type.generic.bind]` binds a
+//! type parameter from every position of the signature that names it,
+//! `T` nested inside a parameter's type included. The checked machine
+//! used to bind only a parameter typed exactly `T`, so `T` stayed
+//! unbound here and `a < b` answered `unsupported` ("trait dispatch on
+//! a non-nominal receiver") while native, release and lupin printed
+//! the answer. The second function nests `T` one level deeper.
+
+use std.cmp
+
+fn ord_less[T: cmp.Ord](a: T, b: T) -> bool {
+    a < b
+}
+
+fn first_two_ordered[T: cmp.Ord](xs: List[T]) -> bool {
+    ord_less(xs[0], xs[1])
+}
+
+fn corners_ordered[T: cmp.Ord](rows: List[List[T]]) -> bool {
+    ord_less(rows[0][0], rows[1][0])
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    print("{first_two_ordered(xs)}")
+    var ys = List[int]()
+    (mut ys).push(5)
+    (mut ys).push(4)
+    print("{first_two_ordered(ys)}")
+    var rows = List[List[int]]()
+    (mut rows).push(copy xs)
+    (mut rows).push(copy ys)
+    print("{corners_ordered(rows)}")
+    0
+}
