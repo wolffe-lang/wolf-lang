@@ -781,6 +781,12 @@ memory/region_str_view_for_words.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_view_inside.lu: lowers
 memory/region_str_view_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
+memory/region_try_payload_bound.lu: not mem-clean (pre-wir rungs own it)
+memory/region_try_payload_escape.lu: not mem-clean (pre-wir rungs own it)
+memory/region_try_payload_literal.lu: lowers
+memory/region_try_payload_okheap.lu: not mem-clean (pre-wir rungs own it)
+memory/region_try_payload_okheap_literal.lu: lowers
+memory/region_try_payload_outside.lu: lowers
 memory/region_unit_tail_call.lu: lowers
 memory/region_value_container.lu: refused — a region inside another value (extent tracking stops at the aggregate boundary — c25 closeout)
 memory/region_value_elem.lu: refused — a region element in a container (extent tracking stops at the handle)
@@ -1119,6 +1125,8 @@ typecheck/closure_inlined_one_liner/main.lu: lowers
 typecheck/closure_module_to_entry/main.lu: lowers
 typecheck/closure_module_to_module/main.lu: lowers
 typecheck/closure_param_call.lu: lowers
+typecheck/closure_param_mut_assign.lu: lowers
+typecheck/closure_param_read_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/closure_return.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/else_binding_assign.lu: not mem-clean (pre-wir rungs own it)
