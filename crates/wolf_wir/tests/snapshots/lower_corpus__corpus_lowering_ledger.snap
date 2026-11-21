@@ -551,6 +551,7 @@ memory/map_remove.lu: lowers
 memory/map_set_generic.lu: lowers
 memory/map_std_keys.lu: lowers
 memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
+memory/match_wildcard_reads_scrutinee.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_field_siblings_ok.lu: lowers
 memory/move_field_use_after.lu: not mem-clean (pre-wir rungs own it)
@@ -844,6 +845,7 @@ methods/method_take.lu: not mem-clean (pre-wir rungs own it)
 methods/method_unknown.lu: not mem-clean (pre-wir rungs own it)
 methods/method_wrong_arity.lu: not mem-clean (pre-wir rungs own it)
 methods/method_wrong_receiver.lu: not mem-clean (pre-wir rungs own it)
+methods/ord_bound_list_elems.lu: lowers
 methods/wordcount_par.lu: lowers
 methods/wordcount_serial.lu: lowers
 net/accept_posture.lu: lowers
@@ -1063,6 +1065,7 @@ strings/format_spec_malformed.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
 strings/from_utf8_border.lu: lowers
+strings/interp_hole_fallible_call.lu: lowers
 strings/interp_value_position.lu: lowers
 strings/interp_values.lu: lowers
 strings/match_str_const_scrutinee.lu: lowers
@@ -1086,6 +1089,7 @@ traits/call_unmet_bound.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_orphan/main.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_overlap.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_uncovered.lu: not mem-clean (pre-wir rungs own it)
+traits/dispatch_nested_call_arg.lu: lowers
 traits/dyn_assoc_escape.lu: not mem-clean (pre-wir rungs own it)
 traits/dyn_generic_method.lu: not mem-clean (pre-wir rungs own it)
 traits/dyn_ok.lu: lowers
@@ -1128,6 +1132,7 @@ typecheck/closure_param_call.lu: lowers
 typecheck/closure_param_mut_assign.lu: lowers
 typecheck/closure_param_read_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/closure_return.lu: lowers
+typecheck/closure_returned_call.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/else_binding_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/enum_str_bare_choice.lu: lowers
