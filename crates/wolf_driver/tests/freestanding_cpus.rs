@@ -38,7 +38,7 @@
 //! which every CI job sets. A failed build FAILS here, whatever its exit
 //! status.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
@@ -51,6 +51,15 @@ fn wolf() -> &'static str {
 
 fn text(b: &[u8]) -> String {
     String::from_utf8_lossy(b).into_owned()
+}
+
+fn fixture(dir: &str, name: &str) -> PathBuf {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(dir)
+        .join(name);
+    assert!(p.is_file(), "fixture missing: {}", p.display());
+    p
 }
 
 /// The freestanding runtime archive, built fresh once per test binary by
@@ -175,21 +184,11 @@ fn the_archive_defines_the_storage_pair_weak() {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod linux_x86_64 {
     use super::*;
-    use std::collections::BTreeMap;
     use std::process::{Output, Stdio};
     use std::time::{Duration, Instant};
 
     /// Every scenario's processor 1 has ended and kmain has printed within this.
     const DEADLINE: Duration = Duration::from_secs(60);
-
-    fn fixture(dir: &str, name: &str) -> PathBuf {
-        let p = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures")
-            .join(dir)
-            .join(name);
-        assert!(p.is_file(), "fixture missing: {}", p.display());
-        p
-    }
 
     /// A scratch package: the kernel, its assembly, `mode.lu` (MODE and PIN)
     /// and the manifest: `wolf.pkg` (with slot.S) or, for the control,
