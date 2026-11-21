@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **The spec says what every machine already does, and what it costs.**
+  No compiler, runtime or corpus change. `check: pass` promises a clean
+  static ladder and admits any outcome of a full run
+  (`[conf.directive.check]`, wolf-lang#603). Identifiers are Unicode
+  17.0.0's, pinned by the digest of its `DerivedCoreProperties.txt`
+  (`[gram.lex.ident]`, wolf-lang#1039). An integer literal never adopts a
+  `distinct` type; `7 as Col` is the spelling (`[type.numlit.adopt]`,
+  wolf-interp#350). An empty `PATH` component makes `os_exec` start
+  `./name` (`[os.proc.exec]`, wolf-lang#689). Whether `p.addr()` exposes
+  is not observable yet (`[mem.prov.expose]`, wolf-lang#580). Two costs are
+  stated: a trap contained at a proc boundary keeps one thread and its
+  touched stack for the life of the process on native and release
+  (`[conc.proc.exit]`, wolf-lang#670), and a finished proc's reason is
+  kept for the life of the process, 8 bytes for each proc that returns a
+  value of its own (`[conc.proc.join]`, wolf-lang#671). The pinned lupin
+  0.1.62 reads `check: pass` as a clean program and lets a literal adopt
+  a `distinct` type; both are the reference interpreter's to change.
+
 - **Language (planned for 0.2.41, after implementation):** scoped binding
   headers on braced `if` and `while`: `if let x = e; cond { ... }` and
   `while var x = e; cond { ... }` (both accept `let` or `var`). Exactly
