@@ -13658,6 +13658,7 @@ impl<'t> Machine<'t> {
         // read through this frame's own bindings, so nesting
         // propagates. Spelled from the callee's source, not the
         // caller's (cross-file calls).
+        let mut rigids: Option<HashMap<String, String>> = None;
         {
             let callee_node = self.ctxs[body]
                 .as_ref()
@@ -13692,7 +13693,7 @@ impl<'t> Machine<'t> {
                         }
                     }
                     if !map.is_empty() {
-                        self.pending_rigids = Some(map);
+                        rigids = Some(map);
                     }
                 }
             }
@@ -13703,6 +13704,11 @@ impl<'t> Machine<'t> {
             let mode = sig.params.get(i).and_then(|p| p.mode);
             vals.push(val!(self.eval_arg(v, mode)));
         }
+        // wolf-lang#981: the bindings are handed to this callee's frame
+        // only now, after the arguments ran. Set before them, a call in
+        // an argument (`run(mut ed, seven())`) took them into its own
+        // frame and left this callee's `T` unbound.
+        self.pending_rigids = rigids;
         let out = self.call_body(body, vals)?;
         // A raised row tag crosses the call as the error flow — the
         // caller's `?`/`else`/`match` observes it (D30).
