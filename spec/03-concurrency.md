@@ -438,6 +438,16 @@ premise by construction.
   needs it reads the reason there. (Added 2026-09-18, s170 — BACKLOG
   B21's ruling on wolf-lang#110: a typed result the supervisor
   collects at the join, NOT a channel handle as a proc parameter.)
+  **What answering late costs.** Because a `Proc[T]` is a copyable id
+  with no lifetime, the runtime cannot know that an id will not be
+  asked about again, so it keeps every finished proc's reason for the
+  life of the process: one word for a proc whose result differs from
+  its neighbours', and almost nothing for procs that end alike (a
+  block of 512 shares one word). A program that spawns without bound
+  procs that each return their own value grows by 8 bytes a proc.
+  (Stated for wolf-lang#671. Tying a reason's life to the region the
+  proc was spawned in would remove the cost, and is a separate
+  question, because it changes which programs are legal.)
 - `[conc.proc.arg]` A `spawn proc` argument crosses into a domain
   that outlives the spawner, so it is **moved** — with one exception:
   FROZEN data is **shared, not moved**. `[mem.region.freeze.1]` makes
