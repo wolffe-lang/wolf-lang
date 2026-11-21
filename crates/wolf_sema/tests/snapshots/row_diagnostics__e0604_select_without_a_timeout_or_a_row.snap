@@ -1,0 +1,26 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0604]: this `select` can be cancelled while it waits, but `wait_one` cannot fail
+ --> mem:///main.lu:3:5
+  |
+1 | fn wait_one(ch: channel[int]) -> int {
+  |                               ------ the signature declares no error row
+2 |     var got = 0
+3 |     select {
+  |     ^^^^^^^^
+4 |         v from ch => {
+5 |             got = v
+6 |         },
+7 |     }
+  | ^^^^^ a cancellation here would have nowhere to go
+  |
+  = note: a cancellation that reaches a blocked `select` runs its `timeout(…)` arm when it has
+    one, and otherwise leaves the `select` as the `cancelled` error value of the function,
+    as `?` would from a receive [conc.select.ready]. Give the `select` a timeout arm, or
+    give the function a row that admits `cancelled` (`-> !T` infers one).
+help: make `wait_one` fallible: `! {cancelled}`
+  |
+1 | fn wait_one(ch: channel[int]) -> int ! {cancelled} {
+  |
