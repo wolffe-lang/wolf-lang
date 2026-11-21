@@ -75,7 +75,10 @@
   in a function with no row is E0604 at the `select`, and E0602 where a
   declared row lacks `cancelled`; an inferred row gains `cancelled`. Native
   and release used to trap `assert` inside such a `select`, and the checked
-  machine returned early with the row in an `int`.
+  machine returned early with the row in an `int`. The must-join check
+  counts that exit as a path out of the function, so a proc waited for only
+  in such a `select` is not joined on every path (E1010 at the call that
+  hands it the caller's bytes).
 
 - The checked machine frees a killed proc's regions, the region blocks its
   tasks had open included, before it delivers the reason (wolf-lang#1141).
