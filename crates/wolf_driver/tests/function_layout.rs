@@ -23,16 +23,22 @@ fn ensure_runtime() {
     });
 }
 
-fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
-    ensure_runtime();
-    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
+/// The directory one probe run owns, under `target/tmp`. The probe refuses
+/// one that exists, so no two runs in this process may share a name.
+fn probe_root(tier: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "function-layout-{tier}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos()
-    ));
+    ))
+}
+
+fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
+    ensure_runtime();
+    let root = probe_root(tier);
     let probe = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/layout/probe.py");
     let mut command = Command::new("python3");
     command
@@ -71,6 +77,24 @@ fn placement(tier: &str, cold: bool, linker: Option<&str>, cache: bool) {
         "function-placement-stability ({tier}): exit {:?}; evidence {}",
         output.status.code(),
         root.display()
+    );
+}
+
+/// wolf-lang#1163: the tests leave `ensure_runtime`'s `Once` together, and
+/// three of them start on the native tier, so their directories are named
+/// in the same instant; on macOS the clock reads microseconds. A name asked
+/// for again at once must still be a new one.
+#[test]
+fn probe_directories_are_unique_within_the_process() {
+    let names: Vec<_> = (0..1000).map(|_| probe_root("native")).collect();
+    let distinct: std::collections::HashSet<_> = names.iter().collect();
+    assert_eq!(
+        distinct.len(),
+        names.len(),
+        "{} of {} probe directory names repeat (first: {})",
+        names.len() - distinct.len(),
+        names.len(),
+        names[0].display()
     );
 }
 
