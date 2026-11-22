@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.tier0.mode.mut
+//! warns: W1002
+//!
+//! wolf-lang#1169: `return r` from a walk over a `mut` parameter's field
+//! returns the `for` name's own copy, so the caller's store into the
+//! result leaves `g.rows[0][0]` at `1`. Every compiling machine returned
+//! the element itself and printed `0`. The `mut` is never written (W1002)
+//! and is what lets the element leave: from a `read` parameter the
+//! `return` is E1002.
+
+struct Grid { rows: List[List[int]] }
+
+fn first(mut g: Grid) -> List[int] {
+    for r in g.rows {
+        return r
+    }
+    [0]
+}
+
+fn main() -> int {
+    var g = Grid { rows: [[1, 2], [3, 4]] }
+    let f = first(mut g)
+    f[0] = 0
+    print("{g.rows[0][0]}")
+    0
+}
