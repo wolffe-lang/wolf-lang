@@ -18,8 +18,15 @@
 //! The two-address row dials `WOLF_TWO_ADDRESS_HOST` when it is set (a name
 //! the operator gave two addresses of one family, a hosts entry, so the
 //! witness never waits on IPv6), else `localhost`. Where that name has
-//! fewer than two distinct addresses the row prints a `SKIP:` line a record
-//! counts, and `WOLF_TWO_ADDRESS_REQUIRE=1` makes that skip a failure.
+//! fewer than two distinct addresses the row skips every machine, and
+//! `WOLF_TWO_ADDRESS_REQUIRE=1` makes that skip a failure (CI's macOS leg
+//! sets it; an empty value is unset).
+//!
+//! Every skip, a machine this host cannot run or the two-address row on a
+//! name with one address, prints one `SKIP:` line per machine, and every row
+//! prints `RAN <row> on N of 3 machines`. Both reach the test's stderr even
+//! when it passes (the harness captures only the print macros), so a record
+//! or a CI log counts them; a row no machine ran fails.
 mod lane_exit;
 
 use std::io::Read;
@@ -32,6 +39,19 @@ const MACHINES: [&str; 3] = ["--checked", "--native", "--release"];
 /// Far past any honest run (each answers in about a second, the held dial
 /// in under 3 s), far short of a dial that waits for the host's timeout.
 const LIMIT: Duration = Duration::from_secs(60);
+
+/// `WOLF_TWO_ADDRESS_REQUIRE` set and not empty (CI sets it empty where the
+/// row is not required).
+fn two_address_required() -> bool {
+    std::env::var_os("WOLF_TWO_ADDRESS_REQUIRE").is_some_and(|v| !v.is_empty())
+}
+
+/// A line a passing test still shows: written to stderr's handle directly,
+/// past the harness's capture, so every SKIP and RAN line can be counted.
+fn loud(line: &str) {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr().lock(), "{line}");
+}
 
 fn corpus(row: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -117,7 +137,10 @@ fn conform(entry: &Path, machine: &str) -> Result<Option<serde_json::Value>, Str
             "required {machine} unavailable: {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        eprintln!("SKIP: {what}: {}", String::from_utf8_lossy(&out.stderr));
+        loud(&format!(
+            "SKIP: {what}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
         return Ok(None);
     }
     if !out.status.success() {
@@ -158,6 +181,11 @@ fn answers(entry: &Path, verdict: &str, stdout: &str) {
             }
         }
     }
+    loud(&format!(
+        "RAN {} on {ran} of {} machines",
+        entry.display(),
+        MACHINES.len()
+    ));
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     assert!(ran > 0, "no machine ran {}", entry.display());
 }
@@ -201,7 +229,10 @@ fn a_held_dial_times_out_inside_its_budget() {
 #[test]
 fn every_resolved_address_is_tried_in_turn() {
     use std::net::ToSocketAddrs as _;
-    let name = std::env::var("WOLF_TWO_ADDRESS_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let name = std::env::var("WOLF_TWO_ADDRESS_HOST")
+        .ok()
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "localhost".to_string());
     let addrs: Vec<std::net::SocketAddr> = match (name.as_str(), 0).to_socket_addrs() {
         Ok(a) => a.collect(),
         Err(e) => panic!("{name} does not resolve: {e}"),
@@ -214,15 +245,17 @@ fn every_resolved_address_is_tried_in_turn() {
     }
     eprintln!("REPORT {name} resolves to {addrs:?}");
     if distinct.len() < 2 {
-        let line = format!(
-            "SKIP: every_resolved_address_is_tried_in_turn: {name} resolves to {distinct:?}; \
-             one address cannot witness the order"
-        );
+        let why = format!("{name} resolves to {distinct:?}; one address cannot witness the order");
         assert!(
-            std::env::var_os("WOLF_TWO_ADDRESS_REQUIRE").is_none(),
-            "{line} (WOLF_TWO_ADDRESS_REQUIRE is set)"
+            !two_address_required(),
+            "every_resolved_address_is_tried_in_turn: {why} (WOLF_TWO_ADDRESS_REQUIRE is set)"
         );
-        eprintln!("{line}");
+        for machine in MACHINES {
+            loud(&format!(
+                "SKIP: every_resolved_address_is_tried_in_turn {machine}: {why}"
+            ));
+        }
+        loud("RAN every_resolved_address_is_tried_in_turn on 0 of 3 machines");
         return;
     }
     let listen = match distinct[1] {
