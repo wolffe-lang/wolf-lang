@@ -5767,6 +5767,16 @@ impl<'t> Machine<'t> {
             }
             _ => return self.refuse("iteration outside ranges and List", e.span),
         };
+        // wolf-lang#1169 (`[gram.pat.let]`, `[mem.iter.for]`): the
+        // binding holds its own value. A body that provably only reads it
+        // ([`crate::forcopy`], the predicate `wolf_wir` lowers by too)
+        // binds the item itself; any other body binds a deep copy of each
+        // item, so no store, lend, move or escape through the binding
+        // reaches the list. A channel's items are the loop's own already.
+        let own_copy = chan.is_none() && d.pattern().is_some() && {
+            let src = &self.pkg.files[self.ctx().src_file].raw.src;
+            crate::forcopy::needs_own_copy(d, src, &|sp| self.expr_ty(sp).cloned())
+        };
         loop {
             let item = match chan {
                 Some(id) => match self.chan_recv(id, e.span)? {
@@ -5785,6 +5795,11 @@ impl<'t> Machine<'t> {
                 },
             };
             self.tick()?;
+            let item = if own_copy {
+                self.deep_copy(item, e.span)?
+            } else {
+                item
+            };
             self.push_scope();
             if let Some(pat) = d.pattern() {
                 self.bind_pattern(pat, item)?;
