@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="2 2\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.tier0.mode.mut
+//!
+//! wolf-lang#1169: `(mut row).push(9)` lends the `for` name's own copy,
+//! so the push grows the copy and the lists in `rows` keep two elements
+//! each. Every compiling machine grew `rows`' lists and printed `3 3`.
+
+fn main() -> int {
+    let rows = [[1, 2], [3, 4]]
+    for row in rows {
+        (mut row).push(9)
+    }
+    print("{rows[0].len} {rows[1].len}")
+    0
+}
