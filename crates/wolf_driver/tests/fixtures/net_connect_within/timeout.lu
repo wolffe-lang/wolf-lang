@@ -1,0 +1,33 @@
+//! member: false
+//! wolf-lang#1146: a dial the kernel holds answers `timeout` inside its
+//! budget. The listener's backlog is 1 and nobody accepts, so after a
+//! dial or two the kernel holds the next; that dial, with a 300 ms
+//! budget, answers `timeout` well before the host's own connect timeout
+//! (75 s or more). Unix only: windows refuses a dial past a full backlog.
+
+fn main() -> !int {
+    let l = net_listen_with("127.0.0.1:0", false, 1)?
+    let port = net_port(l)?
+    let addr = "127.0.0.1:{port}"
+    var timed = false
+    var spent = 0
+    var k = 0
+    while k < 16 && !timed {
+        let t0 = time_now_ms()
+        let _c = net_connect_within(addr, 300) else |e| match e {
+            timeout => {
+                timed = true
+                spent = time_now_ms() - t0
+                -1
+            },
+            refused => { -2 },
+            invalid => { -3 },
+            io => { -4 },
+        }
+        k += 1
+    }
+    let bounded = spent >= 250 && spent < 3000
+    print("timed {timed} bounded {bounded}")
+    net_close(l)?
+    0
+}
