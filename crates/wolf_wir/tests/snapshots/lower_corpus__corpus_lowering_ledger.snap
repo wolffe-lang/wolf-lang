@@ -1119,6 +1119,12 @@ typecheck/byte_elem_arith_fail.lu: not mem-clean (pre-wir rungs own it)
 typecheck/byte_narrow_fail.lu: not mem-clean (pre-wir rungs own it)
 typecheck/byte_shapes.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
+typecheck/cast_f32_narrow_in_range.lu: lowers
+typecheck/cast_float_i16_nan.lu: lowers
+typecheck/cast_float_i8_under.lu: lowers
+typecheck/cast_float_narrow_in_range.lu: lowers
+typecheck/cast_float_u16_negative.lu: lowers
+typecheck/cast_float_u8_over.lu: lowers
 typecheck/cast_int_to_float.lu: lowers
 typecheck/cast_narrow_in_range.lu: lowers
 typecheck/cast_narrow_wrapping_truncates.lu: lowers
