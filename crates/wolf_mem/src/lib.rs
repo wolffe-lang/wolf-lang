@@ -133,6 +133,7 @@ pub mod byteview;
 pub mod cfg;
 mod excl;
 pub mod facts;
+pub mod forcopy;
 pub mod json;
 pub mod loans;
 mod lower;

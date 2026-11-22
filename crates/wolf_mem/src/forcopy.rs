@@ -1,0 +1,542 @@
+//! A `for` binding's own value (wolf-lang#1169) — when a `for` over a list
+//! may bind the walked element itself, and when the binding must be a deep
+//! copy of it.
+//!
+//! # Why
+//!
+//! `[gram.pat.let]`: a name a `for` header binds "holds its own value, moved
+//! or copied out of what was matched, never a place in it, so no write to it
+//! could reach the scrutinee"; `[mem.iter.for]` walks a copy of the iterable
+//! and binds each yielded value with a `let`. A machine that binds the
+//! element itself (the list's own header word, an `Rc` id in the checked
+//! machine) is right exactly when nothing can write through the binding or
+//! keep it past the iteration — then the element and a copy of it cannot be
+//! told apart. Until wolf-lang#1169 every compiling machine bound the element
+//! itself unconditionally, so `for row in rows { row[0] = 0 }` wrote `rows`,
+//! and so did every way the element could leave the binding: a `let` or
+//! `var` move, a struct built from it, a `mut` lend, a `take` argument, an
+//! assignment out of the loop, a `return`.
+//!
+//! # The rule, and which way it errs
+//!
+//! [`needs_own_copy`] answers `false` (bind the element itself) only when it
+//! can show the body READS the bound names and everything derived from them,
+//! and `true` (deep-copy the element at the bind) for anything else,
+//! including every shape it does not know. A wrong `true` costs one copy an
+//! iteration, never an answer; a wrong `false` is the bug. Derived names are
+//! the names bound, in the body, from an expression that spells a bound name:
+//! a `let`/`var`, a `match` arm on it, a nested `for` over it, an `else`
+//! handler (to a fixpoint, by spelling — never narrower than an alias).
+//!
+//! A use is a read when the value goes nowhere that keeps it: an operand, a
+//! condition, an interpolation, an index or a field read, a plain call
+//! argument (a `read` parameter is deeply immutable for the call, E1014, and
+//! cannot be returned or moved out, E1002; a builtin that keeps a plain
+//! argument copies it in, `[mem.region.edge.elem]`: `push` copies any plain
+//! element, an index store copies a place), the iterable of a nested `for`,
+//! the initializer of a `let` (the new name is derived and answers for
+//! itself). Everything else asks for the copy: a store through a derived
+//! name (an index or field place rooted at one), `mut`/`take`/`move`/`&`/
+//! `shared` on one, a plain assignment, a `return` or a `break` carrying one,
+//! a struct, tuple or list literal holding one, a closure, `spawn`, region,
+//! scope or other construct that names one.
+//!
+//! A value whose type is a primitive (`int`, `bool`, `str`, …) is its own
+//! copy wherever it goes (`[mem.tier0.move.3]`; a `str`'s bytes are
+//! immutable), so an escape of one is a read. The type is the checker's, read
+//! at the expression's span through the consumer's `expr_ty` (`ubcheck`'s
+//! `expr_tys`, the lowering's `expr_sema_ty`); a span with no recorded type,
+//! a generic (`Rigid`), an unsolved variable, a distinct type or any other
+//! non-primitive answers "may reach the heap" and asks for the copy.
+//!
+//! Both machines call this one function — `ubcheck`'s `eval_for` and
+//! `wolf_wir::lower`'s `lower_for_list` — and copy with their own deep copy
+//! (`deep_copy` there, `deep_copy_in` here, which agree by construction,
+//! wolf-lang#384), so the two can never disagree about which loops copy.
+
+use std::collections::HashSet;
+
+use wolf_ast::{
+    Arg, AssignStmt, Block, BracketApply, BreakExpr, CallExpr, ElseExpr, ForExpr, GreenNode,
+    MatchExpr, MemberExpr, ParenExpr, PrefixExpr, ReturnExpr, StructLit, SyntaxKind,
+};
+use wolf_sema::types::TyKind;
+use wolf_span::Span;
+
+/// Must the `for` loop `d` bind a deep copy of each element (`true`), or may
+/// it bind the element itself (`false`)? `false` only when the body provably
+/// only reads what the header binds; see the module documentation.
+pub fn needs_own_copy(
+    d: ForExpr<'_>,
+    src: &[u8],
+    expr_ty: &dyn Fn(Span) -> Option<TyKind>,
+) -> bool {
+    let Some(pat) = d.pattern() else {
+        return false;
+    };
+    let mut names = HashSet::new();
+    idents(pat, src, &mut names);
+    if names.is_empty() {
+        return false;
+    }
+    let Some(body) = d.body() else {
+        return false;
+    };
+    let body = body.syntax();
+    loop {
+        let before = names.len();
+        derive(body, src, &mut names);
+        if names.len() == before {
+            break;
+        }
+    }
+    let mut w = Walk {
+        src,
+        names: &names,
+        expr_ty,
+        copy: false,
+    };
+    w.block(body, Pos::Read);
+    w.copy
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pos {
+    /// The value is read where it stands, or bound to a derived name.
+    Read,
+    /// The value goes somewhere that may keep it or write it.
+    Escape,
+}
+
+struct Walk<'s, 'n, 'f> {
+    src: &'s [u8],
+    names: &'n HashSet<String>,
+    expr_ty: &'f dyn Fn(Span) -> Option<TyKind>,
+    copy: bool,
+}
+
+impl Walk<'_, '_, '_> {
+    fn prim(&self, span: Span) -> bool {
+        matches!(
+            (self.expr_ty)(span),
+            Some(TyKind::Prim(_) | TyKind::Unit | TyKind::Never)
+        )
+    }
+
+    fn spells(&self, n: &GreenNode) -> bool {
+        spells(n, self.src, self.names)
+    }
+
+    fn block(&mut self, n: &GreenNode, pos: Pos) {
+        let Some(b) = Block::cast(n) else {
+            return self.expr(n, pos);
+        };
+        let tail = b.trailing_expr().map(|e| e.span);
+        for s in b.statements() {
+            self.stmt(s, tail, pos);
+        }
+    }
+
+    fn stmt(&mut self, s: &GreenNode, tail: Option<Span>, pos: Pos) {
+        match s.kind {
+            SyntaxKind::ExprStmt => {
+                for e in s.nodes() {
+                    let p = if Some(e.span) == tail { pos } else { Pos::Read };
+                    self.expr(e, p);
+                }
+            }
+            // The initializer is bound to a new name, which `derive` made
+            // answer for itself.
+            SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+                for b in wolf_ast::binding_binders(s) {
+                    if let Some(init) = b.init {
+                        self.expr(init, Pos::Read);
+                    }
+                }
+            }
+            SyntaxKind::ConstDecl | SyntaxKind::AssumeStmt | SyntaxKind::DeferStmt => {
+                for e in s.nodes() {
+                    self.expr(e, Pos::Read);
+                }
+            }
+            SyntaxKind::AssignStmt => self.assign(s),
+            _ => {
+                if self.spells(s) {
+                    self.copy = true;
+                }
+            }
+        }
+    }
+
+    fn assign(&mut self, s: &GreenNode) {
+        let Some(d) = AssignStmt::cast(s) else {
+            self.copy |= self.spells(s);
+            return;
+        };
+        let compound = d.op().is_some_and(|t| t.kind != SyntaxKind::Eq);
+        let mut index_store = false;
+        if let Some(place) = d.place() {
+            let place = unparen(place);
+            if place.kind != SyntaxKind::PathExpr {
+                // A store through a place: rooted at a derived name, it
+                // writes that name's value.
+                if root(place).is_some_and(|r| self.names.contains(&text(self.src, r.span))) {
+                    self.copy = true;
+                }
+                index_store = place.kind == SyntaxKind::BracketApply;
+                self.place_parts(place);
+            }
+        }
+        if let Some(v) = d.value() {
+            // `xs[i] = v` copies a place `v` in (wolf-lang#438,
+            // `[mem.region.edge.elem]`); a temporary, a field store and a
+            // plain assignment keep the value itself.
+            let copied = index_store && !d.takes() && is_place(unparen(v));
+            let p = if compound || copied {
+                Pos::Read
+            } else {
+                Pos::Escape
+            };
+            self.expr(v, p);
+        }
+    }
+
+    /// The reads inside a store's place: its index expressions.
+    fn place_parts(&mut self, place: &GreenNode) {
+        match place.kind {
+            SyntaxKind::BracketApply => {
+                let b = BracketApply::cast(place).expect("kind");
+                if let Some(c) = b.callee() {
+                    self.place_parts(unparen(c));
+                }
+                for a in b.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = a.value() {
+                        self.expr(v, Pos::Read);
+                    }
+                }
+            }
+            SyntaxKind::MemberExpr => {
+                if let Some(b) = MemberExpr::cast(place).and_then(|m| m.base()) {
+                    self.place_parts(unparen(b));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn expr(&mut self, e: &GreenNode, pos: Pos) {
+        if self.copy {
+            return;
+        }
+        let pos = if pos == Pos::Escape && self.prim(e.span) {
+            Pos::Read
+        } else {
+            pos
+        };
+        match e.kind {
+            SyntaxKind::PathExpr => {
+                if pos == Pos::Escape && self.names.contains(&text(self.src, e.span)) {
+                    self.copy = true;
+                }
+            }
+            SyntaxKind::LiteralExpr | SyntaxKind::ContinueExpr => {}
+            SyntaxKind::ParenExpr => {
+                let moded = e
+                    .tokens()
+                    .any(|t| matches!(t.kind, SyntaxKind::MutKw | SyntaxKind::TakeKw));
+                let p = if moded { Pos::Escape } else { pos };
+                if let Some(inner) = ParenExpr::cast(e).and_then(|x| x.expr()) {
+                    self.expr(inner, p);
+                }
+            }
+            SyntaxKind::PrefixExpr => {
+                let d = PrefixExpr::cast(e).expect("kind");
+                let p = match d.op().map(|t| t.kind) {
+                    Some(SyntaxKind::CopyKw) => Pos::Read,
+                    Some(SyntaxKind::Minus | SyntaxKind::Not | SyntaxKind::Star) => Pos::Read,
+                    _ => Pos::Escape,
+                };
+                if let Some(o) = d.operand() {
+                    self.expr(o, p);
+                }
+            }
+            SyntaxKind::BinExpr
+            | SyntaxKind::CastExpr
+            | SyntaxKind::RangeExpr
+            | SyntaxKind::FromEndExpr
+            | SyntaxKind::StringExpr
+            | SyntaxKind::Interp => {
+                for c in e.nodes() {
+                    self.expr(c, Pos::Read);
+                }
+            }
+            SyntaxKind::TryExpr => {
+                for c in e.nodes() {
+                    self.expr(c, pos);
+                }
+            }
+            SyntaxKind::CallExpr => {
+                let d = CallExpr::cast(e).expect("kind");
+                // A plain argument is a `read` parameter's (E1014, E1002)
+                // or a keeping builtin's, which copies it in. A call whose
+                // own result escapes hands its plain arguments the escape
+                // too: a builtin's answer (`first`, `get`) may be an
+                // element.
+                let plain = pos;
+                if let Some(c) = d.callee() {
+                    match c.kind {
+                        SyntaxKind::MemberExpr => {
+                            if let Some(b) = MemberExpr::cast(c).and_then(|m| m.base()) {
+                                self.expr(b, plain);
+                            }
+                        }
+                        _ => self.expr(c, Pos::Read),
+                    }
+                }
+                for a in d.args().into_iter().flat_map(|l| l.args()) {
+                    self.arg(a, plain);
+                }
+            }
+            SyntaxKind::BracketApply => {
+                let d = BracketApply::cast(e).expect("kind");
+                if let Some(c) = d.callee() {
+                    self.expr(c, pos);
+                }
+                for a in d.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = a.value() {
+                        self.expr(v, Pos::Read);
+                    }
+                }
+            }
+            SyntaxKind::MemberExpr => {
+                if let Some(b) = MemberExpr::cast(e).and_then(|m| m.base()) {
+                    self.expr(b, pos);
+                }
+            }
+            // A literal holds its parts: a struct, tuple or list built
+            // from a derived value holds that value (an index store keeps
+            // a temporary as it is, wolf-lang#438).
+            SyntaxKind::StructLit => {
+                let d = StructLit::cast(e).expect("kind");
+                for f in d.fields() {
+                    match f.value() {
+                        Some(v) => self.expr(v, Pos::Escape),
+                        None => {
+                            // `S { row }`: the shorthand moves the name.
+                            if f.name()
+                                .is_some_and(|t| self.names.contains(&text(self.src, t.span)))
+                            {
+                                self.copy = true;
+                            }
+                        }
+                    }
+                }
+            }
+            SyntaxKind::TupleExpr | SyntaxKind::ListLit => {
+                for c in e.nodes() {
+                    self.expr(c, Pos::Escape);
+                }
+            }
+            SyntaxKind::Block => self.block(e, pos),
+            SyntaxKind::IfExpr | SyntaxKind::WhileExpr | SyntaxKind::LoopExpr => {
+                let cond = match e.kind {
+                    SyntaxKind::IfExpr => wolf_ast::IfExpr::cast(e).and_then(|d| d.condition()),
+                    SyntaxKind::WhileExpr => {
+                        wolf_ast::WhileExpr::cast(e).and_then(|d| d.condition())
+                    }
+                    _ => None,
+                }
+                .map(|c| c.span);
+                let p = if e.kind == SyntaxKind::IfExpr {
+                    pos
+                } else {
+                    Pos::Read
+                };
+                for c in e.nodes() {
+                    if Some(c.span) == cond {
+                        self.expr(c, Pos::Read);
+                    } else {
+                        self.expr(c, p);
+                    }
+                }
+            }
+            SyntaxKind::MatchExpr => {
+                let d = MatchExpr::cast(e).expect("kind");
+                if let Some(s) = d.scrutinee() {
+                    self.expr(s, Pos::Read);
+                }
+                for arm in d.arms() {
+                    if let Some(g) = arm.guard() {
+                        self.expr(g, Pos::Read);
+                    }
+                    if let Some(b) = arm.body() {
+                        self.expr(b, pos);
+                    }
+                }
+            }
+            SyntaxKind::MatchGuard => {
+                for c in e.nodes() {
+                    self.expr(c, Pos::Read);
+                }
+            }
+            SyntaxKind::ForExpr => {
+                let d = ForExpr::cast(e).expect("kind");
+                if let Some(i) = d.iterable() {
+                    self.expr(i, Pos::Read);
+                }
+                if let Some(b) = d.body() {
+                    self.block(b.syntax(), Pos::Read);
+                }
+            }
+            SyntaxKind::ReturnExpr => {
+                if let Some(v) = ReturnExpr::cast(e).and_then(|d| d.value()) {
+                    self.expr(v, Pos::Escape);
+                }
+            }
+            SyntaxKind::BreakExpr => {
+                if let Some(v) = BreakExpr::cast(e).and_then(|d| d.value()) {
+                    self.expr(v, Pos::Escape);
+                }
+            }
+            SyntaxKind::ElseExpr => {
+                let d = ElseExpr::cast(e).expect("kind");
+                if let Some(s) = d.scrutinized() {
+                    self.expr(s, pos);
+                }
+                if let Some(f) = d.fallback() {
+                    self.expr(f, pos);
+                }
+            }
+            // Closures, `spawn`, regions, scopes, `when`, `select`, raw
+            // borrows, inline C and assembly, a nested item, an error node:
+            // anything else that names a derived value copies.
+            _ => {
+                if self.spells(e) {
+                    self.copy = true;
+                }
+            }
+        }
+    }
+
+    fn arg(&mut self, a: Arg<'_>, plain: Pos) {
+        let p = if a.mode().is_some() {
+            Pos::Escape
+        } else {
+            plain
+        };
+        if let Some(v) = a.value() {
+            self.expr(v, p);
+        }
+    }
+}
+
+/// Grow `names` by every name the body binds from an expression that spells
+/// one of them: a `let`/`var` initializer, a `match` scrutinee (each arm's
+/// pattern), a nested `for`'s iterable (its pattern), an `else` scrutinee
+/// (its handler's pattern).
+fn derive(n: &GreenNode, src: &[u8], names: &mut HashSet<String>) {
+    match n.kind {
+        SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+            for b in wolf_ast::binding_binders(n) {
+                if let (Some(p), Some(init)) = (b.pattern, b.init)
+                    && spells(init, src, names)
+                {
+                    idents(p, src, names);
+                }
+            }
+        }
+        SyntaxKind::MatchExpr => {
+            let d = MatchExpr::cast(n).expect("kind");
+            if d.scrutinee().is_some_and(|s| spells(s, src, names)) {
+                for arm in d.arms() {
+                    if let Some(p) = arm.pattern() {
+                        idents(p, src, names);
+                    }
+                }
+            }
+        }
+        SyntaxKind::ForExpr => {
+            let d = ForExpr::cast(n).expect("kind");
+            if d.iterable().is_some_and(|i| spells(i, src, names))
+                && let Some(p) = d.pattern()
+            {
+                idents(p, src, names);
+            }
+        }
+        SyntaxKind::ElseExpr => {
+            let d = ElseExpr::cast(n).expect("kind");
+            if d.scrutinized().is_some_and(|s| spells(s, src, names))
+                && let Some(p) = d.handler_pattern()
+            {
+                idents(p, src, names);
+            }
+        }
+        _ => {}
+    }
+    for c in n.nodes() {
+        derive(c, src, names);
+    }
+}
+
+/// Every identifier a pattern spells: the names it binds, and harmlessly
+/// the variant and field names beside them (more names only copy more).
+fn idents(p: &GreenNode, src: &[u8], out: &mut HashSet<String>) {
+    for t in p.tokens() {
+        if t.kind == SyntaxKind::Ident {
+            out.insert(text(src, t.span));
+        }
+    }
+    for c in p.nodes() {
+        idents(c, src, out);
+    }
+}
+
+/// Does any identifier token in this subtree spell one of `names`?
+fn spells(n: &GreenNode, src: &[u8], names: &HashSet<String>) -> bool {
+    n.tokens()
+        .any(|t| t.kind == SyntaxKind::Ident && names.contains(&text(src, t.span)))
+        || n.nodes().any(|c| spells(c, src, names))
+}
+
+/// The name a place is rooted at: `a` of `a.f[i].g`.
+fn root(place: &GreenNode) -> Option<&GreenNode> {
+    let place = unparen(place);
+    match place.kind {
+        SyntaxKind::PathExpr => Some(place),
+        SyntaxKind::BracketApply => BracketApply::cast(place)?.callee().and_then(root),
+        SyntaxKind::MemberExpr => MemberExpr::cast(place)?.base().and_then(root),
+        _ => None,
+    }
+}
+
+/// A name, a field of a place, or an element of one.
+fn is_place(e: &GreenNode) -> bool {
+    match e.kind {
+        SyntaxKind::PathExpr => true,
+        SyntaxKind::BracketApply => BracketApply::cast(e)
+            .and_then(|b| b.callee())
+            .is_some_and(|c| is_place(unparen(c))),
+        SyntaxKind::MemberExpr => MemberExpr::cast(e)
+            .and_then(|m| m.base())
+            .is_some_and(|b| is_place(unparen(b))),
+        _ => false,
+    }
+}
+
+fn text(src: &[u8], span: Span) -> String {
+    String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize])
+        .trim()
+        .to_string()
+}
+
+fn unparen(e: &GreenNode) -> &GreenNode {
+    if e.kind == SyntaxKind::ParenExpr
+        && !e
+            .tokens()
+            .any(|t| matches!(t.kind, SyntaxKind::MutKw | SyntaxKind::TakeKw))
+    {
+        ParenExpr::cast(e).and_then(|p| p.expr()).unwrap_or(e)
+    } else {
+        e
+    }
+}
