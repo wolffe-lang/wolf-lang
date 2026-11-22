@@ -1,0 +1,16 @@
+//! member: false
+//! wolf-lang#1146: one budget covers every address a name resolves to,
+//! tried in turn. The gate stages this program with LISTEN set to the
+//! second address `localhost` resolves to on this host: the listener is
+//! there alone, the first address refuses, and the dial connects to the
+//! second inside its 2 s budget.
+
+fn main() -> !int {
+    let l = net_listen("LISTEN")?
+    let port = net_port(l)?
+    let c = net_connect_within("localhost:{port}", 2000)?
+    print("connected")
+    net_close(c)?
+    net_close(l)?
+    0
+}
