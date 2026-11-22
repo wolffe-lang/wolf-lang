@@ -26,24 +26,29 @@ fn corpus(row: &str) -> PathBuf {
         .join(row)
 }
 
-fn record(out: &Output, row: &str, machine: &str) -> serde_json::Value {
-    assert!(
-        out.status.success(),
-        "{machine} {row}: {}\n{}",
-        out.status,
-        String::from_utf8_lossy(&out.stderr)
-    );
-    serde_json::from_slice(&out.stdout).unwrap_or_else(|e| {
-        panic!(
+/// The record a machine wrote, or why there is none: a compiler that
+/// panicked or a run that exited non-zero is an `Err` naming its stderr.
+fn record(out: &Output, row: &str, machine: &str) -> Result<serde_json::Value, String> {
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        let tail: Vec<&str> = err.lines().rev().take(4).collect();
+        return Err(format!(
+            "{machine} {row}: {} ({})",
+            out.status,
+            tail.into_iter().rev().collect::<Vec<_>>().join(" | ")
+        ));
+    }
+    serde_json::from_slice(&out.stdout).map_err(|e| {
+        format!(
             "{machine} {row}: {e}: {}",
             String::from_utf8_lossy(&out.stdout)
         )
     })
 }
 
-/// One machine's record, or `None` when the host cannot run that tier (a
+/// One machine's record: `Ok(None)` when the host cannot run that tier (a
 /// loud SKIP, refused under `WOLF_TEST_NATIVE_REQUIRE`).
-fn conform(row: &str, machine: &str) -> Option<serde_json::Value> {
+fn conform(row: &str, machine: &str) -> Result<Option<serde_json::Value>, String> {
     let out = Command::new(env!("CARGO_BIN_EXE_wolf"))
         .args(["conform-run", "--json", machine])
         .arg(corpus(row))
@@ -59,9 +64,9 @@ fn conform(row: &str, machine: &str) -> Option<serde_json::Value> {
             "SKIP: {machine} {row}: {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        return None;
+        return Ok(None);
     }
-    Some(record(&out, row, machine))
+    record(&out, row, machine).map(Some)
 }
 
 fn lupin() -> Option<PathBuf> {
@@ -84,34 +89,48 @@ fn lupin() -> Option<PathBuf> {
     found
 }
 
-fn lupin_record(row: &str) -> Option<serde_json::Value> {
+fn lupin_record(row: &str) -> Result<Option<serde_json::Value>, String> {
     let Some(lupin) = lupin() else {
         eprintln!("SKIP: lupin {row}: set LUPIN to run the fourth machine");
-        return None;
+        return Ok(None);
     };
     let out = Command::new(lupin)
         .args(["conform-run", "--json"])
         .arg(corpus(row))
         .output()
         .expect("run lupin");
-    Some(record(&out, row, "lupin"))
+    record(&out, row, "lupin").map(Some)
 }
 
 /// `verdict` and `stdout` (`None`: nothing printed) from every machine in
-/// `machines`, and from lupin.
+/// `machines` and from lupin. Every machine runs before the verdict, so a
+/// red run reports each one's answer (`REPORT` lines).
 fn answers(row: &str, machines: &[&str], verdict: &str, stdout: Option<&str>) {
     let want = stdout.map_or(serde_json::Value::Null, |s| s.into());
-    for &machine in machines {
-        let Some(rec) = conform(row, machine) else {
-            continue;
-        };
-        assert_eq!(rec["verdict"], verdict, "{machine} {row}: {rec}");
-        assert_eq!(rec["stdout_inline"], want, "{machine} {row}: {rec}");
+    let mut wrong = Vec::new();
+    let runs = machines
+        .iter()
+        .map(|&m| (m, conform(row, m)))
+        .chain(std::iter::once(("lupin", lupin_record(row))));
+    for (machine, got) in runs {
+        match got {
+            Err(why) => {
+                eprintln!("REPORT {machine} {row}: no record: {why}");
+                wrong.push(why);
+            }
+            Ok(None) => {}
+            Ok(Some(rec)) => {
+                eprintln!(
+                    "REPORT {machine} {row}: {} {}",
+                    rec["verdict"], rec["stdout_inline"]
+                );
+                if rec["verdict"] != verdict || rec["stdout_inline"] != want {
+                    wrong.push(format!("{machine} {row}: {rec}"));
+                }
+            }
+        }
     }
-    if let Some(rec) = lupin_record(row) {
-        assert_eq!(rec["verdict"], verdict, "lupin {row}: {rec}");
-        assert_eq!(rec["stdout_inline"], want, "lupin {row}: {rec}");
-    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 const IN_RANGE: &str = "255 0 65535 -128 32767\n";
@@ -135,7 +154,9 @@ fn f32_to_narrow_in_range() {
         Some(IN_RANGE),
     );
     // The checked machine's own posture: `f32` is refused by name.
-    let rec = conform("cast_f32_narrow_in_range.lu", "--checked").expect("checked runs");
+    let rec = conform("cast_f32_narrow_in_range.lu", "--checked")
+        .expect("checked writes a record")
+        .expect("checked runs");
     assert_eq!(rec["verdict"], "unsupported", "{rec}");
     let construct = rec["x-unsupported-construct"].as_str().unwrap_or("");
     assert!(construct.contains("f32"), "{rec}");
