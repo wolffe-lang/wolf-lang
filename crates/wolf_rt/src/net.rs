@@ -1333,25 +1333,17 @@ impl NetTable {
         self.push_stream(s)
     }
 
-    /// Dial with a deadline: the `timeout` row when the handshake
-    /// does not complete in `millis`. The wait sits in std's own
-    /// poll (recorded delta — not a reactor route); `millis <= 0`
+    /// Dial with a deadline: the `timeout` row when no address the name
+    /// resolves to connects within `millis` ([`dial_within`]: one budget
+    /// over every address in turn, wolf-lang#1146). The wait sits in std's
+    /// own poll (recorded delta — not a reactor route); `millis <= 0`
     /// behaves as [`NetTable::connect`].
     pub fn connect_timeout(&mut self, addr: &str, millis: i64) -> Result<i64, NetErr> {
-        use std::net::ToSocketAddrs as _;
         let Some(m) = u64::try_from(millis).ok().filter(|&m| m > 0) else {
             return self.connect(addr);
         };
-        let Ok(mut addrs) = addr.to_socket_addrs() else {
-            return Err("io");
-        };
-        let Some(sa) = addrs.next() else {
-            return Err("io");
-        };
-        match TcpStream::connect_timeout(&sa, std::time::Duration::from_millis(m)) {
-            Ok(s) => self.push_stream(Sock::Stream(s)),
-            Err(e) => Err(host_err(&e)),
-        }
+        let s = dial_within(addr, std::time::Duration::from_millis(m))?;
+        self.push_stream(s)
     }
 
     /// Some bytes (at most `max`), the syscall first (s141): a socket
@@ -1680,6 +1672,44 @@ fn dial(addr: &str) -> Result<Sock, NetErr> {
         .map_err(|e| host_err(&e))
 }
 
+/// wolf-lang#1146 (`[os.net.connect.within]`): [`dial`] with one budget
+/// over every address `addr` resolves to, tried in turn as `dial` tries
+/// them, each attempt given what is left of the budget. Name resolution
+/// comes first and is not inside the budget (a bounded resolver is
+/// wolf-lang#831). `timeout` once the budget is spent; otherwise the
+/// last address's own row. Each wait sits inside [`crate::host_wait`],
+/// as `dial`'s does.
+fn dial_within(addr: &str, budget: std::time::Duration) -> Result<Sock, NetErr> {
+    use std::net::ToSocketAddrs as _;
+    let addrs: Vec<std::net::SocketAddr> = crate::host_wait(|| addr.to_socket_addrs())
+        .map_err(|e| host_err(&e))?
+        .collect();
+    if addrs.is_empty() {
+        return Err("io");
+    }
+    let deadline = std::time::Instant::now() + budget;
+    let mut last = None;
+    for sa in addrs {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            break;
+        }
+        match crate::host_wait(|| TcpStream::connect_timeout(&sa, left)) {
+            Ok(s) => return Ok(Sock::Stream(s)),
+            Err(e) => last = Some(e),
+        }
+    }
+    match last {
+        Some(e) if std::time::Instant::now() < deadline => Err(host_err(&e)),
+        _ => {
+            // The budget ran out: a deadline the program armed, not a
+            // host refusal (0, as `host_err` leaves for `WouldBlock`).
+            crate::fs::os_error_set(0);
+            Err("timeout")
+        }
+    }
+}
+
 /// [`dial`] for an `AF_UNIX` path (its connect blocks on a full
 /// backlog too). Windows: `unsupported`, by name.
 fn dial_unix(path: &str) -> Result<Sock, NetErr> {
@@ -1836,6 +1866,7 @@ fn code_of_tag(tag: NetErr) -> i64 {
         "denied" => net_code::DENIED,
         "exists" => net_code::EXISTS,
         "busy" => net_code::BUSY,
+        "invalid" => net_code::INVALID,
         _ => net_code::IO,
     }
 }
@@ -2119,6 +2150,41 @@ unsafe fn __wolf_rt_net_connect_parks(ap: i64, al: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_connect_parks(ap, al) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::leave_if_killed() };
+    r
+}
+
+/// `net_connect_within(addr, within_ms) -> int ! {refused, timeout,
+/// invalid, io}` (wolf-lang#1146, `[os.net.connect.within]`): [`dial_within`]
+/// with the budget in milliseconds; zero or less is `invalid`, answered
+/// before the name is resolved. The stream's fd, or `-code`.
+///
+/// # Safety
+///
+/// A valid str pair.
+unsafe fn __wolf_rt_net_connect_within_parks(ap: i64, al: i64, within: i64) -> i64 {
+    crate::fs::os_error_clear();
+    let Some(ms) = u64::try_from(within).ok().filter(|&m| m > 0) else {
+        return -net_code::INVALID;
+    };
+    let addr = unsafe { view(ap, al) };
+    match dial_within(addr, std::time::Duration::from_millis(ms)).and_then(|s| tbl().push_stream(s))
+    {
+        Ok(fd) => fd,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// The exported shim: [`__wolf_rt_net_connect_within_parks`], then a killed
+/// compiled task leaves instead of returning into the program (s260, #683).
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_connect_within_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_connect_within(ap: i64, al: i64, within: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_connect_within_parks(ap, al, within) };
     // SAFETY: the shim's last step; the body's locals are dropped.
     unsafe { crate::leave_if_killed() };
     r
