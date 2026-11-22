@@ -10671,6 +10671,31 @@ impl<'t> Machine<'t> {
             // windows — so a program with an in-process path (pelt's
             // subshells) takes it and runs to its end here.
             "os_fork" => Ok(tag("unsupported")),
+            // wolf-lang#1153 (`[os.proc.subreaper]`, `[os.proc.poll.adopted]`):
+            // the `wolf` process's own attribute, and the poll of its children
+            // that the checked machine's table does not hold.
+            "os_subreaper_set" => {
+                let Some(Value::Bool(on)) = argv.first() else {
+                    return self.refuse("this os call shape", span);
+                };
+                match checked_subreaper_set(*on) {
+                    Ok(prev) => Ok(Flow::Val(Value::Bool(prev))),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            "os_subreaper" => match checked_subreaper() {
+                Ok(on) => Ok(Flow::Val(Value::Bool(on))),
+                Err(t) => Ok(tag(t)),
+            },
+            "os_wait_adopted_poll" => match checked_poll_adopted(&self.children) {
+                Ok((pid, st)) => Ok(Flow::Val(Value::Struct {
+                    fields: vec![
+                        ("0".to_string(), Value::Int(pid)),
+                        ("1".to_string(), Value::Int(st)),
+                    ],
+                })),
+                Err(t) => Ok(tag(t)),
+            },
             "os_wait_poll" | "os_wait_poll_core" => {
                 match checked_poll(&mut self.children, name == "os_wait_poll_core") {
                     Ok((h, st)) => Ok(Flow::Val(Value::Struct {
@@ -13557,6 +13582,8 @@ impl<'t> Machine<'t> {
             | "os_signal_realtime" | "os_signal_text"
             // s242 (#680): the poll of the children.
             | "os_wait_poll"
+            // wolf-lang#1153: the subreaper attribute and the adopted poll.
+            | "os_subreaper_set" | "os_subreaper" | "os_wait_adopted_poll"
             // s246 (#785, ruling #88 R3 D): the statuses that carry a core.
             | "os_wait_status_core" | "os_wait_poll_core"
             // s247 (ruling #90): the fork, refused by name.
@@ -16544,6 +16571,147 @@ const TERM_MODE_VALID: i64 = 255 | 0xFF00 | 0xFF_0000 | 1 << 24;
 /// async-signal-safe) and does nothing else; `take` hands the lowest
 /// pending bit of a set to `wait`/`poll`. Dispositions are the host's
 /// `sigaction`.
+/// wolf-lang#1153 (`[os.proc.subreaper]`): the HAND MIRROR of
+/// `wolf_rt::os`'s attribute calls (wolf_mem and wolf_rt may not see each
+/// other; D15), for the `wolf` process the checked machine runs in: a
+/// kernel without the attribute answers `EINVAL`, which is `unsupported`;
+/// `EPERM` on the set is `denied`. Off linux `unsupported`.
+#[cfg(target_os = "linux")]
+fn checked_subreaper() -> Result<bool, &'static str> {
+    let mut v: libc::c_int = 0;
+    // SAFETY: PR_GET_CHILD_SUBREAPER writes one int through the pointer.
+    let r = unsafe {
+        libc::prctl(
+            libc::PR_GET_CHILD_SUBREAPER,
+            &mut v as *mut libc::c_int as libc::c_ulong,
+            0,
+            0,
+            0,
+        )
+    };
+    if r < 0 {
+        let e = std::io::Error::last_os_error();
+        return Err(if e.raw_os_error() == Some(libc::EINVAL) {
+            "unsupported"
+        } else {
+            "io"
+        });
+    }
+    Ok(v != 0)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn checked_subreaper() -> Result<bool, &'static str> {
+    Err("unsupported")
+}
+
+#[cfg(target_os = "linux")]
+fn checked_subreaper_set(on: bool) -> Result<bool, &'static str> {
+    let prev = checked_subreaper()?;
+    // SAFETY: PR_SET_CHILD_SUBREAPER takes the flag by value.
+    let r = unsafe {
+        libc::prctl(
+            libc::PR_SET_CHILD_SUBREAPER,
+            libc::c_ulong::from(on),
+            0,
+            0,
+            0,
+        )
+    };
+    if r < 0 {
+        let e = std::io::Error::last_os_error();
+        return Err(match e.raw_os_error() {
+            Some(libc::EINVAL) => "unsupported",
+            Some(libc::EPERM) => "denied",
+            _ => "io",
+        });
+    }
+    Ok(prev)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn checked_subreaper_set(_on: bool) -> Result<bool, &'static str> {
+    Err("unsupported")
+}
+
+/// wolf-lang#1153 (`[os.proc.poll.adopted]`): the HAND MIRROR of
+/// `wolf_rt::os::ChildTable::poll_adopted` over the checked machine's
+/// table: the `wolf` process's children from `/proc/self/task/*/children`,
+/// each one the table does not hold asked by pid (`waitpid(pid,
+/// WNOHANG)`), the first ended one reaped and answered as `(pid, status)`
+/// (an exit code, or `-N` for host signal N); `(0, 0)` when none has
+/// ended. Off linux `unsupported`.
+#[cfg(target_os = "linux")]
+fn checked_poll_adopted(
+    children: &[Option<std::process::Child>],
+) -> Result<(i64, i64), &'static str> {
+    let held: Vec<libc::pid_t> = children
+        .iter()
+        .flatten()
+        .map(|c| c.id() as libc::pid_t)
+        .collect();
+    let tasks = std::fs::read_dir("/proc/self/task").map_err(|_| "io")?;
+    let mut pids: Vec<libc::pid_t> = Vec::new();
+    let mut read = 0;
+    for t in tasks.flatten() {
+        match std::fs::read_to_string(t.path().join("children")) {
+            Ok(text) => {
+                read += 1;
+                for w in text.split_ascii_whitespace() {
+                    if let Ok(pid) = w.parse::<libc::pid_t>()
+                        && !pids.contains(&pid)
+                    {
+                        pids.push(pid);
+                    }
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("io"),
+        }
+    }
+    if read == 0 {
+        return Err("io");
+    }
+    for pid in pids {
+        if held.contains(&pid) {
+            continue;
+        }
+        let mut st: libc::c_int = 0;
+        let r = loop {
+            // SAFETY: a plain waitpid on one child of this process, never
+            // blocking (WNOHANG).
+            let r = unsafe { libc::waitpid(pid, &mut st, libc::WNOHANG) };
+            if r < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                continue;
+            }
+            break r;
+        };
+        if r < 0 {
+            if std::io::Error::last_os_error().raw_os_error() == Some(libc::ECHILD) {
+                continue;
+            }
+            return Err("io");
+        }
+        if r == 0 {
+            continue;
+        }
+        if libc::WIFEXITED(st) {
+            return Ok((i64::from(pid), i64::from(libc::WEXITSTATUS(st))));
+        }
+        if libc::WIFSIGNALED(st) {
+            return Ok((i64::from(pid), -i64::from(libc::WTERMSIG(st))));
+        }
+    }
+    Ok((0, 0))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn checked_poll_adopted(
+    _children: &[Option<std::process::Child>],
+) -> Result<(i64, i64), &'static str> {
+    Err("unsupported")
+}
+
 /// `os_wait_poll` on the checked machine's table (s242, wolf-lang#680,
 /// `[os.proc.poll]`) — `wolf_rt::os::ChildTable::poll`'s rule, entry for
 /// entry: in handle order, one `waitpid(pid, WNOHANG | WUNTRACED)` per
