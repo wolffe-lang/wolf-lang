@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A dial can carry a budget.** `net_connect_within(addr, within_ms)`
+  answers the stream's handle as `net_connect` does, or `timeout` once
+  `within_ms` milliseconds are spent (`[os.net.connect.within]`,
+  wolf-lang#1146). One budget covers every address the name resolves to,
+  tried in turn, each attempt given what is left of it; a budget of zero
+  or less is `invalid`. Name resolution comes first and is not inside the
+  budget (a bounded resolver is wolf-lang#831). `net_connect` is
+  unchanged: it still waits as long as the host's own connect timeout,
+  about two minutes on linux for an address that drops its handshake.
+
 - The checked machine (`wolf conform-run --checked`, and so `wolf test`)
   agrees with native, release and lupin on five shapes it used to answer
   differently. A fallible call written directly in an interpolation hole
