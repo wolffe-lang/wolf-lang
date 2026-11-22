@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.trunc
+//!
+//! A NaN fits no integer, so a cast from a NaN `f64` to `i16` traps
+//! `overflow` (`[type.numlit.cast.trunc]`, wolf-lang#1160). Nothing is
+//! printed. At 0.2.40 the x86-64 native compiler panicked in code
+//! generation instead.
+
+fn main() -> int {
+    let n = 0.0 / 0.0
+    let r = n as i16
+    print("{r}")
+    0
+}
