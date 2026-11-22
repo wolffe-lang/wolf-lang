@@ -1,0 +1,17 @@
+//! check: run(exit=0, stdout="1 5\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.tier0.move.1
+//!
+//! wolf-lang#1169: `let line = plane[0]` moves an element out of the
+//! `for` name's own copy, so the store through `line` leaves `cube` at
+//! `1 5`. Every compiling machine wrote it through and printed `0 0`.
+
+fn main() -> int {
+    let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+    for plane in cube {
+        let line = plane[0]
+        line[0] = 0
+    }
+    print("{cube[0][0][0]} {cube[1][0][0]}")
+    0
+}
