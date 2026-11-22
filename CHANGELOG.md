@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **A `for` loop's binding holds its own value** (wolf-lang#1169,
+  `[gram.pat.let]`, `[mem.iter.for]`). Every compiling machine bound the
+  walked element itself, so `for row in rows { row[0] = 0 }` wrote
+  `rows`, and so did every way the element could leave the binding: a
+  `let` or `var` move, a struct or tuple built from it, a `mut` lend, a
+  `take` argument, an assignment out of the loop, a `return`. The
+  binding is now a deep copy of the element whenever the body may write
+  or keep it, on the checked machine, native and release alike, and the
+  element itself when the body provably only reads it (operands,
+  conditions, interpolation, element and field reads, plain call
+  arguments, `push`, nested `for` loops). A loop that only reads compiles
+  to the same code as before, byte for byte. A loop that stores through
+  its binding pays one deep copy an iteration, kept in the enclosing
+  region until it ends: 100 passes over 1,000 lists of 1,000 ints with a
+  store each went from 0.02 s to 0.13 s and from an 18 MB to an 841 MB
+  peak on an M-series Mac. Walk by index (`for i in 0..rows.len {
+  rows[i][0] = 0 }`) to change the list in place, or open a `region`
+  inside the loop to bound the copies. No program in the organisation's
+  repositories stored through a `for` binding.
+
+- `copy` of an enum value copies its payload on the checked machine, as
+  it always did natively: the payload's list was shared with the
+  original there.
 - A program that names a runtime wait (`time_sleep_ms`, `fs_sync`,
   `fs_sync_dir`, `net_connect`, `net_connect_within`, `net_connect_unix`,
   `net_wait`) but never starts a task no longer links the runtime's
