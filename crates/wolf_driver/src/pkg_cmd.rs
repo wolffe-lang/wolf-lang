@@ -1556,6 +1556,11 @@ mod builtin_cap_tests {
             // s242 (#680; ruling owed): the poll of the children reaps as
             // `os_wait_status` does — `exec`.
             ("os_wait_poll", Cap::Exec),
+            // wolf-lang#1153: the subreaper attribute and the adopted poll
+            // are process control — `exec`, with the poll.
+            ("os_subreaper_set", Cap::Exec),
+            ("os_subreaper", Cap::Exec),
+            ("os_wait_adopted_poll", Cap::Exec),
             ("os_wait_status", Cap::Exec),
             // s246 (#783, #784; ruling asked): one meaning's disposition
             // and the end by a signal charge `exec`, with the set calls and
