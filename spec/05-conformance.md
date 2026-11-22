@@ -439,8 +439,9 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   monitor as `error` — wolf-interp#228; ruled A (#63), 2026-10-11.) A run whose root domain is killed
   (`[conc.proc.root]`) exits 121, the native runtime's number. A host
   call that would park the machine's one running thread — an accept, a
-  read on a socket, a dial the kernel holds (`net_connect` to a
-  listener whose backlog is full), a readiness wait over a set
+  read on a socket, a dial the kernel holds (`net_connect` or
+  `net_connect_within` to a listener whose backlog is full), a readiness
+  wait over a set
   (`net_wait`), a write
   to a socket whose buffers are full (`net_write`, `net_write_bytes`,
   `net_writev`, `net_writev_head`), a signal wait, a sleep — waits a
