@@ -10892,6 +10892,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_port"
                 | "net_accept"
                 | "net_connect"
+                // wolf-lang#1146 (`[os.net.connect.within]`): the dial with a
+                // budget rides the fd shape.
+                | "net_connect_within"
                 | "net_read"
                 | "net_write"
                 | "net_read_bytes"
@@ -15109,7 +15112,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         // The wire codes, as (coarsened) row tags. `utf8` is only
         // `net_read`'s and `invalid` only `net_write_bytes`'s (s115,
-        // #137); on every other row each coarsens like the rest.
+        // #137) and `net_connect_within`'s (a budget of zero or less,
+        // wolf-lang#1146); on every other row each coarsens like the rest.
         let declared = self.row_tag_names(e.span);
         // s136 (#227): 7–10 are the unix-domain family's — declared
         // only by `net_listen_unix`/`net_connect_unix`.
@@ -15153,7 +15157,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // The fd family: the handle (>= 0), or `-code`. The
             // unix-domain pair (s136, #227) rides the same shape.
             "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix"
-            | "net_listen_with" | "net_adopt_listener" | "net_port" | "net_accept" => {
+            | "net_listen_with" | "net_adopt_listener" | "net_port" | "net_accept"
+            | "net_connect_within" => {
                 let rc = match name {
                     "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix" => {
                         let s = arg(0)?;
@@ -15165,6 +15170,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             _ => "__wolf_rt_net_connect_unix",
                         };
                         self.rt_call(sym, &[p, l], Some(types::I64))
+                    }
+                    // wolf-lang#1146: the address, then the budget in
+                    // milliseconds as it stands (the shim answers `invalid`
+                    // for zero or less).
+                    "net_connect_within" => {
+                        let s = arg(0)?;
+                        let (p, l) = self.str_parts(s);
+                        let within = arg(1)?;
+                        self.rt_call(
+                            "__wolf_rt_net_connect_within",
+                            &[p, l, within],
+                            Some(types::I64),
+                        )
                     }
                     // s137 (#234): the address, then the two options —
                     // `reuse_port` widened to the wire word the shim
