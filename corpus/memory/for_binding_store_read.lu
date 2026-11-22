@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="inside: 11 13 after: 1 3\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.model.value
+//!
+//! wolf-lang#1169: the `for` name's copy is the name's own. A read of it
+//! after a store in the same pass sees the store (`11`, `13`), and the
+//! list the loop walked does not (`1 3`). Every compiling machine
+//! printed `after: 11 13`.
+
+fn main() -> int {
+    let rows = [[1, 2], [3, 4]]
+    var seen = ""
+    for row in rows {
+        row[0] = row[0] + 10
+        seen = "{seen} {row[0]}"
+    }
+    print("inside:{seen} after: {rows[0][0]} {rows[1][0]}")
+    0
+}
