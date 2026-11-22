@@ -1,13 +1,17 @@
 //! member: false
-//! wolf-lang#1153 (`[os.proc.poll.adopted]`): two adopted children and the
-//! table's own child end together. The adopted poll reports the two
-//! adopted pids, each once, whatever order the host keeps its children
-//! in, and leaves the table's child (which ends with 3) to `os_wait_poll`.
-//! Linux, in a throwaway container where the program is not process 1.
+//! wolf-lang#1153 (`[os.proc.poll.adopted]`): the table's own child ends
+//! first and stays unreaped while two adopted children end together. The
+//! adopted poll reports the two adopted pids, each once, whatever order the
+//! host keeps its children in, and leaves the table's child (which ends
+//! with 3) to `os_wait_poll`. The shell exits at once, so both background
+//! children outlive it and are adopted: a shell that waits for a job of
+//! its own reaps any background child that ended meanwhile
+//! (`shell_reaps.lu`). Linux, in a throwaway container where the program
+//! is not process 1.
 
 fn main() -> !int {
     let was = os_subreaper_set(true)?
-    let h = os_spawn(["/bin/sh", "-c", "sleep 0.2 & sleep 0.2 & sleep 0.2; exit 3"])?
+    let h = os_spawn(["/bin/sh", "-c", "sleep 0.3 & sleep 0.3 & exit 3"])?
     let shell = os_proc_pid(h)?
     var first = 0
     var second = 0
