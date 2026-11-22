@@ -519,6 +519,11 @@ memory/field_shorthand_nested_runs.lu: lowers
 memory/field_shorthand_return_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/field_shorthand_return_take.lu: lowers
 memory/field_shorthand_task.lu: not mem-clean (pre-wir rungs own it)
+memory/for_binding_elem_move.lu: lowers
+memory/for_binding_lend.lu: lowers
+memory/for_binding_let_move.lu: lowers
+memory/for_binding_outer_assign.lu: lowers
+memory/for_binding_return_mut.lu: lowers
 memory/for_binding_store.lu: lowers
 memory/for_binding_store_arm.lu: lowers
 memory/for_binding_store_field.lu: lowers
@@ -526,6 +531,9 @@ memory/for_binding_store_map.lu: lowers
 memory/for_binding_store_nested.lu: lowers
 memory/for_binding_store_read.lu: lowers
 memory/for_binding_store_tuple.lu: lowers
+memory/for_binding_struct_init.lu: lowers
+memory/for_binding_take_arg.lu: lowers
+memory/for_binding_var_lend.lu: lowers
 memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: lowers
 memory/index_store_copies_list.lu: lowers
