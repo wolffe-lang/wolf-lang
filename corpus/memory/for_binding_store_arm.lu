@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.model.value
+//!
+//! wolf-lang#1169 through a `match` arm inside the loop: `b` is the `for`
+//! name's own copy, `xs` is moved out of it, and the store reaches
+//! neither `boxes` nor anything the loop walked, so `boxes[0]` still
+//! holds `1`. Every compiling machine wrote it through and printed `0`.
+
+enum Box { Full(List[int]), Empty }
+
+fn main() -> int {
+    let boxes = [Box.Full([1, 2]), Box.Empty]
+    for b in boxes {
+        match b {
+            Full(xs) => { xs[0] = 0 },
+            Empty => {},
+        }
+    }
+    match boxes[0] {
+        Full(xs) => print("{xs[0]}"),
+        Empty => print("empty"),
+    }
+    0
+}
