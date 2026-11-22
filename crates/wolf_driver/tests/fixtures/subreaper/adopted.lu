@@ -12,7 +12,7 @@ fn children() -> int {
     var n = 0
     for t in tasks {
         let text = fs_read_text("/proc/self/task/{t}/children") else |_| { return -1 }
-        n = n + text.words().len()
+        n = n + text.words().len
     }
     n
 }
