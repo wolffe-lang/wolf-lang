@@ -498,6 +498,11 @@ pub const PRELUDE: &[Ambient] = &[
     // child of the program's that ended or stopped, never a wait.
     // `exec`-tagged with `os_wait_status`.
     host("os_wait_poll"),
+    // wolf-lang#1153 (`[os.proc.subreaper]`, `[os.proc.poll.adopted]`): the
+    // subreaper attribute and the poll of the children it adopts.
+    host("os_subreaper_set"),
+    host("os_subreaper"),
+    host("os_wait_adopted_poll"),
     // s246 (wolf-lang#785; ruling #88 R3 D): the wait and the poll that
     // also report a core (-(256 + N)); the released two keep -N. `exec`,
     // with them.
