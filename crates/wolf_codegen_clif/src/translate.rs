@@ -2030,7 +2030,15 @@ impl<'a, 'b> Tx<'a, 'b> {
                 let bad0 = self.b.ins().bor(oob_lo, oob_hi);
                 let bad = self.b.ins().bor(bad0, is_nan);
                 self.trap_if(bad, TrapKind::Overflow)?;
-                let r = if signed {
+                // wolf-lang#1160: cranelift's x64 emitter has no 8- or
+                // 16-bit saturating conversion (it panicked in code
+                // generation). Below 32 bits the value converts at 32
+                // and narrows: every input that passed the range and NaN
+                // test above fits i32, whichever the signedness.
+                let r = if int_ty.bits() < 32 {
+                    let wide = self.b.ins().fcvt_to_sint_sat(ctypes::I32, a);
+                    self.b.ins().ireduce(int_ty, wide)
+                } else if signed {
                     self.b.ins().fcvt_to_sint_sat(int_ty, a)
                 } else {
                     self.b.ins().fcvt_to_uint_sat(int_ty, a)
