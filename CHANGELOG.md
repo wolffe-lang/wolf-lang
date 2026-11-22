@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **A program can be a subreaper and reap the orphans it adopts.**
+  `os_subreaper_set(on)` marks this process a child subreaper (or clears
+  the mark) and answers the previous value, and `os_subreaper()` reads it
+  (`[os.proc.subreaper]`, wolf-lang#1153). An orphaned descendant then
+  goes to the program instead of to process 1.
+  `os_wait_adopted_poll()` never waits: it answers `(pid, status)` once
+  for each ended child the process table does not hold, reaped, and
+  `(0, 0)` when none has ended (`[os.proc.poll.adopted]`). It never
+  touches a child the table holds, whatever order the host reports the
+  children in; those stay `os_wait_poll`'s. Linux only: macOS and windows
+  answer `unsupported`.
+
 - **A dial can carry a budget.** `net_connect_within(addr, within_ms)`
   answers the stream's handle as `net_connect` does, or `timeout` once
   `within_ms` milliseconds are spent (`[os.net.connect.within]`,
