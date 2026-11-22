@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 286] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 287] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -317,6 +317,8 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 286] = [
     ("__wolf_rt_net_port", 1, true),
     ("__wolf_rt_net_accept", 1, true),
     ("__wolf_rt_net_connect", 2, true),
+    // wolf-lang#1146: (addr ptr, addr len, budget ms) -> fd or -code.
+    ("__wolf_rt_net_connect_within", 3, true),
     ("__wolf_rt_net_read", 3, true),
     ("__wolf_rt_net_write", 3, true),
     // s115/#137: the byte twins — `List[int]` in/out, no UTF-8 gate,
