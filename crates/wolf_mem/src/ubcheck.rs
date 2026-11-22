@@ -1148,6 +1148,39 @@ fn accept_deadline_unix(
     out
 }
 
+/// wolf-lang#1146 (`[os.net.connect.within]`): the checked machine's dial
+/// with a budget, the HAND MIRROR of `wolf_rt::net::dial_within` (wolf_mem
+/// and wolf_rt may not see each other; D15): the name resolved first and
+/// outside the budget, then every address in turn, each given what is left
+/// of it. Spent, it is `TimedOut` (the `timeout` row); otherwise the last
+/// address's own error.
+fn checked_dial_within(
+    addr: &str,
+    budget: std::time::Duration,
+) -> std::io::Result<std::net::TcpStream> {
+    use std::net::ToSocketAddrs as _;
+    let addrs: Vec<std::net::SocketAddr> = addr.to_socket_addrs()?.collect();
+    if addrs.is_empty() {
+        return Err(std::io::Error::other("the name resolved to no address"));
+    }
+    let deadline = std::time::Instant::now() + budget;
+    let mut last = None;
+    for sa in addrs {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            break;
+        }
+        match std::net::TcpStream::connect_timeout(&sa, left) {
+            Ok(s) => return Ok(s),
+            Err(e) => last = Some(e),
+        }
+    }
+    match last {
+        Some(e) if std::time::Instant::now() < deadline => Err(e),
+        _ => Err(std::io::Error::from(std::io::ErrorKind::TimedOut)),
+    }
+}
+
 /// s137 (#234, `[os.net.listen.opts]`): the checked machine's bind
 /// with listener options — the HAND MIRROR of `wolf_rt::net::bind_with`
 /// (wolf_mem and wolf_rt may not see each other; D15), call for call:
@@ -9127,6 +9160,29 @@ impl<'t> Machine<'t> {
                     }
                 }
             }
+            // wolf-lang#1146 (`[os.net.connect.within]`): the dial with a
+            // budget. Zero or less is `invalid`, before any lookup; one
+            // budget covers every resolved address in turn
+            // (`checked_dial_within`), and the dial waits beside other
+            // tasks as `net_connect`'s does.
+            "net_connect_within" => {
+                let (Some(addr), Some(within)) = (str_arg(0), int_arg(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(ms) = u64::try_from(within).ok().filter(|&m| m > 0) else {
+                    return Ok(tag("invalid"));
+                };
+                let budget = std::time::Duration::from_millis(ms);
+                let dialled = self.dial_parked(move || checked_dial_within(&addr, budget), span)?;
+                match dialled.and_then(|s| NetSock::Stream(s).under_posture()) {
+                    Err(e) => Ok(tag(&coarse(&e, &["refused", "timeout", "io"]))),
+                    Ok(s) => {
+                        let fd = self.socks.len() as i64;
+                        self.socks.push(Some(s));
+                        Ok(Flow::Val(Value::Int(fd)))
+                    }
+                }
+            }
             "net_read" => {
                 let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this net call shape", span);
@@ -13430,6 +13486,8 @@ impl<'t> Machine<'t> {
             // operations, D30 rows, comptime is the one refusal site.
             "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_listen_with"
             | "net_adopt_listener" | "net_wait" | "net_port" | "net_accept" | "net_connect"
+            // wolf-lang#1146: the dial with a budget.
+            | "net_connect_within"
             // s290: the send that counts and the peer's credentials.
             | "net_write_some" | "net_peer_cred"
             | "net_read" | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
