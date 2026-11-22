@@ -288,6 +288,8 @@ pub const PRELUDE: &[Ambient] = &[
     host("net_port"),
     host("net_accept"),
     host("net_connect"),
+    // wolf-lang#1146 (`[os.net.connect.within]`): the dial with a budget.
+    host("net_connect_within"),
     host("net_read"),
     host("net_write"),
     // s115 (#137): the byte twins — `List[int]` in/out, no UTF-8 gate,
