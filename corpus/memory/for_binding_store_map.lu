@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="1 2\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.model.value
+//!
+//! wolf-lang#1169 for `Map` elements: a key store through a `for` name
+//! writes the name's own map, and the maps in the list keep `1 2`. Every
+//! compiling machine wrote it through and printed `9 9`.
+
+fn main() -> int {
+    var a = Map[str, int]()
+    a["k"] = 1
+    var b = Map[str, int]()
+    b["k"] = 2
+    let maps = [a, b]
+    for m in maps {
+        m["k"] = 9
+    }
+    print("{maps[0]["k"] else 0} {maps[1]["k"] else 0}")
+    0
+}
