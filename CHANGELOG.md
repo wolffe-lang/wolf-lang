@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A dial can carry a budget.** `net_connect_within(addr, within_ms)`
+  answers the stream's handle as `net_connect` does, or `timeout` once
+  `within_ms` milliseconds are spent (`[os.net.connect.within]`,
+  wolf-lang#1146). One budget covers every address the name resolves to,
+  tried in turn, each attempt given what is left of it; a budget of zero
+  or less is `invalid`. Name resolution comes first and is not inside the
+  budget (a bounded resolver is wolf-lang#831). `net_connect` is
+  unchanged: it still waits as long as the host's own connect timeout,
+  about two minutes on linux for an address that drops its handshake.
+
 - A cast from a float to a narrow integer (`u8`, `u16`, `i8`, `i16`) no
   longer panics the native compiler on x86-64 (wolf-lang#1160). Every such
   cast, in range or not, stopped code generation with an internal error,
