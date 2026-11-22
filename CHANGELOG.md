@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **A program can be a subreaper and reap the orphans it adopts.**
+  `os_subreaper_set(on)` marks this process a child subreaper (or clears
+  the mark) and answers the previous value, and `os_subreaper()` reads it
+  (`[os.proc.subreaper]`, wolf-lang#1153). An orphaned descendant then
+  goes to the program instead of to process 1.
+  `os_wait_adopted_poll()` never waits: it answers `(pid, status)` once
+  for each ended child the process table does not hold, reaped, and
+  `(0, 0)` when none has ended (`[os.proc.poll.adopted]`). It never
+  touches a child the table holds, whatever order the host reports the
+  children in; those stay `os_wait_poll`'s. Linux only: macOS and windows
+  answer `unsupported`.
+
 - A cast from a float to a narrow integer (`u8`, `u16`, `i8`, `i16`) no
   longer panics the native compiler on x86-64 (wolf-lang#1160). Every such
   cast, in range or not, stopped code generation with an internal error,
