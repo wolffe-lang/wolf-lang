@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="invalid invalid")
+//! phase: run
+//! conforms: os.net.connect.within, err.union
+//!
+//! A dial budget of zero or less is the `invalid` row
+//! (`[os.net.connect.within]`, wolf-lang#1146), answered before any
+//! address is resolved or dialled: the address here is a listener that
+//! would accept.
+
+fn tag(addr: str, within: int) -> str {
+    let c = net_connect_within(addr, within) else |e| match e {
+        invalid => { return "invalid" },
+        refused => { return "refused" },
+        timeout => { return "timeout" },
+        io => { return "io" },
+    }
+    net_close(c) else |_| {}
+    "connected"
+}
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let a = tag("127.0.0.1:{port}", 0)
+    let b = tag("127.0.0.1:{port}", 0 - 5)
+    print("{a} {b}")
+    net_close(srv)?
+    0
+}
