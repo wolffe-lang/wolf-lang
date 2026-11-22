@@ -379,8 +379,21 @@ pub fn with_scope<R>(scope: &Arc<ScopeInner>, f: impl FnOnce() -> R) -> R {
     r
 }
 
+/// wolf-lang#1171: the worker half of [`compensated`], installed by
+/// [`pool`] when the pool starts. A compensated wait reaches the pool's
+/// thread machinery (a compensation worker is a `std::thread` spawn, with
+/// its stack-overflow guard and, on static glibc, `pthread_getattr_np` and
+/// its `sscanf`) only through this pointer, so a program that never starts
+/// the pool links none of it for naming a wait (`time_sleep_ms`,
+/// `fs_sync`, `net_wait`).
+static ON_WORKER_WAIT: OnceLock<WorkerWait> = OnceLock::new();
+
+/// The worker half of a compensated wait: the worker's id and the wait.
+type WorkerWait = fn(usize, &mut dyn FnMut());
+
 fn pool() -> &'static Pool {
     POOL.get_or_init(|| {
+        let _ = ON_WORKER_WAIT.set(wait_on_worker);
         // s286 (#1051): glibc's own arena limit, set here, before the first
         // worker exists, on the one thread running the program
         // ([`crate::arena`]).
@@ -524,6 +537,23 @@ pub(crate) fn compensated<R>(f: impl FnOnce() -> R) -> R {
         super::hooks::det_block_exit();
         return r;
     };
+    // A worker id is set only on a worker the pool started, so the pool
+    // has installed its half (wolf-lang#1171: reached through the pointer,
+    // never named here, so an off-pool program links no worker start).
+    let wait = *ON_WORKER_WAIT
+        .get()
+        .expect("a worker runs only after the pool has started");
+    let mut f = Some(f);
+    let mut out = None;
+    wait(w, &mut || {
+        out = Some((f.take().expect("the wait runs once"))())
+    });
+    out.expect("the wait ran")
+}
+
+/// [`compensated`] on worker `w`: the pool covers the blocked worker
+/// ([`compensate`]) while `f` waits, then takes the count back.
+fn wait_on_worker(w: usize, f: &mut dyn FnMut()) {
     let p = pool();
     // The LIFO slot is owner-private: flush it to stealable ground
     // before blocking, or a child spawned just before a nested join
@@ -549,12 +579,11 @@ pub(crate) fn compensated<R>(f: impl FnOnce() -> R) -> R {
     // stays counted blocked through the grant wait, so compensation
     // keeps covering it.
     super::hooks::det_block_enter();
-    let r = f();
+    f();
     super::hooks::det_block_exit();
     if p.unblocked.fetch_add(1, SeqCst) + 1 > p.target {
         nudge_sleeping_extra(p);
     }
-    r
 }
 
 /// A surplus of unblocked workers exists: wake one idle extra that is
