@@ -3,7 +3,7 @@
 //! the host has no child-subreaper attribute (macOS, windows), every call of
 //! the pair answers `unsupported`, before anything is set or waited for.
 
-fn set() -> str {
+fn set_answer() -> str {
     let prev = os_subreaper_set(true) else |e| {
         return match e {
             unsupported => "unsupported",
@@ -14,7 +14,7 @@ fn set() -> str {
     "ok {prev}"
 }
 
-fn get() -> str {
+fn read_answer() -> str {
     let on = os_subreaper() else |e| {
         return match e {
             unsupported => "unsupported",
@@ -24,7 +24,7 @@ fn get() -> str {
     "ok {on}"
 }
 
-fn poll() -> str {
+fn poll_answer() -> str {
     let r = os_wait_adopted_poll() else |e| {
         return match e {
             unsupported => "unsupported",
@@ -36,8 +36,8 @@ fn poll() -> str {
 }
 
 fn main() -> int {
-    print("set: {set()}")
-    print("get: {get()}")
-    print("poll: {poll()}")
+    print("set: {set_answer()}")
+    print("get: {read_answer()}")
+    print("poll: {poll_answer()}")
     0
 }
