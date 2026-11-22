@@ -15962,6 +15962,20 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
             (Vec::new(), rowed(table, pair, &["io"]))
         }
+        // wolf-lang#1153 (`[os.proc.subreaper]`): the child-subreaper
+        // attribute, set (answering the previous value) and read;
+        // `unsupported` where the host has none.
+        "os_subreaper_set" => (
+            vec![bool_],
+            rowed(table, bool_, &["unsupported", "denied", "io"]),
+        ),
+        "os_subreaper" => (Vec::new(), rowed(table, bool_, &["unsupported", "io"])),
+        // wolf-lang#1153 (`[os.proc.poll.adopted]`): never waits — (pid,
+        // status) for an ended child the table does not hold, (0, 0) for none.
+        "os_wait_adopted_poll" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (Vec::new(), rowed(table, pair, &["unsupported", "io"]))
+        }
         // s247 (ruling #90, `[os.proc.fork]`; ruling asked): a child that
         // keeps running wolf code — (pid, h) in the parent, the child's id
         // and its handle in the child table, (0, -1) in the child; `busy`
