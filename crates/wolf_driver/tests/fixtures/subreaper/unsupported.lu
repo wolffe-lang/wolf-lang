@@ -1,0 +1,43 @@
+//! member: false
+//! wolf-lang#1153 (`[os.proc.subreaper]`, `[os.proc.poll.adopted]`): where
+//! the host has no child-subreaper attribute (macOS, windows), every call of
+//! the pair answers `unsupported`, before anything is set or waited for.
+
+fn set() -> str {
+    let prev = os_subreaper_set(true) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "ok {prev}"
+}
+
+fn get() -> str {
+    let on = os_subreaper() else |e| {
+        return match e {
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok {on}"
+}
+
+fn poll() -> str {
+    let r = os_wait_adopted_poll() else |e| {
+        return match e {
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    let (pid, status) = r
+    "ok ({pid}, {status})"
+}
+
+fn main() -> int {
+    print("set: {set()}")
+    print("get: {get()}")
+    print("poll: {poll()}")
+    0
+}
