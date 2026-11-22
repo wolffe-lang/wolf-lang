@@ -934,6 +934,64 @@ impl ChildTable {
         Ok((-1, live))
     }
 
+    /// wolf-lang#1153 (`[os.proc.poll.adopted]`): never waits — `(pid,
+    /// status)` for the first ended child of this process that the table
+    /// does not hold (an orphan a subreaper adopted, or a child started by
+    /// other means), reaped; `(0, 0)` when none has ended. The status is
+    /// [`Self::wait_status`]'s: 0..255 an exit code, `-N` an end by host
+    /// signal N. The children are read from `/proc/self/task/*/children`
+    /// and each one the table does not hold is asked by pid
+    /// (`waitpid(pid, WNOHANG)`), so an ended child the table holds — which
+    /// `waitid(P_ALL)` could report first — is never reaped here, and never
+    /// hides an adopted one behind it. The table is held throughout, so a
+    /// spawn cannot add a child between the look and the reap (a fork
+    /// records its child after the fact, but refuses while any other task
+    /// is live, so nothing polls meanwhile).
+    #[cfg(target_os = "linux")]
+    pub fn poll_adopted(&mut self) -> Result<(i64, i64), ProcErr> {
+        let held: Vec<libc::pid_t> = self
+            .children
+            .iter()
+            .flatten()
+            .map(|k| k.id() as libc::pid_t)
+            .collect();
+        for pid in own_children()? {
+            if held.contains(&pid) {
+                continue;
+            }
+            let mut st: libc::c_int = 0;
+            let r = loop {
+                // SAFETY: a plain waitpid on one child of this process,
+                // never blocking (WNOHANG).
+                let r = unsafe { libc::waitpid(pid, &mut st, libc::WNOHANG) };
+                if r < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                break r;
+            };
+            if r < 0 {
+                let e = std::io::Error::last_os_error();
+                if e.raw_os_error() == Some(libc::ECHILD) {
+                    // Reaped since it was listed (a host that embeds the
+                    // runtime): not this poll's to report.
+                    continue;
+                }
+                crate::fs::os_error_record(&e);
+                return Err("io");
+            }
+            if r == 0 {
+                continue;
+            }
+            if libc::WIFEXITED(st) {
+                return Ok((i64::from(pid), i64::from(libc::WEXITSTATUS(st))));
+            }
+            if libc::WIFSIGNALED(st) {
+                return Ok((i64::from(pid), signal_status(libc::WTERMSIG(st), false)));
+            }
+        }
+        Ok((0, 0))
+    }
+
     /// Wait for the child and REAP it (the slot tombstones on any
     /// completed wait). The exit code, or `signal` for a child that
     /// died without one (unix); a forged or already-reaped handle is
@@ -1855,6 +1913,177 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_poll_core(out: i64) -> i64 {
     match children().poll(true) {
         Ok((h, st)) => {
             unsafe { write_pair(out, h, st) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// wolf-lang#1153: every child of this process, live or ended and
+/// unreaped, from each thread's `/proc/self/task/<tid>/children` (a
+/// child belongs to the thread that started it, and an adopted one to a
+/// live thread of the subreaper). A thread that ended since the list was
+/// read is skipped; no readable list at all is `io`.
+#[cfg(target_os = "linux")]
+fn own_children() -> Result<Vec<libc::pid_t>, ProcErr> {
+    let tasks = match std::fs::read_dir("/proc/self/task") {
+        Ok(t) => t,
+        Err(e) => {
+            crate::fs::os_error_record(&e);
+            return Err("io");
+        }
+    };
+    let mut pids = Vec::new();
+    let mut read = 0;
+    for t in tasks.flatten() {
+        match std::fs::read_to_string(t.path().join("children")) {
+            Ok(text) => {
+                read += 1;
+                for w in text.split_ascii_whitespace() {
+                    if let Ok(pid) = w.parse::<libc::pid_t>()
+                        && !pids.contains(&pid)
+                    {
+                        pids.push(pid);
+                    }
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                crate::fs::os_error_record(&e);
+                return Err("io");
+            }
+        }
+    }
+    if read == 0 {
+        crate::fs::os_error_record(&std::io::Error::from(std::io::ErrorKind::NotFound));
+        return Err("io");
+    }
+    Ok(pids)
+}
+
+/// wolf-lang#1153 (`[os.proc.subreaper]`): the child-subreaper attribute.
+/// A kernel without it answers `EINVAL`, which is `unsupported`.
+#[cfg(target_os = "linux")]
+fn subreaper() -> Result<bool, ProcErr> {
+    let mut v: libc::c_int = 0;
+    // SAFETY: PR_GET_CHILD_SUBREAPER writes one int through the pointer.
+    let r = unsafe {
+        libc::prctl(
+            libc::PR_GET_CHILD_SUBREAPER,
+            &mut v as *mut libc::c_int as libc::c_ulong,
+            0,
+            0,
+            0,
+        )
+    };
+    if r < 0 {
+        let e = std::io::Error::last_os_error();
+        crate::fs::os_error_record(&e);
+        return Err(if e.raw_os_error() == Some(libc::EINVAL) {
+            "unsupported"
+        } else {
+            "io"
+        });
+    }
+    Ok(v != 0)
+}
+
+/// wolf-lang#1153: set the attribute, answering the previous value;
+/// `EINVAL` is `unsupported`, `EPERM` `denied`.
+#[cfg(target_os = "linux")]
+fn subreaper_set(on: bool) -> Result<bool, ProcErr> {
+    let prev = subreaper()?;
+    // SAFETY: PR_SET_CHILD_SUBREAPER takes the flag by value.
+    let r = unsafe {
+        libc::prctl(
+            libc::PR_SET_CHILD_SUBREAPER,
+            libc::c_ulong::from(on),
+            0,
+            0,
+            0,
+        )
+    };
+    if r < 0 {
+        let e = std::io::Error::last_os_error();
+        crate::fs::os_error_record(&e);
+        return Err(match e.raw_os_error() {
+            Some(libc::EINVAL) => "unsupported",
+            Some(libc::EPERM) => "denied",
+            _ => "io",
+        });
+    }
+    Ok(prev)
+}
+
+/// `os_subreaper_set(on: bool) -> bool ! {unsupported, denied, io}`
+/// (wolf-lang#1153, `[os.proc.subreaper]`) — mark this process a child
+/// subreaper (or clear the mark), the previous value through `out` on
+/// code 0. Off linux `unsupported`, nothing set.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_subreaper_set(on: i64, out: i64) -> i64 {
+    crate::fs::os_error_clear();
+    #[cfg(target_os = "linux")]
+    let r = subreaper_set(on != 0);
+    #[cfg(not(target_os = "linux"))]
+    let r: Result<bool, ProcErr> = {
+        let _ = on;
+        Err("unsupported")
+    };
+    match r {
+        Ok(prev) => {
+            unsafe { write_word(out, i64::from(prev)) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// `os_subreaper() -> bool ! {unsupported, io}` (wolf-lang#1153,
+/// `[os.proc.subreaper]`) — whether this process is a child subreaper,
+/// through `out` on code 0. Off linux `unsupported`.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_subreaper(out: i64) -> i64 {
+    crate::fs::os_error_clear();
+    #[cfg(target_os = "linux")]
+    let r = subreaper();
+    #[cfg(not(target_os = "linux"))]
+    let r: Result<bool, ProcErr> = Err("unsupported");
+    match r {
+        Ok(on) => {
+            unsafe { write_word(out, i64::from(on)) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// `os_wait_adopted_poll() -> (int, int) ! {unsupported, io}`
+/// (wolf-lang#1153, `[os.proc.poll.adopted]`) — never waits: `(pid,
+/// status)` for an ended child the table does not hold, reaped, or `(0,
+/// 0)` ([`ChildTable::poll_adopted`]), through `out` on code 0. Off linux
+/// `unsupported`.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_adopted_poll(out: i64) -> i64 {
+    crate::fs::os_error_clear();
+    #[cfg(target_os = "linux")]
+    let r = children().poll_adopted();
+    #[cfg(not(target_os = "linux"))]
+    let r: Result<(i64, i64), ProcErr> = Err("unsupported");
+    match r {
+        Ok((pid, st)) => {
+            unsafe { write_pair(out, pid, st) };
             proc_code::OK
         }
         Err(t) => proc_code_of_tag(t),
