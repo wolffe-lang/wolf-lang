@@ -1,0 +1,36 @@
+//! member: false
+//! wolf-lang#1153 (`[os.proc.poll.adopted]`): two adopted children and the
+//! table's own child end together. The adopted poll reports the two
+//! adopted pids, each once, whatever order the host keeps its children
+//! in, and leaves the table's child (which ends with 3) to `os_wait_poll`.
+//! Linux, in a throwaway container where the program is not process 1.
+
+fn main() -> !int {
+    let was = os_subreaper_set(true)?
+    let h = os_spawn(["/bin/sh", "-c", "sleep 0.2 & sleep 0.2 & sleep 0.2; exit 3"])?
+    let shell = os_proc_pid(h)?
+    var first = 0
+    var second = 0
+    var statuses = ""
+    var tries = 0
+    while second == 0 && tries < 500 {
+        time_sleep_ms(10)
+        let (p, s) = os_wait_adopted_poll()?
+        if p != 0 {
+            if first == 0 {
+                first = p
+            } else {
+                second = p
+            }
+            statuses = "{statuses} {s}"
+        }
+        tries = tries + 1
+    }
+    print("set: was {was}")
+    print("adopted: two {second != 0}, distinct {first != second}, neither the shell {first != shell && second != shell}, statuses{statuses}")
+    let (p3, s3) = os_wait_adopted_poll()?
+    print("adopted again: ({p3}, {s3})")
+    let (th, ts) = os_wait_poll()?
+    print("table: the shell {th == h}, status {ts}")
+    0
+}
