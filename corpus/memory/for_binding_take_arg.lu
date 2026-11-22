@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="1 3\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.tier0.mode.take
+//!
+//! wolf-lang#1169: `zap(take row)` hands `zap` the `for` name's own
+//! copy, so the store into its `take` parameter leaves `rows` at `1 3`.
+//! Every compiling machine wrote it through and printed `0 0`.
+
+fn zap(take xs: List[int]) -> int {
+    xs[0] = 0
+    0
+}
+
+fn main() -> int {
+    let rows = [[1, 2], [3, 4]]
+    for row in rows {
+        let _ = zap(take row)
+    }
+    print("{rows[0][0]} {rows[1][0]}")
+    0
+}
