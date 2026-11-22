@@ -32,7 +32,7 @@ fn probe_root(tier: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
         "function-layout-{tier}-{}-{}-{}",
         std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        NEXT.fetch_add(0, std::sync::atomic::Ordering::Relaxed),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
