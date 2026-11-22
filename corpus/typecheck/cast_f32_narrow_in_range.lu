@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="255 0 65535 -128 32767")
+//! phase: run
+//! conforms: type.numlit.cast.trunc
+//!
+//! The f64 row's five casts from `f32` sources (`[type.numlit.cast.trunc]`,
+//! wolf-lang#1160). Each value is exact in `f32`, so the truncation is the
+//! same. The checked machine runs `f64` only and refuses an `f32` binding
+//! by name; native, release and the reference interpreter run it.
+
+fn main() -> int {
+    let a: f32 = 255.5
+    let b: f32 = -0.75
+    let c: f32 = 65535.5
+    let d: f32 = -128.5
+    let e: f32 = 32767.5
+    print("{a as u8} {b as u8} {c as u16} {d as i8} {e as i16}")
+    0
+}
