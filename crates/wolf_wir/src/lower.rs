@@ -19194,6 +19194,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ));
             }
         };
+        // wolf-lang#1169 (`[gram.pat.let]`, `[mem.iter.for]`): the
+        // binding holds its own value. A body that provably only reads it
+        // (`wolf_mem::forcopy`, the predicate the checked machine binds
+        // by too) binds the element itself, as before; any other body
+        // binds a deep copy, one an iteration, so no store, lend, move or
+        // escape through the binding reaches the list.
+        let own_copy = self.copy_reaches_heap(self.table, elem_sema, 0) && {
+            let ty = |sp: Span| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone());
+            wolf_mem::forcopy::needs_own_copy(d, self.src, &ty)
+        };
         let n = self.list_len_of(hdr);
         let header = self.b.create_block();
         let iparam = self.b.add_block_param(header, types::I64);
@@ -19221,6 +19231,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // the load loop-invariant and LICM lifts it, and a body that
         // CAN would have invalidated a hoisted copy.
         let elem = self.list_load_at(hdr, iparam, ewty, span)?;
+        let elem = if own_copy {
+            let table = self.table;
+            match self.deep_copy_in(elem, table, elem_sema, span, 0) {
+                Ok(c) => c,
+                Err(x) => {
+                    self.b.gvn_pop_scope();
+                    return Err(x);
+                }
+            }
+        } else {
+            elem
+        };
         let frame = self.run_for_body(d, elem, ewty, false, bind_name, Some(exit));
         let frame = match frame {
             Ok(f) => f,
