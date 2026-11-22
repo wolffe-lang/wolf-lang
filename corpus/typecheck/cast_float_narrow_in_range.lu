@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="255 0 65535 -128 32767")
+//! phase: run
+//! conforms: type.numlit.cast.trunc
+//!
+//! A cast from `f64` to a narrow integer truncates toward zero and keeps
+//! the value when it fits (`[type.numlit.cast.trunc]`, wolf-lang#1160):
+//! `u8`, `u16`, `i8` and `i16`, each near the end of its range, and a
+//! negative fraction that truncates to `0`. At 0.2.40 the x86-64 native
+//! compiler panicked in code generation on every one of these casts.
+
+fn main() -> int {
+    let a: f64 = 255.9
+    let b: f64 = -0.99
+    let c: f64 = 65535.99
+    let d: f64 = -128.9
+    let e: f64 = 32767.5
+    print("{a as u8} {b as u8} {c as u16} {d as i8} {e as i16}")
+    0
+}
