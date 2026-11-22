@@ -391,6 +391,12 @@ static ON_WORKER_WAIT: OnceLock<WorkerWait> = OnceLock::new();
 /// The worker half of a compensated wait: the worker's id and the wait.
 type WorkerWait = fn(usize, &mut dyn FnMut());
 
+#[cfg(test)]
+thread_local! {
+    /// Waits this thread ran through the worker half ([`wait_on_worker`]).
+    static WORKER_WAITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 fn pool() -> &'static Pool {
     POOL.get_or_init(|| {
         let _ = ON_WORKER_WAIT.set(wait_on_worker);
@@ -554,6 +560,8 @@ pub(crate) fn compensated<R>(f: impl FnOnce() -> R) -> R {
 /// [`compensated`] on worker `w`: the pool covers the blocked worker
 /// ([`compensate`]) while `f` waits, then takes the count back.
 fn wait_on_worker(w: usize, f: &mut dyn FnMut()) {
+    #[cfg(test)]
+    WORKER_WAITS.with(|c| c.set(c.get() + 1));
     let p = pool();
     // The LIFO slot is owner-private: flush it to stealable ground
     // before blocking, or a child spawned just before a nested join
@@ -1307,4 +1315,51 @@ pub(crate) fn fork_child() {
     p.sleepers.store(0, SeqCst);
     p.running.store(0, SeqCst);
     p.unblocked.store(0, SeqCst);
+}
+
+#[cfg(test)]
+mod hook_tests {
+    use super::*;
+    use crate::task::{ExitReason, scope};
+
+    fn worker_waits() -> usize {
+        WORKER_WAITS.with(std::cell::Cell::get)
+    }
+
+    /// wolf-lang#1171: a compensated wait reaches the worker half only
+    /// through the hook [`pool`] installs. Off the pool it never reads the
+    /// hook and runs the wait inline; once the pool exists the hook is
+    /// set, and a wait in a task, on a worker, runs through it.
+    #[test]
+    fn a_wait_on_a_worker_runs_through_the_hook_the_pool_installed() {
+        assert!(WORKER_ID.with(std::cell::Cell::get).is_none());
+        let before = worker_waits();
+        assert_eq!(compensated(|| 5), 5);
+        assert_eq!(worker_waits(), before, "off the pool: the wait runs inline");
+
+        let _ = pool();
+        assert!(
+            ON_WORKER_WAIT.get().is_some(),
+            "the pool installs the hook as it starts"
+        );
+
+        let seen = Arc::new(Mutex::new(None));
+        let s2 = seen.clone();
+        let r = scope("hook", move |s| {
+            s.spawn("waiter", move |_| {
+                let on_worker = WORKER_ID.with(std::cell::Cell::get).is_some();
+                let before = worker_waits();
+                let v = compensated(|| 7);
+                *s2.lock().unwrap() = Some((on_worker, worker_waits() - before, v));
+                ExitReason::Normal
+            });
+        });
+        assert!(r.is_ok());
+        let got = seen.lock().unwrap().take();
+        assert_eq!(
+            got,
+            Some((true, 1, 7)),
+            "(on a worker, waits through the hook, the wait's value)"
+        );
+    }
 }
