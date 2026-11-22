@@ -1689,7 +1689,7 @@ fn dial_within(addr: &str, budget: std::time::Duration) -> Result<Sock, NetErr> 
     }
     let deadline = std::time::Instant::now() + budget;
     let mut last = None;
-    for sa in addrs {
+    for sa in addrs.into_iter().take(1) {
         let left = deadline.saturating_duration_since(std::time::Instant::now());
         if left.is_zero() {
             break;
