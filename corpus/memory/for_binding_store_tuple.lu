@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.model.value
+//!
+//! wolf-lang#1169 through a destructuring `for` pattern: `xs` holds its
+//! own copy of the pair's list, so the store leaves `pairs` alone and
+//! `a[0]` is `1`. Every compiling machine wrote it through and printed
+//! `7`.
+
+fn main() -> int {
+    let pairs = [([1, 2], 7), ([3, 4], 8)]
+    for (xs, n) in pairs {
+        xs[0] = n
+    }
+    let (a, _) = pairs[0]
+    print("{a[0]}")
+    0
+}
