@@ -337,6 +337,27 @@ fn the_table_child_is_left_to_the_table_poll() {
     );
 }
 
+/// The cause the order row once met: a shell that waits for a job of its
+/// own reaps its background child that ended meanwhile, so nothing is
+/// orphaned and nothing is adopted, mark or no mark.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_shell_that_waits_reaps_its_own_children() {
+    let test = "a_shell_that_waits_reaps_its_own_children";
+    let Some(place) = linux_place(test) else {
+        return;
+    };
+    rows(
+        &place,
+        "shell_reaps.lu",
+        test,
+        "set: was false
+table: the shell ended 0
+adopted: (0, 0)
+",
+    );
+}
+
 /// Without the attribute the orphan goes to process 1, not to the program.
 #[cfg(target_os = "linux")]
 #[test]

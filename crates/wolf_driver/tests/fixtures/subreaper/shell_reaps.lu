@@ -1,0 +1,20 @@
+//! member: false
+//! wolf-lang#1153 (`[os.proc.subreaper]`): the cause the order row once
+//! met. A shell that waits for a job of its own reaps every child of its
+//! that ends meanwhile, its background ones too (a wait for any child), so
+//! a background child that ends before the shell does is never orphaned
+//! and there is nothing to adopt, even with the mark set. Only a child
+//! that outlives its parent is adopted (`adopted.lu`, `order.lu`). Linux,
+//! in a throwaway container where the program is not process 1.
+
+fn main() -> !int {
+    let was = os_subreaper_set(true)?
+    let h = os_spawn(["/bin/sh", "-c", "sleep 0.1 & sleep 0.5; exit 0"])?
+    let ts = os_wait_status(h)?
+    time_sleep_ms(200)
+    let (p, s) = os_wait_adopted_poll()?
+    print("set: was {was}")
+    print("table: the shell ended {ts}")
+    print("adopted: ({p}, {s})")
+    0
+}
