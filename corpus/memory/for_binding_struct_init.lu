@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="1 3\n")
+//! phase: run
+//! conforms: gram.pat.let, mem.iter.for, mem.tier0.move.1
+//!
+//! wolf-lang#1169: a struct literal built from the `for` name holds the
+//! name's own copy, so a store into the struct's field leaves `rows` at
+//! `1 3`. Every compiling machine wrote it through and printed `0 0`.
+
+struct W { items: List[int] }
+
+fn main() -> int {
+    let rows = [[1, 2], [3, 4]]
+    for row in rows {
+        let w = W { items: row }
+        w.items[0] = 0
+    }
+    print("{rows[0][0]} {rows[1][0]}")
+    0
+}
