@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="echo: howl")
+//! phase: run
+//! conforms: os.net.connect.within, conc.task.spawn, conc.task.scope, err.union, err.propagate
+//!
+//! A dial with a budget that a listener answers inside it
+//! (`[os.net.connect.within]`, wolf-lang#1146): the spawned task accepts
+//! and echoes, the dial with a 5 s budget connects at once, and the
+//! stream behaves as `net_connect`'s does (`spawn_accept.lu`'s shape).
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    scope s {
+        s.spawn(fn() {
+            let conn = net_accept(srv) else |_| -1
+            let msg = net_read(conn, 16) else |_| "?"
+            net_write(conn, "echo: {msg}") else |_| print("task write failed")
+        })
+        let cli = net_connect_within("127.0.0.1:{port}", 5000)?
+        net_write(cli, "howl")?
+        let reply = net_read(cli, 32)?
+        print("{reply}")
+        net_close(cli)?
+    }
+    net_close(srv)?
+    0
+}
