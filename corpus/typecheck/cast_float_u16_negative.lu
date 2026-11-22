@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.trunc
+//!
+//! A cast from `f64` to `u16` traps `overflow` when the truncated value
+//! does not fit (`[type.numlit.cast.trunc]`, wolf-lang#1160): -1.0 truncates to -1, which does not fit `u16`.
+//! Nothing is printed. At 0.2.40 the x86-64 native compiler panicked in
+//! code generation instead.
+
+fn main() -> int {
+    let a: f64 = -1.0
+    let r = a as u16
+    print("{r}")
+    0
+}
