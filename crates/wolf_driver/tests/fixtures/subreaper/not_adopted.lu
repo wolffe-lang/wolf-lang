@@ -1,0 +1,17 @@
+//! member: false
+//! wolf-lang#1153 (`[os.proc.subreaper]`): without the attribute, the
+//! grandchild a shell leaves behind goes to the container's process 1, not
+//! to this program; the adopted poll has nothing to report after it ends.
+//! Linux, in a throwaway container where the program is not process 1.
+
+fn main() -> !int {
+    let on = os_subreaper()?
+    print("attribute: {on}")
+    let h = os_spawn(["/bin/sh", "-c", "sleep 0.1 & exit 0"])?
+    time_sleep_ms(500)
+    let (p, s) = os_wait_adopted_poll()?
+    print("adopted: ({p}, {s})")
+    let (th, ts) = os_wait_poll()?
+    print("table: the shell {th == h}, status {ts}")
+    0
+}
