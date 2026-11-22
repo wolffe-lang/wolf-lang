@@ -6048,6 +6048,19 @@ impl<'t> Machine<'t> {
                 }
                 Value::Struct { fields: out }
             }
+            // An enum's payload is the value's own, as a struct's fields
+            // are: native's `deep_copy_in` rebuilds it (`enum_copy_call`),
+            // and so does this copy.
+            Value::Enum { variant, payload } => {
+                let mut out = Vec::with_capacity(payload.len());
+                for p in payload {
+                    out.push(self.deep_copy(p, span)?);
+                }
+                Value::Enum {
+                    variant,
+                    payload: out,
+                }
+            }
             Value::Shared(c) => {
                 self.cells[c].strong += 1;
                 Value::Shared(c)
