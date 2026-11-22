@@ -191,6 +191,7 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `net` capability (I13), and the whole family is refused at
         // comptime categorically — sockets are the loudest D33 case.
         "net_fetch" | "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read"
+        | "net_connect_within"
         | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline"
         | "net_listen_unix" | "net_connect_unix" | "net_listen_with" | "net_adopt_listener"
         | "net_wait" | "net_writev" | "net_writev_head" | "net_nodelay"

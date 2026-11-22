@@ -15559,6 +15559,13 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![str_],
             rowed(table, int_, &["refused", "timeout", "io"]),
         ),
+        // wolf-lang#1146 (`[os.net.connect.within]`): one budget, in
+        // milliseconds, over every address the name resolves to; zero
+        // or less is `invalid`.
+        "net_connect_within" => (
+            vec![str_, int_],
+            rowed(table, int_, &["refused", "timeout", "invalid", "io"]),
+        ),
         "net_read" => (
             vec![int_, int_],
             rowed(table, str_, &["closed", "timeout", "utf8", "io"]),
