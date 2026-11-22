@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- A cast from a float to a narrow integer (`u8`, `u16`, `i8`, `i16`) no
+  longer panics the native compiler on x86-64 (wolf-lang#1160). Every such
+  cast, in range or not, stopped code generation with an internal error,
+  because the x86-64 backend has no 8- or 16-bit saturating conversion; the
+  conversion now runs at 32 bits and narrows, after the same range and NaN
+  test. The answers are `[type.numlit.cast.trunc]`'s on every machine:
+  truncation toward zero, and `trap(overflow)` when the value does not fit or
+  is a NaN. macOS arm64, release and the checked machine already answered.
+
 - The checked machine (`wolf conform-run --checked`, and so `wolf test`)
   agrees with native, release and lupin on five shapes it used to answer
   differently. A fallible call written directly in an interpolation hole
