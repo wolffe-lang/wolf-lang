@@ -662,6 +662,11 @@ jobs:
       - run: cargo build --workspace
       - if: matrix.leg != 'rung'
         run: cargo test --workspace
+        # wolf-lang#1146: localhost is ::1 and 127.0.0.1 on macOS, so the
+        # budgeted dial's two-address row must run there, never skip. Empty,
+        # and so not required, on windows.
+        env:
+          WOLF_TWO_ADDRESS_REQUIRE: ${{ runner.os == 'macOS' && '1' || '' }}
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
