@@ -1,0 +1,236 @@
+//! wolf-lang#1169 — a `for` binding holds its own value, on every machine.
+//!
+//! `[gram.pat.let]`: a name a `for` header binds holds its own value, never
+//! a place in the walked list. Every compiling machine bound the element
+//! itself, so a store through the binding, or through anything moved,
+//! built, lent, handed or returned from it, wrote the list. The fix binds a
+//! deep copy unless one predicate (`wolf_mem::forcopy`) shows the body only
+//! reads the binding; the checked machine's `eval_for` and the lowering's
+//! `lower_for_list` both ask it.
+//!
+//! Why a driver test beside the corpus rows: `cargo xtask corpus` runs every
+//! entry on the native lane only, and this gate asks the checked machine,
+//! native, release and lupin. It fails in both directions if a machine
+//! stops asking the predicate:
+//!
+//! - a machine that never copies fails the rows: each prints what the list
+//!   held after a store through the binding, and the header is the spec's
+//!   answer (lupin's, where one runs);
+//! - a machine that always copies fails the ledger row: a read-only walk
+//!   inside a region charges that region nothing, where a copy an
+//!   iteration charges the ledger (`[mem.region.account.1]`), and the
+//!   storing walk beside it does charge.
+
+mod lane_exit;
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+fn wolf() -> &'static str {
+    env!("CARGO_BIN_EXE_wolf")
+}
+
+/// The corpus rows: the seven stores, the eight escapes, and the copy of an
+/// enum the checked machine's deep copy used to share.
+const ROWS: [&str; 16] = [
+    "for_binding_store",
+    "for_binding_store_nested",
+    "for_binding_store_read",
+    "for_binding_store_map",
+    "for_binding_store_field",
+    "for_binding_store_tuple",
+    "for_binding_store_arm",
+    "for_binding_let_move",
+    "for_binding_elem_move",
+    "for_binding_struct_init",
+    "for_binding_lend",
+    "for_binding_var_lend",
+    "for_binding_take_arg",
+    "for_binding_outer_assign",
+    "for_binding_return_mut",
+    "copy_enum_payload",
+];
+
+const MACHINES: [&str; 3] = ["--checked", "--native", "--release"];
+
+struct Obs {
+    verdict: String,
+    stdout: String,
+}
+
+fn parse_obs(bytes: &[u8], what: &str) -> Obs {
+    let rec: serde_json::Value =
+        serde_json::from_slice(bytes).unwrap_or_else(|e| panic!("{what} record parses: {e}"));
+    Obs {
+        verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
+        stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
+    }
+}
+
+/// One machine's observation of `entry`; `None` where the host cannot run
+/// a compiled tier (a loud skip, refused under `WOLF_TEST_NATIVE_REQUIRE`).
+fn lane(entry: &Path, flag: &str) -> Option<Obs> {
+    let out = Command::new(wolf())
+        .arg("conform-run")
+        .arg(entry)
+        .arg(flag)
+        .arg("--json")
+        .output()
+        .expect("wolf runs");
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) && flag != "--checked" {
+        assert!(
+            std::env::var_os("WOLF_TEST_NATIVE_REQUIRE").is_none(),
+            "required tier {flag} unavailable: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        eprintln!(
+            "SKIP: environment cannot run the {flag} lane: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
+    assert!(
+        out.status.success(),
+        "conform-run {flag} failed on {}: {}",
+        entry.display(),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Some(parse_obs(&out.stdout, "the observation"))
+}
+
+/// The sibling lupin, found as the other lane gates find it: `LUPIN`
+/// first, then a `wolf-interp` checkout beside an ancestor.
+fn sibling_lupin() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("LUPIN") {
+        let p = PathBuf::from(p);
+        return p.is_file().then_some(p);
+    }
+    let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    while dir.pop() {
+        let candidate = dir.join("../wolf-interp/target/release/lupin");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn lupin(entry: &Path) -> Option<Obs> {
+    let Some(lupin) = sibling_lupin() else {
+        assert!(
+            std::env::var_os("WOLF_PAIRING_REQUIRE_SIBLING").is_none(),
+            "WOLF_PAIRING_REQUIRE_SIBLING is set and no sibling lupin was found"
+        );
+        eprintln!(
+            "SKIP: no sibling lupin on this box (set LUPIN); the machines still answer the header"
+        );
+        return None;
+    };
+    let out = Command::new(&lupin)
+        .arg("conform-run")
+        .arg(entry)
+        .arg("--json")
+        .output()
+        .expect("lupin runs");
+    Some(parse_obs(&out.stdout, "lupin's observation"))
+}
+
+/// The `stdout="…"` of a row's `run(exit=0, …)` header, unescaped.
+fn expected(src: &str) -> String {
+    let line = src
+        .lines()
+        .find(|l| l.starts_with("//! check: run(exit=0, stdout=\""))
+        .expect("a run(exit=0, stdout=…) header");
+    let body = line
+        .trim_start_matches("//! check: run(exit=0, stdout=\"")
+        .trim_end_matches("\")");
+    body.replace("\\n", "\n").replace("\\\"", "\"")
+}
+
+fn corpus(row: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus/memory")
+        .join(format!("{row}.lu"))
+}
+
+#[test]
+fn every_row_answers_its_header_on_every_machine() {
+    let mut wrong = Vec::new();
+    for row in ROWS {
+        let entry = corpus(row);
+        let src = std::fs::read_to_string(&entry).expect("the row exists");
+        let want = expected(&src);
+        for m in MACHINES {
+            let Some(o) = lane(&entry, m) else {
+                continue;
+            };
+            if o.verdict != "exit(0)" || o.stdout != want {
+                wrong.push(format!(
+                    "{row} {m}: {} {:?}, the header {:?}",
+                    o.verdict, o.stdout, want
+                ));
+            }
+        }
+        if let Some(o) = lupin(&entry)
+            && (o.verdict != "exit(0)" || o.stdout != want)
+        {
+            wrong.push(format!(
+                "{row} lupin: {} {:?}, the header {:?}",
+                o.verdict, o.stdout, want
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A walk that only reads binds the element itself and charges its region
+/// nothing; the storing walk beside it binds a copy an iteration, charges,
+/// and leaves the list alone. lupin's ledger does not charge its copies, so
+/// this row is the compiling machines' only.
+const LEDGER: &str = "fn main() -> !int {
+    let rows = [[1, 2], [3, 4], [5, 6]]
+    let probe = region()
+    var read = -1
+    var wrote = false
+    var total = 0
+    in probe {
+        let before = region_bytes(probe)
+        for row in rows {
+            total += row[0]
+        }
+        read = region_bytes(probe) - before
+        let mid = region_bytes(probe)
+        for row in rows {
+            row[0] = 0
+        }
+        wrote = region_bytes(probe) > mid
+    }
+    print(\"read={read} wrote={wrote} rows={rows[0][0]} total={total}\")
+    0
+}
+";
+
+#[test]
+fn a_walk_that_only_reads_charges_its_region_nothing() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("for_binding_copy_lanes")
+        .join("ledger");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let entry = dir.join("main.lu");
+    std::fs::write(&entry, LEDGER).expect("program written");
+    let want = "read=0 wrote=true rows=1 total=9\n";
+    let mut wrong = Vec::new();
+    for m in MACHINES {
+        let Some(o) = lane(&entry, m) else {
+            continue;
+        };
+        eprintln!("REPORT ledger {m}: {} {:?}", o.verdict, o.stdout);
+        if o.verdict != "exit(0)" || o.stdout != want {
+            wrong.push(format!(
+                "ledger {m}: {} {:?}, want {want:?}",
+                o.verdict, o.stdout
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
