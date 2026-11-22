@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- A program that names a runtime wait (`time_sleep_ms`, `fs_sync`,
+  `fs_sync_dir`, `net_connect`, `net_connect_within`, `net_connect_unix`,
+  `net_wait`) but never starts a task no longer links the runtime's
+  thread machinery: the code that starts a compensation worker, its
+  stack-overflow guard and, on static glibc, `pthread_getattr_np` with
+  its `sscanf` (wolf-lang#1171). The wait reaches the task pool only
+  through a hook the pool installs when it starts.
+
 - **A program can be a subreaper and reap the orphans it adopts.**
   `os_subreaper_set(on)` marks this process a child subreaper (or clears
   the mark) and answers the previous value, and `os_subreaper()` reads it
