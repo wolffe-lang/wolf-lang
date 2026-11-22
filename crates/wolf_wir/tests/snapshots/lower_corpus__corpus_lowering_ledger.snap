@@ -851,6 +851,9 @@ methods/wordcount_serial.lu: lowers
 net/accept_posture.lu: lowers
 net/accept_race.lu: lowers
 net/byte_roundtrip.lu: lowers
+net/connect_within_invalid.lu: lowers
+net/connect_within_ok.lu: lowers
+net/connect_within_refused.lu: lowers
 net/echo_bytes.lu: lowers
 net/echo_roundtrip.lu: lowers
 net/inherit_listener.lu: lowers
