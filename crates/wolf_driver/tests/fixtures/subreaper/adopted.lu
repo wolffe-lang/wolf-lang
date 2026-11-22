@@ -1,0 +1,48 @@
+//! member: false
+//! wolf-lang#1153 (`[os.proc.subreaper]`, `[os.proc.poll.adopted]`): a
+//! program marked a child subreaper adopts the grandchild a shell leaves
+//! behind. The adopted poll reports it once, never the table's child (the
+//! shell, which ended first and is still unreaped), and nothing is left
+//! behind. Linux, in a throwaway container where the program is not
+//! process 1.
+
+// Every child this process still has, live or ended and unreaped.
+fn children() -> int {
+    let tasks = fs_read_dir("/proc/self/task") else |_| { return -1 }
+    var n = 0
+    for t in tasks {
+        let text = fs_read_text("/proc/self/task/{t}/children") else |_| { return -1 }
+        n = n + text.words().len()
+    }
+    n
+}
+
+fn main() -> !int {
+    let was = os_subreaper_set(true)?
+    let now = os_subreaper()?
+    print("set: was {was}, now {now}")
+    let h = os_spawn(["/bin/sh", "-c", "sleep 0.3 & exit 0"])?
+    let shell = os_proc_pid(h)?
+    var pid = 0
+    var status = -1
+    var tries = 0
+    while pid == 0 && tries < 500 {
+        time_sleep_ms(10)
+        let (p, s) = os_wait_adopted_poll()?
+        pid = p
+        status = s
+        tries = tries + 1
+    }
+    print("adopted: status {status}, its own pid {pid > 1 && pid != shell}")
+    let (p2, s2) = os_wait_adopted_poll()?
+    print("adopted again: ({p2}, {s2})")
+    let (th, ts) = os_wait_poll()?
+    print("table: the shell {th == h}, status {ts}")
+    let (p3, s3) = os_wait_adopted_poll()?
+    let (t3, n3) = os_wait_poll()?
+    print("nothing left: ({p3}, {s3}) ({t3}, {n3}), children {children()}")
+    let back = os_subreaper_set(false)?
+    let after = os_subreaper()?
+    print("clear: was {back}, now {after}")
+    0
+}
