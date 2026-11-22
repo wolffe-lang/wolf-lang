@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: mem.tier0.move.3, mem.model.value
+//!
+//! `copy` of an enum value copies its payload: `c` holds its own list,
+//! so the store through `c`'s payload leaves `b`'s at `1`. Native and
+//! release copied the payload; the checked machine's copy kept `b`'s
+//! list and printed `0` (found by wolf-lang#1169, whose `for` binding
+//! copies an enum element the same way).
+
+enum Box { Full(List[int]), Empty }
+
+fn main() -> int {
+    let b = Box.Full([1, 2])
+    let c = copy b
+    match c {
+        Full(xs) => { xs[0] = 0 },
+        Empty => {},
+    }
+    match b {
+        Full(xs) => print("{xs[0]}"),
+        Empty => print("empty"),
+    }
+    0
+}
