@@ -13,7 +13,13 @@
 //! backlog), and a name whose first address refuses connecting to its
 //! second inside one budget. lupin has no such builtin and is not a machine
 //! here. A run past its deadline is killed by its own child handle and
-//! FAILS.
+//! FAILS; a test no machine ran FAILS too.
+//!
+//! The two-address row dials `WOLF_TWO_ADDRESS_HOST` when it is set (a name
+//! the operator gave two addresses of one family, a hosts entry, so the
+//! witness never waits on IPv6), else `localhost`. Where that name has
+//! fewer than two distinct addresses the row prints a `SKIP:` line a record
+//! counts, and `WOLF_TWO_ADDRESS_REQUIRE=1` makes that skip a failure.
 mod lane_exit;
 
 use std::io::Read;
@@ -130,6 +136,7 @@ fn conform(entry: &Path, machine: &str) -> Result<Option<serde_json::Value>, Str
 /// so a red run reports each one's answer (`REPORT` lines).
 fn answers(entry: &Path, verdict: &str, stdout: &str) {
     let mut wrong = Vec::new();
+    let mut ran = 0;
     for machine in MACHINES {
         match conform(entry, machine) {
             Err(why) => {
@@ -138,6 +145,7 @@ fn answers(entry: &Path, verdict: &str, stdout: &str) {
             }
             Ok(None) => {}
             Ok(Some(rec)) => {
+                ran += 1;
                 eprintln!(
                     "REPORT {machine} {}: {} {}",
                     entry.display(),
@@ -151,6 +159,7 @@ fn answers(entry: &Path, verdict: &str, stdout: &str) {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    assert!(ran > 0, "no machine ran {}", entry.display());
 }
 
 #[test]
@@ -187,31 +196,42 @@ fn a_held_dial_times_out_inside_its_budget() {
     );
 }
 
-/// The listener sits on the second address `localhost` resolves to here;
-/// the first refuses, and the one budget covers both.
+/// The listener sits on the second address the name resolves to here; the
+/// first refuses, and the one budget covers both.
 #[test]
 fn every_resolved_address_is_tried_in_turn() {
     use std::net::ToSocketAddrs as _;
-    let addrs: Vec<std::net::SocketAddr> = ("localhost", 0)
-        .to_socket_addrs()
-        .expect("localhost resolves")
-        .collect();
-    let (Some(first), Some(second)) = (addrs.first(), addrs.get(1)) else {
-        eprintln!("SKIP: localhost resolves to {addrs:?}: one address cannot witness the order");
-        return;
+    let name = std::env::var("WOLF_TWO_ADDRESS_HOST").unwrap_or_else(|_| "localhost".to_string());
+    let addrs: Vec<std::net::SocketAddr> = match (name.as_str(), 0).to_socket_addrs() {
+        Ok(a) => a.collect(),
+        Err(e) => panic!("{name} does not resolve: {e}"),
     };
-    if first.ip() == second.ip() {
-        eprintln!("SKIP: localhost resolves to {addrs:?}: one address cannot witness the order");
+    let mut distinct: Vec<std::net::IpAddr> = Vec::new();
+    for a in &addrs {
+        if !distinct.contains(&a.ip()) {
+            distinct.push(a.ip());
+        }
+    }
+    eprintln!("REPORT {name} resolves to {addrs:?}");
+    if distinct.len() < 2 {
+        let line = format!(
+            "SKIP: every_resolved_address_is_tried_in_turn: {name} resolves to {distinct:?}; \
+             one address cannot witness the order"
+        );
+        assert!(
+            std::env::var_os("WOLF_TWO_ADDRESS_REQUIRE").is_none(),
+            "{line} (WOLF_TWO_ADDRESS_REQUIRE is set)"
+        );
+        eprintln!("{line}");
         return;
     }
-    let listen = match second.ip() {
+    let listen = match distinct[1] {
         std::net::IpAddr::V6(ip) => format!("[{ip}]:0"),
         std::net::IpAddr::V4(ip) => format!("{ip}:0"),
     };
-    eprintln!("REPORT localhost resolves to {addrs:?}; listening on {listen}");
-    answers(
-        &stage("two_addresses", Some(("LISTEN", &listen))),
-        "exit(0)",
-        "connected\n",
-    );
+    eprintln!("REPORT dialling {name}, listening on {listen} (its second address)");
+    let staged = stage("two_addresses", Some(("@LISTEN@", &listen)));
+    let body = std::fs::read_to_string(&staged).expect("read the staged row");
+    std::fs::write(&staged, body.replacen("@NAME@", &name, 1)).expect("name the row");
+    answers(&staged, "exit(0)", "connected\n");
 }
