@@ -11077,6 +11077,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_text"
                 // s242 (#680): the poll of the children.
                 | "os_wait_poll"
+                // wolf-lang#1153: the subreaper attribute and the poll of
+                // the children it adopts.
+                | "os_subreaper_set"
+                | "os_subreaper"
+                | "os_wait_adopted_poll"
                 // s246 (#783, #784): one meaning's disposition, and the
                 // end of this process by a signal.
                 | "os_signal_ignore_one"
@@ -16281,6 +16286,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_set_core_limit" => 2,
             "os_getpriority" => 0,
             "os_wait_poll" | "os_wait_poll_core" | "os_fork" => 0,
+            "os_subreaper" | "os_wait_adopted_poll" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
             "os_spawn_job" => 6,
@@ -16376,6 +16382,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_realtime" => ("__wolf_rt_os_signal_realtime", PROC),
             "os_signal_text" => ("__wolf_rt_os_signal_text", PROC),
             "os_wait_poll" => ("__wolf_rt_os_wait_poll", PROC),
+            "os_subreaper_set" => ("__wolf_rt_os_subreaper_set", PROC),
+            "os_subreaper" => ("__wolf_rt_os_subreaper", PROC),
+            "os_wait_adopted_poll" => ("__wolf_rt_os_wait_adopted_poll", PROC),
             "os_wait_poll_core" => ("__wolf_rt_os_wait_poll_core", PROC),
             "os_fork" => ("__wolf_rt_os_fork", FORK),
             "os_wait_status_core" => ("__wolf_rt_os_wait_status_core", PROC),
@@ -16417,6 +16426,49 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             )?;
             return Ok(Flow::Val(Some(out)));
         }
+        // wolf-lang#1153 (`[os.proc.subreaper]`): `os_isatty`'s bool shape —
+        // rc 0 and the answer (nonzero is true) through an 8-byte slot, else
+        // the code; the set's `on` widened to the word the shim reads.
+        if name == "os_subreaper_set" || name == "os_subreaper" {
+            let args: Vec<Value> = if name == "os_subreaper_set" {
+                vec![self.widen_to_wire(argv[0], e.span)?]
+            } else {
+                Vec::new()
+            };
+            let (region, slot) = self.rt_slot(8);
+            let rc = self
+                .rt_call_slot(sym, &args, slot, region, Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| {
+                    let w = zz.load_flat(types::I64, slot, region, e.span)?;
+                    let zero = zz.b.iconst(types::I64, 0);
+                    Ok(Some(
+                        zz.b.ins(
+                            Opcode::Icmp,
+                            &[w, zero],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Ne),
+                        )
+                        .one(),
+                    ))
+                },
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
         // s234 (`[os.term.size]`): `os_pipe`'s pair shape — rc 0 and the
         // (rows, columns) pair through a 16-byte slot, else the code.
         //
@@ -16429,6 +16481,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             || name == "os_core_limit"
             || name == "os_wait_poll"
             || name == "os_wait_poll_core"
+            // wolf-lang#1153 (`[os.proc.poll.adopted]`): (pid, status).
+            || name == "os_wait_adopted_poll"
             || name == "os_fork"
             // s292 (`[os.term.pty]`): the pty's (master, slave).
             || name == "os_term_open_pty"

@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 287] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 290] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -462,6 +462,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 287] = [
     // s242 (#680): the poll of the children — the (handle, status) pair
     // through a 16-byte out slot.
     ("__wolf_rt_os_wait_poll", 1, true),
+    // wolf-lang#1153: (on, out) / (out) / (out) -> code.
+    ("__wolf_rt_os_subreaper_set", 2, true),
+    ("__wolf_rt_os_subreaper", 1, true),
+    ("__wolf_rt_os_wait_adopted_poll", 1, true),
     // s246 (#785; ruling #88 R3 D): the wait and the poll that report a
     // core, the released two's shapes.
     ("__wolf_rt_os_wait_status_core", 2, true),
