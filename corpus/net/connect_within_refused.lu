@@ -6,15 +6,16 @@
 //! row (`[os.net.connect.within]`, wolf-lang#1146), as `net_connect`'s is
 //! (`refused_row.lu`): handled with `else`, then propagated with `?`
 //! (the tag on stdout, exit 1). Bind loopback port 0, learn the port,
-//! close the listener, then dial it.
+//! close the listener, then dial it. The budget is wide (10 s): windows
+//! retries a refused loopback dial for about two seconds before it says so.
 
 fn main() -> !int {
     let srv = net_listen("127.0.0.1:0")?
     let port = net_port(srv)?
     net_close(srv)?
-    let sock = net_connect_within("127.0.0.1:{port}", 2000) else |_| 0
+    let sock = net_connect_within("127.0.0.1:{port}", 10000) else |_| 0
     print("handled: {sock}")
-    let strict = net_connect_within("127.0.0.1:{port}", 2000)?
+    let strict = net_connect_within("127.0.0.1:{port}", 10000)?
     print("unreachable: {strict}")
     0
 }
