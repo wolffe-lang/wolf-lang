@@ -956,9 +956,6 @@ impl ChildTable {
             .map(|k| k.id() as libc::pid_t)
             .collect();
         for pid in own_children()? {
-            if held.contains(&pid) {
-                continue;
-            }
             let mut st: libc::c_int = 0;
             let r = loop {
                 // SAFETY: a plain waitpid on one child of this process,
