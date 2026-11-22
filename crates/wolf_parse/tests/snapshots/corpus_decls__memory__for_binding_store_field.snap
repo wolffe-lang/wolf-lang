@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 393..424 name=Row fields=1
+FnDecl 426..614 name=main body=Block
