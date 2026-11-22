@@ -24,11 +24,15 @@ fn ensure_runtime() {
 }
 
 /// The directory one probe run owns, under `target/tmp`. The probe refuses
-/// one that exists, so no two runs in this process may share a name.
+/// one that exists, so no two runs in this process may share a name: the
+/// clock alone does not part them (macOS reads microseconds), a count kept
+/// for the process does.
 fn probe_root(tier: &str) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!(
-        "function-layout-{tier}-{}-{}",
+        "function-layout-{tier}-{}-{}-{}",
         std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
