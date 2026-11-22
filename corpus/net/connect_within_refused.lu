@@ -1,0 +1,20 @@
+//! check: run(exit=1, stdout="handled: 0\nerror: refused")
+//! phase: run
+//! conforms: os.net.connect.within, err.union, err.propagate
+//!
+//! A dial with a budget to a port nobody listens on is the `refused`
+//! row (`[os.net.connect.within]`, wolf-lang#1146), as `net_connect`'s is
+//! (`refused_row.lu`): handled with `else`, then propagated with `?`
+//! (the tag on stdout, exit 1). Bind loopback port 0, learn the port,
+//! close the listener, then dial it.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    net_close(srv)?
+    let sock = net_connect_within("127.0.0.1:{port}", 2000) else |_| 0
+    print("handled: {sock}")
+    let strict = net_connect_within("127.0.0.1:{port}", 2000)?
+    print("unreachable: {strict}")
+    0
+}
