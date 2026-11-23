@@ -213,6 +213,68 @@ pub fn declared_call(c: &CallSig) -> bool {
     !c.has_self && c.decl_span.is_some() && !c.ctor && !c.c_call && !c.variadic
 }
 
+/// wolf-lang#1177 (part 2): is `push`'s operand `e` FRESH — a value no
+/// other place can reach once the push holds it — so the push may store it
+/// as it is instead of deep-copying it? `[mem.region.edge.elem]` states the
+/// copy's cost as paid once per plain push, a ceiling, and a push of a value
+/// nobody else holds needs no copy to keep the list's element independent.
+///
+/// `true` only for, parentheses seen through:
+/// - a struct, tuple or list literal: it owns its parts. A local, a field or
+///   an element it names is moved into it (a later use is E1001 on every
+///   compiling machine, a `use-after-move` trap on lupin);
+/// - `copy e`, `copy region { … }` among them: its answer is a new value;
+/// - a call to a declared function ([`declared_call`]) whose every argument
+///   is a primitive (`expr_ty`): nothing it could hand back was reachable
+///   before the call, since module state holds no heap value
+///   (`[mem.static.3]`) and its arguments hold none. A declared call with a
+///   heap argument is not fresh while wolf-lang#1184 stands: a function may
+///   answer `xs.first() else [..]`, the caller's own element, and E1002 does
+///   not see it.
+///
+/// `false` for everything else, which keeps the copy: a place, a method call
+/// (`get` and `first` may hand out the receiver's own element), an `else`,
+/// `if`, `match` or block expression (each may yield a place's value), a
+/// constructor, a fn value's call, a C call. A wrong `false` costs one copy;
+/// a wrong `true` is a second writable path to one value, so the list is
+/// short on purpose. `declared` answers whether the call at a span is a
+/// [`declared_call`], from the consumer's own call records; `expr_ty` is the
+/// checker's type at a span, as [`needs_own_copy`] reads it.
+pub fn fresh_operand(
+    e: &GreenNode,
+    declared: &dyn Fn(Span) -> bool,
+    expr_ty: &dyn Fn(Span) -> Option<TyKind>,
+) -> bool {
+    match e.kind {
+        SyntaxKind::ParenExpr => {
+            // `(mut x)` and `(take x)` are modes, not values.
+            !e.tokens()
+                .any(|t| matches!(t.kind, SyntaxKind::MutKw | SyntaxKind::TakeKw))
+                && ParenExpr::cast(e)
+                    .and_then(|p| p.expr())
+                    .is_some_and(|inner| fresh_operand(inner, declared, expr_ty))
+        }
+        SyntaxKind::StructLit | SyntaxKind::TupleExpr | SyntaxKind::ListLit => true,
+        SyntaxKind::PrefixExpr => PrefixExpr::cast(e)
+            .and_then(|p| p.op())
+            .is_some_and(|t| t.kind == SyntaxKind::CopyKw),
+        SyntaxKind::CallExpr => {
+            declared(e.span)
+                && CallExpr::cast(e).is_some_and(|d| {
+                    d.args().into_iter().flat_map(|l| l.args()).all(|a| {
+                        a.value().is_some_and(|v| {
+                            matches!(
+                                expr_ty(v.span),
+                                Some(TyKind::Prim(_) | TyKind::Unit | TyKind::Never)
+                            )
+                        })
+                    })
+                })
+        }
+        _ => false,
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Pos {
     /// The value is read where it stands, or bound to a derived name.
@@ -458,8 +520,21 @@ impl Walk<'_, '_, '_> {
                         _ => self.expr(c, Pos::Read),
                     }
                 }
+                // wolf-lang#1177: a `push` stores a fresh operand as it is
+                // ([`fresh_operand`]), so the parts of a literal it is handed
+                // go where the list goes: they escape. Any method named
+                // `push` counts, a builtin or not; for a declared one the
+                // only cost is a copy.
+                let pushes = d
+                    .callee()
+                    .and_then(MemberExpr::cast)
+                    .and_then(|m| m.member())
+                    .is_some_and(|t| text(self.src, t.span) == "push");
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
-                    self.arg(a, plain);
+                    let kept = pushes
+                        && a.value()
+                            .is_some_and(|v| fresh_operand(v, self.declared, self.expr_ty));
+                    self.arg(a, if kept { Pos::Escape } else { plain });
                 }
             }
             SyntaxKind::BracketApply => {
@@ -483,8 +558,9 @@ impl Walk<'_, '_, '_> {
             // temporary, which an index store keeps as it is, wolf-lang#438)
             // its parts escape with it. Where it is read, they are read: a
             // `let` makes the bound name derived (its own uses answer for
-            // it), a function's argument is a `read` one, and `push` copies
-            // its element whole (`[mem.region.edge.elem]`).
+            // it) and a function's argument is a `read` one. A `push` keeps
+            // a literal as it is (wolf-lang#1177): the call arm walks one in
+            // the escaping position.
             SyntaxKind::StructLit => {
                 let d = StructLit::cast(e).expect("kind");
                 for f in d.fields() {
