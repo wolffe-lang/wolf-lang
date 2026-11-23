@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, os.term.pty
+//!
+//! wolf-lang#1179 — `os_term_pty_name` is a site. It copies the slave's
+//! name into the ambient region, an ordinary owned `str`, so a name asked
+//! inside a region and returned out of it is the escape `os_cwd`'s is
+//! (`region_os_cwd_return.lu`); the row on its type (`str ! {io,
+//! unsupported}`) is why the mem tier could not see it by asking whether
+//! the result is `str`.
+//!
+//! Before the site the compiler accepted this program on every machine,
+//! and a native binary that allocated again after the call printed the
+//! bytes of whatever the freed region held next in place of the name.
+
+fn slave_name(master: int) -> str {
+    region scratch {
+        os_term_pty_name(master) else "?"   // ERROR E1010: asked in scratch
+    }
+}
+
+fn main() {
+    print("{slave_name(3)}\n")
+}
