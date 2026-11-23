@@ -32,17 +32,16 @@
 //! condition, an interpolation, an index or a field read, a plain call
 //! argument (a `read` parameter is deeply immutable for the call, E1014, and
 //! cannot be returned or moved out, E1002; a builtin that keeps a plain
-//! argument copies it in, `[mem.region.edge.elem]`: `push` copies any plain
-//! element, an index store copies a place), the iterable of a nested `for`,
-//! the initializer of a `let` (the new name is derived and answers for
-//! itself). A call that escapes keeps its plain arguments read when it is a
+//! argument copies it in, `[mem.region.edge.elem]`: `push` and a pool's
+//! `init` copy any plain value, an index store copies a place), the iterable
+//! of a nested `for`, the initializer of a `let` (the new name is derived and
+//! answers for itself). A call that escapes keeps its plain arguments read when it is a
 //! call by name to a declared function ([`declared_call`]): its answer cannot
 //! hold a `read` argument (a `read` parameter moved anywhere that outlives the
 //! call is E1002; a walk over one binds an element this predicate copies
 //! before it leaves). Every other call (a method, builtin or declared; a
 //! constructor; a fn value; a C call) passes its own position on to its plain
-//! arguments. A pool's `init` keeps the value it is handed as it is, so its
-//! plain arguments escape.
+//! arguments.
 //! Everything else asks for the copy: a store through a derived
 //! name (an index or field place rooted at one), `mut`/`take`/`move`/`&`/
 //! `shared` on one, a plain assignment, a `return` or a `break` carrying one,
@@ -412,15 +411,6 @@ impl Walk<'_, '_, '_> {
                 //   position.
                 let plain = if (self.declared)(e.span) {
                     Pos::Read
-                } else if d
-                    .callee()
-                    .and_then(MemberExpr::cast)
-                    .is_some_and(|m| self.keeps_as_is(m))
-                {
-                    // A pool's `init` keeps the value it is handed as it is,
-                    // on every compiling machine: a binding handed to it
-                    // must be the loop's own.
-                    Pos::Escape
                 } else {
                     pos
                 };
@@ -646,25 +636,6 @@ impl Walk<'_, '_, '_> {
             Some(TyKind::Map(..)) => matches!(name.as_str(), "clear" | "remove"),
             _ => false,
         }
-    }
-
-    /// Is `m` a builtin that keeps a plain argument without copying it in:
-    /// `init` on a `Pool` receiver? A `push` copies its element in, and a
-    /// channel's `send` takes only payloads that cannot share mutable data
-    /// (E1102). An unrecorded receiver type answers no; the call then keeps
-    /// the rule of every other builtin.
-    fn keeps_as_is(&self, m: MemberExpr<'_>) -> bool {
-        let Some(name) = m.member().map(|t| text(self.src, t.span)) else {
-            return false;
-        };
-        let Some(b) = m.base() else {
-            return false;
-        };
-        let recv = match ParenExpr::cast(b).and_then(|x| x.expr()) {
-            Some(inner) => unparen(inner),
-            None => b,
-        };
-        name == "init" && matches!((self.expr_ty)(recv.span), Some(TyKind::Pool(_)))
     }
 
     /// `(mut p)` where `p` is a place rooted at a derived name.
