@@ -572,18 +572,30 @@ fn a_declared_function_cannot_keep_its_plain_parameter() {
     );
 }
 
-/// A pool's `init` keeps the value it is handed as it is, on every compiling
-/// machine, so a binding handed to it must be the loop's own: it copies.
+/// A pool's `init` copies a value handed to it plainly into the pool
+/// (wolf-lang#1183, as `push` does), so a binding handed to it plainly is read:
+/// the walk binds the element, and `init` makes the one copy. Handed under
+/// `take`, it is moved out of the binding, which copies.
 #[test]
-fn a_pool_init_of_the_binding_copies() {
-    let src = "fn f() -> int {\n    let rows = [[1, 2], [3, 4]]\n    var pool = Pool[List[int]]()\n    let hs = [(mut pool).reserve(), (mut pool).reserve()]\n    var i = 0\n    for row in rows {\n        (mut pool).init(hs[i], row)\n        i += 1\n    }\n    rows.len\n}\n\nfn main() {}\n";
+fn a_pool_init_of_the_binding_binds_the_element() {
+    let pool = |arg: &str| {
+        format!(
+            "fn f() -> int {{\n    let rows = [[1, 2], [3, 4]]\n    var pool = Pool[List[int]]()\n    let hs = [(mut pool).reserve(), (mut pool).reserve()]\n    var i = 0\n    for row in rows {{\n        (mut pool).init(hs[i], {arg})\n        i += 1\n    }}\n    rows.len\n}}\n\nfn main() {{}}\n"
+        )
+    };
+    let plain = pool("row");
     assert!(
-        ask(src, true, true),
-        "must copy: a pool init of the binding\n{src}"
+        !ask(&plain, true, true),
+        "must not copy: a pool init of the binding\n{plain}"
+    );
+    let taken = pool("take row");
+    assert!(
+        ask(&taken, true, true),
+        "must copy: a pool init taking the binding\n{taken}"
     );
     let part = "fn f() -> int {\n    let cube = [[[1, 2]], [[3, 4]]]\n    var pool = Pool[List[int]]()\n    let hs = [(mut pool).reserve(), (mut pool).reserve()]\n    var i = 0\n    for plane in cube {\n        (mut pool).init(hs[i], plane[0])\n        i += 1\n    }\n    cube.len\n}\n\nfn main() {}\n";
     assert!(
-        ask(part, true, true),
-        "must copy: a pool init of a part of the binding\n{part}"
+        !ask(part, true, true),
+        "must not copy: a pool init of a part of the binding\n{part}"
     );
 }
