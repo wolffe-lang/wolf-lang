@@ -587,3 +587,122 @@ fn a_pool_init_of_the_binding_copies() {
         "must copy: a pool init of a part of the binding\n{part}"
     );
 }
+
+/// wolf-lang#1177: a `push` stores a fresh operand as it is, so a literal
+/// over the binding that is pushed carries the binding into the list: the
+/// binding must be the loop's own copy. A literal of a part, a `copy` and a
+/// declared function's answer still read it.
+#[test]
+fn a_literal_over_the_binding_pushed_copies() {
+    let head = "struct W { items: List[int] }\n\nfn size(xs: List[int]) -> int {\n    xs.len\n}\n\nfn f() -> int {\n    let rows = [[1, 2], [3, 4]]\n    var ws = List[W]()\n    var ps = List[(List[int], int)]()\n    var ls = List[List[List[int]]]()\n    var ns = List[List[int]]()\n    for row in rows {\n        ";
+    let tail = "\n    }\n    ws.len + ps.len + ls.len + ns.len\n}\n\nfn main() {}\n";
+    for (name, body) in [
+        ("a struct literal", "(mut ws).push(W { items: row })"),
+        (
+            "a shorthand struct literal",
+            "let items = row\n        (mut ws).push(W { items })",
+        ),
+        ("a tuple literal", "(mut ps).push((row, 1))"),
+        ("a list literal", "(mut ls).push([row])"),
+        ("a parenthesized literal", "(mut ls).push(([row]))"),
+    ] {
+        let src = format!("{head}{body}{tail}");
+        assert!(ask(&src, true, true), "must copy: {name}, pushed\n{src}");
+    }
+    for (name, body) in [
+        ("a literal of a part", "(mut ns).push([row[0], row.len])"),
+        ("a copy of it", "(mut ls).push([copy row])"),
+        ("a declared function's answer", "(mut ns).push([size(row)])"),
+    ] {
+        let src = format!("{head}{body}{tail}");
+        assert!(
+            !ask(&src, true, true),
+            "must not copy: {name}, pushed\n{src}"
+        );
+    }
+}
+
+/// The operand `push` may store as it is: the first `push` in `src`'s `f`,
+/// asked with the checker's own types and call records.
+fn fresh(src: &str) -> bool {
+    use wolf_ast::{Arg, CallExpr};
+    let mut ml = MemoryLoader::new("fresh");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        !tc.has_errors(),
+        "input types clean: {:?}\n{src}",
+        tc.diagnostics
+    );
+    let file = &res.package.files[0];
+    let text = &file.raw.src;
+    fn find<'a>(n: &'a GreenNode, src: &[u8]) -> Option<&'a GreenNode> {
+        let pushes = n.kind == SyntaxKind::CallExpr
+            && src[n.span.lo as usize..n.span.hi as usize]
+                .windows(6)
+                .any(|w| w == b".push(");
+        let operand = CallExpr::cast(n)
+            .filter(|_| pushes)
+            .and_then(|d| d.args().into_iter().flat_map(|l| l.args()).next())
+            .and_then(Arg::value)
+            .filter(|v| find(v, src).is_none());
+        operand.or_else(|| n.nodes().find_map(|c| find(c, src)))
+    }
+    let v = find(&file.parse.root, text).expect("a push");
+    let ty = |sp: Span| -> Option<TyKind> {
+        tc.bodies.iter().find_map(|b| match &b.result {
+            BodyResult::Checked(tb) => tb
+                .exprs
+                .iter()
+                .find(|(s, _)| *s == sp)
+                .map(|(_, id)| tb.table.kind(*id).clone()),
+            _ => None,
+        })
+    };
+    let declared = |sp: Span| -> bool {
+        tc.bodies.iter().any(|b| match &b.result {
+            BodyResult::Checked(tb) => tb.calls.iter().any(|(s, c)| *s == sp && declared_call(c)),
+            _ => false,
+        })
+    };
+    wolf_mem::forcopy::fresh_operand(v, &declared, &ty)
+}
+
+/// wolf-lang#1177: which pushed operands are fresh. A literal, a `copy` and a
+/// declared function's answer to primitive arguments are; a place, a method
+/// call, an `else`, `if` or block, and a declared function handed a list (it
+/// may answer that list's own element, wolf-lang#1184) are not.
+#[test]
+fn a_fresh_operand_is_a_literal_a_copy_or_a_call_on_primitives() {
+    let head = "struct S { a: List[int] }\n\nfn make(i: int) -> S {\n    S { a: [i] }\n}\n\nfn mk() -> List[int] {\n    [1]\n}\n\nfn first_of(xs: List[List[int]]) -> List[int] {\n    xs.first() else [0]\n}\n\nfn f() -> int {\n    let c = true\n    var yss = [[1, 2], [3]]\n    var ss = List[S]()\n    var o = List[List[int]]()\n    ";
+    let tail = "\n    ss.len + o.len\n}\n\nfn main() {}\n";
+    for (name, body, want) in [
+        ("a struct literal", "(mut ss).push(S { a: [1] })", true),
+        ("a list literal", "(mut o).push([1, 2])", true),
+        ("a parenthesized literal", "(mut o).push(([1, 2]))", true),
+        ("a copy", "(mut o).push(copy yss[0])", true),
+        ("a declared call on an int", "(mut ss).push(make(3))", true),
+        ("a declared call on nothing", "(mut o).push(mk())", true),
+        ("a place", "(mut o).push(yss[0])", false),
+        (
+            "a method's element behind else",
+            "(mut o).push(yss.first() else [9])",
+            false,
+        ),
+        (
+            "a get behind else",
+            "(mut o).push(yss.get(1) else [9])",
+            false,
+        ),
+        ("an if", "(mut o).push(if c { yss[0] } else { [0] })", false),
+        (
+            "a declared call on a list",
+            "(mut o).push(first_of(yss))",
+            false,
+        ),
+    ] {
+        let src = format!("{head}{body}{tail}");
+        assert_eq!(fresh(&src), want, "{name}\n{src}");
+    }
+}
