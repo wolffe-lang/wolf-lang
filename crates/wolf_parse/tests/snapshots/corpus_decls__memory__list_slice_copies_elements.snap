@@ -1,0 +1,15 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1515..1551 name=Bag fields=1
+FnDecl 1553..1617 name=head body=Block
+FnDecl 1619..1673 name=head_of body=Block
+FnDecl 1675..1812 name=in_main body=Block
+FnDecl 1814..1950 name=through_call body=Block
+FnDecl 1952..2099 name=through_generic body=Block
+FnDecl 2101..2311 name=through_loop body=Block
+FnDecl 2313..2466 name=source_write body=Block
+FnDecl 2468..2647 name=in_struct body=Block
+FnDecl 2649..2864 name=open_ends body=Block
+FnDecl 2866..3018 name=main body=Block
