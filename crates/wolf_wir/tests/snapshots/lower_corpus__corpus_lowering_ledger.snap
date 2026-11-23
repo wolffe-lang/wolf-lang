@@ -554,6 +554,7 @@ memory/list_reset.lu: lowers
 memory/list_reset_reuse_ledger.lu: lowers
 memory/list_session_struct.lu: lowers
 memory/list_slice.lu: lowers
+memory/list_slice_copies_elements.lu: lowers
 memory/list_slice_edges.lu: lowers
 memory/list_slice_inline_owned.lu: lowers
 memory/list_slice_owned_call.lu: lowers
