@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **`get`, `first` and `last` answer a value of their own**
+  (wolf-lang#1184, `[mem.list.pop]`, `[mem.model.value]`). In 0.2.40
+  every compiling machine answered with the element itself, so after
+  `var a = rows.first() else [0]` a write to `a` changed `rows[0]`, a
+  later write to `rows[0]` changed `a`, and a function could hand its
+  `read` parameter's element back to the caller with no diagnostic. An
+  element that reaches heap storage is now copied out, as `push` copies
+  one in. The copy is charged to the ambient region: a `get` of a
+  `List[List[int]]` element costs what `copy` of it costs. Elements
+  that reach no heap storage, `str` included, cost nothing, as before.
+
 - **A pool's `init` copies a value handed to it plainly**
   (wolf-lang#1183, `[mem.region.edge.elem]`), as `push` has since
   wolf-lang#385, and `init(h, take v)` moves it. In 0.2.40 the native
