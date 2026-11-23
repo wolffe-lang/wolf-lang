@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **A slice copies its elements whole** (wolf-lang#1191,
+  `[mem.list.slice]`, `[mem.model.value]`). In 0.2.40 every compiling
+  machine copied only each element's word or handle, so a slice of a
+  list of lists shared its inner lists with the source: a write through
+  `rows[0..1]` changed `rows`, a later write to `rows` changed the
+  slice, and a function could hand its `read` parameter's inner lists
+  back through a slice. An element that reaches heap storage is now
+  copied whole, as `copy` copies it, and the slice charges that copy: a
+  full-range slice costs what `copy` of the list costs. A slice of flat
+  elements is the same single copy as before.
+
 - **`get`, `first` and `last` answer a value of their own**
   (wolf-lang#1184, `[mem.list.pop]`, `[mem.model.value]`). In 0.2.40
   every compiling machine answered with the element itself, so after
