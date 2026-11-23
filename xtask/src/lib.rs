@@ -9,3 +9,4 @@ pub mod release;
 pub mod spec;
 pub mod stats;
 pub mod t1;
+pub mod wolf_bin;
