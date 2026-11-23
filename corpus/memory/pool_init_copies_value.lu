@@ -1,0 +1,55 @@
+//! check: run(exit=0, stdout="issue: xs=9 pool=1\nput: ys=9 pool=1\ntake: pool=2\nstruct: bag=9 pool=1\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.excl.1
+//!
+//! wolf-lang#1183 — a pool's `init`, the other builtin container store
+//! that KEEPS its argument (`[mem.region.edge.elem]`, ruled with `push`
+//! in wolf-lang#385), copies a non-`Copy` value handed to it plainly,
+//! and `init(h, take v)` moves it instead.
+//!
+//! Each line writes the caller's value after the call and reads the pool's
+//! through its handle. Measured at v0.2.40, the issue line printed
+//! `xs=9 pool=9` natively and on `--release`: the pool kept the lent value
+//! itself, so its slot and `xs` were one value with two writable paths.
+//! The checked machine moved the value instead and stopped with
+//! `trap(use-after-move)` at the write to `xs` the checker had accepted.
+//!
+//! The `put` line is the same store one call deeper, through a user
+//! `read` parameter into a `mut` pool. The `take` line moves, and the
+//! struct line is a value whose `List` field the copy reaches.
+
+struct Bag {
+    items: List[int],
+}
+
+fn put(mut pool: Pool[List[int]], h: handle List[int], b: List[int]) {
+    (mut pool).init(h, b)
+}
+
+fn main() -> !int {
+    var pool = Pool[List[int]]()
+    var xs = [1, 2]
+    let h = (mut pool).reserve()
+    (mut pool).init(h, xs)
+    xs[0] = 9
+    print("issue: xs={xs[0]} pool={pool[h][0]}")
+
+    var ys = [1, 2]
+    let h2 = (mut pool).reserve()
+    put(mut pool, h2, ys)
+    ys[0] = 9
+    print("put: ys={ys[0]} pool={pool[h2][0]}")
+
+    var zs = [2, 3]
+    let h3 = (mut pool).reserve()
+    (mut pool).init(h3, take zs)
+    print("take: pool={pool[h3][0]}")
+
+    var bags = Pool[Bag]()
+    var bag = Bag { items: [1] }
+    let hb = (mut bags).reserve()
+    (mut bags).init(hb, bag)
+    bag.items[0] = 9
+    print("struct: bag={bag.items[0]} pool={bags[hb].items[0]}")
+    0
+}
