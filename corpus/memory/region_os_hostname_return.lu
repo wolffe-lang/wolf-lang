@@ -1,0 +1,19 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, os.hostname
+//!
+//! wolf-lang#858 — `os_hostname` is a site, as `os_cwd` is
+//! (`region_os_cwd_return.lu`): it copies the node name into the ambient
+//! region, an ordinary owned `str`, so a name asked inside a region and
+//! returned out of it is the escape; the row on its type (`str ! {io,
+//! unsupported, utf8}`) is why the mem tier sees it by name.
+
+fn here() -> str {
+    region scratch {
+        os_hostname() else "?"   // ERROR E1010: asked in scratch
+    }
+}
+
+fn main() {
+    print("{here()}\n")
+}

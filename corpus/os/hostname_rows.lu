@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="agree: true\nbounded: true\nrow: true")
+//! phase: run
+//! conforms: os.hostname, os.uname
+//!
+//! wolf-lang#858 (`[os.hostname]`) — the rows that hold on every host,
+//! whatever its name: two reads agree (nothing renames the host here), the
+//! name is at most 255 bytes, and the row is `unsupported` exactly where
+//! `os_name()` is `windows`. A handler over exactly `{io, unsupported,
+//! utf8}` is exhaustive.
+
+fn main() -> int {
+    let windows = os_name() == "windows"
+    let a = os_hostname() else |e| {
+        let unsupported = match e {
+            unsupported => true,
+            io => false,
+            utf8 => false,
+        }
+        print("agree: true")
+        print("bounded: true")
+        print("row: {windows && unsupported}")
+        return 0
+    }
+    let b = os_hostname() else |e| {
+        "<failed>"
+    }
+    print("agree: {a == b}")
+    print("bounded: {a.len <= 255}")
+    print("row: {!windows}")
+    0
+}

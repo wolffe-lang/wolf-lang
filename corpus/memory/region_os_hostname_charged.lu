@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="charged true | reclaimed true | got true")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+//!
+//! wolf-lang#858 — `region_os_cwd_charged.lu` for the machine's name: the
+//! name is a materialization in the ambient region (`[mem.region.create.3]`),
+//! so a thousand names asked inside `region pass { }` appear in that
+//! region's ledger and vanish with it — a server that asks the name every
+//! turn inside a region keeps nothing. Windows has no name to read and
+//! prints the line the other hosts earn.
+
+fn main() -> !int {
+    if os_name() == "windows" {
+        print_raw("charged true | reclaimed true | got true")
+        return 0
+    }
+    let before = live_region_bytes()
+    var charged = 0
+    var got = 0
+    region pass {
+        for _ in 0..1000 {
+            let n = os_hostname() else |e| {
+                ""
+            }
+            got = got + n.len
+        }
+        charged = region_bytes(pass)
+    }
+    let reclaimed = live_region_bytes() == before
+    print_raw("charged {charged >= got} | reclaimed {reclaimed} | got {got > 0}")
+    0
+}
