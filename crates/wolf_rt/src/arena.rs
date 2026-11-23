@@ -152,10 +152,6 @@ mod imp {
             // SAFETY: a malloc parameter, set before any other thread exists.
             unsafe { libc::mallopt(libc::M_ARENA_MAX, PER_CPU) };
         }
-        if threshold_settles() {
-            // SAFETY: a malloc parameter, set before any other thread exists.
-            unsafe { libc::mallopt(libc::M_MMAP_THRESHOLD, MMAP_THRESHOLD) };
-        }
     }
 
     pub(crate) fn settle_at_pool_start() {
