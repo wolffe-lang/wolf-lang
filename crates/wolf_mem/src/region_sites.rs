@@ -24,12 +24,16 @@
 /// - `net_read` (wolf-lang#374, the net half): what arrived.
 /// - `os_cwd` (wolf-lang#834): the working directory's name.
 /// - `env_arg0` (`[os.env.argv]`): the invocation name.
+/// - `os_term_pty_name` (wolf-lang#1179, `[os.term.pty]`): the slave's
+///   name. Its runtime copied into the region from the first, and the
+///   name was missing here, so its escape compiled.
 pub const HOST_STR_SITES: &[&str] = &[
     "str_from_utf8",
     "os_error_text",
     "net_read",
     "os_cwd",
     "env_arg0",
+    "os_term_pty_name",
 ];
 
 /// Methods on a `str` receiver that build fresh bytes in the current
