@@ -1244,6 +1244,18 @@ pub unsafe extern "C" fn __wolf_rt_os_term_pty_name(h: i64, out: i64) -> i64 {
     }
 }
 
+/// Plant: an entry point that copies a `str` into the current region and
+/// that no table names.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_plant_region_copy(out: i64) {
+    let p = crate::str::region_copy(b"plant");
+    unsafe { crate::str::write_pair(out, p as i64, 5) };
+}
+
 /// `os_term_set_size(fd, rows, columns, xpixels, ypixels) -> () !
 /// {invalid, io, unsupported}` (s292, `[os.term.size.set]`) — 0 or the
 /// code.
