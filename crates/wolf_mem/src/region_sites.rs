@@ -27,6 +27,8 @@
 /// - `os_term_pty_name` (wolf-lang#1179, `[os.term.pty]`): the slave's
 ///   name. Its runtime copied into the region from the first, and the
 ///   name was missing here, so its escape compiled.
+/// - `os_hostname` (wolf-lang#858, `[os.hostname]`): the kernel's node
+///   name, read on every call.
 pub const HOST_STR_SITES: &[&str] = &[
     "str_from_utf8",
     "os_error_text",
@@ -34,6 +36,7 @@ pub const HOST_STR_SITES: &[&str] = &[
     "os_cwd",
     "env_arg0",
     "os_term_pty_name",
+    "os_hostname",
 ];
 
 /// Methods on a `str` receiver that build fresh bytes in the current
