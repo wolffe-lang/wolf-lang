@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- On linux-gnu, a large region buffer freed after an earlier large free
+  gives its pages back (wolf-lang#1175). glibc raised its mmap threshold at
+  the first free of a large mapped block, so every later block of that size
+  came from the heap and stayed resident after the region that held it
+  ended. The runtime now sets the threshold to glibc's starting 128 KiB
+  before `main`, which turns that adjustment off; a threshold the user set
+  (`MALLOC_MMAP_THRESHOLD_`, or `glibc.malloc.mmap_threshold` in
+  `GLIBC_TUNABLES`) is left alone. The cost: a program that makes and frees
+  blocks of 128 KiB or more over and over maps and unmaps each one. A
+  program with no block that large is unchanged, and so is every host but
+  linux-gnu.
+
 - **A pool's `init` copies a value handed to it plainly**
   (wolf-lang#1183, `[mem.region.edge.elem]`), as `push` has since
   wolf-lang#385, and `init(h, take v)` moves it. In 0.2.40 the native
