@@ -1,0 +1,19 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1914..1950 name=Bag fields=1
+FnDecl 1952..2025 name=first_of body=Block
+FnDecl 2027..2128 name=first_mut body=Block
+FnDecl 2130..2207 name=poke body=Block
+FnDecl 2209..2410 name=through_call body=Block
+FnDecl 2412..2617 name=through_loop body=Block
+FnDecl 2619..2806 name=store_first body=Block
+FnDecl 2808..2956 name=bind_first body=Block
+FnDecl 2958..3140 name=store_get body=Block
+FnDecl 3142..3287 name=bind_last body=Block
+FnDecl 3289..3468 name=in_struct body=Block
+FnDecl 3470..3564 name=in_callee body=Block
+FnDecl 3566..3702 name=from_mut body=Block
+FnDecl 3704..3859 name=source_write body=Block
+FnDecl 3861..4059 name=main body=Block
