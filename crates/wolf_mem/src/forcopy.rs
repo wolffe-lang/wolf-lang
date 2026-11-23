@@ -45,10 +45,12 @@
 //! Everything else asks for the copy: a store through a derived
 //! name (an index or field place rooted at one), `mut`/`take`/`move`/`&`/
 //! `shared` on one, a plain assignment, a `return` or a `break` carrying one,
-//! a struct, tuple or list literal holding one, a closure, `spawn` or other
-//! construct that names one, `unsafe` among them. A `region`, `in` or `scope`
-//! block is walked as the block it is: its region holds the block's own
-//! allocations, never the walked element.
+//! a closure, `spawn` or other construct that names one, `unsafe` among
+//! them. A struct, tuple or list literal passes its own position to its
+//! parts: one that escapes carries them out, one that is read (bound by
+//! `let`, pushed, passed to a function) reads them. A `region`, `in` or
+//! `scope` block is walked as the block it is: its region holds the block's
+//! own allocations, never the walked element.
 //!
 //! A value whose type is a primitive (`int`, `bool`, `str`, …) is its own
 //! copy wherever it goes (`[mem.tier0.move.3]`; a `str`'s bytes are
@@ -351,18 +353,23 @@ impl Walk<'_, '_, '_> {
                     self.expr(b, pos);
                 }
             }
-            // A literal holds its parts: a struct, tuple or list built
-            // from a derived value holds that value (an index store keeps
-            // a temporary as it is, wolf-lang#438).
+            // A literal holds its parts, and they go where it goes. Where
+            // the literal escapes (assigned, returned, stored by index as a
+            // temporary, which an index store keeps as it is, wolf-lang#438)
+            // its parts escape with it. Where it is read, they are read: a
+            // `let` makes the bound name derived (its own uses answer for
+            // it), a function's argument is a `read` one, and `push` copies
+            // its element whole (`[mem.region.edge.elem]`).
             SyntaxKind::StructLit => {
                 let d = StructLit::cast(e).expect("kind");
                 for f in d.fields() {
                     match f.value() {
-                        Some(v) => self.expr(v, Pos::Escape),
+                        Some(v) => self.expr(v, pos),
                         None => {
                             // `S { row }`: the shorthand moves the name.
-                            if f.name()
-                                .is_some_and(|t| self.names.contains(&text(self.src, t.span)))
+                            if pos == Pos::Escape
+                                && f.name()
+                                    .is_some_and(|t| self.names.contains(&text(self.src, t.span)))
                             {
                                 self.copy = true;
                             }
@@ -372,7 +379,7 @@ impl Walk<'_, '_, '_> {
             }
             SyntaxKind::TupleExpr | SyntaxKind::ListLit => {
                 for c in e.nodes() {
-                    self.expr(c, Pos::Escape);
+                    self.expr(c, pos);
                 }
             }
             SyntaxKind::Block => self.block(e, pos),
