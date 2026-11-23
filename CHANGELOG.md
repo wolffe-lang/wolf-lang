@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- A `push` of a value nothing else holds stores it as it is
+  (wolf-lang#1177): a struct, tuple or list literal, a `copy e`, and a
+  declared function's answer to primitive arguments (`push(make(i))`).
+  Every machine copied such a value again on the way in, so each pushed
+  element was allocated twice and `push(copy v)` copied twice: 64 pushes
+  of a struct of four one-element lists charged their region 47,152 bytes
+  natively where 64 `push(take v)` charge 30,768, and now charge the same.
+  Every other plain operand is copied as before: a place, a method call
+  (`get` and `first` may hand out the receiver's own element), an `else`,
+  `if`, `match` or block expression, and a declared function handed a heap
+  value (it may answer that value's own element, wolf-lang#1184). A literal
+  over a `for` binding that is pushed now makes the binding the loop's own
+  copy, since the push keeps the literal as it is.
+
 - **A pool's `init` copies a value handed to it plainly**
   (wolf-lang#1183, `[mem.region.edge.elem]`), as `push` has since
   wolf-lang#385, and `init(h, take v)` moves it. In 0.2.40 the native
