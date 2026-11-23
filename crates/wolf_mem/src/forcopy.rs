@@ -45,8 +45,10 @@
 //! Everything else asks for the copy: a store through a derived
 //! name (an index or field place rooted at one), `mut`/`take`/`move`/`&`/
 //! `shared` on one, a plain assignment, a `return` or a `break` carrying one,
-//! a struct, tuple or list literal holding one, a closure, `spawn`, region,
-//! scope or other construct that names one.
+//! a struct, tuple or list literal holding one, a closure, `spawn` or other
+//! construct that names one, `unsafe` among them. A `region`, `in` or `scope`
+//! block is walked as the block it is: its region holds the block's own
+//! allocations, never the walked element.
 //!
 //! A value whose type is a primitive (`int`, `bool`, `str`, …) is its own
 //! copy wherever it goes (`[mem.tier0.move.3]`; a `str`'s bytes are
@@ -374,6 +376,41 @@ impl Walk<'_, '_, '_> {
                 }
             }
             SyntaxKind::Block => self.block(e, pos),
+            // A region, `in` or `scope` block is a block. Its region
+            // changes where the block's own allocations go, never the
+            // walked element, which lives outside it; a value it hands out
+            // leaves by the block's own position, and what its body does
+            // with the binding is what it would do outside. A closure or
+            // `spawn` inside still copies, as anywhere. `unsafe` is not
+            // among them: a raw write through a pointer to the binding has
+            // no place this walk can root, so it stays a construct the walk
+            // does not know.
+            SyntaxKind::RegionBlock => {
+                let d = wolf_ast::RegionBlock::cast(e).expect("kind");
+                if let Some(st) = d.strategy() {
+                    self.expr(st, Pos::Read);
+                }
+                if let Some(v) = d.cap().and_then(|c| c.value()) {
+                    self.expr(v, Pos::Read);
+                }
+                if let Some(b) = d.body() {
+                    self.block(b.syntax(), pos);
+                }
+            }
+            SyntaxKind::InBlock => {
+                let d = wolf_ast::InBlock::cast(e).expect("kind");
+                if let Some(r) = d.region() {
+                    self.expr(r, Pos::Read);
+                }
+                if let Some(b) = d.body() {
+                    self.block(b.syntax(), pos);
+                }
+            }
+            SyntaxKind::ScopeExpr => {
+                if let Some(b) = wolf_ast::ScopeExpr::cast(e).and_then(|d| d.body()) {
+                    self.block(b.syntax(), pos);
+                }
+            }
             SyntaxKind::IfExpr | SyntaxKind::WhileExpr | SyntaxKind::LoopExpr => {
                 let cond = match e.kind {
                     SyntaxKind::IfExpr => wolf_ast::IfExpr::cast(e).and_then(|d| d.condition()),
