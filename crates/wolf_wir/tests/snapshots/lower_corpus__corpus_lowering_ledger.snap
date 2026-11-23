@@ -618,6 +618,7 @@ memory/packed_field_lend.lu: not mem-clean (pre-wir rungs own it)
 memory/packed_field_raw_read.lu: lowers
 memory/packed_fields_at_offset_of.lu: lowers
 memory/pool_accessors.lu: lowers
+memory/pool_init_copies_value.lu: lowers
 memory/pool_place_write.lu: lowers
 memory/prov_addr_with_addr.lu: lowers
 memory/prov_cast_round_trip.lu: lowers
