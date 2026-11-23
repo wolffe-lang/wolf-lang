@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `repeat` makes its result once, in the region it answers it in
+  (wolf-lang#1176). It used to build the whole result in a host buffer and
+  copy it into the region, so a repeat of N bytes held two buffers of N at
+  once and freed the first at once. Every `copy region` and every
+  outer-write `copy` of a `str` makes its copy through the same entry, so
+  each such copy no longer allocates and frees a host buffer of its own.
+
 - **A `for` loop's binding holds its own value** (wolf-lang#1169,
   `[gram.pat.let]`, `[mem.iter.for]`). Every compiling machine bound the
   walked element itself, so `for row in rows { row[0] = 0 }` wrote
