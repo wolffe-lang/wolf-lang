@@ -48,6 +48,19 @@
 - `copy` of an enum value copies its payload on the checked machine, as
   it always did natively: the payload's list was shared with the
   original there.
+
+- **A pty's name returned out of the region it was asked in is refused.**
+  `os_term_pty_name` builds the slave's name in the current region, as
+  `os_cwd` does, but the compiler did not count it among the calls whose
+  answer is an allocation there, so `region r { os_term_pty_name(m) else
+  "?" }` returned out of the block compiled, and a native binary that
+  allocated again read the next allocation's bytes as the name
+  (wolf-lang#1179). It is now E1010 on every machine; `copy region { … }`
+  keeps the name. Calls through std's `term.pty_name` were refused
+  already. The compiler's list of such calls is now one table, and a test
+  holds it against the runtime's source so that a call which copies into
+  the current region cannot be left off it again.
+
 - A program that names a runtime wait (`time_sleep_ms`, `fs_sync`,
   `fs_sync_dir`, `net_connect`, `net_connect_within`, `net_connect_unix`,
   `net_wait`) but never starts a task no longer links the runtime's
