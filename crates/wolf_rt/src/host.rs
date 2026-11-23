@@ -168,7 +168,11 @@ pub fn host_name_text(bytes: Vec<u8>) -> Result<String, i64> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_hostname(out: i64) -> i64 {
     crate::fs::os_error_clear();
-    match node_name().and_then(host_name_text) {
+    static KEPT: std::sync::OnceLock<Result<String, i64>> = std::sync::OnceLock::new();
+    match KEPT
+        .get_or_init(|| node_name().and_then(host_name_text))
+        .clone()
+    {
         Ok(s) => {
             let p = crate::str::region_copy(s.as_bytes());
             unsafe { write_pair(out, p as i64, s.len() as i64) };
