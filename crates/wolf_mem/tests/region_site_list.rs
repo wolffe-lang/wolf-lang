@@ -3,12 +3,15 @@
 //! (`wolf_mem::region_sites::HOST_STR_SITES`) is held against the runtime's
 //! source, both ways, failing by name.
 //!
-//! The runtime copies a `str` into the current region through one
-//! primitive, `wolf_rt::str::region_copy`. This test reads every `.rs` file
-//! under `crates/wolf_rt/src` as text, finds each function whose body
-//! mentions `region_copy` or a function that does (followed to a fixed
-//! point, by name), and resolves the runtime's exported entry points
-//! (`extern "C" fn __wolf_rt_*`) among them:
+//! The runtime copies a `str` into the current region through
+//! `wolf_rt::str::region_copy`, or by the same steps written out in place:
+//! an allocation in the ambient region (`alloc_in(ambient_region(), …)`)
+//! that the function then fills (`copy_nonoverlapping` or `write_bytes`), as
+//! `repeat` does since wolf-lang#1176. This test reads every `.rs` file under
+//! `crates/wolf_rt/src` as text, finds each function that does either, or
+//! names a function that does (followed to a fixed point, by name), and
+//! resolves the runtime's exported entry points (`extern "C" fn
+//! __wolf_rt_*`) among them:
 //!
 //! - an entry point `__wolf_rt_<name>` whose `<name>` the prelude declares
 //!   is a builtin that answers bytes in the current region, and must be in
@@ -19,11 +22,11 @@
 //! - every name in `HOST_STR_SITES` must be such an entry point, or one of
 //!   [`EXCEPTIONS`], with its reason.
 //!
-//! A second rule pins the copying primitive itself: the functions whose
-//! body copies bytes into an allocation made in the current region (they
-//! mention `ambient_region`, `alloc_in` and `copy_nonoverlapping`) are
-//! exactly `region_copy`, so a second primitive beside it fails here by
-//! name instead of escaping the first rule.
+//! A second rule holds the shape itself: it must still find `region_copy`,
+//! so a change that hides the primitive from it fails here by name instead
+//! of quietly emptying the first rule; and it reports every other function
+//! with the shape, each of which the first rule then holds like the
+//! primitive.
 //!
 //! **What would make it miss a site.** It reads source text, so it sees
 //! only what the text says: comments, string and character literals and
@@ -31,8 +34,8 @@
 //! bodies are followed by name, so a helper, a method, a function pointer
 //! or a macro that reaches `region_copy` is found (the rows at the end plant
 //! each one). It misses a copy into the current region that never names
-//! `region_copy` or a function that does and does not have the primitive's
-//! shape (a cursor bumped by hand into a region chunk, say), code outside
+//! `region_copy` or a function that does and does not have its shape (a
+//! cursor bumped by hand into a region chunk, say), code outside
 //! `crates/wolf_rt/src` (a generated or `include!`d file), and an entry
 //! point not declared `extern "C"` with the `__wolf_rt_` prefix. Matching by
 //! name over-approximates (two functions of one name are one here), which
@@ -353,10 +356,23 @@ fn runtime_items(dir: &Path) -> Vec<Item> {
     items
 }
 
-/// The names of the items that reach `primitive`: those that mention it or
-/// an item that does, to a fixed point. The primitive itself is left out.
+/// Does this item copy bytes into an allocation it makes in the current
+/// region, `region_copy`'s steps?
+fn copies_in_place(it: &Item) -> bool {
+    it.mentions.contains("ambient_region")
+        && it.mentions.contains("alloc_in")
+        && (it.mentions.contains("copy_nonoverlapping") || it.mentions.contains("write_bytes"))
+}
+
+/// The names of the items that reach `primitive`: those that mention it,
+/// copy in place themselves, or mention an item that does either, to a
+/// fixed point. The primitive itself is left out.
 fn reaching(items: &[Item], primitive: &str) -> BTreeSet<String> {
-    let mut reach: BTreeSet<String> = BTreeSet::new();
+    let mut reach: BTreeSet<String> = items
+        .iter()
+        .filter(|it| it.name != primitive && copies_in_place(it))
+        .map(|it| it.name.clone())
+        .collect();
     loop {
         let before = reach.len();
         for it in items {
@@ -475,32 +491,32 @@ fn every_region_str_entry_point_is_a_listed_site() {
     );
 }
 
-/// The primitive's shape has one owner: a second function that copies
-/// bytes into an allocation in the current region fails here by name.
+/// The shape still finds the primitive, and every other function with it
+/// is reported; the first rule holds each one like `region_copy`.
 #[test]
-fn region_copy_is_the_only_copy_into_the_current_region() {
+fn the_copy_shape_still_finds_region_copy() {
     let items = runtime_items(&runtime_dir());
     let copiers: Vec<String> = items
         .iter()
-        .filter(|it| {
-            ["ambient_region", "alloc_in", "copy_nonoverlapping"]
-                .iter()
-                .all(|m| it.mentions.contains(*m))
-        })
+        .filter(|it| copies_in_place(it))
         .map(|it| format!("`{}` ({})", it.name, it.file))
         .collect();
-    assert_eq!(
-        copiers,
-        vec![format!("`{PRIMITIVE}` (str.rs)")],
-        "a function other than `{PRIMITIVE}` copies bytes into the current region: route it \
-         through `{PRIMITIVE}`, or teach this test its name (wolf-lang#1179)"
+    eprintln!(
+        "REPORT {} function(s) copy into the current region in place: {}",
+        copiers.len(),
+        copiers.join(", ")
+    );
+    assert!(
+        copiers.contains(&format!("`{PRIMITIVE}` (str.rs)")),
+        "the copy shape no longer finds `{PRIMITIVE}` (str.rs): the scan would follow nothing \
+         (wolf-lang#1179); found {copiers:?}"
     );
 }
 
 /// The scanner, on a planted source: a two-level helper, a method, a
 /// function pointer and a macro, each between an entry point and the
-/// primitive, are all found; the decoys (a comment, a string, a test
-/// module) are not.
+/// primitive, and an entry point that copies in place without it, are all
+/// found; the decoys (a comment, a string, a test module) are not.
 #[test]
 fn the_scanner_follows_planted_helpers() {
     let planted = r##"
@@ -527,6 +543,12 @@ macro_rules! copy_it { ($s:expr) => { region_copy($s) } }
 pub extern "C" fn __wolf_rt_by_macro(out: i64) -> i64 { copy_it!(b"c"); 0 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_by_own_copy(out: i64) {
+    let p = crate::list::alloc_in(crate::native::ambient_region(), 1);
+    unsafe { core::ptr::write_bytes(p, b'd', 1) };
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_decoy(out: i64) -> i64 {
     // region_copy is named in this comment only
     let s = "region_copy in a string { not a brace";
@@ -549,6 +571,7 @@ mod tests {
             "__wolf_rt_by_helper".to_string(),
             "__wolf_rt_by_macro".to_string(),
             "__wolf_rt_by_method".to_string(),
+            "__wolf_rt_by_own_copy".to_string(),
             "__wolf_rt_by_pointer".to_string(),
         ],
         "the scanner on the planted source"
