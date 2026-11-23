@@ -18774,7 +18774,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .nth(1)
                     .and_then(Arg::mode)
                     == Some(wolf_ast::ParamMode::Take);
-                let val = if moves_in {
+                let val = if moves_in || true {
                     val
                 } else {
                     let table = self.table;
