@@ -472,3 +472,49 @@ fn a_walk_that_only_writes_keeps_no_copy_past_its_iteration() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// A walk that hands its binding to a pool's `init` leaves the list alone:
+/// `init` keeps what it is handed as it is, so the binding it is handed must
+/// be the loop's own copy. Writing the pool's slot writes that copy.
+const POOL: &str = "fn main() -> !int {
+    let rows = [[1, 2], [3, 4]]
+    var pool = Pool[List[int]]()
+    var hs = List[handle List[int]]()
+    for _ in 0..2 {
+        (mut hs).push((mut pool).reserve())
+    }
+    var i = 0
+    for row in rows {
+        (mut pool).init(hs[i], row)
+        i += 1
+    }
+    pool[hs[0]][0] = 9
+    print(\"rows={rows[0][0]} pool={pool[hs[0]][0]}\")
+    0
+}
+";
+
+#[test]
+fn a_walk_that_hands_its_binding_to_a_pool_leaves_the_list_alone() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("for_binding_copy_lanes")
+        .join("pool");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let entry = dir.join("main.lu");
+    std::fs::write(&entry, POOL).expect("program written");
+    let want = "rows=1 pool=9\n";
+    let mut wrong = Vec::new();
+    for m in MACHINES {
+        let Some(o) = lane(&entry, m) else {
+            continue;
+        };
+        eprintln!("REPORT pool {m}: {} {:?}", o.verdict, o.stdout);
+        if o.verdict != "exit(0)" || o.stdout != want {
+            wrong.push(format!(
+                "pool {m}: {} {:?}, want {want:?}",
+                o.verdict, o.stdout
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

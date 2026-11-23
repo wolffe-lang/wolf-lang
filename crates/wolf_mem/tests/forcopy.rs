@@ -571,3 +571,19 @@ fn a_declared_function_cannot_keep_its_plain_parameter() {
         "copy at the move is not refused: {copied:?}"
     );
 }
+
+/// A pool's `init` keeps the value it is handed as it is, on every compiling
+/// machine, so a binding handed to it must be the loop's own: it copies.
+#[test]
+fn a_pool_init_of_the_binding_copies() {
+    let src = "fn f() -> int {\n    let rows = [[1, 2], [3, 4]]\n    var pool = Pool[List[int]]()\n    let hs = [(mut pool).reserve(), (mut pool).reserve()]\n    var i = 0\n    for row in rows {\n        (mut pool).init(hs[i], row)\n        i += 1\n    }\n    rows.len\n}\n\nfn main() {}\n";
+    assert!(
+        ask(src, true, true),
+        "must copy: a pool init of the binding\n{src}"
+    );
+    let part = "fn f() -> int {\n    let cube = [[[1, 2]], [[3, 4]]]\n    var pool = Pool[List[int]]()\n    let hs = [(mut pool).reserve(), (mut pool).reserve()]\n    var i = 0\n    for plane in cube {\n        (mut pool).init(hs[i], plane[0])\n        i += 1\n    }\n    cube.len\n}\n\nfn main() {}\n";
+    assert!(
+        ask(part, true, true),
+        "must copy: a pool init of a part of the binding\n{part}"
+    );
+}
