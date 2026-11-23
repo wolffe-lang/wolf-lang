@@ -379,3 +379,92 @@ fn an_interpolation_allocates_nothing_once_warm() {
     }
     assert_steady("strbuf (8 segments, a head)", total);
 }
+
+// ---------------------------------------------------- materializations --
+
+use wolf_rt::native::{
+    __wolf_rt_region_ambient_enter, __wolf_rt_region_ambient_leave, __wolf_rt_region_bytes,
+    __wolf_rt_region_free, __wolf_rt_region_new,
+};
+use wolf_rt::str::__wolf_rt_str_repeat;
+
+/// `repeat(count)` of `s`, through the runtime entry, as Rust bytes.
+fn repeat_bytes(s: &str, count: i64) -> Vec<u8> {
+    let (sp, sl) = pair(s);
+    let mut out = [0i64; 2];
+    unsafe { __wolf_rt_str_repeat(sp, sl, count, out.as_mut_ptr() as i64) };
+    if out[1] == 0 {
+        return Vec::new();
+    }
+    unsafe { std::slice::from_raw_parts(out[0] as *const u8, out[1] as usize) }.to_vec()
+}
+
+/// wolf-lang#1176: `repeat` asks the host for one buffer, the result's,
+/// and frees none. It used to build the whole result in a host `String`
+/// and then copy it into the region, so a zero-filled `str` of N bytes
+/// held two host buffers of N at once and freed the first as soon as the
+/// second was written. The size is not a rung of the region's chunk
+/// ladder, so the region's chunk is a fresh host block, never a pooled
+/// one, and the counts are this call's alone.
+#[test]
+fn repeat_materializes_once() {
+    const N: i64 = (1 << 20) + 16;
+    let r = __wolf_rt_region_new();
+    let prev = unsafe { __wolf_rt_region_ambient_enter(r) };
+    let (zp, zl) = pair("\0");
+    let mut out = [0i64; 2];
+    let ((), c) = armed(|| unsafe { __wolf_rt_str_repeat(zp, zl, N, out.as_mut_ptr() as i64) });
+    let charged = unsafe { __wolf_rt_region_bytes(r) };
+    unsafe { __wolf_rt_region_ambient_leave(prev) };
+    assert_eq!(out[1], N, "the result's length");
+    let got = unsafe { std::slice::from_raw_parts(out[0] as *const u8, out[1] as usize) };
+    assert!(got.iter().all(|&b| b == 0), "the result's bytes");
+    assert_eq!(charged, N, "the region is charged the result, once");
+    assert_eq!(
+        c.big_allocs, 1,
+        "#1176: repeat of a 1-byte str to {N} bytes asked the host for {} buffers ({c:?}); the result needs one",
+        c.big_allocs
+    );
+    assert_eq!(
+        c.big_frees, 0,
+        "#1176: repeat freed {} buffers ({c:?}): a temporary the result was copied out of",
+        c.big_frees
+    );
+    unsafe { __wolf_rt_region_free(r) };
+}
+
+/// The bytes `repeat` answers are Rust's `str::repeat`'s, for every
+/// count the fill takes a different path on (none, one, a few, a large
+/// one) and for a receiver of several bytes with multibyte scalars, in
+/// a region and at the process root.
+#[test]
+fn repeat_bytes_are_the_repeat() {
+    let cases: [(&str, i64); 9] = [
+        ("", 0),
+        ("", 5),
+        ("x", 0),
+        ("x", 1),
+        ("x", 3),
+        ("ab", 7),
+        ("\u{e9}\u{2192}w", 1000),
+        ("\0", 70_000),
+        ("wolf ", 13_107),
+    ];
+    for (s, n) in cases {
+        let want = s.repeat(n as usize).into_bytes();
+        assert_eq!(repeat_bytes(s, n), want, "root: {s:?} x {n}");
+        let r = __wolf_rt_region_new();
+        let prev = unsafe { __wolf_rt_region_ambient_enter(r) };
+        let got = repeat_bytes(s, n);
+        let charged = unsafe { __wolf_rt_region_bytes(r) };
+        unsafe { __wolf_rt_region_ambient_leave(prev) };
+        assert_eq!(got, want, "region: {s:?} x {n}");
+        let len = want.len() as i64;
+        assert_eq!(
+            charged,
+            ((len + 15) & !15).max(16),
+            "region: {s:?} x {n} charges its 16-byte-rounded length"
+        );
+        unsafe { __wolf_rt_region_free(r) };
+    }
+}
