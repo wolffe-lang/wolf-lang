@@ -1,0 +1,43 @@
+//! member: false
+//! wolf-lang#858 (`[os.hostname]`) — the name read, the host renamed while
+//! the program runs (`/usr/bin/hostname` started by its absolute path, no
+//! shell, with this program's own arguments), and the name read again: a
+//! name kept from the first call would print the old one. The test runs it
+//! in a throwaway container that may rename itself, never on a host.
+
+fn read() -> str {
+    let n = os_hostname() else |e| {
+        return match e {
+            io => "<io>",
+            unsupported => "<unsupported>",
+            utf8 => "<utf8>",
+        }
+    }
+    n
+}
+
+fn main() -> int {
+    let args = env_args()
+    print("before={read()}")
+    let argv = if args.len == 1 {
+        ["/usr/bin/hostname", args[0]]
+    } else {
+        ["/usr/bin/hostname", args[0], args[1]]
+    }
+    let h = os_spawn(argv) else |e| {
+        print("rename=not-started")
+        return 0
+    }
+    let status = os_wait(h) else |e| {
+        print("rename=not-waited")
+        return 0
+    }
+    if status != 0 {
+        print("rename=refused {status}")
+        return 0
+    }
+    let after = read()
+    print("after={after}")
+    print("bytes={after.len}")
+    0
+}

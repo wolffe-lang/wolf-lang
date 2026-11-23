@@ -1,0 +1,20 @@
+//! member: false
+//! wolf-lang#858 (`[os.hostname]`) — the machine's name as its kernel holds
+//! it, and its length: the test holds it to its own `uname`, to linux's
+//! `/proc/sys/kernel/hostname` and to what the host's own `hostname`
+//! program prints. Windows answers `unsupported`.
+
+fn main() -> int {
+    let n = os_hostname() else |e| {
+        let w = match e {
+            io => "io",
+            unsupported => "unsupported",
+            utf8 => "utf8",
+        }
+        print("name={w}")
+        return 0
+    }
+    print("name={n}")
+    print("bytes={n.len}")
+    0
+}
