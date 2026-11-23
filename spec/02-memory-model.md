@@ -1908,9 +1908,14 @@ adopt that design and give `for` its desugar.)
   iterates the fresh `List` by `[mem.iter.impl]`; nothing new is
   ruled. The full-open `[..]` spelling stays refused at the grammar
   (`[gram.expr.primary]` requires an endpoint — lupin's letter).
-  **The cost, stated** (s228, wolf-lang#663): one bounds check, one
-  allocation of exactly the slice's elements and one copy of them, for
-  every element type — the native tiers used to append the elements
+  **The cost, stated** (s228, wolf-lang#663; wolf-lang#1191): one
+  bounds check, one allocation of exactly the slice's elements and one
+  copy of them; an element that reaches heap storage is copied whole,
+  as `copy` copies it, and that copy is charged too. So a full-range
+  slice charges what `copy` of the list charges: for a list of two
+  4-int lists, 192 bytes natively and 160 on the checked machine,
+  where the shallow slice charged 64 and 32. A flat element costs the
+  one copy and nothing more. The native tiers used to append the elements
   one at a time into a buffer that grew by doubling, 1.9 ns a byte
   where a decode of the same bytes took 0.03 (7.8 µs against 0.13 µs
   for 4 KiB), and charged the region every abandoned buffer on the
