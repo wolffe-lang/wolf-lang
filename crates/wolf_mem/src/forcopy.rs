@@ -52,6 +52,15 @@
 //! `scope` block is walked as the block it is: its region holds the block's
 //! own allocations, never the walked element.
 //!
+//! A body that writes through the binding and lets nothing escape binds a
+//! copy no use keeps past the iteration ([`OwnCopy::Local`]): a machine makes
+//! it in a region of the iteration's own and frees that region when the
+//! iteration ends. The writes are a store through a derived place and a
+//! builtin's `mut` receiver whose answer goes nowhere and whose other
+//! arguments are plain; a `mut` or `take` argument of any call, and a
+//! receiver whose answer escapes (`last = (mut row).pop()`), are escapes. An
+//! element type that may hold a `str` keeps its copy ([`reaches_str`]).
+//!
 //! A value whose type is a primitive (`int`, `bool`, `str`, …) is its own
 //! copy wherever it goes (`[mem.tier0.move.3]`; a `str`'s bytes are
 //! immutable), so an escape of one is a read. The type is the checker's, read
@@ -72,8 +81,24 @@ use wolf_ast::{
     MatchExpr, MemberExpr, ParenExpr, PrefixExpr, ReturnExpr, StructLit, SyntaxKind,
 };
 use wolf_sema::check::CallSig;
-use wolf_sema::types::TyKind;
+use wolf_sema::sig::{ItemSig, SigTables};
+use wolf_sema::types::{Prim, TyId, TyKind, TypeTable};
 use wolf_span::Span;
+
+/// What a `for` loop binds each element to.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum OwnCopy {
+    /// The element itself: the body only reads what the header binds.
+    Element,
+    /// A deep copy nothing keeps past its iteration: the body writes
+    /// through the binding (a store, a builtin's `mut` receiver) and lets
+    /// no part of it escape, and the element's type holds no `str`, so a
+    /// machine may make the copy in a region of its own and free that
+    /// region when the iteration ends.
+    Local,
+    /// A deep copy that may outlive its iteration.
+    Kept,
+}
 
 /// Must the `for` loop `d` bind a deep copy of each element (`true`), or may
 /// it bind the element itself (`false`)? `false` only when the body provably
@@ -84,16 +109,34 @@ pub fn needs_own_copy(
     expr_ty: &dyn Fn(Span) -> Option<TyKind>,
     declared: &dyn Fn(Span) -> bool,
 ) -> bool {
+    own_copy(d, src, expr_ty, declared, true) != OwnCopy::Element
+}
+
+/// The binding the `for` loop `d` needs: the element itself, a copy freed
+/// with its iteration, or a kept copy. Errs only toward the more owned
+/// answer. `holds_str` is [`reaches_str`] of the element's type: a copy
+/// that may hold a `str` is never freed with its iteration, because a
+/// `str` is a primitive this walk lets go anywhere (`[mem.tier0.move.3]`),
+/// and a `str` stored into the copy may have its bytes in the copy's own
+/// region (a list's growth and its `str` pushes land in the region the
+/// list was born in).
+pub fn own_copy(
+    d: ForExpr<'_>,
+    src: &[u8],
+    expr_ty: &dyn Fn(Span) -> Option<TyKind>,
+    declared: &dyn Fn(Span) -> bool,
+    holds_str: bool,
+) -> OwnCopy {
     let Some(pat) = d.pattern() else {
-        return false;
+        return OwnCopy::Element;
     };
     let mut names = HashSet::new();
     idents(pat, src, &mut names);
     if names.is_empty() {
-        return false;
+        return OwnCopy::Element;
     }
     let Some(body) = d.body() else {
-        return false;
+        return OwnCopy::Element;
     };
     let body = body.syntax();
     loop {
@@ -108,10 +151,55 @@ pub fn needs_own_copy(
         names: &names,
         expr_ty,
         declared,
-        copy: false,
+        wrote: false,
+        escaped: false,
     };
     w.block(body, Pos::Read);
-    w.copy
+    match (w.wrote, w.escaped) {
+        (_, true) => OwnCopy::Kept,
+        (true, false) if holds_str => OwnCopy::Kept,
+        (true, false) => OwnCopy::Local,
+        (false, false) => OwnCopy::Element,
+    }
+}
+
+/// Can a value of `ty` (its ids in `table`) hold a `str`, at any depth?
+/// Errs toward yes: a generic or recursive shape, a fn value, a cell, a
+/// pointer, a row or any kind this does not name answers yes.
+pub fn reaches_str(sigs: &SigTables, table: &TypeTable, ty: TyId, depth: u32) -> bool {
+    if depth > 16 {
+        return true;
+    }
+    let inner = |t: TyId| reaches_str(sigs, table, t, depth + 1);
+    let declared = |t: TyId| reaches_str(sigs, &sigs.table, t, depth + 1);
+    match table.kind(ty) {
+        TyKind::Never | TyKind::Unit => false,
+        TyKind::Prim(p) => matches!(p, Prim::Str),
+        TyKind::Wrapping(t)
+        | TyKind::Distinct(t)
+        | TyKind::List(t)
+        | TyKind::Pool(t)
+        | TyKind::Range(t) => inner(*t),
+        TyKind::Map(k, v) => inner(*k) || inner(*v),
+        TyKind::Tuple(es) => es.iter().any(|&e| inner(e)),
+        TyKind::Nominal { module, name, .. } => match sigs.get(*module as usize, name) {
+            Some(ItemSig::Struct(ss)) => {
+                !ss.generics.is_empty() || ss.fields.iter().any(|f| declared(f.ty))
+            }
+            Some(ItemSig::Enum {
+                generics, variants, ..
+            }) => {
+                !generics.is_empty()
+                    || variants
+                        .iter()
+                        .flat_map(|v| v.payload.iter())
+                        .any(|&p| declared(p))
+            }
+            Some(ItemSig::Distinct { base, .. }) => declared(*base),
+            _ => true,
+        },
+        _ => true,
+    }
 }
 
 /// Is `c` a call to a declared function, by name or as a qualified trait
@@ -139,7 +227,10 @@ struct Walk<'s, 'n, 'f> {
     /// Is the call at this span one to a declared function ([`declared_call`]
     /// of the checker's record there)?
     declared: &'f dyn Fn(Span) -> bool,
-    copy: bool,
+    /// A store through a derived name, or a `mut` lend of one.
+    wrote: bool,
+    /// Any other use that may keep or hand on a derived value.
+    escaped: bool,
 }
 
 impl Walk<'_, '_, '_> {
@@ -189,7 +280,7 @@ impl Walk<'_, '_, '_> {
             SyntaxKind::AssignStmt => self.assign(s),
             _ => {
                 if self.spells(s) {
-                    self.copy = true;
+                    self.escaped = true;
                 }
             }
         }
@@ -197,7 +288,7 @@ impl Walk<'_, '_, '_> {
 
     fn assign(&mut self, s: &GreenNode) {
         let Some(d) = AssignStmt::cast(s) else {
-            self.copy |= self.spells(s);
+            self.escaped |= self.spells(s);
             return;
         };
         let compound = d.op().is_some_and(|t| t.kind != SyntaxKind::Eq);
@@ -208,7 +299,7 @@ impl Walk<'_, '_, '_> {
                 // A store through a place: rooted at a derived name, it
                 // writes that name's value.
                 if root(place).is_some_and(|r| self.names.contains(&text(self.src, r.span))) {
-                    self.copy = true;
+                    self.wrote = true;
                 }
                 index_store = place.kind == SyntaxKind::BracketApply;
                 self.place_parts(place);
@@ -252,7 +343,7 @@ impl Walk<'_, '_, '_> {
     }
 
     fn expr(&mut self, e: &GreenNode, pos: Pos) {
-        if self.copy {
+        if self.escaped {
             return;
         }
         let pos = if pos == Pos::Escape && self.prim(e.span) {
@@ -263,7 +354,7 @@ impl Walk<'_, '_, '_> {
         match e.kind {
             SyntaxKind::PathExpr => {
                 if pos == Pos::Escape && self.names.contains(&text(self.src, e.span)) {
-                    self.copy = true;
+                    self.escaped = true;
                 }
             }
             SyntaxKind::LiteralExpr | SyntaxKind::ContinueExpr => {}
@@ -323,11 +414,35 @@ impl Walk<'_, '_, '_> {
                 } else {
                     pos
                 };
+                // A builtin mutator's `mut` receiver whose answer goes
+                // nowhere, with no lent or taken argument, is written and
+                // kept by nothing: the runtime keeps no part of its
+                // receiver, the answer is read here, and no other operand is
+                // lent to receive one. A declared `mut self` method is not
+                // among them: it may move its receiver into module state and
+                // store a fresh value back.
+                let plain_args = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .all(|a| a.mode().is_none());
                 if let Some(c) = d.callee() {
                     match c.kind {
                         SyntaxKind::MemberExpr => {
-                            if let Some(b) = MemberExpr::cast(c).and_then(|m| m.base()) {
-                                self.expr(b, plain);
+                            let m = MemberExpr::cast(c);
+                            if let Some(b) = m.and_then(|m| m.base()) {
+                                if pos == Pos::Read
+                                    && plain_args
+                                    && self.lends_derived(b)
+                                    && m.is_some_and(|m| self.builtin_mutator(m, b))
+                                {
+                                    self.wrote = true;
+                                    if let Some(inner) = ParenExpr::cast(b).and_then(|x| x.expr()) {
+                                        self.expr(inner, Pos::Read);
+                                    }
+                                } else {
+                                    self.expr(b, plain);
+                                }
                             }
                         }
                         _ => self.expr(c, Pos::Read),
@@ -371,7 +486,7 @@ impl Walk<'_, '_, '_> {
                                 && f.name()
                                     .is_some_and(|t| self.names.contains(&text(self.src, t.span)))
                             {
-                                self.copy = true;
+                                self.escaped = true;
                             }
                         }
                     }
@@ -492,10 +607,48 @@ impl Walk<'_, '_, '_> {
             // anything else that names a derived value copies.
             _ => {
                 if self.spells(e) {
-                    self.copy = true;
+                    self.escaped = true;
                 }
             }
         }
+    }
+
+    /// Is `m` (on the lent receiver `b`) a builtin mutator: `push`, `pop`,
+    /// `clear`, `reserve` or `reset` on a `List`, `clear` or `remove` on a
+    /// `Map`? The checker resolves these names on such a receiver to the
+    /// builtin before any home-module or declared method
+    /// (`[type.method.resolve]`), so the receiver's recorded type decides it;
+    /// an unrecorded type answers no.
+    fn builtin_mutator(&self, m: MemberExpr<'_>, b: &GreenNode) -> bool {
+        let Some(name) = m.member().map(|t| text(self.src, t.span)) else {
+            return false;
+        };
+        let Some(inner) = ParenExpr::cast(b).and_then(|x| x.expr()) else {
+            return false;
+        };
+        match (self.expr_ty)(unparen(inner).span) {
+            Some(TyKind::List(_)) => {
+                matches!(
+                    name.as_str(),
+                    "push" | "pop" | "clear" | "reserve" | "reset"
+                )
+            }
+            Some(TyKind::Map(..)) => matches!(name.as_str(), "clear" | "remove"),
+            _ => false,
+        }
+    }
+
+    /// `(mut p)` where `p` is a place rooted at a derived name.
+    fn lends_derived(&self, b: &GreenNode) -> bool {
+        b.kind == SyntaxKind::ParenExpr
+            && b.tokens().any(|t| t.kind == SyntaxKind::MutKw)
+            && !b.tokens().any(|t| t.kind == SyntaxKind::TakeKw)
+            && ParenExpr::cast(b)
+                .and_then(|x| x.expr())
+                .is_some_and(|inner| {
+                    is_place(unparen(inner))
+                        && root(inner).is_some_and(|r| self.names.contains(&text(self.src, r.span)))
+                })
     }
 
     fn arg(&mut self, a: Arg<'_>, plain: Pos) {

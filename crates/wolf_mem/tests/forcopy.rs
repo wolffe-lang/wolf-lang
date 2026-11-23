@@ -9,7 +9,7 @@
 //! resolves clean, and the types the predicate reads are the checker's own.
 
 use wolf_ast::{ForExpr, GreenNode, SyntaxKind};
-use wolf_mem::forcopy::{declared_call, needs_own_copy};
+use wolf_mem::forcopy::{OwnCopy, declared_call, needs_own_copy, own_copy, reaches_str};
 use wolf_sema::check::BodyResult;
 use wolf_sema::types::TyKind;
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
@@ -20,6 +20,17 @@ use wolf_span::Span;
 /// carried by `break` out of a `for`) is still asked, over the types it did
 /// record. `known` false answers no type at any span.
 fn ask(src: &str, typed: bool, known: bool) -> bool {
+    answer(src, typed, known).0
+}
+
+/// The three-way answer ([`own_copy`]) for the first `for` in `src`, which
+/// types clean; the element's `str` test reads the iterable's recorded type,
+/// as the checked machine does.
+fn three(src: &str) -> OwnCopy {
+    answer(src, true, true).1
+}
+
+fn answer(src: &str, typed: bool, known: bool) -> (bool, OwnCopy) {
     let mut ml = MemoryLoader::new("forcopy");
     ml.add_file(&[], "main.lu", src);
     let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
@@ -67,7 +78,26 @@ fn ask(src: &str, typed: bool, known: bool) -> bool {
             _ => false,
         })
     };
-    needs_own_copy(d, src, &ty, &declared)
+    let holds_str = !known
+        || tc
+            .bodies
+            .iter()
+            .find_map(|b| match &b.result {
+                BodyResult::Checked(tb) => {
+                    let it = d.iterable()?.span;
+                    let (_, id) = tb.exprs.iter().find(|(s, _)| *s == it)?;
+                    match tb.table.kind(*id) {
+                        TyKind::List(el) => Some(reaches_str(&tc.sigs, &tb.table, *el, 0)),
+                        _ => Some(true),
+                    }
+                }
+                _ => None,
+            })
+            .unwrap_or(true);
+    (
+        needs_own_copy(d, src, &ty, &declared),
+        own_copy(d, src, &ty, &declared, holds_str),
+    )
 }
 
 /// A loop over `rows: List[List[int]]` in `f`, with `body` inside it.
@@ -310,6 +340,127 @@ fn only_a_known_primitive_escapes_free() {
     );
     let scalar = rows("let first = row[0]\n        total = first");
     assert!(ask(&scalar, true, false), "no type known at the span: copy");
+}
+
+/// A body that writes through its binding and lets nothing keep it binds a
+/// copy for the iteration alone ([`OwnCopy::Local`]); one that also lets the
+/// binding or a part of it escape keeps its copy, and so does one whose
+/// element may hold a `str`.
+#[test]
+fn a_walk_that_only_writes_its_binding_copies_for_the_iteration_alone() {
+    for (name, src) in [
+        ("a store", rows("row[0] = 0")),
+        (
+            "a compound store, then a read",
+            rows("row[0] += 1\n        total += row[0]"),
+        ),
+        ("a builtin's mut receiver", rows("(mut row).push(1)")),
+        (
+            "a store, then a push of the binding",
+            rows("row[0] = 0\n        (mut out).push(row)"),
+        ),
+        (
+            "a store, then a declared function reading it",
+            rows("row[0] = 0\n        total += sum(row)"),
+        ),
+        (
+            "a store, then a derived name read",
+            rows("row[0] = 0\n        let r = row\n        total += r[0]"),
+        ),
+    ] {
+        let (copies, own) = answer(&src, true, true);
+        assert!(copies, "{name}: a write still binds a copy");
+        assert_eq!(own, OwnCopy::Local, "{name}\n{src}");
+    }
+    for (name, src, want) in [
+        ("only reads", rows("total += row[0]"), OwnCopy::Element),
+        (
+            "a store, then assigned out",
+            rows("row[0] = 0\n        last = row"),
+            OwnCopy::Kept,
+        ),
+        (
+            "a store, then a derived name assigned out",
+            rows("row[0] = 0\n        let r = row\n        last = r"),
+            OwnCopy::Kept,
+        ),
+        (
+            "a take argument",
+            rows("total += zap(take row)"),
+            OwnCopy::Kept,
+        ),
+        (
+            "a store, then a closure naming it",
+            rows("row[0] = 0\n        let g = fn(i: int) row[i]\n        total += g(0)"),
+            OwnCopy::Kept,
+        ),
+    ] {
+        assert_eq!(three(&src), want, "{name}\n{src}");
+    }
+    // A builtin receiver whose answer escapes hands out a part of the copy:
+    // the popped list outlives the iteration.
+    let popped = "fn f() -> int {\n    let cube = [[[1, 2], [3, 4]]]\n    var last = [0]\n    for plane in cube {\n        last = (mut plane).pop() else [9]\n    }\n    last.len\n}\n\nfn main() {}\n";
+    assert_eq!(three(popped), OwnCopy::Kept, "a popped part assigned out");
+    let bound = "fn f() -> int {\n    let cube = [[[1, 2], [3, 4]]]\n    var last = [0]\n    for plane in cube {\n        let p = (mut plane).pop() else [9]\n        last = p\n    }\n    last.len\n}\n\nfn main() {}\n";
+    assert_eq!(
+        three(bound),
+        OwnCopy::Kept,
+        "a popped part bound, then assigned out"
+    );
+    let dropped = "fn f() -> int {\n    let cube = [[[1, 2], [3, 4]]]\n    var total = 0\n    for plane in cube {\n        let p = (mut plane).pop() else [9]\n        total += p.len\n    }\n    total\n}\n\nfn main() {}\n";
+    assert_eq!(
+        three(dropped),
+        OwnCopy::Local,
+        "a popped part read and dropped"
+    );
+    // A declared function's `mut` parameter is a lend the walk cannot see
+    // the end of: the copy is kept.
+    let lent = "fn grow(mut ys: List[int]) -> int {\n    (mut ys).push(1)\n    ys.len\n}\n\nfn f() -> int {\n    let rows = [[1, 2]]\n    var total = 0\n    for row in rows {\n        total += grow(mut row)\n    }\n    total\n}\n\nfn main() {}\n";
+    assert_eq!(
+        three(lent),
+        OwnCopy::Kept,
+        "a declared function's mut argument"
+    );
+    // A declared `mut self` method may move its receiver into module state
+    // and store a fresh value back: even one named `push` keeps the copy.
+    let user = "struct Bag { items: List[int] }\n\nimpl Bag {\n    fn push(mut self, x: int) {\n        (mut self.items).push(x)\n    }\n}\n\nfn f() -> int {\n    let bags = [Bag { items: [1] }]\n    var total = 0\n    for b in bags {\n        (mut b).push(2)\n        total += b.items.len\n    }\n    total\n}\n\nfn main() {}\n";
+    assert_eq!(
+        three(user),
+        OwnCopy::Kept,
+        "a declared mut self method named push"
+    );
+    // A Map's builtin mutators: `clear`, and `remove` whose answer is read
+    // and dropped, write the copy and keep nothing; a `remove` whose answer
+    // escapes hands a value of the copy out, and keeps it.
+    let maps = |body: &str| {
+        format!(
+            "fn f() -> int {{\n    var a = Map[int, int]()\n    a[1] = 2\n    let maps = [a]\n    var total = 0\n    for m in maps {{\n        {body}\n    }}\n    total\n}}\n\nfn main() {{}}\n"
+        )
+    };
+    assert_eq!(
+        three(&maps("(mut m).clear()")),
+        OwnCopy::Local,
+        "a map's clear"
+    );
+    assert_eq!(
+        three(&maps(
+            "let v = (mut m).remove(1) else 0\n        total += v"
+        )),
+        OwnCopy::Local,
+        "a map's remove, its answer read"
+    );
+    let held = "fn f() -> int {\n    var a = Map[int, List[int]]()\n    a[1] = [2]\n    let maps = [a]\n    var last = [0]\n    for m in maps {\n        last = (mut m).remove(1) else [9]\n    }\n    last.len\n}\n\nfn main() {}\n";
+    assert_eq!(
+        three(held),
+        OwnCopy::Kept,
+        "a map's remove whose answer escapes"
+    );
+    // A `str` anywhere in the element keeps the copy: a `str` goes anywhere
+    // as a primitive, and one stored into the copy may live in its region.
+    let named = "struct Row { name: str, items: List[int] }\n\nfn f() -> str {\n    let rows = [Row { name: \"a\", items: [1] }]\n    var seen = \"\"\n    for r in rows {\n        r.items[0] = 0\n        seen = r.name\n    }\n    seen\n}\n\nfn main() {}\n";
+    assert_eq!(three(named), OwnCopy::Kept, "an element with a str field");
+    let strs = "fn f() -> int {\n    let rows = [[\"a\"], [\"b\"]]\n    var total = 0\n    for row in rows {\n        row[0] = \"z\"\n        total += row.len\n    }\n    total\n}\n\nfn main() {}\n";
+    assert_eq!(three(strs), OwnCopy::Kept, "a list of str");
 }
 
 /// The boundary of the call rule: only a declared function's answer is

@@ -5773,14 +5773,37 @@ impl<'t> Machine<'t> {
         // binds the item itself; any other body binds a deep copy of each
         // item, so no store, lend, move or escape through the binding
         // reaches the list. A channel's items are the loop's own already.
-        let own_copy = chan.is_none() && d.pattern().is_some() && {
+        // A copy the body only writes and lets nothing keep is made in a
+        // region of the iteration's own, freed when the iteration ends.
+        let own = if chan.is_none() && d.pattern().is_some() {
             let src = &self.pkg.files[self.ctx().src_file].raw.src;
-            crate::forcopy::needs_own_copy(d, src, &|sp| self.expr_ty(sp).cloned(), &|sp| {
-                self.ctx()
-                    .calls
-                    .get(&sp)
-                    .is_some_and(|c| crate::forcopy::declared_call(c))
-            })
+            // The element's type, from the iterable's: a List's element, or
+            // (no List type recorded) the answer that keeps the copy.
+            let ctx = self.ctx();
+            let holds_str = match d
+                .iterable()
+                .and_then(|it| ctx.expr_tys.get(&it.span))
+                .map(|&id| ctx.tb.table.kind(id))
+            {
+                Some(TyKind::List(el)) => {
+                    crate::forcopy::reaches_str(&self.tc.sigs, &ctx.tb.table, *el, 0)
+                }
+                _ => true,
+            };
+            crate::forcopy::own_copy(
+                d,
+                src,
+                &|sp| self.expr_ty(sp).cloned(),
+                &|sp| {
+                    self.ctx()
+                        .calls
+                        .get(&sp)
+                        .is_some_and(|c| crate::forcopy::declared_call(c))
+                },
+                holds_str,
+            )
+        } else {
+            crate::forcopy::OwnCopy::Element
         };
         loop {
             let item = match chan {
@@ -5800,29 +5823,51 @@ impl<'t> Machine<'t> {
                 },
             };
             self.tick()?;
-            let item = if own_copy {
-                self.deep_copy(item, e.span)?
-            } else {
-                item
+            let mut local = None;
+            let item = match own {
+                crate::forcopy::OwnCopy::Element => item,
+                crate::forcopy::OwnCopy::Kept => self.deep_copy(item, e.span)?,
+                crate::forcopy::OwnCopy::Local => {
+                    // The iteration's region is ambient for the copy alone:
+                    // the body allocates where it did before.
+                    let rid = self.regions.len();
+                    self.regions.push(DynRegion {
+                        live: true,
+                        frozen: false,
+                        backing: None,
+                        span: e.span,
+                        charged: 0,
+                        cap: None,
+                    });
+                    local = Some(rid);
+                    self.ambient.push(rid);
+                    let c = self.deep_copy(item, e.span);
+                    self.ambient.pop();
+                    c?
+                }
             };
             self.push_scope();
             if let Some(pat) = d.pattern() {
                 self.bind_pattern(pat, item)?;
             }
-            if let Some(body) = d.body() {
-                match self.eval_block(body, false)? {
-                    Flow::Break => {
-                        self.close_scope(false)?;
-                        return Ok(Flow::Val(Value::Unit));
-                    }
-                    Flow::Continue | Flow::Val(_) => {}
-                    other => {
-                        self.close_scope(matches!(other, Flow::Err(..)))?;
-                        return Ok(other);
-                    }
-                }
+            let flow = match d.body() {
+                Some(body) => self.eval_block(body, false)?,
+                None => Flow::Val(Value::Unit),
+            };
+            // Every exit of the iteration closes its scope (its defers
+            // run), then frees the iteration's copy region.
+            let leave = match flow {
+                Flow::Break => Some(Flow::Val(Value::Unit)),
+                Flow::Continue | Flow::Val(_) => None,
+                other => Some(other),
+            };
+            self.close_scope(matches!(leave, Some(Flow::Err(..))))?;
+            if let Some(rid) = local {
+                self.free_region(rid);
             }
-            self.close_scope(false)?;
+            if let Some(out) = leave {
+                return Ok(out);
+            }
         }
         Ok(Flow::Val(Value::Unit))
     }

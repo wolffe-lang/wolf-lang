@@ -19199,15 +19199,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // (`wolf_mem::forcopy`, the predicate the checked machine binds
         // by too) binds the element itself, as before; any other body
         // binds a deep copy, one an iteration, so no store, lend, move or
-        // escape through the binding reaches the list.
-        let own_copy = self.copy_reaches_heap(self.table, elem_sema, 0) && {
+        // escape through the binding reaches the list. A copy the body
+        // only writes and lets nothing keep is made in a region of the
+        // iteration's own, freed when the iteration ends.
+        let own = if self.copy_reaches_heap(self.table, elem_sema, 0) {
             let ty = |sp: Span| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone());
             let declared = |sp: Span| {
                 self.calls
                     .get(&sp)
                     .is_some_and(|c| wolf_mem::forcopy::declared_call(c))
             };
-            wolf_mem::forcopy::needs_own_copy(d, self.src, &ty, &declared)
+            let holds_str = wolf_mem::forcopy::reaches_str(self.sigs, self.table, elem_sema, 0);
+            wolf_mem::forcopy::own_copy(d, self.src, &ty, &declared, holds_str)
+        } else {
+            wolf_mem::forcopy::OwnCopy::Element
         };
         let n = self.list_len_of(hdr);
         let header = self.b.create_block();
@@ -19236,19 +19241,42 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // the load loop-invariant and LICM lifts it, and a body that
         // CAN would have invalidated a hoisted copy.
         let elem = self.list_load_at(hdr, iparam, ewty, span)?;
-        let elem = if own_copy {
-            let table = self.table;
-            match self.deep_copy_in(elem, table, elem_sema, span, 0) {
-                Ok(c) => c,
-                Err(x) => {
-                    self.b.gvn_pop_scope();
-                    return Err(x);
+        let mut local = None;
+        let elem = match own {
+            wolf_mem::forcopy::OwnCopy::Element => elem,
+            wolf_mem::forcopy::OwnCopy::Kept => {
+                let table = self.table;
+                match self.deep_copy_in(elem, table, elem_sema, span, 0) {
+                    Ok(c) => c,
+                    Err(x) => {
+                        self.b.gvn_pop_scope();
+                        return Err(x);
+                    }
                 }
             }
-        } else {
-            elem
+            wolf_mem::forcopy::OwnCopy::Local => {
+                // The iteration's region is ambient for the copy alone: the
+                // body allocates where it did before.
+                let (region, handle) = self.b.ins_region_new();
+                let prev = self.open_ambient(handle);
+                let table = self.table;
+                let c = self.deep_copy_in(elem, table, elem_sema, span, 0);
+                if let Some(prev) = prev {
+                    self.rt_call("__wolf_rt_region_ambient_leave", &[prev], None);
+                }
+                match c {
+                    Ok(c) => {
+                        local = Some((region, handle));
+                        c
+                    }
+                    Err(x) => {
+                        self.b.gvn_pop_scope();
+                        return Err(x);
+                    }
+                }
+            }
         };
-        let frame = self.run_for_body(d, elem, ewty, false, bind_name, Some(exit));
+        let frame = self.run_for_body(d, elem, ewty, false, bind_name, Some(exit), local);
         let frame = match frame {
             Ok(f) => f,
             Err(x) => {
@@ -19873,7 +19901,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // The binding is a `byte` (s136): an I8 cell on the unsigned
         // rail, widened at the operator like any other byte.
         let elem = self.bytes_elem_at(base, iparam);
-        let frame = self.run_for_body(d, elem, types::I8, true, bind_name, Some(exit));
+        let frame = self.run_for_body(d, elem, types::I8, true, bind_name, Some(exit), None);
         let frame = match frame {
             Ok(f) => f,
             Err(x) => {
@@ -20383,7 +20411,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.seal_block(stop);
         self.b.switch_to_block(stop);
         let elem = self.str_subslice(base, si, ji);
-        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit)) {
+        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit), None) {
             Ok(f) => f,
             Err(x) => {
                 self.b.gvn_pop_scope();
@@ -20499,7 +20527,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.seal_block(emit);
         self.b.switch_to_block(emit);
         let elem = self.str_subslice(base, ip, eparam);
-        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit)) {
+        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit), None) {
             Ok(f) => f,
             Err(x) => {
                 self.b.gvn_pop_scope();
@@ -20562,7 +20590,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if self.b.as_int_const(nl) == Some(0) {
             self.b.stats.fold += 1;
             let elem = self.str_subslice(base, zero, n);
-            let frame = self.run_for_body(d, elem, sty, false, bind_name, Some(exit))?;
+            let frame = self.run_for_body(d, elem, sty, false, bind_name, Some(exit), None)?;
             if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
                 self.b.seal_block(latch);
                 self.b.switch_to_block(latch);
@@ -20640,7 +20668,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.seal_block(emit);
         self.b.switch_to_block(emit);
         let elem = self.str_subslice(base, ip, eparam);
-        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit)) {
+        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit), None) {
             Ok(f) => f,
             Err(x) => {
                 self.b.gvn_pop_scope();
@@ -25980,7 +26008,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_br(cond, body_bb, &[], exit, &[]);
         self.b.seal_block(body_bb);
         self.b.switch_to_block(body_bb);
-        let frame = self.run_for_body(d, iparam, ity, unsigned, bind_name, Some(exit));
+        let frame = self.run_for_body(d, iparam, ity, unsigned, bind_name, Some(exit), None);
         let frame = match frame {
             Ok(f) => f,
             Err(x) => {
@@ -26058,7 +26086,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         self.b.switch_to_block(header);
         self.b.gvn_push_scope();
-        let frame = self.run_for_body(d, iparam, ity, unsigned, bind_name, pre_exit);
+        let frame = self.run_for_body(d, iparam, ity, unsigned, bind_name, pre_exit, None);
         let mut frame = match frame {
             Ok(f) => f,
             Err(x) => {
@@ -26118,6 +26146,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// The shared `for`-body walk: bind the induction variable, push
     /// the loop frame (continue → latch, break → exit), lower the
     /// body, and emit the fall-through edge to the latch.
+    #[allow(clippy::too_many_arguments)]
     fn run_for_body(
         &mut self,
         d: ForExpr<'t>,
@@ -26126,6 +26155,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         unsigned: bool,
         bind_name: Option<String>,
         exit: Option<Block>,
+        local: Option<(RegionId, Value)>,
     ) -> R<LoopFrame> {
         self.scopes.push(ScopeFrame::default());
         if let Some((pat, elem_sema)) = self.pending_for_pat.take()
@@ -26162,9 +26192,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             depth: self.scopes.len(),
         });
         self.b.gvn_push_scope();
+        // wolf-lang#1169: an iteration's own copy region (a copy nothing
+        // keeps past the iteration) rides the body's scope, as a `region`
+        // block's does: every exit edge — fall-through, `continue`,
+        // `break`, `return`, `?` — frees it, after the body's own cleanup.
         let flow = match d.body() {
-            Some(bl) => self.lower_block(bl, false),
-            None => Ok(Flow::Val(None)),
+            Some(bl) => self.lower_block_in(bl, false, local, None),
+            None => {
+                if let Some((region, handle)) = local {
+                    self.b.ins_region_free(region, handle);
+                }
+                Ok(Flow::Val(None))
+            }
         };
         let flow = match flow {
             Ok(f) => f,
