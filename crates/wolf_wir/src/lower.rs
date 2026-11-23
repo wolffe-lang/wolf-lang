@@ -17219,8 +17219,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // the slice reaches the source and no later write to
                     // the source reaches the slice; a flat slice is the
                     // byte copy above and nothing more.
-                    let table = self.table;
-                    self.deep_copy_elems_in(out, table, elem, e.span, 0)?;
                     return Ok(Flow::Val(Some(out)));
                 }
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {
