@@ -712,6 +712,14 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_arch`",
             "hosted runtime",
         ),
+        // wolf-lang#858: the machine's name, a hosted symbol.
+        (
+            "os_hostname",
+            "",
+            "let n = os_hostname() else |e| {\n        return 0\n    }\n    n.len",
+            "`os_hostname`",
+            "hosted runtime",
+        ),
         (
             "os_core_limit",
             "",
