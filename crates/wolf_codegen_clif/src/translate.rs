@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 290] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 291] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -519,6 +519,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 290] = [
     // inherited descriptor's handle, or the negated code (`fs_open`'s).
     ("__wolf_rt_os_name", 1, false),
     ("__wolf_rt_os_arch", 1, false),
+    // wolf-lang#858 (`[os.hostname]`): the node name's pair through a slot,
+    // and the code.
+    ("__wolf_rt_os_hostname", 1, true),
     ("__wolf_rt_os_core_limit", 1, true),
     ("__wolf_rt_os_set_core_limit", 2, true),
     ("__wolf_rt_os_core_off", 0, true),

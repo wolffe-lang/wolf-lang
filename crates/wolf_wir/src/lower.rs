@@ -11094,6 +11094,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_core_off"
                 | "os_name"
                 | "os_arch"
+                // wolf-lang#858 (`[os.hostname]`): the machine's name.
+                | "os_hostname"
                 // s272 (#922): the nice value and its set; (#975) one
                 // meaning's action.
                 | "os_getpriority"
@@ -16283,6 +16285,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_set_attr" => 3,
             "os_signal_last" | "os_signal_realtime" => 0,
             "os_core_limit" | "os_core_off" | "os_name" | "os_arch" => 0,
+            "os_hostname" => 0,
             "os_set_core_limit" => 2,
             "os_getpriority" => 0,
             "os_wait_poll" | "os_wait_poll_core" | "os_fork" => 0,
@@ -16335,6 +16338,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // s247 (`[os.proc.fork]`): the fork's codes — `wolf_rt::os::proc_code`'s
         // UNSUPPORTED and BUSY, anything else `io`.
         const FORK: &[(i64, &str)] = &[(5, "unsupported"), (7, "busy")];
+        // wolf-lang#858 (`[os.hostname]`): `proc_code`'s UNSUPPORTED and UTF8,
+        // anything else `io`.
+        const HOSTNAME: &[(i64, &str)] = &[(5, "unsupported"), (8, "utf8")];
         let (sym, pairs): (&str, &[(i64, &str)]) = match name {
             "os_signal_ignore" => ("__wolf_rt_os_signal_ignore", SIG),
             "os_signal_default" => ("__wolf_rt_os_signal_default", SIG),
@@ -16345,6 +16351,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_setsid" => ("__wolf_rt_os_setsid", PROC),
             "os_term_open_pty" => ("__wolf_rt_os_term_open_pty", PROC),
             "os_term_pty_name" => ("__wolf_rt_os_term_pty_name", PROC),
+            "os_hostname" => ("__wolf_rt_os_hostname", HOSTNAME),
             "os_term_set_size" => ("__wolf_rt_os_term_set_size", PROC),
             "os_term_attr" => ("__wolf_rt_os_term_attr", PROC),
             "os_term_set_attr" => ("__wolf_rt_os_term_set_attr", PROC),
@@ -16403,10 +16410,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // text's (pointer, length) through a 16-byte slot, else the code.
         //
         // s292 (`[os.term.pty]`): the slave's name is the same shape.
-        if name == "os_signal_text" || name == "os_term_pty_name" {
+        //
+        // wolf-lang#858 (`[os.hostname]`): the node name is the same shape
+        // with no argument.
+        if name == "os_signal_text" || name == "os_term_pty_name" || name == "os_hostname" {
+            let args: Vec<Value> = if name == "os_hostname" {
+                Vec::new()
+            } else {
+                vec![argv[0]]
+            };
             let (region, slot) = self.rt_slot(16);
             let rc = self
-                .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
+                .rt_call_slot(sym, &args, slot, region, Some(types::I64))
                 .expect("rc");
             let z = self.b.iconst(types::I64, 0);
             let hit = self
