@@ -67,7 +67,7 @@ fn ask(src: &str, typed: bool, known: bool) -> bool {
 /// A loop over `rows: List[List[int]]` in `f`, with `body` inside it.
 fn rows(body: &str) -> String {
     format!(
-        "fn f() -> int {{\n    let rows = [[1, 2], [3, 4]]\n    var out = [[0]]\n    var last = [0]\n    var total = 0\n    var seen = \"\"\n    for row in rows {{\n        {body}\n    }}\n    print(\"{{out.len}} {{last.len}} {{seen}}\")\n    total\n}}\n\nstruct W {{ items: List[int] }}\n\nfn zap(take xs: List[int]) -> int {{\n    xs[0] = 0\n    0\n}}\n\nfn sum(xs: List[int]) -> int {{\n    xs.len\n}}\n\nfn main() {{}}\n"
+        "fn f() -> int {{\n    let rows = [[1, 2], [3, 4]]\n    var out = [[0]]\n    var last = [0]\n    var total = 0\n    var seen = \"\"\n    for row in rows {{\n        {body}\n    }}\n    print(\"{{out.len}} {{last.len}} {{seen}}\")\n    total\n}}\n\nstruct W {{ items: List[int] }}\n\nfn zap(take xs: List[int]) -> int {{\n    xs[0] = 0\n    0\n}}\n\nfn sum(xs: List[int]) -> int {{\n    xs.len\n}}\n\nfn fresh(xs: List[int]) -> List[int] {{\n    copy xs\n}}\n\nenum Bag {{ Full(List[int]), Empty }}\n\nfn main() {{}}\n"
     )
 }
 
@@ -137,6 +137,13 @@ fn every_escape_of_the_binding_copies() {
         ),
         ("take argument", rows("let _ = zap(take row)"), true),
         ("assigned out of the loop", rows("last = row"), true),
+        (
+            "an enum constructor holding it, assigned out",
+            rows(
+                "let b = Bag.Full(row)\n        match b {\n            Full(xs) => { last = xs },\n            Empty => {},\n        }",
+            ),
+            true,
+        ),
         ("returned", ret.to_string(), true),
         (
             "tuple literal",
@@ -205,6 +212,17 @@ fn a_body_that_only_reads_binds_the_element() {
         ("push of the binding", rows("(mut out).push(row)")),
         // An index store copies a place in (wolf-lang#438).
         ("index store of the binding", rows("out[0] = row")),
+        // A declared function's answer never holds a `read` argument: a
+        // move out of one that outlives the call is E1002, and a walk
+        // over one copies its binding before it leaves.
+        (
+            "a function's answer assigned out",
+            rows("last = fresh(row)"),
+        ),
+        (
+            "a function's answer stored by index",
+            rows("out[0] = fresh(row)"),
+        ),
         ("copy of the binding", rows("last = copy row")),
         (
             "nested for that reads",
@@ -234,4 +252,113 @@ fn only_a_known_primitive_escapes_free() {
     );
     let scalar = rows("let first = row[0]\n        total = first");
     assert!(ask(&scalar, true, false), "no type known at the span: copy");
+}
+
+/// The boundary of the call rule: only a declared function's answer is
+/// known not to hold its plain argument. A builtin's answer may be an element
+/// of its receiver (`get`, `first`), and a method is a different record:
+/// each copies when its answer is assigned out.
+#[test]
+fn a_call_answer_that_may_hold_the_binding_copies() {
+    let cube = |call: &str| {
+        format!(
+            "fn f() -> int {{\n    let cube = [[[1, 2], [3, 4]]]\n    var last = [0]\n    for plane in cube {{\n        last = {call}\n    }}\n    last.len\n}}\n\nfn main() {{}}\n"
+        )
+    };
+    for (name, src) in [
+        (
+            "a builtin get's answer, assigned out",
+            cube("plane.get(0) else [9]"),
+        ),
+        (
+            "a builtin first's answer, assigned out",
+            cube("plane.first() else [9]"),
+        ),
+        (
+            "a builtin last's answer, assigned out",
+            cube("plane.last() else [9]"),
+        ),
+    ] {
+        assert!(ask(&src, true, true), "must copy: {name}\n{src}");
+    }
+    let method = "struct W { items: List[int] }\n\nimpl W {\n    fn pick(self) -> List[int] {\n        copy self.items\n    }\n}\n\nfn f() -> int {\n    let ws = [W { items: [1, 2] }]\n    var last = [0]\n    for w in ws {\n        last = w.pick()\n    }\n    last.len\n}\n\nfn main() {}\n";
+    assert!(
+        ask(method, true, true),
+        "must copy: a method's answer, assigned out"
+    );
+}
+
+/// The law the call rule leans on, held here rather than only cited: a
+/// declared function that keeps a plain parameter past the call is refused
+/// (E1002, `[mem.tier0.mode.read]`), whether it returns the parameter,
+/// carries it out in a struct, or stores it into a `mut` parameter, and
+/// whether it is declared in the root module or in another one, as std's
+/// functions are. `wolf_mem::check_package` judges every typed body of the
+/// package, std's among them. The same function with `copy` at the move is
+/// not refused.
+#[test]
+fn a_declared_function_cannot_keep_its_plain_parameter() {
+    fn codes(files: &[(&[&str], &str, &str)]) -> Vec<String> {
+        let mut ml = MemoryLoader::new("law");
+        for (m, n, s) in files {
+            ml.add_file(m, n, s);
+        }
+        let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+        assert!(
+            !res.diagnostics
+                .iter()
+                .any(|d| d.severity == wolf_diag::Severity::Error),
+            "input resolves clean: {:?}",
+            res.diagnostics
+        );
+        let tc = typecheck_package_with(&res.package, true);
+        assert!(!tc.has_errors(), "input types clean: {:?}", tc.diagnostics);
+        let mem = wolf_mem::check_package(&res.package, &tc);
+        mem.diagnostics
+            .iter()
+            .map(|d| d.code.as_str().to_string())
+            .collect()
+    }
+    for (name, src) in [
+        (
+            "returned",
+            "fn keep(b: List[int]) -> List[int] { b }\n\nfn main() -> !int {\n    let xs = [1]\n    let ys = keep(xs)\n    ys.len + xs.len\n}\n",
+        ),
+        (
+            "carried out in a struct",
+            "struct Box { items: List[int] }\n\nfn wrap(b: List[int]) -> Box { Box { items: b } }\n\nfn main() -> !int {\n    let xs = [1]\n    let w = wrap(xs)\n    w.items.len + xs.len\n}\n",
+        ),
+        (
+            "stored into a mut parameter",
+            "fn replace(mut out: List[int], b: List[int]) { out = b }\n\nfn main() -> !int {\n    var o = [0]\n    let xs = [1]\n    replace(mut o, xs)\n    o.len + xs.len\n}\n",
+        ),
+    ] {
+        let got = codes(&[(&[], "main.lu", src)]);
+        assert!(got.iter().any(|c| c == "E1002"), "{name}: {got:?}\n{src}");
+    }
+    let other = codes(&[
+        (
+            &[],
+            "main.lu",
+            "use keeper.keep\n\nfn main() -> !int {\n    let xs = [1]\n    let ys = keep(xs)\n    ys.len + xs.len\n}\n",
+        ),
+        (
+            &["keeper"],
+            "keeper.lu",
+            "pub fn keep(b: List[int]) -> List[int] {\n    b\n}\n",
+        ),
+    ]);
+    assert!(
+        other.iter().any(|c| c == "E1002"),
+        "a function of another module: {other:?}"
+    );
+    let copied = codes(&[(
+        &[],
+        "main.lu",
+        "fn keep(b: List[int]) -> List[int] { copy b }\n\nfn main() -> !int {\n    let xs = [1]\n    let ys = keep(xs)\n    ys.len + xs.len\n}\n",
+    )]);
+    assert!(
+        !copied.iter().any(|c| c == "E1002"),
+        "copy at the move is not refused: {copied:?}"
+    );
 }
