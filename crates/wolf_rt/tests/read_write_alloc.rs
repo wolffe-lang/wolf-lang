@@ -468,3 +468,38 @@ fn repeat_bytes_are_the_repeat() {
         unsafe { __wolf_rt_region_free(r) };
     }
 }
+
+/// Every `copy region` and every outer-write `copy` of a `str`
+/// materializes it through `repeat(s, 1)` (the lowering's
+/// `deep_copy_out`), so a loop that keeps one `str` a turn paid a host
+/// `String`, and its free, a turn on top of the region's own bytes.
+/// Once the result is made in place, the host sees only the region's
+/// chunk refills: no free at all.
+#[test]
+fn a_str_copied_out_frees_nothing() {
+    let s = "wolf ".repeat(20);
+    let (sp, sl) = pair(&s);
+    let r = __wolf_rt_region_new();
+    let prev = unsafe { __wolf_rt_region_ambient_enter(r) };
+    let mut total = Counts::default();
+    for i in 0..WARM + CALLS {
+        let mut out = [0i64; 2];
+        let ((), c) = armed(|| unsafe { __wolf_rt_str_repeat(sp, sl, 1, out.as_mut_ptr() as i64) });
+        assert_eq!(out[1], sl, "the copy's length");
+        if i >= WARM {
+            total = add(total, c);
+        }
+    }
+    unsafe { __wolf_rt_region_ambient_leave(prev) };
+    unsafe { __wolf_rt_region_free(r) };
+    assert_eq!(
+        total.frees, 0,
+        "#1176: {} host frees over {CALLS} copies of a 100-byte str ({total:?}): a temporary per copy",
+        total.frees
+    );
+    assert!(
+        (total.allocs + total.reallocs) * 10 <= CALLS,
+        "#1176: {} host allocations over {CALLS} copies ({total:?}): more than the region's refills",
+        total.allocs + total.reallocs
+    );
+}
