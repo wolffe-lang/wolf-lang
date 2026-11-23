@@ -140,6 +140,7 @@ mod moves;
 pub mod pairswalk;
 pub mod place;
 mod procjoin;
+pub mod region_sites;
 pub mod regions;
 mod shared;
 mod strres;

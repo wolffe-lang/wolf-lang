@@ -6899,53 +6899,27 @@ impl<'t> Lowerer<'t> {
     /// `trim_end`, `get`, `strip_prefix`/`strip_suffix`, and the
     /// pieces of `split`/`words`/`lines` are all subslices of the
     /// receiver's own storage and allocate nothing, so they are no
-    /// site. The four below are the other side — each builds fresh
-    /// bytes in the ambient region exactly as `+` does — and the mem
-    /// tier could not see them, because `str` is `Copy` and a `Copy`
-    /// result never made `ret_heap`. That is how `region scratch {
-    /// let s = "re".repeat(2); s }` printed `rere` from freed bytes
-    /// with no diagnostic on either tier.
+    /// site. The methods of `region_sites::STR_METHOD_SITES` are the
+    /// other side — each builds fresh bytes in the ambient region exactly
+    /// as `+` does — and the mem tier could not see them, because `str` is
+    /// `Copy` and a `Copy` result never made `ret_heap`. That is how
+    /// `region scratch { let s = "re".repeat(2); s }` printed `rere` from
+    /// freed bytes with no diagnostic on either tier.
+    ///
+    /// The host builtins of `region_sites::HOST_STR_SITES` are the FREE
+    /// producers: each copies its answer into the ambient region (an
+    /// ordinary owned `str`), and its row is why `is_str_expr` alone
+    /// cannot see it. They are matched on the callee's bare text, the same
+    /// way `wolf_wir::lower` decides to lower a builtin at all, so the two
+    /// cannot disagree about what a name means; the list's own comments
+    /// say why each is there, and its test holds it against the runtime.
     fn is_materializing_str_call(&self, e: &'t GreenNode) -> bool {
         let Some(callee) = CallExpr::cast(e).and_then(|d| d.callee()) else {
             return false;
         };
-        // s160 (wolf-lang#191's other half): the FREE producer.
-        // `str_from_utf8(b) -> str ! {utf8}` copies the accepted bytes
-        // into the ambient region — an ordinary owned `str`, borrowing
-        // nothing from its list — so it is a site like any other
-        // materialization, and the row is why `is_str_expr` alone
-        // cannot see it. Matched on the callee's bare text, the same
-        // way `wolf_wir::lower` decides to lower this builtin at all,
-        // so the two cannot disagree about what the name means.
-        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "str_from_utf8" {
-            return self.is_str_or_str_row(e.span);
-        }
-        // s200 (#407, `[os.fs.error]`): `os_error_text(code) -> str` mints
-        // the host's message in the ambient region — the same kind of
-        // site, with no row to hide it.
-        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_error_text" {
-            return self.is_str_or_str_row(e.span);
-        }
-        // s228 (wolf-lang#374, the net half): `net_read(fd, max) -> str
-        // ! {closed, timeout, utf8, io}` copies what arrived into the
-        // ambient region — a site BEFORE the runtime routes the bytes
-        // there, in #374's order: with the site, a read returned out of
-        // the region it was made in is E1010; without it, moving the
-        // bytes would turn today's leak into a read of freed memory.
-        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "net_read" {
-            return self.is_str_or_str_row(e.span);
-        }
-        // s254 (wolf-lang#834; pelt sh22): `os_cwd() -> str ! {io}` copies
-        // the working directory's name into the ambient region — a site
-        // BEFORE the runtime routes the bytes there, #374's order as
-        // `net_read`'s: with the site, a name returned out of the region
-        // it was asked in is E1010; without it, moving the bytes would
-        // turn sh22's 48 B a call in the root into a read of freed memory.
-        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_cwd" {
-            return self.is_str_or_str_row(e.span);
-        }
-        // s261: the invocation name is copied into the ambient region.
-        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "env_arg0" {
+        if callee.kind == SyntaxKind::PathExpr
+            && crate::region_sites::HOST_STR_SITES.contains(&self.text(callee.span).as_str())
+        {
             return self.is_str_or_str_row(e.span);
         }
         if !self.is_str_expr(e.span) {
@@ -6957,10 +6931,7 @@ impl<'t> Lowerer<'t> {
         let Some(name) = m.member() else {
             return false;
         };
-        if !matches!(
-            self.text(name.span).as_str(),
-            "upper" | "lower" | "repeat" | "replace"
-        ) {
+        if !crate::region_sites::STR_METHOD_SITES.contains(&self.text(name.span).as_str()) {
             return false;
         }
         // The receiver must be a `str`: a user type with a method by
