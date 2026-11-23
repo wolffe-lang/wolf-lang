@@ -681,11 +681,7 @@ impl Walk<'_, '_, '_> {
     }
 
     fn arg(&mut self, a: Arg<'_>, plain: Pos) {
-        let p = if a.mode().is_some() {
-            Pos::Escape
-        } else {
-            plain
-        };
+        let p = plain;
         if let Some(v) = a.value() {
             self.expr(v, p);
         }
