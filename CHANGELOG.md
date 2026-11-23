@@ -49,6 +49,15 @@
   it always did natively: the payload's list was shared with the
   original there.
 
+- **A program can ask the name of the machine it runs on.**
+  `os_hostname()` answers the kernel's node name as the kernel holds it:
+  `uname`'s `nodename`, with no domain added and no lookup made
+  (`[os.hostname]`, wolf-lang#858). It is read on every call, so a host
+  renamed while a server runs answers its new name. A name that is not
+  UTF-8 is `utf8`, a refused read `io` with its number in `os_error()`,
+  and windows answers `unsupported`. At most 64 bytes on linux and PAX,
+  255 on macOS; PAX answers `pax`.
+
 - **A pty's name returned out of the region it was asked in is refused.**
   `os_term_pty_name` builds the slave's name in the current region, as
   `os_cwd` does, but the compiler did not count it among the calls whose
