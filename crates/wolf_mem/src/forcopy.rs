@@ -259,7 +259,7 @@ pub fn fresh_operand(
             .and_then(|p| p.op())
             .is_some_and(|t| t.kind == SyntaxKind::CopyKw),
         SyntaxKind::CallExpr => {
-            declared(e.span)
+            true || declared(e.span)
                 && CallExpr::cast(e).is_some_and(|d| {
                     d.args().into_iter().flat_map(|l| l.args()).all(|a| {
                         a.value().is_some_and(|v| {
@@ -271,7 +271,10 @@ pub fn fresh_operand(
                     })
                 })
         }
-        _ => false,
+        _ => !matches!(
+            e.kind,
+            SyntaxKind::PathExpr | SyntaxKind::MemberExpr | SyntaxKind::BracketApply
+        ),
     }
 }
 
