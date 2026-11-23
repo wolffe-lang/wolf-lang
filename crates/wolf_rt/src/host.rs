@@ -120,6 +120,64 @@ pub unsafe extern "C" fn __wolf_rt_os_arch(out: i64) {
     unsafe { write_pair(out, p as i64, s.len() as i64) };
 }
 
+/// wolf-lang#858 (`[os.hostname]`): the kernel's node name, read now and
+/// never kept — `uname(2)`'s `nodename`, every byte before its first NUL
+/// (or the field's end), nothing added or looked up. At most the field
+/// less its NUL: 64 bytes on linux and PAX, 255 on macOS. `Err(IO)` when
+/// the kernel refuses the read, its number recorded for `os_error()`.
+#[cfg(unix)]
+pub fn node_name() -> Result<Vec<u8>, i64> {
+    // SAFETY: `uname` fills a zeroed struct it is handed; the read below
+    // stops inside the field.
+    let mut u: libc::utsname = unsafe { std::mem::zeroed() };
+    if unsafe { libc::uname(&mut u) } != 0 {
+        crate::fs::os_error_record(&std::io::Error::last_os_error());
+        return Err(crate::os::proc_code::IO);
+    }
+    Ok(field_bytes(&u.nodename))
+}
+
+/// Windows has no `uname`; its host name is a clause of its own.
+#[cfg(not(unix))]
+pub fn node_name() -> Result<Vec<u8>, i64> {
+    Err(crate::os::proc_code::UNSUPPORTED)
+}
+
+/// A `utsname` field's bytes before its first NUL, or all of it.
+#[cfg(unix)]
+fn field_bytes(f: &[libc::c_char]) -> Vec<u8> {
+    f.iter()
+        .take_while(|&&c| c != 0)
+        .map(|&c| c as u8)
+        .collect()
+}
+
+/// The node name as text: `Err(UTF8)` for bytes that are not UTF-8, never
+/// a lossy decode.
+pub fn host_name_text(bytes: Vec<u8>) -> Result<String, i64> {
+    String::from_utf8(bytes).map_err(|_| crate::os::proc_code::UTF8)
+}
+
+/// `os_hostname() -> str ! {io, unsupported, utf8}` (wolf-lang#858,
+/// `[os.hostname]`) — 0 and the name's (pointer, length) through `out`,
+/// the text in the current region, or the code.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_hostname(out: i64) -> i64 {
+    crate::fs::os_error_clear();
+    match node_name().and_then(host_name_text) {
+        Ok(s) => {
+            let p = crate::str::region_copy(s.as_bytes());
+            unsafe { write_pair(out, p as i64, s.len() as i64) };
+            crate::os::proc_code::OK
+        }
+        Err(c) => c,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,6 +204,56 @@ mod tests {
         ] {
             assert_eq!(arch_word(machine), want, "{machine}");
         }
+    }
+
+    /// The node name's decode: UTF-8 text whole, anything else the code.
+    #[test]
+    fn the_host_name_is_text_or_the_utf8_code() {
+        assert_eq!(
+            host_name_text(b"nomad-1.local".to_vec()),
+            Ok("nomad-1.local".into())
+        );
+        assert_eq!(host_name_text(Vec::new()), Ok(String::new()));
+        assert_eq!(
+            host_name_text(vec![0xff, b'f', b'o']),
+            Err(crate::os::proc_code::UTF8)
+        );
+    }
+
+    /// A field stops at its first NUL, or at its end when it has none.
+    #[cfg(unix)]
+    #[test]
+    fn a_field_stops_at_its_nul_or_its_end() {
+        let f = [
+            b'p' as libc::c_char,
+            b'a' as libc::c_char,
+            0,
+            b'x' as libc::c_char,
+        ];
+        assert_eq!(field_bytes(&f), b"pa");
+        let g = [b'a' as libc::c_char; 3];
+        assert_eq!(field_bytes(&g), b"aaa");
+    }
+
+    /// This host's node name is its `uname`'s, read on each call, within
+    /// the field.
+    #[cfg(unix)]
+    #[test]
+    fn this_host_names_itself() {
+        let u = {
+            // SAFETY: as `node_name`.
+            let mut u: libc::utsname = unsafe { std::mem::zeroed() };
+            assert_eq!(unsafe { libc::uname(&mut u) }, 0);
+            u
+        };
+        let want: Vec<u8> = u
+            .nodename
+            .iter()
+            .take_while(|&&c| c != 0)
+            .map(|&c| c as u8)
+            .collect();
+        assert_eq!(node_name(), Ok(want.clone()));
+        assert!(want.len() < u.nodename.len(), "the name fits its field");
     }
 
     /// This host's answer is its kernel's (on unix) and one of the

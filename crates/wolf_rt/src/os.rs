@@ -1412,6 +1412,9 @@ pub mod proc_code {
     /// whose other tasks are live, or from a task — the protocol's rule,
     /// decided before the host is asked. Declared only by `os_fork`.
     pub const BUSY: i64 = 7;
+    /// wolf-lang#858 (`[os.hostname]`): a node name that is not UTF-8,
+    /// never decoded lossily. Declared only by `os_hostname`.
+    pub const UTF8: i64 = 8;
 }
 
 /// The most `(target, source)` pairs one `os_spawn_fds` places (s215):
