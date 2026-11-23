@@ -837,6 +837,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // `[os.proc.adopt]`.
         "__wolf_rt_os_name",
         "__wolf_rt_os_arch",
+        // wolf-lang#858: `[os.hostname]`.
+        "__wolf_rt_os_hostname",
         "__wolf_rt_os_core_limit",
         "__wolf_rt_os_set_core_limit",
         "__wolf_rt_os_core_off",
@@ -905,7 +907,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        290,
+        291,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
