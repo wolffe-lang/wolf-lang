@@ -565,30 +565,44 @@ fn corpus_cmd() -> ExitCode {
     // Runs through the differential protocol so xtask stays independent of
     // compiler crates. A stub driver (verdict `unsupported`) skips checks.
     let mut executed = false;
+    // wolf-lang#1187: how many files reached a phase engine. A step that
+    // ran none passed once, so the count is printed and a zero fails.
+    let mut ran = 0usize;
     // The two halves of the rejection ledger, counted from what the
     // compiler DID rather than from what the headers claim (s91).
     let mut rules = 0u32;
     let mut forward_pins = 0u32;
-    if run_ok(
+    // wolf-lang#1187: a driver that does not build, or cannot be found where
+    // cargo put it, fails the step; it never leaves the corpus unexecuted.
+    if !run_ok(
         "cargo",
         &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
     ) {
+        eprintln!("corpus: the driver did not build; no file was executed");
+        return ExitCode::FAILURE;
+    }
+    let wolf = match xtask::wolf_bin::require("corpus") {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("corpus: running {}", wolf.display());
+    {
         for (f, d) in &parsed {
             // `phase: run` files execute NATIVELY (s31: compile, link,
             // run — the M1 gate). WOLF_NATIVE=1 keeps the argv shape
             // protocol-stable.
             let native = d.phase.as_deref() == Some("run");
-            let mut cmd =
-                Command::new(format!("target/debug/wolf{}", std::env::consts::EXE_SUFFIX));
-            cmd.arg("conform-run").arg(f).arg("--json");
-            if let Some(root) = corpus::fixture_std_root(f) {
-                cmd.arg("--std-root").arg(root);
-            }
-            if native {
-                cmd.env("WOLF_NATIVE", "1");
-            }
-            let out = cmd.output();
-            let Ok(out) = out else { continue };
+            let out = match corpus::run_row(&wolf, f, native) {
+                Ok(out) => out,
+                Err(e) => {
+                    eprintln!("corpus: {e}");
+                    bad += 1;
+                    continue;
+                }
+            };
             if !out.status.success() {
                 eprintln!("corpus: {}: conform-run failed", f.display());
                 eprintln!("  stderr: {}", String::from_utf8_lossy(&out.stderr).trim());
@@ -608,6 +622,7 @@ fn corpus_cmd() -> ExitCode {
             // `unsupported` with a real phase_reached still carries phase
             // evidence: everything through phase_reached completed clean.
             executed = true;
+            ran += 1;
             // The forward-pin ledger (s91). A `check: fail(CODE)` file
             // is a claim that the compiler ENFORCES a rule. When the
             // compiler declines the file instead, the claim is an
@@ -773,6 +788,15 @@ fn corpus_cmd() -> ExitCode {
             " — phase execution pending a non-stub driver"
         }
     );
+    eprintln!("corpus: {ran} file(s) executed by {}", wolf.display());
+    // wolf-lang#1187: no file reaching a phase engine is not a pass.
+    if !executed && !parsed.is_empty() {
+        eprintln!(
+            "corpus: executed no file of {}: the step checked nothing (wolf-lang#1187)",
+            parsed.len()
+        );
+        return ExitCode::FAILURE;
+    }
     // Both numbers, never one corrected number (s91). A forward pin is
     // not a subtraction to be quietly applied to the rule count: it is
     // its own quantity, and a reader who is told only "N rules" cannot
@@ -851,7 +875,7 @@ fn peel_cmd(args: &[String]) -> ExitCode {
         if corpus::parse_directives(&src).is_ok_and(|d| d.is_member()) {
             continue;
         }
-        let mut cmd = Command::new("target/debug/wolf");
+        let mut cmd = Command::new(xtask::wolf_bin::wolf_exe());
         cmd.arg("conform-run")
             .arg(f)
             .arg("--json")
@@ -1972,7 +1996,7 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         eprintln!("lane-coverage: failed to build wolf + the runtime staticlib");
         return ExitCode::FAILURE;
     }
-    let wolf = PathBuf::from(format!("target/debug/wolf{}", std::env::consts::EXE_SUFFIX));
+    let wolf = xtask::wolf_bin::wolf_exe();
     let mut files = Vec::new();
     collect_wolf_files(Path::new("corpus"), &mut files);
     files.sort();
@@ -2552,7 +2576,8 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         "use m01\n\nfn main() -> !int {\n    if m01.f01(0) > 0 { 0 } else { 1 }\n}\n",
     )
     .expect("write main");
-    let wolf = Path::new("target/debug/wolf");
+    let wolf_exe = xtask::wolf_bin::wolf_exe();
+    let wolf = wolf_exe.as_path();
     let entry = proj.join("main.lu");
     let prog = proj.join("prog");
     let wolf_build = |extra: &[&str]| -> bool {
@@ -2758,7 +2783,7 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v.
         touch(&proj.join("m01").join("m01.lu"));
         match max_rss_kb(
-            "target/debug/wolf",
+            wolf.to_str().expect("utf8 path"),
             &[
                 "build",
                 entry.to_str().expect("utf8 path"),
@@ -2799,7 +2824,7 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         for _ in 0..runs {
             let t = Instant::now();
             for f in &sweep_files {
-                let mut cmd = Command::new("target/debug/wolf");
+                let mut cmd = Command::new(xtask::wolf_bin::wolf_exe());
                 cmd.arg("conform-run").arg(f).arg("--json");
                 if let Some(root) = corpus::fixture_std_root(f) {
                     cmd.arg("--std-root").arg(root);
@@ -3784,17 +3809,20 @@ fn fmt_lu() -> ExitCode {
         eprintln!("fmt-lu: failed to build wolf");
         return ExitCode::FAILURE;
     }
+    let wolf = match xtask::wolf_bin::require("fmt-lu") {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut files = Vec::new();
     collect_wolf_files(Path::new("corpus"), &mut files);
     let mut relaid = 0usize;
     let mut refusals = 0usize;
     let mut bad = 0usize;
     for f in &files {
-        let out = match Command::new("target/debug/wolf")
-            .args(["fmt", "--check"])
-            .arg(f)
-            .output()
-        {
+        let out = match Command::new(&wolf).args(["fmt", "--check"]).arg(f).output() {
             Ok(out) => out,
             Err(e) => {
                 eprintln!("fmt-lu: {}: {e}", f.display());
@@ -3815,7 +3843,7 @@ fn fmt_lu() -> ExitCode {
         // parsing matters: `phase: parse` also includes resolver refusals,
         // and broken member files can have no header of their own.
         if out.status.code() == Some(1) && !codes.is_empty() {
-            let record = Command::new("target/debug/wolf")
+            let record = Command::new(&wolf)
                 .args(["conform-run", "--json", "--phase=parse"])
                 .arg(f)
                 .output()
@@ -3889,7 +3917,13 @@ fn fmt_fixpoint(args: &[String]) -> ExitCode {
         eprintln!("fmt-fixpoint: failed to build wolf");
         return ExitCode::FAILURE;
     }
-    let wolf = Path::new("target/debug").join(format!("wolf{}", std::env::consts::EXE_SUFFIX));
+    let wolf = match xtask::wolf_bin::require("fmt-fixpoint") {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut corpus_files = Vec::new();
     collect_wolf_files(Path::new("corpus"), &mut corpus_files);
     corpus_files.sort();
@@ -4040,11 +4074,17 @@ fn audit_surface() -> ExitCode {
         eprintln!("audit-surface: failed to build wolf");
         return ExitCode::FAILURE;
     }
-    let wolf = "target/debug/wolf";
+    let wolf = match xtask::wolf_bin::require("audit-surface") {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
     // Green: the corpus memory package (its wolf.pkg declares `root`)
     // and the declared fixture.
     for target in ["corpus/memory/unsafe_trusted.lu", "xtask/fixtures/audit/ok"] {
-        let out = Command::new(wolf)
+        let out = Command::new(&wolf)
             .args(["audit-surface", target])
             .output()
             .expect("run wolf audit-surface");
@@ -4065,7 +4105,7 @@ fn audit_surface() -> ExitCode {
         eprint!("{stdout}");
     }
     // Red: an undeclared trusted module fails the build (E1303).
-    let out = Command::new(wolf)
+    let out = Command::new(&wolf)
         .args(["audit-surface", "xtask/fixtures/audit/undeclared"])
         .output()
         .expect("run wolf audit-surface");
@@ -4767,7 +4807,8 @@ fn differ_cmd(args: &[String]) -> ExitCode {
             eprintln!("differ: failed to build wolf");
             return ExitCode::FAILURE;
         }
-        ("target/debug/wolf".into(), "target/debug/wolf".into())
+        let w = xtask::wolf_bin::wolf_exe().display().to_string();
+        (w.clone(), w)
     } else {
         let free: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
         let [a, b] = free.as_slice() else {

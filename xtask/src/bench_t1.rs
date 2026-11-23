@@ -94,7 +94,7 @@ impl Runtime {
 
     /// A `wolf` invocation with the runtime override applied.
     fn wolf(&self) -> Command {
-        let mut c = Command::new("target/debug/wolf");
+        let mut c = Command::new(xtask::wolf_bin::wolf_exe());
         if let Some(lib) = &self.lib {
             c.env("WOLF_RT_LIB", lib);
         }
@@ -1600,7 +1600,8 @@ pub fn bench_gates(args: &[String]) -> ExitCode {
     }
     let dir = Path::new("target/bench-gates");
     std::fs::create_dir_all(dir).expect("mkdir bench-gates");
-    let wolf = Path::new("target/debug/wolf");
+    let wolf_exe = xtask::wolf_bin::wolf_exe();
+    let wolf = wolf_exe.as_path();
     let mut failures: Vec<String> = Vec::new();
 
     let emit = |src: &Path, out: &Path, midend: bool| -> Option<String> {
