@@ -481,9 +481,12 @@ fn a_walk_that_only_writes_keeps_no_copy_past_its_iteration() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// A walk that hands its binding to a pool's `init` leaves the list alone:
-/// `init` keeps what it is handed as it is, so the binding it is handed must
-/// be the loop's own copy. Writing the pool's slot writes that copy.
+/// A walk that hands its binding to a pool's `init` leaves the list alone.
+/// The binding is the element itself (a plain argument of a builtin that
+/// copies it in), and `init` copies it into the pool (wolf-lang#1183), so
+/// writing the pool's slot writes the pool's own value. The predicate reads
+/// `init`'s argument only because `init` copies: this row fails on every
+/// compiling machine if either half goes.
 const POOL: &str = "fn main() -> !int {
     let rows = [[1, 2], [3, 4]]
     var pool = Pool[List[int]]()
