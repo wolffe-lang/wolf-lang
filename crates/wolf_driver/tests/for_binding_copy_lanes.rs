@@ -325,6 +325,7 @@ fn a_per_file_walk_that_pushes_a_struct_charges_what_pushing_the_element_does() 
 
 /// `src` built on one tier; `None` where the host cannot build it (a loud
 /// skip, refused under `WOLF_TEST_NATIVE_REQUIRE`).
+#[cfg(unix)]
 fn build(dir: &Path, name: &str, src: &str, release: bool) -> Option<PathBuf> {
     let at = dir.join(name);
     std::fs::create_dir_all(&at).expect("program dir");
@@ -360,6 +361,7 @@ fn build(dir: &Path, name: &str, src: &str, release: bool) -> Option<PathBuf> {
 
 /// Reap `child` with `wait4(2)`: its raw status and its peak resident set
 /// in bytes (`ru_maxrss`: kibibytes on linux, bytes on macOS).
+#[cfg(unix)]
 fn reap_with_peak(child: std::process::Child) -> (libc::c_int, u64) {
     let pid = child.id() as libc::pid_t;
     let mut status: libc::c_int = 0;
@@ -379,6 +381,7 @@ fn reap_with_peak(child: std::process::Child) -> (libc::c_int, u64) {
 }
 
 /// The peak resident set of a run of `exe`, in bytes, and its stdout.
+#[cfg(unix)]
 fn peak(exe: &Path) -> (String, u64) {
     use std::io::Read as _;
     let mut child = Command::new(exe)
@@ -405,6 +408,7 @@ fn peak(exe: &Path) -> (String, u64) {
 
 /// A walk that only writes through its binding over 1,000 lists of 1,000
 /// ints, `passes` times: every iteration binds a copy of an 8 KB list.
+#[cfg(unix)]
 fn write_only(passes: u32) -> String {
     format!(
         "fn main() -> int {{
@@ -433,6 +437,10 @@ fn write_only(passes: u32) -> String {
 /// The write-only copy is freed at the end of its iteration: six more
 /// passes (6,000 more copies of 8 KB, 48 MB if they were kept) leave the
 /// peak resident set where it was, within 16 MiB, natively and on release.
+///
+/// Unix only: the peak is the child's `ru_maxrss` from `wait4(2)`, which
+/// Windows does not have. The ledger row holds the same free on every host.
+#[cfg(unix)]
 #[test]
 fn a_walk_that_only_writes_keeps_no_copy_past_its_iteration() {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
