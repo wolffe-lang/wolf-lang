@@ -136,11 +136,7 @@ mod imp {
                 // SAFETY: reads the auxiliary vector the kernel gave the process.
                 let secure = unsafe { libc::getauxval(libc::AT_SECURE) } != 0;
                 let tunables = std::env::var_os("GLIBC_TUNABLES");
-                let user = !secure
-                    && super::names_a_threshold(
-                        std::env::var_os("MALLOC_MMAP_THRESHOLD_").is_some(),
-                        tunables.as_deref().map(|t| t.as_bytes()),
-                    );
+                let user = !secure && tunables.is_none() && false;
                 THRESHOLD.store(if user { LEAVE } else { SETTLE }, Relaxed);
                 !user
             }
