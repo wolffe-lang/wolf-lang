@@ -703,3 +703,39 @@ mod tests {
         assert!(err.contains("line 2"), "names the line: {err}");
     }
 }
+
+/// wolf-lang#1187: one corpus file's observation record, from `wolf` at
+/// `wolf`: `conform-run <file> --json`, natively for a `phase: run` file
+/// (`WOLF_NATIVE=1`), with the file's fixture std root when it has one. A
+/// compiler that cannot be started is an error naming its path, never a file
+/// skipped: the corpus step once passed having run nothing that way.
+pub fn run_row(wolf: &Path, file: &Path, native: bool) -> Result<std::process::Output, String> {
+    let mut cmd = std::process::Command::new(wolf);
+    cmd.arg("conform-run").arg(file).arg("--json");
+    if let Some(root) = fixture_std_root(file) {
+        cmd.arg("--std-root").arg(root);
+    }
+    if native {
+        cmd.env("WOLF_NATIVE", "1");
+    }
+    cmd.output()
+        .map_err(|e| format!("cannot run {} on {}: {e}", wolf.display(), file.display()))
+}
+
+#[cfg(test)]
+mod run_row_tests {
+    use super::*;
+
+    /// A compiler that is not there is an error that names where it was
+    /// looked for (wolf-lang#1187).
+    #[test]
+    fn a_missing_compiler_is_an_error_naming_its_path() {
+        let wolf = Path::new("/nonexistent/wolf-1187/debug/wolf");
+        let err = run_row(wolf, Path::new("corpus/grammar/semicolon.lu"), false)
+            .expect_err("a missing compiler cannot run a row");
+        assert!(
+            err.contains("/nonexistent/wolf-1187/debug/wolf"),
+            "the error names the path: {err}"
+        );
+    }
+}
