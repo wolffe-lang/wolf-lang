@@ -631,6 +631,7 @@ memory/prov_narrow_cast.lu: lowers
 memory/prov_narrow_cast_trap.lu: lowers
 memory/prov_two_phase.lu: lowers
 memory/push_copies_element.lu: lowers
+memory/push_fresh_only.lu: lowers
 memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
 memory/push_take_moves.lu: not mem-clean (pre-wir rungs own it)
