@@ -19,7 +19,10 @@
 //! - a machine that always copies fails the ledger row: a read-only walk
 //!   inside a region charges that region nothing, where a copy an
 //!   iteration charges the ledger (`[mem.region.account.1]`), and the
-//!   storing walk beside it does charge.
+//!   escaping storing walk beside it does charge. A walk that only writes
+//!   through its binding charges nothing either: its copy is made in a
+//!   region of its own and freed at the end of each iteration, which the
+//!   native peak-memory row holds by name.
 
 mod lane_exit;
 
@@ -183,29 +186,38 @@ fn every_row_answers_its_header_on_every_machine() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// A walk that only reads binds the element itself and charges its region
-/// nothing; the storing walk beside it binds a copy an iteration, charges,
-/// and leaves the list alone. lupin's ledger does not charge its copies, so
-/// this row is the compiling machines' only.
+/// What each kind of walk charges the region it runs in. One that only
+/// reads binds the element itself and charges nothing. One that only writes
+/// through its binding binds a copy made in a region of its own, freed at
+/// the end of every iteration, so it charges the walk's region nothing
+/// either. One whose written binding escapes (`last = row`) binds a copy that
+/// must outlive the iteration: it charges, and the list is left alone.
+/// lupin's ledger does not charge its copies, so this row is the compiling
+/// machines' only.
 const LEDGER: &str = "fn main() -> !int {
     let rows = [[1, 2], [3, 4], [5, 6]]
     let probe = region()
-    var read = -1
-    var wrote = false
-    var total = 0
     in probe {
+        var total = 0
+        var last = [0]
         let before = region_bytes(probe)
         for row in rows {
             total += row[0]
         }
-        read = region_bytes(probe) - before
+        let read = region_bytes(probe) - before
         let mid = region_bytes(probe)
         for row in rows {
             row[0] = 0
         }
-        wrote = region_bytes(probe) > mid
+        let local = region_bytes(probe) - mid
+        let late = region_bytes(probe)
+        for row in rows {
+            row[0] = 0
+            last = row
+        }
+        let kept = region_bytes(probe) > late
+        print(\"read={read} local={local} kept={kept} rows={rows[0][0]} last={last[0]} total={total}\")
     }
-    print(\"read={read} wrote={wrote} rows={rows[0][0]} total={total}\")
     0
 }
 ";
@@ -218,7 +230,7 @@ fn a_walk_that_only_reads_charges_its_region_nothing() {
     std::fs::create_dir_all(&dir).expect("scratch dir");
     let entry = dir.join("main.lu");
     std::fs::write(&entry, LEDGER).expect("program written");
-    let want = "read=0 wrote=true rows=1 total=9\n";
+    let want = "read=0 local=0 kept=true rows=1 last=0 total=9\n";
     let mut wrong = Vec::new();
     for m in MACHINES {
         let Some(o) = lane(&entry, m) else {
@@ -305,6 +317,156 @@ fn a_per_file_walk_that_pushes_a_struct_charges_what_pushing_the_element_does() 
             wrong.push(format!(
                 "per-file {m}: {} {:?}, want {want:?}",
                 o.verdict, o.stdout
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `src` built on one tier; `None` where the host cannot build it (a loud
+/// skip, refused under `WOLF_TEST_NATIVE_REQUIRE`).
+fn build(dir: &Path, name: &str, src: &str, release: bool) -> Option<PathBuf> {
+    let at = dir.join(name);
+    std::fs::create_dir_all(&at).expect("program dir");
+    let entry = at.join("main.lu");
+    std::fs::write(&entry, src).expect("program written");
+    let exe = at.join(if release { "a-release" } else { "a-native" });
+    let mut cmd = Command::new(wolf());
+    cmd.arg("build")
+        .arg(&entry)
+        .arg("-o")
+        .arg(&exe)
+        .arg("--no-cache");
+    if release {
+        cmd.arg("--release");
+    }
+    let out = cmd.output().expect("wolf build runs");
+    if lane_exit::environment_refusal(&out, "wolf build") {
+        assert!(
+            std::env::var_os("WOLF_TEST_NATIVE_REQUIRE").is_none(),
+            "required tier unavailable: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        eprintln!("SKIP: {name}: this host cannot build the tier");
+        return None;
+    }
+    assert!(
+        out.status.success(),
+        "wolf build {name} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Some(exe)
+}
+
+/// Reap `child` with `wait4(2)`: its raw status and its peak resident set
+/// in bytes (`ru_maxrss`: kibibytes on linux, bytes on macOS).
+fn reap_with_peak(child: std::process::Child) -> (libc::c_int, u64) {
+    let pid = child.id() as libc::pid_t;
+    let mut status: libc::c_int = 0;
+    // SAFETY: a zeroed `rusage` is a valid out-parameter; `wait4` fills it
+    // for the child this test spawned and has not waited for.
+    let mut ru: libc::rusage = unsafe { std::mem::zeroed() };
+    // SAFETY: plain FFI on a pid this process spawned.
+    let reaped = unsafe { libc::wait4(pid, &mut status, 0, &mut ru) };
+    assert_eq!(reaped, pid, "wait4 reaps exactly the child");
+    let maxrss = ru.ru_maxrss as u64;
+    let bytes = if cfg!(target_os = "macos") {
+        maxrss
+    } else {
+        maxrss * 1024
+    };
+    (status, bytes)
+}
+
+/// The peak resident set of a run of `exe`, in bytes, and its stdout.
+fn peak(exe: &Path) -> (String, u64) {
+    use std::io::Read as _;
+    let mut child = Command::new(exe)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn the witness");
+    let mut stdout = String::new();
+    child
+        .stdout
+        .take()
+        .expect("piped stdout")
+        .read_to_string(&mut stdout)
+        .expect("read stdout");
+    let (status, bytes) = reap_with_peak(child);
+    assert!(
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        "{} did not exit 0 (status {status})",
+        exe.display()
+    );
+    (stdout, bytes)
+}
+
+/// A walk that only writes through its binding over 1,000 lists of 1,000
+/// ints, `passes` times: every iteration binds a copy of an 8 KB list.
+fn write_only(passes: u32) -> String {
+    format!(
+        "fn main() -> int {{
+    var rows = List[List[int]]()
+    for i in 0..1000 {{
+        var row = List[int]()
+        for j in 0..1000 {{
+            (mut row).push(j)
+        }}
+        (mut rows).push(take row)
+    }}
+    var total = 0
+    for pass in 0..{passes} {{
+        for row in rows {{
+            row[0] = pass
+            total += row[1]
+        }}
+    }}
+    print(\"{{total}} {{rows[0][0]}}\")
+    0
+}}
+"
+    )
+}
+
+/// The write-only copy is freed at the end of its iteration: six more
+/// passes (6,000 more copies of 8 KB, 48 MB if they were kept) leave the
+/// peak resident set where it was, within 16 MiB, natively and on release.
+#[test]
+fn a_walk_that_only_writes_keeps_no_copy_past_its_iteration() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("for_binding_copy_lanes")
+        .join("write_only");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    const MIB: u64 = 1 << 20;
+    let mut wrong = Vec::new();
+    for release in [false, true] {
+        let tier = if release { "release" } else { "native" };
+        let (Some(two), Some(eight)) = (
+            build(&dir, &format!("{tier}-2"), &write_only(2), release),
+            build(&dir, &format!("{tier}-8"), &write_only(8), release),
+        ) else {
+            continue;
+        };
+        let (o2, p2) = peak(&two);
+        let (o8, p8) = peak(&eight);
+        let grew = p8 as i64 - p2 as i64;
+        eprintln!(
+            "REPORT write-only {tier}: peak {p2} B at 2 passes, {p8} B at 8 ({grew:+} B); stdout {:?} {:?}",
+            o2.trim(),
+            o8.trim()
+        );
+        if o2.trim() != "2000 0" || o8.trim() != "8000 0" {
+            wrong.push(format!(
+                "{tier}: stdout {:?} {:?}, want \"2000 0\" \"8000 0\"",
+                o2.trim(),
+                o8.trim()
+            ));
+        }
+        if grew > (16 * MIB) as i64 {
+            wrong.push(format!(
+                "{tier}: the peak grew {grew} B from 2 to 8 passes: write-only copies are kept past their iteration"
             ));
         }
     }
