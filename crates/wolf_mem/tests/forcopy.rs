@@ -189,8 +189,20 @@ fn every_escape_of_the_binding_copies() {
             true,
         ),
         (
-            "a shape the walk does not know (a region naming it)",
-            rows("region r {\n            total += row[0]\n        }"),
+            "a shape the walk does not know (a frozen region naming it)",
+            rows("let fr = freeze region { W { items: row } }"),
+            false,
+        ),
+        (
+            "a store through it inside a region block",
+            rows("region r {\n            row[0] = 0\n        }"),
+            true,
+        ),
+        // `unsafe` stays a construct the walk does not know: a raw write
+        // through a pointer to the binding has no place the walk can root.
+        (
+            "an unsafe block naming it",
+            rows("unsafe {\n            total += row[0]\n        }"),
             true,
         ),
     ] {
@@ -229,6 +241,16 @@ fn a_body_that_only_reads_binds_the_element() {
             "a function's answer stored by index",
             rows("out[0] = fresh(row)"),
         ),
+        // A region, `in` or `scope` block is a block: what it does with the
+        // binding is read where it stands, as outside it.
+        (
+            "a region block that reads it",
+            rows("region r {\n            total += row[0]\n        }"),
+        ),
+        (
+            "a scope block that reads it",
+            rows("scope s {\n            total += row[0]\n        }"),
+        ),
         ("copy of the binding", rows("last = copy row")),
         (
             "nested for that reads",
@@ -237,6 +259,11 @@ fn a_body_that_only_reads_binds_the_element() {
     ] {
         assert!(!ask(&src, true, true), "must not copy: {name}\n{src}");
     }
+    let inb = "fn f() -> int {\n    let rows = [[1, 2]]\n    let r = region()\n    var total = 0\n    for row in rows {\n        in r {\n            total += row[0]\n        }\n    }\n    total\n}\n\nfn main() {}\n";
+    assert!(
+        !ask(inb, true, true),
+        "must not copy: an in block that reads it"
+    );
     let wild = "fn f() -> int {\n    let rows = [[1, 2]]\n    var n = 0\n    for _ in rows {\n        n += 1\n    }\n    n\n}\n\nfn main() {}\n";
     assert!(
         !ask(wild, true, true),
