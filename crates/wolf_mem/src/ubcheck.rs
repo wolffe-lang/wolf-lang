@@ -6065,6 +6065,16 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// wolf-lang#1184 (`[mem.list.pop]`, `[mem.model.value]`): what a hit of
+    /// `get`, `first` or `last` answers, a value of its own. The element is
+    /// copied out whole, as native's `deep_copy_in` copies it, so no write
+    /// through the answer reaches the list and no later write to the list
+    /// reaches the answer; `deep_copy` hands back a scalar or a `str` as it
+    /// is. The three reads answer through here and nowhere else.
+    fn list_read_answer(&mut self, v: Value, span: Span) -> E<Flow> {
+        Ok(Flow::Val(self.deep_copy(v, span)?))
+    }
+
     fn deep_copy(&mut self, v: Value, span: Span) -> E<Value> {
         Ok(match v {
             Value::List(id) => {
@@ -14529,7 +14539,8 @@ impl<'t> Machine<'t> {
                                 payload: Vec::new(),
                             }));
                         }
-                        Ok(Flow::Val(self.lists[id][i as usize].clone()))
+                        let v = self.lists[id][i as usize].clone();
+                        self.list_read_answer(v, e.span)
                     }
                     "first" | "last" => {
                         let v = if method == "first" {
@@ -14538,7 +14549,7 @@ impl<'t> Machine<'t> {
                             self.lists[id].last().cloned()
                         };
                         match v {
-                            Some(v) => Ok(Flow::Val(v)),
+                            Some(v) => self.list_read_answer(v, e.span),
                             None => Ok(raise(Value::ErrTag {
                                 tag: "none".to_string(),
                                 payload: Vec::new(),
