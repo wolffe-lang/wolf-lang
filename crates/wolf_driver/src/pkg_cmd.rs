@@ -1582,6 +1582,8 @@ mod builtin_cap_tests {
             // `os_exit_signal`; the adoption of a descriptor — `fs`.
             ("os_name", Cap::Env),
             ("os_arch", Cap::Env),
+            // wolf-lang#858: the machine's name, with them.
+            ("os_hostname", Cap::Env),
             ("os_core_limit", Cap::Env),
             ("os_set_core_limit", Cap::Exec),
             ("os_core_off", Cap::Exec),
