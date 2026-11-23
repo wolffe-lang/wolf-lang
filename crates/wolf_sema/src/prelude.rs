@@ -355,6 +355,9 @@ pub const PRELUDE: &[Ambient] = &[
     // program runs on — machine-state reads, `env`-tagged with `os_cpus`.
     host("os_name"),
     host("os_arch"),
+    // wolf-lang#858 (`[os.hostname]`): the machine's name, a machine-state
+    // read, `env`-tagged with `os_name`.
+    host("os_hostname"),
     host("os_exit"),
     host("os_spawn"),
     // s137 (#235, `[os.proc.inherit]`): the spawn that hands

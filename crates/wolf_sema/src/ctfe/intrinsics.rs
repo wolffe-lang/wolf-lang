@@ -212,7 +212,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "os_cpus"
         // s253 (#819, #811): the OS and architecture the kernel answers,
         // and this process's core limit — machine and process state, `env`.
-        | "os_name" | "os_arch" | "os_core_limit" => SandboxCategory::Env,
+        | "os_name" | "os_arch" | "os_core_limit"
+        // wolf-lang#858: the machine's name, with the OS and architecture.
+        | "os_hostname" => SandboxCategory::Env,
         "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,
         // s215, ruling #54: the spawn with a descriptor map starts a
         // program and the pipe exists to plumb one — both `exec`, with

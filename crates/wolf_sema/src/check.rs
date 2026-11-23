@@ -15816,6 +15816,13 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // s253 (wolf-lang#819, `[os.uname]`; ruling asked R5): the OS and the
         // architecture the program runs on, as the kernel answers; no row.
         "os_name" | "os_arch" => (Vec::new(), str_),
+        // wolf-lang#858 (`[os.hostname]`): the kernel's node name, read on
+        // every call; `utf8` for a name that is not UTF-8, `unsupported` on
+        // windows, `io` when the kernel refuses the read.
+        "os_hostname" => (
+            Vec::new(),
+            rowed(table, str_, &["unsupported", "utf8", "io"]),
+        ),
         "os_signal_poll" => (vec![int_], rowed(table, int_, &["io"])),
         // s234 (wolf-lang#719, `[os.signal.wait.fd]`): park until a
         // meaning in the set is delivered (answered) or the descriptor
