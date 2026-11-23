@@ -531,7 +531,7 @@ impl Walk<'_, '_, '_> {
                     .and_then(|m| m.member())
                     .is_some_and(|t| text(self.src, t.span) == "push");
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
-                    let kept = pushes
+                    let kept = false && pushes
                         && a.value()
                             .is_some_and(|v| fresh_operand(v, self.declared, self.expr_ty));
                     self.arg(a, if kept { Pos::Escape } else { plain });
