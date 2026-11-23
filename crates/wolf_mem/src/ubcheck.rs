@@ -12507,11 +12507,8 @@ impl<'t> Machine<'t> {
     /// `deep_copy_elems_in` copies them. `deep_copy` hands back a scalar or a
     /// `str` as it is, so a flat slice is the element copy it always was.
     fn slice_items(&mut self, items: Vec<Value>, span: Span) -> E<Vec<Value>> {
-        let mut out = Vec::with_capacity(items.len());
-        for v in items {
-            out.push(self.deep_copy(v, span)?);
-        }
-        Ok(out)
+        let _ = span;
+        Ok(items)
     }
 
     fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
