@@ -17515,6 +17515,33 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// field. The shapes this does not model yet refuse by name rather
     /// than share: a `Map` whose values reach the heap, an enum or row
     /// payload that does, a `Pool`, a `shared` cell.
+    /// The elements of the fresh list `out` (element type `elem`, ids in
+    /// `table`), each replaced by its own copy when the element type reaches
+    /// heap storage: the step that makes a fresh header and buffer
+    /// (`__wolf_rt_list_copy`'s, a slice's) a list of whole values. A flat
+    /// element type is left as the buffer copy made it.
+    fn deep_copy_elems_in(
+        &mut self,
+        out: Value,
+        table: &'t TypeTable,
+        elem: TyId,
+        span: Span,
+        depth: u32,
+    ) -> R<()> {
+        if !self.copy_reaches_heap(table, elem, 0) {
+            return Ok(());
+        }
+        let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
+            return Ok(());
+        };
+        let n = self.list_len_of(out);
+        self.count_loop(n, |z, i| {
+            let x = z.list_load_at(out, i, ewty, span)?;
+            let c = z.deep_copy_in(x, table, elem, span, depth + 1)?;
+            z.list_store_at(out, i, c, span)
+        })
+    }
+
     fn deep_copy_in(
         &mut self,
         v: Value,
@@ -17536,17 +17563,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let out = self
                     .rt_call_foreign("__wolf_rt_list_copy", &[v], None, Some(types::PTR))
                     .expect("hdr");
-                if self.copy_reaches_heap(table, elem, 0) {
-                    let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
-                        return Ok(out);
-                    };
-                    let n = self.list_len_of(out);
-                    self.count_loop(n, |z, i| {
-                        let x = z.list_load_at(out, i, ewty, span)?;
-                        let c = z.deep_copy_in(x, table, elem, span, depth + 1)?;
-                        z.list_store_at(out, i, c, span)
-                    })?;
-                }
+                self.deep_copy_elems_in(out, table, elem, span, depth)?;
                 Ok(out)
             }
             // s257: a map whose values reach the heap (`Map[str, Value]`,
