@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `cargo xtask` finds the compiler where cargo built it, so `CARGO_TARGET_DIR`
+  (or `build.target-dir`) no longer hides it (wolf-lang#1187). Before, the
+  corpus step skipped every file it could not start and passed having run
+  nothing, and `fmt-fixpoint`, `fmt-lu` and `audit-surface` failed with a bare
+  "No such file or directory". The corpus step now names the compiler it runs
+  and how many files it executed, and fails when the driver does not build,
+  cannot be started, or runs no file.
+
 - **A pool's `init` copies a value handed to it plainly**
   (wolf-lang#1183, `[mem.region.edge.elem]`), as `push` has since
   wolf-lang#385, and `init(h, take v)` moves it. In 0.2.40 the native
