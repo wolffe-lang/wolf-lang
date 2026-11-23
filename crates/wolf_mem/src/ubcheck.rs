@@ -5775,7 +5775,12 @@ impl<'t> Machine<'t> {
         // reaches the list. A channel's items are the loop's own already.
         let own_copy = chan.is_none() && d.pattern().is_some() && {
             let src = &self.pkg.files[self.ctx().src_file].raw.src;
-            crate::forcopy::needs_own_copy(d, src, &|sp| self.expr_ty(sp).cloned())
+            crate::forcopy::needs_own_copy(d, src, &|sp| self.expr_ty(sp).cloned(), &|sp| {
+                self.ctx()
+                    .calls
+                    .get(&sp)
+                    .is_some_and(|c| crate::forcopy::declared_call(c))
+            })
         };
         loop {
             let item = match chan {

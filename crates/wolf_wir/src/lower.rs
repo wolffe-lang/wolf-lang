@@ -19202,7 +19202,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // escape through the binding reaches the list.
         let own_copy = self.copy_reaches_heap(self.table, elem_sema, 0) && {
             let ty = |sp: Span| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone());
-            wolf_mem::forcopy::needs_own_copy(d, self.src, &ty)
+            let declared = |sp: Span| {
+                self.calls
+                    .get(&sp)
+                    .is_some_and(|c| wolf_mem::forcopy::declared_call(c))
+            };
+            wolf_mem::forcopy::needs_own_copy(d, self.src, &ty, &declared)
         };
         let n = self.list_len_of(hdr);
         let header = self.b.create_block();

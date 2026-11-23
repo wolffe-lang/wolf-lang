@@ -9,7 +9,7 @@
 //! resolves clean, and the types the predicate reads are the checker's own.
 
 use wolf_ast::{ForExpr, GreenNode, SyntaxKind};
-use wolf_mem::forcopy::needs_own_copy;
+use wolf_mem::forcopy::{declared_call, needs_own_copy};
 use wolf_sema::check::BodyResult;
 use wolf_sema::types::TyKind;
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
@@ -61,7 +61,13 @@ fn ask(src: &str, typed: bool, known: bool) -> bool {
             _ => None,
         })
     };
-    needs_own_copy(d, src, &ty)
+    let declared = |sp: Span| -> bool {
+        tc.bodies.iter().any(|b| match &b.result {
+            BodyResult::Checked(tb) => tb.calls.iter().any(|(s, c)| *s == sp && declared_call(c)),
+            _ => false,
+        })
+    };
+    needs_own_copy(d, src, &ty, &declared)
 }
 
 /// A loop over `rows: List[List[int]]` in `f`, with `body` inside it.

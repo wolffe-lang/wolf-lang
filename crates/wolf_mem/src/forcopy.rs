@@ -35,7 +35,14 @@
 //! argument copies it in, `[mem.region.edge.elem]`: `push` copies any plain
 //! element, an index store copies a place), the iterable of a nested `for`,
 //! the initializer of a `let` (the new name is derived and answers for
-//! itself). Everything else asks for the copy: a store through a derived
+//! itself). A call that escapes keeps its plain arguments read when it is a
+//! call by name to a declared function ([`declared_call`]): its answer cannot
+//! hold a `read` argument (a `read` parameter moved anywhere that outlives the
+//! call is E1002; a walk over one binds an element this predicate copies
+//! before it leaves). Every other call (a method, builtin or declared; a
+//! constructor; a fn value; a C call) passes its own position on to its plain
+//! arguments.
+//! Everything else asks for the copy: a store through a derived
 //! name (an index or field place rooted at one), `mut`/`take`/`move`/`&`/
 //! `shared` on one, a plain assignment, a `return` or a `break` carrying one,
 //! a struct, tuple or list literal holding one, a closure, `spawn`, region,
@@ -60,6 +67,7 @@ use wolf_ast::{
     Arg, AssignStmt, Block, BracketApply, BreakExpr, CallExpr, ElseExpr, ForExpr, GreenNode,
     MatchExpr, MemberExpr, ParenExpr, PrefixExpr, ReturnExpr, StructLit, SyntaxKind,
 };
+use wolf_sema::check::CallSig;
 use wolf_sema::types::TyKind;
 use wolf_span::Span;
 
@@ -70,6 +78,7 @@ pub fn needs_own_copy(
     d: ForExpr<'_>,
     src: &[u8],
     expr_ty: &dyn Fn(Span) -> Option<TyKind>,
+    declared: &dyn Fn(Span) -> bool,
 ) -> bool {
     let Some(pat) = d.pattern() else {
         return false;
@@ -94,10 +103,21 @@ pub fn needs_own_copy(
         src,
         names: &names,
         expr_ty,
+        declared,
         copy: false,
     };
     w.block(body, Pos::Read);
     w.copy
+}
+
+/// Is `c` a call to a declared function, by name or as a qualified trait
+/// method (`f(x)`, `m.f(x)`, `T.make(x)`, `Tr.m(x)`), whose body the checker
+/// holds to the `read` parameter law (E1002)? Not a method call (`x.m()`,
+/// builtin or declared: its receiver is a parameter of its own), a
+/// constructor, a fn value (no declaration), a nested fn by its moded name,
+/// a C or a variadic call.
+pub fn declared_call(c: &CallSig) -> bool {
+    !c.has_self && c.decl_span.is_some() && !c.ctor && !c.c_call && !c.variadic
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -112,6 +132,9 @@ struct Walk<'s, 'n, 'f> {
     src: &'s [u8],
     names: &'n HashSet<String>,
     expr_ty: &'f dyn Fn(Span) -> Option<TyKind>,
+    /// Is the call at this span one to a declared function ([`declared_call`]
+    /// of the checker's record there)?
+    declared: &'f dyn Fn(Span) -> bool,
     copy: bool,
 }
 
@@ -278,11 +301,24 @@ impl Walk<'_, '_, '_> {
             SyntaxKind::CallExpr => {
                 let d = CallExpr::cast(e).expect("kind");
                 // A plain argument is a `read` parameter's (E1014, E1002)
-                // or a keeping builtin's, which copies it in. A call whose
-                // own result escapes hands its plain arguments the escape
-                // too: a builtin's answer (`first`, `get`) may be an
-                // element.
-                let plain = pos;
+                // or a keeping builtin's, which copies it in. Where the call
+                // itself escapes, what it answers may hold its arguments:
+                // - a declared function's answer never does. A `read`
+                //   parameter moved anywhere that outlives the call is E1002
+                //   (returned bare, in a struct or as an element, or stored),
+                //   and the one other way out, a walk over the parameter,
+                //   binds an element this predicate copies before it leaves.
+                //   So its plain arguments are read.
+                // - a builtin's answer (`get`, `first`) may be an element of
+                //   its receiver, a constructor's holds its arguments, and a
+                //   method, a fn value or a C call is not known to be held
+                //   to E1002 here: their plain arguments take the call's own
+                //   position.
+                let plain = if (self.declared)(e.span) {
+                    Pos::Read
+                } else {
+                    pos
+                };
                 if let Some(c) = d.callee() {
                     match c.kind {
                         SyntaxKind::MemberExpr => {
