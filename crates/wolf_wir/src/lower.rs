@@ -14305,10 +14305,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let hit = self.list_in_bounds(idx, n);
                 let eu = self.eu_ty_of(e.span)?;
+                // wolf-lang#1184 (`[mem.list.pop]`, `[mem.model.value]`): the
+                // answer is a value of its own. An element that reaches heap
+                // storage is copied out into the ambient region, the copy a
+                // plain `push` makes going in, so no write through the answer
+                // reaches the list and no later write to the list reaches the
+                // answer. `deep_copy_in` hands any other element back as it
+                // is: `Copy` elements and `str` stay free.
+                let table = self.table;
                 let out = self.eu_join(
                     eu,
                     hit,
-                    |z| Ok(Some(z.list_load_at(hdr, idx, ewty, e.span)?)),
+                    |z| {
+                        let v = z.list_load_at(hdr, idx, ewty, e.span)?;
+                        Ok(Some(z.deep_copy_in(v, table, elem_sema, e.span, 0)?))
+                    },
                     |z| Ok(z.none_tag()),
                 )?;
                 Ok(Flow::Val(Some(out)))
