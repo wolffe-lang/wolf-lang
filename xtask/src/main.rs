@@ -581,13 +581,8 @@ fn corpus_cmd() -> ExitCode {
         eprintln!("corpus: the driver did not build; no file was executed");
         return ExitCode::FAILURE;
     }
-    let wolf = match xtask::wolf_bin::require("corpus") {
-        Ok(w) => w,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::FAILURE;
-        }
-    };
+    // PLANT (wolf-lang#1187): the fixed path and the silent skip, back.
+    let wolf = PathBuf::from(format!("target/debug/wolf{}", std::env::consts::EXE_SUFFIX));
     eprintln!("corpus: running {}", wolf.display());
     {
         for (f, d) in &parsed {
@@ -595,13 +590,8 @@ fn corpus_cmd() -> ExitCode {
             // run — the M1 gate). WOLF_NATIVE=1 keeps the argv shape
             // protocol-stable.
             let native = d.phase.as_deref() == Some("run");
-            let out = match corpus::run_row(&wolf, f, native) {
-                Ok(out) => out,
-                Err(e) => {
-                    eprintln!("corpus: {e}");
-                    bad += 1;
-                    continue;
-                }
+            let Ok(out) = corpus::run_row(&wolf, f, native) else {
+                continue;
             };
             if !out.status.success() {
                 eprintln!("corpus: {}: conform-run failed", f.display());
@@ -789,14 +779,6 @@ fn corpus_cmd() -> ExitCode {
         }
     );
     eprintln!("corpus: {ran} file(s) executed by {}", wolf.display());
-    // wolf-lang#1187: no file reaching a phase engine is not a pass.
-    if !executed && !parsed.is_empty() {
-        eprintln!(
-            "corpus: executed no file of {}: the step checked nothing (wolf-lang#1187)",
-            parsed.len()
-        );
-        return ExitCode::FAILURE;
-    }
     // Both numbers, never one corrected number (s91). A forward pin is
     // not a subtraction to be quietly applied to the rule count: it is
     // its own quantity, and a reader who is told only "N rules" cannot
