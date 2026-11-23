@@ -234,3 +234,79 @@ fn a_walk_that_only_reads_charges_its_region_nothing() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// The hot case by name (a per-file index or worktree walk): a walk that
+/// builds a struct from each element's parts and pushes it binds the element
+/// itself. `push` copies the pushed struct whole, so walk A charges its region
+/// exactly what walk B charges, which pushes the element itself (a plain
+/// argument of `push`, read at every commit). Each walk builds its own entries
+/// in its own region, so no value crosses a region.
+const PER_FILE: &str = "struct Entry {
+    path: List[byte],
+    id: List[int],
+}
+
+fn entries() -> List[Entry] {
+    var es = List[Entry]()
+    for i in 0..40 {
+        (mut es).push(Entry { path: [1 as byte, 2 as byte, 3 as byte], id: [i, i + 1] })
+    }
+    es
+}
+
+fn main() -> !int {
+    let a = region()
+    let b = region()
+    var ca = 0
+    var cb = 0
+    var na = 0
+    var nb = 0
+    in a {
+        let es = entries()
+        let before = region_bytes(a)
+        var out = List[Entry]()
+        for e in es {
+            (mut out).push(Entry { path: e.path, id: e.id })
+        }
+        ca = region_bytes(a) - before
+        na = out.len
+    }
+    in b {
+        let es = entries()
+        let before = region_bytes(b)
+        var out = List[Entry]()
+        for e in es {
+            (mut out).push(e)
+        }
+        cb = region_bytes(b) - before
+        nb = out.len
+    }
+    print(\"same={ca == cb} charged={ca > 0} items={na} {nb}\")
+    0
+}
+";
+
+#[test]
+fn a_per_file_walk_that_pushes_a_struct_charges_what_pushing_the_element_does() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("for_binding_copy_lanes")
+        .join("per_file");
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let entry = dir.join("main.lu");
+    std::fs::write(&entry, PER_FILE).expect("program written");
+    let want = "same=true charged=true items=40 40\n";
+    let mut wrong = Vec::new();
+    for m in MACHINES {
+        let Some(o) = lane(&entry, m) else {
+            continue;
+        };
+        eprintln!("REPORT per-file {m}: {} {:?}", o.verdict, o.stdout);
+        if o.verdict != "exit(0)" || o.stdout != want {
+            wrong.push(format!(
+                "per-file {m}: {} {:?}, want {want:?}",
+                o.verdict, o.stdout
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

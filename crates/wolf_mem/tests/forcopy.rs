@@ -162,6 +162,16 @@ fn every_escape_of_the_binding_copies() {
             true,
         ),
         (
+            "a struct literal holding it, assigned out",
+            rows("last = W { items: row }.items"),
+            true,
+        ),
+        (
+            "a tuple holding it, returned",
+            "fn f(rows: List[List[int]]) -> (List[int], int) {\n    for row in rows {\n        return (row, 1)\n    }\n    ([0], 0)\n}\n\nfn main() {}\n".to_string(),
+            true,
+        ),
+        (
             "closure naming it",
             rows("let g = fn(i: int) row[i]\n        total += g(0)"),
             false,
@@ -250,6 +260,21 @@ fn a_body_that_only_reads_binds_the_element() {
         (
             "a scope block that reads it",
             rows("scope s {\n            total += row[0]\n        }"),
+        ),
+        // A literal's parts go where the literal goes: one that is pushed is
+        // copied whole by `push`, one bound by `let` makes its name derived,
+        // one passed to a function is a `read` argument.
+        (
+            "a struct literal holding it, pushed",
+            rows("(mut out).push(W { items: row }.items)"),
+        ),
+        (
+            "a tuple holding it, bound and read",
+            rows("let t = (row, 1)\n        total += t.0[0]"),
+        ),
+        (
+            "a list literal holding it, passed to a function",
+            rows("total += out.len + [row].len"),
         ),
         ("copy of the binding", rows("last = copy row")),
         (
