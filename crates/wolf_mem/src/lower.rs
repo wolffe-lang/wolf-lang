@@ -8234,7 +8234,8 @@ impl<'t> Lowerer<'t> {
         // rules: the `str` surface above (views carry the receiver,
         // the four producers are sites), a container's element read
         // carries the receiver (below), and a host builtin's bytes are
-        // the process root's or static, never a region's.
+        // the process root's, static, or (for `region_sites::HOST_STR_SITES`)
+        // the current region's, a site by name above.
         let builtin_recv = receiver_done && self.recv_is_builtin(&d);
         let static_callee = cs
             .and_then(|c| c.decl_span)
