@@ -11855,6 +11855,16 @@ impl<'t> Machine<'t> {
                 let w = if name == "os_name" { os } else { arch };
                 Ok(Flow::Val(self.mint_str(w, span)?))
             }
+            // wolf-lang#858 (`[os.hostname]`): the `wolf` process's own node
+            // name, read on every call as the runtime reads it, and minted in
+            // the ambient region as the native tiers place it.
+            "os_hostname" => match checked_host::node_name() {
+                Ok(bytes) => match String::from_utf8(bytes) {
+                    Ok(s) => Ok(Flow::Val(self.mint_str(s, span)?)),
+                    Err(_) => Ok(tag("utf8")),
+                },
+                Err(row) => Ok(tag(row)),
+            },
             // s253 (wolf-lang#811, `[os.proc.core]`): the `wolf` process's own
             // core limit — it is the process the program runs as — read and
             // set as the runtime does (the shape first), and its end made
@@ -13675,6 +13685,8 @@ impl<'t> Machine<'t> {
             // s253 (#811, #819): the core limit, its set, the end with no
             // core; the OS and the architecture.
             | "os_core_limit" | "os_set_core_limit" | "os_core_off" | "os_name" | "os_arch"
+            // wolf-lang#858: the machine's name.
+            | "os_hostname"
             // s272 (#921, #922, #975): the root, the nice value and its set,
             // one meaning's action.
             | "os_chroot" | "os_getpriority" | "os_setpriority" | "os_signal_action_one"
@@ -13718,7 +13730,9 @@ impl<'t> Machine<'t> {
                     // s290: the spawn in a new session and the move into one.
                     | "os_spawn_session" | "os_setsid"
                     // s292: the pty open.
-                    | "os_term_open_pty") => {
+                    | "os_term_open_pty"
+                    // wolf-lang#858: the node name's read.
+                    | "os_hostname") => {
                         FS_HOST_ERROR.with(|c| c.set(0));
                         let r = self.os_builtin(n, argv, e.span);
                         self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
@@ -16919,6 +16933,32 @@ mod checked_host {
             }
         }
         (os(std::env::consts::OS), arch(std::env::consts::ARCH))
+    }
+
+    /// `[os.hostname]`'s bytes: `uname(2)`'s `nodename` before its first
+    /// NUL, read now; `io` when the kernel refuses (its number set for
+    /// `os_error()`), `unsupported` on windows.
+    pub(super) fn node_name() -> Result<Vec<u8>, &'static str> {
+        #[cfg(unix)]
+        {
+            // SAFETY: `uname` fills a zeroed struct; the read stops inside
+            // the field.
+            let mut u: libc::utsname = unsafe { std::mem::zeroed() };
+            if unsafe { libc::uname(&mut u) } != 0 {
+                let n = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+                super::FS_HOST_ERROR.with(|c| c.set(i64::from(n)));
+                return Err("io");
+            }
+            Ok(u.nodename
+                .iter()
+                .take_while(|&&c| c != 0)
+                .map(|&c| c as u8)
+                .collect())
+        }
+        #[cfg(not(unix))]
+        {
+            Err("unsupported")
+        }
     }
 
     #[cfg(unix)]
