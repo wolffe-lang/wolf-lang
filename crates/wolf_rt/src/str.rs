@@ -1048,14 +1048,51 @@ pub unsafe extern "C" fn __wolf_rt_str_strip(
 /// the only thing between a direct FFI caller and
 /// `repeat(huge_negative as usize)`.
 ///
+/// wolf-lang#1176: the result is made once, where it is answered: one
+/// allocation of its length in the ambient region, filled in place by
+/// doubling. It used to be built in a host `String` and then copied
+/// into the region, which held two buffers of the result's size at once
+/// and freed the first at once. The charge is the allocation the copy
+/// made. A length past `isize::MAX` keeps Rust's own refusal.
+///
 /// # Safety
 ///
 /// A valid str pair; `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_repeat(sp: i64, sl: i64, count: i64, out: i64) {
     let s = unsafe { view(sp, sl) };
-    let t = s.repeat(count.max(0) as usize);
-    unsafe { write_owned(out, &t) };
+    let count = count.max(0) as usize;
+    let Some(len) = s
+        .len()
+        .checked_mul(count)
+        .filter(|&n| n <= isize::MAX as usize)
+    else {
+        let t = s.repeat(count);
+        unsafe { write_owned(out, &t) };
+        return;
+    };
+    let p = crate::list::alloc_in(crate::native::ambient_region(), len);
+    if len > 0 {
+        let src = s.as_bytes();
+        // SAFETY: `p` addresses `len` writable bytes, and `len` is a
+        // nonzero multiple of `src.len()`. Each copy reads the filled
+        // prefix `[0, filled)` and writes `[filled, filled + n)`, which
+        // do not overlap.
+        unsafe {
+            if let [b] = src {
+                core::ptr::write_bytes(p, *b, len);
+            } else {
+                core::ptr::copy_nonoverlapping(src.as_ptr(), p, src.len());
+                let mut filled = src.len();
+                while filled < len {
+                    let n = filled.min(len - filled);
+                    core::ptr::copy_nonoverlapping(p, p.add(filled), n);
+                    filled += n;
+                }
+            }
+        }
+    }
+    unsafe { write_pair(out, p as i64, len as i64) };
 }
 
 /// `replace(from, to)` — materialized. Empty `from`: identity — an
