@@ -46,12 +46,12 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-The current release is v0.2.40, under the codename wolfgang. See the
-[0.2.40 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.40.md)
-for one wait over files, sockets and signals, the readiness set the
-kernel holds, a socket send that counts, a Unix peer's credentials, the
-bundled std's sessions, pseudo-terminals and `std.poll`, and what the
-paired interpreter answers and refuses by name.
+The current release is v0.2.41, under the codename wolfgang. See the
+[0.2.41 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.41.md)
+for a dial with a budget, a subreaper and the orphans it adopts, the
+region and closure escapes the checker now refuses, stable function
+placement, the checked machine's agreements, the bundled std's Bech32,
+base64 and guarded OS randomness, and the paired interpreter's fixes.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -127,6 +127,15 @@ and `net_peer_cred` names a Unix-domain stream's peer. Windows answers
 `[os.ready.set]` in
 [the OS chapter](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/11-os.md).
 
+From 0.2.41, a dial can carry a budget: `net_connect_within(addr,
+within_ms)` answers `timeout` once the budget is spent, over every address
+the name resolves to. On Linux a program can be a child subreaper
+(`os_subreaper_set`, `os_subreaper`) and reap the orphans it adopts
+without touching its own children (`os_wait_adopted_poll`); macOS and
+windows answer `unsupported`. See `[os.net.connect.within]`,
+`[os.proc.subreaper]` and `[os.proc.poll.adopted]` in
+[the OS chapter](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/11-os.md).
+
 ### Debugging native programs
 
 Native debug builds describe source scalars, structs, tuples, strings, container
@@ -155,7 +164,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.40 by campaign, and
+tells the history of v0.2.41 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 
