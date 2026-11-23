@@ -6072,7 +6072,8 @@ impl<'t> Machine<'t> {
     /// reaches the answer; `deep_copy` hands back a scalar or a `str` as it
     /// is. The three reads answer through here and nowhere else.
     fn list_read_answer(&mut self, v: Value, span: Span) -> E<Flow> {
-        Ok(Flow::Val(self.deep_copy(v, span)?))
+        let _ = span;
+        Ok(Flow::Val(v))
     }
 
     fn deep_copy(&mut self, v: Value, span: Span) -> E<Value> {
