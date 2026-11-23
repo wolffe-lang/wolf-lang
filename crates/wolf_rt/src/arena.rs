@@ -1,5 +1,5 @@
-//! glibc's malloc arena limit, settled before any thread runs the program
-//! (s286, wolf-lang#1051).
+//! glibc's malloc arena limit and mmap threshold, settled before any thread
+//! runs the program (s286, wolf-lang#1051; wolf-lang#1175).
 //!
 //! glibc gives each new thread a malloc arena. The first time a thread
 //! needs one past glibc's test bound (`M_ARENA_TEST`: 8 where `long` is 8
@@ -44,7 +44,33 @@
 //! arenas on 20 CPUs with either set to 2), so they are not the user's
 //! setting there and the limit is settled.
 //!
-//! Off linux-gnu both calls do nothing: glibc's arenas are glibc's.
+//! # The mmap threshold (wolf-lang#1175)
+//!
+//! glibc maps an allocation at or above its mmap threshold (128 KiB at
+//! start) and unmaps it when it is freed. The first free of a mapped block
+//! larger than the threshold raises the threshold to that block's size and
+//! the trim threshold to twice it (mallopt(3), "dynamic mmap threshold"), so
+//! every later block of that size comes from the heap, and one freed there
+//! stays resident unless it is at the heap's top and the top passes the
+//! raised trim threshold. A region's large buffer is one host block, freed
+//! when the region ends, so a program that ended one large region and then
+//! another kept the second one's pages for good.
+//!
+//! [`settle_at_entry`] sets `M_MMAP_THRESHOLD` to glibc's own starting
+//! value, 128 KiB, which turns the dynamic adjustment off (mallopt(3)): every
+//! block of 128 KiB or more is mapped when it is made and unmapped when it is
+//! freed, and the trim threshold stays at its starting 128 KiB. A program
+//! with no block that large allocates exactly as before. The cost is a
+//! program that makes and frees blocks of one large size over and over: each
+//! is a map, an unmap and a page fault per page it touches, where glibc would
+//! have reused heap pages after the first free. A threshold of the user's
+//! (`MALLOC_MMAP_THRESHOLD_`, any value, or a `GLIBC_TUNABLES` item named
+//! `glibc.malloc.mmap_threshold`, [`names_a_threshold`]) is left alone,
+//! decided once and apart from the arena limit, with AT_SECURE read as above.
+//! The call makes no system call.
+//!
+//! Off linux-gnu every call here does nothing: glibc's arenas and
+//! thresholds are glibc's.
 
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 mod imp {
@@ -67,6 +93,15 @@ mod imp {
     /// Whether the limit is the runtime's to settle, decided once, at the
     /// first step that runs (the entry's, in a compiled program).
     static DECISION: AtomicU8 = AtomicU8::new(UNDECIDED);
+
+    /// The same decision for the mmap threshold (#1175), made apart: a
+    /// user who set one of the two still gets the runtime's other.
+    static THRESHOLD: AtomicU8 = AtomicU8::new(UNDECIDED);
+
+    /// glibc's starting mmap threshold (`DEFAULT_MMAP_THRESHOLD_MIN`,
+    /// mallopt(3): 128 KiB). Set explicitly, it turns the dynamic
+    /// adjustment off.
+    const MMAP_THRESHOLD: libc::c_int = 128 * 1024;
 
     unsafe extern "C" {
         /// get_nprocs(3): the processors online, the count glibc's limit uses.
@@ -92,10 +127,34 @@ mod imp {
         }
     }
 
+    /// Whether the mmap threshold is the runtime's to settle (#1175).
+    fn threshold_settles() -> bool {
+        match THRESHOLD.load(Relaxed) {
+            SETTLE => true,
+            LEAVE => false,
+            _ => {
+                // SAFETY: reads the auxiliary vector the kernel gave the process.
+                let secure = unsafe { libc::getauxval(libc::AT_SECURE) } != 0;
+                let tunables = std::env::var_os("GLIBC_TUNABLES");
+                let user = !secure
+                    && super::names_a_threshold(
+                        std::env::var_os("MALLOC_MMAP_THRESHOLD_").is_some(),
+                        tunables.as_deref().map(|t| t.as_bytes()),
+                    );
+                THRESHOLD.store(if user { LEAVE } else { SETTLE }, Relaxed);
+                !user
+            }
+        }
+    }
+
     pub(crate) fn settle_at_entry() {
         if settles() {
             // SAFETY: a malloc parameter, set before any other thread exists.
             unsafe { libc::mallopt(libc::M_ARENA_MAX, PER_CPU) };
+        }
+        if threshold_settles() {
+            // SAFETY: a malloc parameter, set before any other thread exists.
+            unsafe { libc::mallopt(libc::M_MMAP_THRESHOLD, MMAP_THRESHOLD) };
         }
     }
 
@@ -130,12 +189,7 @@ pub(crate) use imp::settle_at_pool_start;
 /// value is glibc's business; the user asked for their own policy.
 #[cfg_attr(not(all(target_os = "linux", target_env = "gnu")), allow(dead_code))]
 pub(crate) fn names_a_limit(max_var: bool, tunables: Option<&[u8]>) -> bool {
-    max_var
-        || tunables.is_some_and(|t| {
-            t.split(|&b| b == b':').any(|item| {
-                item.split(|&b| b == b'=').next() == Some(&b"glibc.malloc.arena_max"[..])
-            })
-        })
+    max_var || names_an_item(tunables, b"glibc.malloc.arena_max")
 }
 
 /// Whether the start environment names an mmap threshold of the user's:
@@ -143,8 +197,17 @@ pub(crate) fn names_a_limit(max_var: bool, tunables: Option<&[u8]>) -> bool {
 /// holds an item whose name is exactly `glibc.malloc.mmap_threshold`.
 #[cfg_attr(not(all(target_os = "linux", target_env = "gnu")), allow(dead_code))]
 pub(crate) fn names_a_threshold(var: bool, tunables: Option<&[u8]>) -> bool {
-    let _ = (var, tunables);
-    false
+    var || names_an_item(tunables, b"glibc.malloc.mmap_threshold")
+}
+
+/// Whether `tunables` (`GLIBC_TUNABLES`, colon-separated `name=value`
+/// items) holds an item whose name is exactly `name`.
+#[cfg_attr(not(all(target_os = "linux", target_env = "gnu")), allow(dead_code))]
+fn names_an_item(tunables: Option<&[u8]>, name: &[u8]) -> bool {
+    tunables.is_some_and(|t| {
+        t.split(|&b| b == b':')
+            .any(|item| item.split(|&b| b == b'=').next() == Some(name))
+    })
 }
 
 #[cfg(test)]
