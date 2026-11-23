@@ -1,7 +1,7 @@
 //! member: false
 //! wolf-lang#858 (`[os.hostname]`) — the name read, the host renamed while
-//! the program runs (`/usr/bin/hostname` started by its absolute path, no
-//! shell, with this program's own arguments), and the name read again: a
+//! the program runs (this program's own arguments are the renamer's argv,
+//! its program by an absolute path, no shell), and the name read again: a
 //! name kept from the first call would print the old one. The test runs it
 //! in a throwaway container that may rename itself, never on a host.
 
@@ -17,13 +17,8 @@ fn read() -> str {
 }
 
 fn main() -> int {
-    let args = env_args()
+    let argv = env_args()
     print("before={read()}")
-    let argv = if args.len == 1 {
-        ["/usr/bin/hostname", args[0]]
-    } else {
-        ["/usr/bin/hostname", args[0], args[1]]
-    }
     let h = os_spawn(argv) else |e| {
         print("rename=not-started")
         return 0

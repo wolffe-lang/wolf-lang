@@ -13,8 +13,10 @@
 //!   linux only): each machine in a throwaway `--network none` container of
 //!   its own, started with `--hostname wolf-before` and `--cap-add
 //!   SYS_ADMIN` so that it may rename its own UTS namespace and nothing
-//!   else. The program reads the name, starts `/usr/bin/hostname` by its
-//!   absolute path with no shell, waits, and reads again. Where the
+//!   else. The program reads the name, starts the renamer its arguments
+//!   name (`/usr/bin/hostname`; for the name that is not UTF-8, which
+//!   `hostname` refuses as invalid, sethostname(2) through `/usr/bin/perl`)
+//!   by its absolute path with no shell, waits, and reads again. Where the
 //!   container may not rename itself the program prints `rename=refused N`
 //!   and the row is a loud `SKIP:` naming the engine, a failure where
 //!   `WOLF_JOBWAIT_REQUIRE_CONTAINER` is set (CI's linux job). The engine
@@ -415,7 +417,7 @@ mod in_a_container {
     fn renamed_while_running() {
         renamed(
             "renamed_while_running",
-            &["wolf-after"],
+            &["/usr/bin/hostname", "wolf-after"],
             &[],
             "wolf-after",
             10,
@@ -423,13 +425,36 @@ mod in_a_container {
     }
 
     /// #858: a name that is not UTF-8 is `utf8` on every machine, never a
-    /// lossy decode. The bytes reach `hostname` through a file (`-F`), as
-    /// an engine's argument path may re-encode them.
+    /// lossy decode. The image's `hostname` refuses any name outside
+    /// letters, digits, `-` and `.` ("the specified hostname is invalid"),
+    /// so the rename is sethostname(2) itself, through the image's perl
+    /// (`perl-base` is essential on ubuntu): the kernel takes any bytes. The
+    /// bytes reach it through a file, as an engine's argument path may
+    /// re-encode them.
     #[test]
     fn a_name_that_is_not_utf8_is_the_utf8_row() {
+        let test = "a_name_that_is_not_utf8_is_the_utf8_row";
+        let nr = match std::env::consts::ARCH {
+            "x86_64" => 170,
+            "aarch64" => 161,
+            arch => {
+                assert!(
+                    std::env::var_os("WOLF_JOBWAIT_REQUIRE_CONTAINER").is_none(),
+                    "{test}: no sethostname(2) number known for {arch}"
+                );
+                loud(&format!(
+                    "SKIP: {test}: no sethostname(2) number known for {arch}"
+                ));
+                return;
+            }
+        };
+        let script = format!(
+            "open(my $f, '<', $ARGV[0]) or exit 2; binmode $f; local $/; my $n = <$f>; \
+             $n =~ s/\\n\\z//; syscall({nr}, $n, length $n) == 0 or exit 1"
+        );
         renamed(
-            "a_name_that_is_not_utf8_is_the_utf8_row",
-            &["-F", "/w/name"],
+            test,
+            &["/usr/bin/perl", "-e", &script, "/w/name"],
             &[("name", &[0xff, b'f', b'o', b'\n'])],
             "<utf8>",
             6,
@@ -442,7 +467,7 @@ mod in_a_container {
         let name = "a".repeat(64);
         renamed(
             "the_longest_name_is_answered_whole",
-            &[&name],
+            &["/usr/bin/hostname", &name],
             &[],
             &name,
             64,
