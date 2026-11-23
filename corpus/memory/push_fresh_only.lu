@@ -1,0 +1,78 @@
+//! check: run(exit=0, stdout="first: yss00=1 o00=7\nget: yss10=3 o10=6\nif: yss00=1 o00=5\nblock: yss10=3 o10=4\nplace: yss00=1 o00=8\ncall: yss00=1 o00=2\ncopy: v0=1 o0=9\nfor: rows00=1 out00=9\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.excl.1
+//!
+//! wolf-lang#1177 (part 2) — a `push` stores a fresh operand as it is (a
+//! struct, tuple or list literal, a `copy e`, a declared function's answer
+//! to primitive arguments) and copies every other plain operand, as it
+//! always did (#385). This row holds the other side: each line pushes an
+//! operand that may still reach a place, writes through the pushed element,
+//! and reads the place back unchanged.
+//!
+//! - `first`, `get`: an element read behind `else` is the receiver's own
+//!   element on the compiling machines (#1184); only the push's copy keeps
+//!   the list's element apart from it.
+//! - `if`, `block`: either may yield such an element. (Yielding a place
+//!   by name, `if c { yss[0] } else { .. }`, moves it: a later read of
+//!   `yss[0]` is E1001, so there is nothing left to alias.)
+//! - `place`: an element pushed by name.
+//! - `call`: a declared function handed a list may answer its first
+//!   element (#1184 again), so its answer is not fresh.
+//! - `copy`: fresh, and the copy is the only one made.
+//! - `for`: a literal over a `for` binding, pushed. The push keeps the
+//!   literal as it is, so the binding inside it must be the loop's own
+//!   copy, never the walked element (#1169's predicate, told that a push
+//!   now keeps a literal).
+
+struct S {
+    a: List[int],
+}
+
+fn first_of(xs: List[List[int]]) -> List[int] {
+    xs.first() else [0]
+}
+
+fn main() -> int {
+    let c = true
+
+    var yss = [[1, 2], [3]]
+    var o = List[List[int]]()
+    (mut o).push(yss.first() else [9, 9])
+    o[0][0] = 7
+    print("first: yss00={yss[0][0]} o00={o[0][0]}")
+
+    (mut o).push(yss.get(1) else [9])
+    o[1][0] = 6
+    print("get: yss10={yss[1][0]} o10={o[1][0]}")
+
+    (mut o).push(if c { yss.first() else [0] } else { [0] })
+    o[2][0] = 5
+    print("if: yss00={yss[0][0]} o00={o[2][0]}")
+
+    (mut o).push({ yss.get(1) else [9] })
+    o[3][0] = 4
+    print("block: yss10={yss[1][0]} o10={o[3][0]}")
+
+    (mut o).push(yss[0])
+    o[4][0] = 8
+    print("place: yss00={yss[0][0]} o00={o[4][0]}")
+
+    (mut o).push(first_of(yss))
+    o[5][0] = 2
+    print("call: yss00={yss[0][0]} o00={o[5][0]}")
+
+    var v = [1, 2]
+    var w = List[List[int]]()
+    (mut w).push(copy v)
+    w[0][0] = 9
+    print("copy: v0={v[0]} o0={w[0][0]}")
+
+    var rows = [[1, 2], [3]]
+    var out = List[S]()
+    for row in rows {
+        (mut out).push(S { a: row })
+    }
+    out[0].a[0] = 9
+    print("for: rows00={rows[0][0]} out00={out[0].a[0]}")
+    0
+}
