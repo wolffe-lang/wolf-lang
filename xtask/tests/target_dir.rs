@@ -10,7 +10,10 @@
 //! having run the compiler cargo built there.
 //!
 //! **What it costs, stated:** one debug build of the driver and runtime into
-//! the relocated directory (printed as a `REPORT` line), then one corpus run.
+//! the relocated directory (printed as a `REPORT` line), reused by later runs
+//! on the same host; then the corpus step on four fixed files (`SUBSET`: the
+//! bug is a step that ran nothing, and four files prove it ran something),
+//! and fmt-lu and audit-surface whole. Each step's seconds are printed.
 //! **Where it runs:** on linux, where CI's `lint + test + corpus` job runs it
 //! inside `cargo xtask ci`. The macOS and windows `build + test` legs would
 //! pay the same build again on the slowest and scarcest runners for the same
@@ -77,11 +80,21 @@ impl Drop for Tree {
     }
 }
 
-/// `xtask <step>` from the clean tree with `CARGO_TARGET_DIR` at `dir`.
-fn xtask(step: &str, tree: &Path, dir: &Path) -> (Output, u64) {
+/// The corpus files the row runs: two native programs (one with a stdout
+/// check, one with a trap), a resolve-phase program and an enforced rule.
+const SUBSET: [&str; 4] = [
+    "corpus/hello.lu",
+    "corpus/overflow.lu",
+    "corpus/errors.lu",
+    "corpus/grammar/attr_unknown.lu",
+];
+
+/// `xtask <step> <args>` from the clean tree with `CARGO_TARGET_DIR` at `dir`.
+fn xtask(step: &str, args: &[String], tree: &Path, dir: &Path) -> (Output, u64) {
     let start = Instant::now();
     let out = Command::new(env!("CARGO_BIN_EXE_xtask"))
         .arg(step)
+        .args(args)
         .current_dir(tree)
         .env("CARGO_TARGET_DIR", dir)
         .stdin(Stdio::null())
@@ -124,7 +137,8 @@ fn the_steps_run_the_compiler_cargo_built_under_a_relocated_target() {
         dir.display()
     ));
 
-    let (out, secs) = xtask("corpus", &tree.0, &dir);
+    let subset: Vec<String> = SUBSET.iter().map(|f| format!("--file={f}")).collect();
+    let (out, secs) = xtask("corpus", &subset, &tree.0, &dir);
     let err = String::from_utf8_lossy(&out.stderr);
     for line in err
         .lines()
@@ -155,11 +169,24 @@ fn the_steps_run_the_compiler_cargo_built_under_a_relocated_target() {
                 .and_then(|(n, _)| n.parse::<usize>().ok())
         })
         .expect("xtask corpus says how many files it executed");
-    assert!(executed > 0, "xtask corpus executed no file");
+    assert_eq!(
+        executed,
+        SUBSET.len(),
+        "xtask corpus executed {executed} file(s), not the {} it was given:\n{err}",
+        SUBSET.len()
+    );
+    let summary = format!(
+        "corpus: {} file(s), 0 bad — phase ledger enforced via conform-run",
+        SUBSET.len()
+    );
+    assert!(
+        err.contains(&summary),
+        "xtask corpus ran other than the four files ({summary}):\n{err}"
+    );
     assert!(out.status.success(), "xtask corpus failed:\n{err}");
 
     for step in ["fmt-lu", "audit-surface"] {
-        let (out, secs) = xtask(step, &tree.0, &dir);
+        let (out, secs) = xtask(step, &[], &tree.0, &dir);
         loud(&format!("REPORT xtask {step} took {secs} s"));
         assert!(
             out.status.success(),
