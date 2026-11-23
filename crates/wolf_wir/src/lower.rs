@@ -14318,7 +14318,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     hit,
                     |z| {
                         let v = z.list_load_at(hdr, idx, ewty, e.span)?;
-                        Ok(Some(z.deep_copy_in(v, table, elem_sema, e.span, 0)?))
+                        let _ = (table, elem_sema);
+                        Ok(Some(v))
                     },
                     |z| Ok(z.none_tag()),
                 )?;
