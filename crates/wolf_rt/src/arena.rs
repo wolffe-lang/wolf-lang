@@ -138,6 +138,15 @@ pub(crate) fn names_a_limit(max_var: bool, tunables: Option<&[u8]>) -> bool {
         })
 }
 
+/// Whether the start environment names an mmap threshold of the user's:
+/// `MALLOC_MMAP_THRESHOLD_` is set (`var`), with any value, or `tunables`
+/// holds an item whose name is exactly `glibc.malloc.mmap_threshold`.
+#[cfg_attr(not(all(target_os = "linux", target_env = "gnu")), allow(dead_code))]
+pub(crate) fn names_a_threshold(var: bool, tunables: Option<&[u8]>) -> bool {
+    let _ = (var, tunables);
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::names_a_limit;
@@ -170,5 +179,49 @@ mod tests {
         ] {
             assert!(!names_a_limit(false, Some(t.as_bytes())), "{t}");
         }
+    }
+
+    /// wolf-lang#1175: the user's own mmap threshold, by either spelling,
+    /// is theirs; the runtime leaves it alone.
+    #[test]
+    fn the_users_threshold_is_named_by_either_spelling() {
+        use super::names_a_threshold;
+        assert!(!names_a_threshold(false, None), "no setting");
+        assert!(
+            names_a_threshold(true, None),
+            "MALLOC_MMAP_THRESHOLD_, any value"
+        );
+        for t in [
+            "glibc.malloc.mmap_threshold=131072",
+            "glibc.malloc.mmap_threshold=0",
+            "glibc.malloc.arena_max=2:glibc.malloc.mmap_threshold=4194304",
+            "glibc.malloc.mmap_threshold=4194304:glibc.malloc.check=3",
+            "glibc.malloc.mmap_threshold",
+        ] {
+            assert!(names_a_threshold(false, Some(t.as_bytes())), "{t}");
+        }
+    }
+
+    /// Another malloc setting, a lookalike, or the arena limit's name is
+    /// not a threshold, and the threshold's name is not an arena limit.
+    #[test]
+    fn another_setting_is_not_a_threshold() {
+        use super::names_a_threshold;
+        for t in [
+            "",
+            ":",
+            "glibc.malloc.trim_threshold=131072",
+            "glibc.malloc.mmap_max=0",
+            "glibc.malloc.arena_max=2",
+            "glibc.malloc.mmap_thresholdx=1",
+            "xglibc.malloc.mmap_threshold=1",
+            "glibc.malloc.arena_max=glibc.malloc.mmap_threshold",
+        ] {
+            assert!(!names_a_threshold(false, Some(t.as_bytes())), "{t}");
+        }
+        assert!(!names_a_limit(
+            false,
+            Some(b"glibc.malloc.mmap_threshold=131072")
+        ));
     }
 }
