@@ -8,7 +8,8 @@
   nothing, and `fmt-fixpoint`, `fmt-lu` and `audit-surface` failed with a bare
   "No such file or directory". The corpus step now names the compiler it runs
   and how many files it executed, and fails when the driver does not build,
-  cannot be started, or runs no file.
+  cannot be started, or runs no file. `cargo xtask corpus --file=PATH` (repeatable)
+  runs only the named corpus files.
 
 - **A pool's `init` copies a value handed to it plainly**
   (wolf-lang#1183, `[mem.region.edge.elem]`), as `push` has since
