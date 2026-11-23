@@ -33,7 +33,6 @@ pub const HOST_STR_SITES: &[&str] = &[
     "net_read",
     "os_cwd",
     "env_arg0",
-    "os_term_pty_name",
 ];
 
 /// Methods on a `str` receiver that build fresh bytes in the current
