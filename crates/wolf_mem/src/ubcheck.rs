@@ -12516,9 +12516,22 @@ impl<'t> Machine<'t> {
             return Ok(bounds);
         };
         let items: Vec<Value> = self.lists[id][start as usize..end as usize].to_vec();
+        let items = self.slice_items(items, e.span)?;
         self.charge_mem(16 * items.len() as u64 + 16)?;
         let nid = self.mint_list(items, e.span)?;
         Ok(Flow::Val(Value::List(nid)))
+    }
+
+    /// wolf-lang#1191 (`[mem.list.slice]`, `[mem.model.value]`): a slice's
+    /// elements, each a value of its own, copied whole as native's
+    /// `deep_copy_elems_in` copies them. `deep_copy` hands back a scalar or a
+    /// `str` as it is, so a flat slice is the element copy it always was.
+    fn slice_items(&mut self, items: Vec<Value>, span: Span) -> E<Vec<Value>> {
+        let mut out = Vec::with_capacity(items.len());
+        for v in items {
+            out.push(self.deep_copy(v, span)?);
+        }
+        Ok(out)
     }
 
     fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
