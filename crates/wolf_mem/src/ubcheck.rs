@@ -14621,8 +14621,21 @@ impl<'t> Machine<'t> {
                             Some(v) => val!(self.eval(v)),
                             None => return self.refuse("pool.init without a handle", e.span),
                         };
-                        let payload = match it.next().and_then(Arg::value) {
-                            Some(v) => val!(self.eval(v)),
+                        // wolf-lang#1183 (`[mem.region.edge.elem]`, ruled with
+                        // `push` in wolf-lang#385): a value handed plainly is
+                        // lent for the call and COPIED into the pool, as
+                        // `push`'s element is; `init(h, take v)` moves it.
+                        let payload = match it.next() {
+                            Some(a) => match a.value() {
+                                Some(v) if a.mode() == Some(wolf_ast::ParamMode::Take) => {
+                                    val!(self.eval_arg(v, Some(wolf_ast::ParamMode::Take)))
+                                }
+                                Some(v) => {
+                                    let x = val!(self.eval_arg(v, None));
+                                    self.deep_copy(x, v.span)?
+                                }
+                                None => return self.refuse("pool.init without a value", e.span),
+                            },
                             None => return self.refuse("pool.init without a value", e.span),
                         };
                         let Value::Handle { index, generation } = h else {
