@@ -18761,6 +18761,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(val) = flow_val!(self.lower_expr(vx)) else {
                     return Err(refuse("a unit-typed pool payload", vx.span));
                 };
+                // wolf-lang#1183 (`[mem.region.edge.elem]`, ruled with
+                // `push` in wolf-lang#385): a value handed to `init`
+                // plainly is COPIED into the pool, so the caller keeps an
+                // independent value; `init(h, take v)` moves it instead.
+                // `deep_copy_in` returns a value that reaches no heap
+                // storage untouched.
+                let moves_in = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .nth(1)
+                    .and_then(Arg::mode)
+                    == Some(wolf_ast::ParamMode::Take);
+                let val = if moves_in {
+                    val
+                } else {
+                    let table = self.table;
+                    self.deep_copy_in(val, table, elem, vx.span, 0)?
+                };
                 let (region, slot) = self.rt_slot(stride);
                 self.store_flat(val, slot, region, vx.span)?;
                 let hit = self
