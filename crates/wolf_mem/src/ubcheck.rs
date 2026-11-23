@@ -14432,7 +14432,7 @@ impl<'t> Machine<'t> {
                                     let x = self.eval_arg(v, None);
                                     self.copy_target = None;
                                     val!(x)
-                                } else if crate::forcopy::fresh_operand(
+                                } else if false && crate::forcopy::fresh_operand(
                                     v,
                                     &|sp| {
                                         self.ctx()
