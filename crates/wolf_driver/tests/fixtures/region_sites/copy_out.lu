@@ -1,0 +1,29 @@
+//! member: false
+//! wolf-lang#1179 — the same name kept the way the clause allows: copied
+//! out of its region (`copy region`, `[mem.region.copyout]`) before the
+//! region is freed. A second region then allocates as `escape.lu`'s does,
+//! and the name is still the slave's device path, with none of the second
+//! region's bytes in it.
+
+fn slave_name(master: int) -> str {
+    copy region scratch {
+        os_term_pty_name(master) else "?"
+    }
+}
+
+fn main() -> int {
+    let p = os_term_open_pty() else |e| {
+        print("pty=unsupported")
+        return 0
+    }
+    let n = slave_name(p.0)
+    region other {
+        let junk = "X".repeat(64)
+        print("junk={junk.len}")
+    }
+    let device = n.starts_with("/dev/")
+    let overwritten = n.contains("X")
+    print("device={device}")
+    print("overwritten={overwritten}")
+    0
+}
