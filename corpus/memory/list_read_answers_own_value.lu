@@ -1,0 +1,138 @@
+//! check: run(exit=0, stdout="first_of: yss00=1 o00=9\nloop: rows100=3 keep0=9\nstore first: rows00=1 out00=7\nbind first: rows00=1 a0=7\nstore get: rows00=1 out00=7\nbind last: rows00=1 a0=7\nstruct: bs0=1 b0=7\ncallee: yss00=1\nmut param: yss00=1 t0=9\nsource write: a0=1 rows00=9\n")
+//! phase: run
+//! conforms: mem.model.value, mem.list.pop, mem.tier0.excl.1, mem.tier0.mode.read
+//!
+//! wolf-lang#1184 — `xs.get(i)`, `xs.first()` and `xs.last()` answer a
+//! value of their own (`[mem.list.pop]`, `[mem.model.value]`): an element
+//! that reaches heap storage is copied out, so nothing written through the
+//! answer reaches the list, and nothing written to the list later reaches
+//! the answer.
+//!
+//! Measured at v0.2.40, native, `--release` and the checked machine
+//! answered with the element itself, so each line below printed the value
+//! written through the other path (`yss00=9`, `rows100=9`, `rows00=7`,
+//! `a0=9`). lupin answered as this header does.
+//!
+//! - `first_of`: a declared function hands out the first element of its
+//!   `read` parameter. Nothing refused it, because E1002 sees a place
+//!   spelled in the return and this is a call's answer.
+//! - `loop`: the same function called on a `for` binding. The binding's
+//!   copy predicate (wolf-lang#1169) reads a declared call's plain
+//!   arguments as read only, which holds once the answer is the function's
+//!   own.
+//! - `store first`, `bind first`, `store get`, `bind last`: the answer
+//!   stored by index or bound, then written.
+//! - `struct`: an element whose list sits in a field.
+//! - `callee`: a write through `first`'s answer inside a function whose
+//!   parameter is `read`. It must not reach the caller.
+//! - `mut param`: the answer read from a `mut` parameter and returned.
+//! - `source write`: the answer is bound by `let` and the list is written
+//!   afterwards. The binding keeps the value it read.
+
+struct Bag {
+    items: List[int],
+}
+
+fn first_of(xs: List[List[int]]) -> List[int] {
+    xs.first() else [0]
+}
+
+fn first_mut(mut xs: List[List[int]]) -> List[int] {
+    (mut xs).push([5])
+    xs.first() else [0]
+}
+
+fn poke(xs: List[List[int]]) {
+    var t = xs.first() else [0]
+    t[0] = 9
+}
+
+fn through_call() {
+    var yss = [[1, 2], [3]]
+    var o = List[List[int]]()
+    let t = first_of(yss)
+    (mut o).push(take t)
+    o[0][0] = 9
+    print("first_of: yss00={yss[0][0]} o00={o[0][0]}")
+}
+
+fn through_loop() {
+    var rows = [[[1, 2]], [[3]]]
+    var keep = [0]
+    for row in rows {
+        keep = first_of(row)
+    }
+    keep[0] = 9
+    print("loop: rows100={rows[1][0][0]} keep0={keep[0]}")
+}
+
+fn store_first() {
+    var rows = [[1, 2]]
+    var out = [[0, 0]]
+    out[0] = rows.first() else [9, 9]
+    out[0][0] = 7
+    print("store first: rows00={rows[0][0]} out00={out[0][0]}")
+}
+
+fn bind_first() {
+    var rows = [[1, 2]]
+    var a = rows.first() else [9, 9]
+    a[0] = 7
+    print("bind first: rows00={rows[0][0]} a0={a[0]}")
+}
+
+fn store_get() {
+    var rows = [[1, 2]]
+    var out = [[0, 0]]
+    out[0] = rows.get(0) else [9, 9]
+    out[0][0] = 7
+    print("store get: rows00={rows[0][0]} out00={out[0][0]}")
+}
+
+fn bind_last() {
+    var rows = [[1, 2]]
+    var a = rows.last() else [9, 9]
+    a[0] = 7
+    print("bind last: rows00={rows[0][0]} a0={a[0]}")
+}
+
+fn in_struct() {
+    var bs = [Bag { items: [1, 2] }]
+    var b = bs.first() else Bag { items: [0] }
+    b.items[0] = 7
+    print("struct: bs0={bs[0].items[0]} b0={b.items[0]}")
+}
+
+fn in_callee() {
+    var yss = [[1, 2]]
+    poke(yss)
+    print("callee: yss00={yss[0][0]}")
+}
+
+fn from_mut() {
+    var yss = [[1, 2]]
+    var t = first_mut(mut yss)
+    t[0] = 9
+    print("mut param: yss00={yss[0][0]} t0={t[0]}")
+}
+
+fn source_write() {
+    var rows = [[1, 2]]
+    let a = rows.first() else [0]
+    rows[0][0] = 9
+    print("source write: a0={a[0]} rows00={rows[0][0]}")
+}
+
+fn main() -> !int {
+    through_call()
+    through_loop()
+    store_first()
+    bind_first()
+    store_get()
+    bind_last()
+    in_struct()
+    in_callee()
+    from_mut()
+    source_write()
+    0
+}
