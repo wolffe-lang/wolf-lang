@@ -739,3 +739,58 @@ mod run_row_tests {
         );
     }
 }
+
+/// wolf-lang#1187: `xtask corpus --file=PATH ...` keeps only the named files of
+/// the corpus, in the corpus's order. Every name must be a corpus file: a name
+/// that matches nothing is an error naming it, so a selection can never shrink
+/// to nothing without saying so. No names keeps the whole corpus.
+pub fn select_files(files: Vec<PathBuf>, wanted: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    if wanted.is_empty() {
+        return Ok(files);
+    }
+    let missing: Vec<String> = wanted
+        .iter()
+        .filter(|w| !files.iter().any(|f| f == *w))
+        .map(|w| w.display().to_string())
+        .collect();
+    if !missing.is_empty() {
+        return Err(format!("not a corpus file: {}", missing.join(", ")));
+    }
+    Ok(files.into_iter().filter(|f| wanted.contains(f)).collect())
+}
+
+#[cfg(test)]
+mod select_files_tests {
+    use super::*;
+
+    fn corpus() -> Vec<PathBuf> {
+        ["corpus/a.lu", "corpus/b.lu", "corpus/c/d.lu"]
+            .iter()
+            .map(PathBuf::from)
+            .collect()
+    }
+
+    #[test]
+    fn no_names_keep_the_whole_corpus() {
+        assert_eq!(select_files(corpus(), &[]).unwrap(), corpus());
+    }
+
+    #[test]
+    fn names_keep_exactly_those_files_in_corpus_order() {
+        let wanted = [PathBuf::from("corpus/c/d.lu"), PathBuf::from("corpus/a.lu")];
+        assert_eq!(
+            select_files(corpus(), &wanted).unwrap(),
+            vec![PathBuf::from("corpus/a.lu"), PathBuf::from("corpus/c/d.lu")]
+        );
+    }
+
+    #[test]
+    fn a_name_that_is_not_a_corpus_file_is_an_error_naming_it() {
+        let wanted = [
+            PathBuf::from("corpus/a.lu"),
+            PathBuf::from("corpus/gone.lu"),
+        ];
+        let err = select_files(corpus(), &wanted).expect_err("gone.lu is not in the corpus");
+        assert!(err.contains("corpus/gone.lu"), "the error names it: {err}");
+    }
+}

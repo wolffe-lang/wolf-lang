@@ -18,7 +18,7 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("ci") => ci(&args[1..]),
         Some("deps-check") => deps_check(),
-        Some("corpus") => corpus_cmd(),
+        Some("corpus") => corpus_cmd(&args[1..]),
         Some("abi-check") => abi_check(),
         Some("debug-check") => debug_check(),
         Some("midend-rate") => midend_rate(),
@@ -507,10 +507,36 @@ fn debug_check() -> ExitCode {
 /// Validate every corpus file's directive header. Phase *execution* is
 /// stubbed until the compiler grows phases (s31); headers must parse and
 /// use canonical phases today so the corpus stays a truthful ledger.
-fn corpus_cmd() -> ExitCode {
+///
+/// `--file=PATH` (repeatable) keeps only the named corpus files
+/// (wolf-lang#1187: the relocated-target row needs a step that runs
+/// something, not the whole corpus a second time). The gauntlet passes none.
+fn corpus_cmd(args: &[String]) -> ExitCode {
+    let mut wanted: Vec<PathBuf> = Vec::new();
+    for a in args {
+        match a.strip_prefix("--file=") {
+            Some(p) => wanted.push(PathBuf::from(p)),
+            None => {
+                eprintln!("corpus: unknown argument `{a}`");
+                eprintln!("usage: cargo xtask corpus [--file=PATH]...");
+                return ExitCode::from(2);
+            }
+        }
+    }
     let mut files = Vec::new();
     collect_wolf_files(Path::new("corpus"), &mut files);
     files.sort();
+    let all = files.len();
+    let files = match corpus::select_files(files, &wanted) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("corpus: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if !wanted.is_empty() {
+        eprintln!("corpus: --file selects {} of {all} file(s)", files.len());
+    }
     let mut bad = 0u32;
     let mut parsed: Vec<(PathBuf, Directives)> = Vec::new();
     for f in &files {
