@@ -1,0 +1,26 @@
+//! member: false
+//! wolf-lang#1179 — a pty's slave name asked inside a region and returned
+//! out of it, then a second region that allocates. Before the name was a
+//! site the compiler accepted this program and its native binaries printed
+//! the second region's bytes (`XXXXXXXXXXXX`) as the name; with the site it
+//! is refused with E1010 on every machine, so no binary of it exists.
+
+fn slave_name(master: int) -> str {
+    region scratch {
+        os_term_pty_name(master) else "?"
+    }
+}
+
+fn main() -> int {
+    let p = os_term_open_pty() else |e| {
+        print("pty=unsupported")
+        return 0
+    }
+    let n = slave_name(p.0)
+    region other {
+        let junk = "X".repeat(64)
+        print("junk={junk.len}")
+    }
+    print("name={n}")
+    0
+}
