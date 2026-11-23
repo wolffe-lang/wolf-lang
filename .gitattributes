@@ -3,3 +3,8 @@
 * text=auto eol=lf
 *.png binary
 *.pdf binary
+# Every PR adds its entry at the top of `## Unreleased`, so two open PRs
+# always conflict there. Union keeps both sides' new lines, trunk's first,
+# with no markers. Its failure: two edits of the same existing line keep
+# both lines. Read the merged entry when two PRs touch one.
+CHANGELOG.md merge=union
