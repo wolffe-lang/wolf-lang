@@ -14216,7 +14216,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     },
                     &|sp| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone()),
                 );
-                let v = if moves_in || materialized || fresh {
+                let v = if moves_in || materialized || (fresh && false) {
                     v
                 } else {
                     let table = self.table;
