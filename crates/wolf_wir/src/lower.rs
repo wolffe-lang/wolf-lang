@@ -17202,11 +17202,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // was a loop of `__wolf_rt_list_push` calls, one
                     // per element, into a list that grew by doubling —
                     // 7.8 µs for a 4 KiB `List[byte]` slice. The value
-                    // is the same fresh list (the same elements, each
-                    // the byte copy a push made), minted at exact
-                    // capacity in the ambient region; every element
-                    // type that reaches here is flat, so every one
-                    // takes it.
+                    // is a fresh list of the same elements' bytes,
+                    // minted at exact capacity in the ambient region.
                     let out = self
                         .rt_call_foreign(
                             "__wolf_rt_list_slice",
@@ -17215,6 +17212,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             Some(types::PTR),
                         )
                         .expect("hdr");
+                    // wolf-lang#1191 (`[mem.list.slice]`, `[mem.model.value]`):
+                    // the elements are copied whole. An element that
+                    // reaches heap storage is replaced by its own copy, as
+                    // `copy` of a list replaces each, so no write through
+                    // the slice reaches the source and no later write to
+                    // the source reaches the slice; a flat slice is the
+                    // byte copy above and nothing more.
+                    let table = self.table;
+                    self.deep_copy_elems_in(out, table, elem, e.span, 0)?;
                     return Ok(Flow::Val(Some(out)));
                 }
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {
