@@ -12,15 +12,20 @@
   or keep it, on the checked machine, native and release alike, and the
   element itself when the body provably only reads it (operands,
   conditions, interpolation, element and field reads, plain call
-  arguments, `push`, nested `for` loops). A loop that only reads compiles
+  arguments, a declared function's answer, `push`, a struct, tuple or
+  list built from it and pushed or bound, a `region`, `in` or `scope`
+  block, nested `for` loops). A pool's `init` keeps what it is handed,
+  so a binding handed to it is a copy. A loop that only reads compiles
   to the same code as before, byte for byte. A loop that stores through
-  its binding pays one deep copy an iteration, kept in the enclosing
-  region until it ends: 100 passes over 1,000 lists of 1,000 ints with a
-  store each went from 0.02 s to 0.13 s and from an 18 MB to an 841 MB
-  peak on an M-series Mac. Walk by index (`for i in 0..rows.len {
-  rows[i][0] = 0 }`) to change the list in place, or open a `region`
-  inside the loop to bound the copies. No program in the organisation's
-  repositories stored through a `for` binding.
+  its binding pays one deep copy an iteration. When the body only writes
+  the copy and nothing keeps it, the copy is made in a region of the
+  iteration's own and freed when the iteration ends: 100 passes over
+  1,000 lists of 1,000 ints with a store each went from 0.02 s to
+  0.08 s and stayed at an 18 MB peak on an M-series Mac. A copy the body
+  may keep stays in the enclosing region until that region ends. Walk by
+  index (`for i in 0..rows.len { rows[i][0] = 0 }`) to change the list
+  in place. No program in the organisation's repositories stored through
+  a `for` binding.
 
 - `copy` of an enum value copies its payload on the checked machine, as
   it always did natively: the payload's list was shared with the
