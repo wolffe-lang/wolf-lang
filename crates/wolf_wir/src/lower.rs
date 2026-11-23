@@ -14194,7 +14194,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // `push(take x)` moves it instead. `deep_copy_in`
                 // returns the value untouched when it reaches no heap
                 // storage, so `Copy` elements and `str` stay free
-                // ([mem.tier0.move.3]).
+                // ([mem.tier0.move.3]). wolf-lang#1177: a FRESH operand
+                // (a literal, a `copy`, a declared function's answer to
+                // primitive arguments: `wolf_mem::forcopy::fresh_operand`,
+                // the predicate the checked machine pushes by too) is held
+                // by nothing else, so it is stored as it is, as `take` would
+                // store it.
                 let moves_in = d
                     .args()
                     .into_iter()
@@ -14202,7 +14207,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .next()
                     .and_then(Arg::mode)
                     == Some(wolf_ast::ParamMode::Take);
-                let v = if moves_in || materialized {
+                let fresh = wolf_mem::forcopy::fresh_operand(
+                    vx,
+                    &|sp| {
+                        self.calls
+                            .get(&sp)
+                            .is_some_and(|c| wolf_mem::forcopy::declared_call(c))
+                    },
+                    &|sp| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone()),
+                );
+                let v = if moves_in || materialized || fresh {
                     v
                 } else {
                     let table = self.table;
