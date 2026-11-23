@@ -1,0 +1,102 @@
+//! check: run(exit=0, stdout="main: rows00=1 s00=7\nfn: yss00=1 h00=9\ngeneric: yss00=1 h00=9\nloop: rows100=3 keep00=9\nsource write: s00=1 rows00=9\nstruct: bs0=1 s0=7\nopen ends: rows00=1 rows10=3 s00=7 t00=8\n")
+//! phase: run
+//! conforms: mem.list.slice, mem.model.value, mem.tier0.excl.1
+//!
+//! wolf-lang#1191 — a slice is a fresh list whose elements are copied in
+//! order (`[mem.list.slice]`), and a copied element is the whole value
+//! (`[mem.model.value]`): an element that reaches heap storage is copied
+//! whole, so nothing written through the slice reaches the list and
+//! nothing written to the list later reaches the slice.
+//!
+//! Measured at v0.2.40, native, `--release` and the checked machine copied
+//! each element's word or handle only, so an element that is itself a list
+//! stayed the source's own. Each line below printed the value written
+//! through the other path, and lupin answered as this header does.
+//!
+//! - `main`: a slice of a list of lists, then a write through it.
+//! - `fn`: a function hands back a slice of its `read` parameter. A slice
+//!   is a fresh value, so this is legal, and the caller's write through it
+//!   must not reach the caller's list.
+//! - `generic`: the same function over a type parameter.
+//! - `loop`: that function called on a `for` binding.
+//! - `source write`: the slice is bound by `let`, and the list is written
+//!   afterwards.
+//! - `struct`: an element whose list sits in a field.
+//! - `open ends`: `rows[..1]` and `rows[1..]`.
+
+struct Bag {
+    items: List[int],
+}
+
+fn head(xs: List[List[int]]) -> List[List[int]] {
+    xs[0..1]
+}
+
+fn head_of[T](xs: List[T]) -> List[T] {
+    xs[0..1]
+}
+
+fn in_main() {
+    var rows = [[1, 2], [3]]
+    var s = rows[0..1]
+    s[0][0] = 7
+    print("main: rows00={rows[0][0]} s00={s[0][0]}")
+}
+
+fn through_call() {
+    var yss = [[1, 2], [3]]
+    var h = head(yss)
+    h[0][0] = 9
+    print("fn: yss00={yss[0][0]} h00={h[0][0]}")
+}
+
+fn through_generic() {
+    var yss = [[1, 2], [3]]
+    var h = head_of(yss)
+    h[0][0] = 9
+    print("generic: yss00={yss[0][0]} h00={h[0][0]}")
+}
+
+fn through_loop() {
+    var rows = [[[1, 2]], [[3]]]
+    var keep = [[0]]
+    for row in rows {
+        keep = head(row)
+    }
+    keep[0][0] = 9
+    print("loop: rows100={rows[1][0][0]} keep00={keep[0][0]}")
+}
+
+fn source_write() {
+    var rows = [[1, 2], [3]]
+    let s = rows[0..1]
+    rows[0][0] = 9
+    print("source write: s00={s[0][0]} rows00={rows[0][0]}")
+}
+
+fn in_struct() {
+    var bs = [Bag { items: [1, 2] }, Bag { items: [3] }]
+    var s = bs[0..1]
+    s[0].items[0] = 7
+    print("struct: bs0={bs[0].items[0]} s0={s[0].items[0]}")
+}
+
+fn open_ends() {
+    var rows = [[1, 2], [3]]
+    var s = rows[..1]
+    s[0][0] = 7
+    var t = rows[1..]
+    t[0][0] = 8
+    print("open ends: rows00={rows[0][0]} rows10={rows[1][0]} s00={s[0][0]} t00={t[0][0]}")
+}
+
+fn main() -> !int {
+    in_main()
+    through_call()
+    through_generic()
+    through_loop()
+    source_write()
+    in_struct()
+    open_ends()
+    0
+}
