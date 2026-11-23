@@ -1932,11 +1932,22 @@ adopt that design and give `for` its desugar.)
   pact, W0603). The subscript `xs[i]` stays the faulting twin: an
   index outside the list traps `bounds` (`[mem.ub.defined]`), which is
   exactly the relation `s.get(a..b)` has to `s[a..b]` (`[mem.str.get]`).
+  A hit answers **a value of its own** (wolf-lang#1184,
+  `[mem.model.value]`): an element that reaches heap storage is copied
+  out whole, the copy a plain `push` makes of an element going in, so
+  no write through the answer reaches the list and no later write to
+  the list reaches the answer. **The cost, stated:** a hit on such an
+  element allocates its copy in the ambient region, so a `get` of a
+  `List[List[int]]` element charges what `copy` of that element
+  charges; an element that reaches no heap storage, `str` included, is
+  the value read and allocates nothing.
   `[mem.ub.defined]` rules indices and slices; `pop` takes no index,
   and reading it as one was an analogy, not a clause. Cost stated: the
   interpreter's `pop` arm and one of its REPL tests, and the book's
   chapter 5 (one fence, one sentence — `pop` is not bounds-checked).
-  Witness: `corpus/memory/list_pop_empty.lu`, both tiers.
+  Witness: `corpus/memory/list_pop_empty.lu`, both tiers; the answer's
+  own value and its cost, `corpus/memory/list_read_answers_own_value.lu`
+  and `crates/wolf_driver/tests/list_read_copy_lanes.rs`.
 - `[mem.list.bytes]` **The bulk byte scan** (s200, wolf-lang#411).
   **`bytes_find(xs: List[byte], b: byte, from: int) -> int ! {none}`**
   answers the first index `i >= from` with `xs[i] == b`, and the
