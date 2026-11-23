@@ -727,6 +727,7 @@ memory/region_net_read_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_os_cwd_charged.lu: lowers
 memory/region_os_cwd_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_os_term_pty_name_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_outer_write_call.lu: lowers
 memory/region_outer_write_call_refused.lu: not mem-clean (pre-wir rungs own it)
 memory/region_outer_write_charged.lu: lowers
