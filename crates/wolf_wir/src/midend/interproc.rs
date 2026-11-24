@@ -18,6 +18,11 @@
 //!   contributes no summary edge — so here it KILLS), an exported or
 //!   address-taken function's parameters (the C membrane and function
 //!   pointers can deliver anything);
+//! - a value the scan has no provenance rule for (an `eu.ok`, a call
+//!   result other than `__wolf_rt_list_new`, any op without an arm) is
+//!   the top, `Other`, never the bottom `Unset`, so a join with it
+//!   proves nothing (wolf-lang#1205: left `Unset`, the join took the
+//!   fresh list on its other edge for the whole value);
 //! - a `wrapping[T]` value needs no special kill because the value
 //!   EVALUATOR is honest: a `*.wrap` op whose mathematical range does
 //!   not fit its type evaluates to the full type bounds — the
@@ -202,6 +207,23 @@ impl Local {
         if let Root::Param(p) = r {
             self.writes.entry(p).or_insert(Meet::Empty).poison();
         }
+    }
+}
+
+/// wolf-lang#1205 (rule 1): the ops the provenance fixpoint in [`scan`] has a
+/// rule for. Every other op's results are `Origin::Other`.
+fn has_provenance_rule(f: &Function, inst: &crate::ir::InstData) -> bool {
+    match inst.op {
+        Opcode::StackAlloc
+        | Opcode::DataAddr
+        | Opcode::Load
+        | Opcode::PtrOff
+        | Opcode::Jmp
+        | Opcode::Br => true,
+        Opcode::Call => {
+            matches!(inst.aux, Aux::Callee(ef) if f.ext_funcs[ef].name == "__wolf_rt_list_new")
+        }
+        _ => false,
     }
 }
 
@@ -559,6 +581,17 @@ fn scan(m: &Module, f: &Function) -> Local {
                         }
                     }
                     _ => {}
+                }
+                // wolf-lang#1205 (rule 1): a value this scan has no provenance
+                // rule for is `Other`, the lattice's top, from the round it is
+                // reached. `Unset` is only "not reached yet": left there, an
+                // `eu.ok` or a call result other than `__wolf_rt_list_new` met a
+                // fresh header at a join as if its edge were not there, and the
+                // join's loads were proved from the fresh list's stores alone.
+                if !has_provenance_rule(f, inst) {
+                    for &r in &results {
+                        changed |= set(&mut o, r, Origin::Other);
+                    }
                 }
             }
         }
