@@ -15,9 +15,9 @@
   as before: a foreign library that throws keeps its own unwinder, and a
   throw that meets a wolf frame still ends the process by SIGABRT.
   bench-gates' start-up row now also holds the release-linked hello's
-  resident memory, minor faults and own text pages over its C twin, read
-  at the exit stop with address randomisation off, and holds an overflow
-  report under half of its alternate stack.
+  minor faults and own text pages over its C twin, read at the exit stop
+  with address randomisation off (its resident memory is printed beside
+  them), and holds an overflow report under half of its alternate stack.
 
 - `cargo xtask` finds the compiler where cargo built it, so `CARGO_TARGET_DIR`
   (or `build.target-dir`) no longer hides it (wolf-lang#1187). Before, the
