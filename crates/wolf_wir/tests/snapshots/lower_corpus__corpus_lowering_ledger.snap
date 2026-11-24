@@ -814,6 +814,12 @@ memory/region_value_container.lu: refused — a region inside another value (ext
 memory/region_value_elem.lu: refused — a region element in a container (extent tracking stops at the handle)
 memory/region_value_pass.lu: lowers
 memory/region_value_return.lu: lowers
+memory/release_range_join_literal.lu: lowers
+memory/release_range_map_get.lu: lowers
+memory/release_range_map_walk.lu: lowers
+memory/release_range_read_far.lu: lowers
+memory/release_range_read_past_end.lu: lowers
+memory/release_range_slot_field.lu: lowers
 memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers)
 memory/static_const_let.lu: lowers
