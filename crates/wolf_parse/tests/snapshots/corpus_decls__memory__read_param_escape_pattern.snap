@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 889..937 name=Bag fields=2
+StructDecl 939..976 name=Wrap fields=1
+FnDecl 978..1115 name=left body=Block
+FnDecl 1117..1260 name=items_of body=Block
+FnDecl 1262..1396 name=first_of body=Block
+FnDecl 1398..1544 name=left_var body=Block
+FnDecl 1546..1689 name=inner body=Block
+FnDecl 1691..1832 name=rewrap body=Block
+FnDecl 1834..1990 name=left_held body=Block
+FnDecl 1992..2109 name=main body=Block
