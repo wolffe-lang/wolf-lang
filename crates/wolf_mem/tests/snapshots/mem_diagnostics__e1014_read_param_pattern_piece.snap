@@ -1,0 +1,22 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1014]: `a[0]` reaches `p`'s value through `a`, and `p` is `read` for the whole call, so it cannot be assigned through
+ --> mem:///main.lu:3:5
+  |
+1 | fn poke(p: (List[int], int)) -> int {
+  |         - `p` is declared without a mode — that spells `read`, immutable for the call
+2 |     var (a, _) = p
+  |                  - `p` is moved here, but the caller still holds it — `a` is a second name for the caller's value
+3 |     a[0] = 9
+  |     ^^^^ a write to `p`'s value, through `a`
+  |
+  = note: moving a `read` parameter into another binding does not make it this function's own: the
+    caller kept it [mem.tier0.mode.read]. Write `copy` at the move to get an independent
+    value, or declare the parameter `mut` (to change the caller's value, spelled at call
+    sites) or `take` (to consume it).
+help: to get a value of this function's own, copy it at the move
+  |
+2 |     var (a, _) = copy p
+  |
