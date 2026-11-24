@@ -48,6 +48,22 @@ the nightly's issue). python3, git and bash only.
   T8  ci/nightly-red.sh against a stand-in `gh`: no open issue opens one,
       labelled, under the one title; an open one gets a comment and no new
       issue; a label that already exists is no failure.
+  T11 a nightly at a commit already green in full: told by ci/covered.py
+      that the commit's latest `tier release` is green, the nightly plans
+      `tier skipped`, no job, and says so in plain words in its log, a
+      warning and the run's summary, naming the covering run and when a
+      full night is due (S1); told anything else, it plans release (S2);
+      no other event is ever skipped, and no dispatch may ask for it (S3);
+      the verdict of a skipped night wants every job skipped and says
+      nothing was tested (S4). ci/covered.py, against a fake `gh`, covers
+      only a green `tier release` check run of GitHub Actions, of this
+      workflow, at this commit, of a run other than tonight's, the latest
+      to complete, at most 144 hours before tonight's run; never another
+      tier's, an older one, a red, cancelled or running one, another
+      app's, a full page, an unanswered question or another event (S5).
+      The plan job asks it before it plans, with read-only permissions,
+      and only the plan step reads the answer (S6). The nightly's issue
+      says a `tier skipped` night is not a green one (S7).
 
 Exit 0 when every check passes, 1 otherwise.
 """
@@ -63,7 +79,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLAN = os.path.join(ROOT, "ci", "tiers.py")
 WORKFLOW = os.path.join(ROOT, ".github", "workflows", "ci.yml")
 RED = os.path.join(ROOT, "ci", "nightly-red.sh")
-ENV_KEYS = ("EVENT", "ACTION", "LABEL", "LABELS", "HEAD_SHA", "IN_JOBS", "IN_TIER", "NEEDS")
+ENV_KEYS = ("EVENT", "ACTION", "LABEL", "LABELS", "HEAD_SHA", "IN_JOBS", "IN_TIER", "NEEDS",
+            "COVERED", "COVERED_BY", "COVERED_AT", "COVERED_RUN", "GITHUB_STEP_SUMMARY")
 fails = 0
 
 
@@ -507,6 +524,187 @@ for path in sorted(glob.glob(os.path.join(ROOT, ".github", "workflows", "*"))) +
                 stale.append("%s:%d" % (os.path.relpath(path, ROOT), n))
 say(not stale, "T9 no workflow or planner leg says ubuntu-latest, the Linux runner image is pinned"
     + ("" if not stale else " (%d places: %s)" % (len(stale), ", ".join(stale))))
+
+# T11 a nightly at a commit already green in full is skipped, and says so (ci/covered.py, against a fake gh).
+COVERED_PY = os.path.join(ROOT, "ci", "covered.py")
+SKIP_TIER = "release"
+PLAIN_ = re.compile(r"\b(?:lanes?|rulings?|crawls?|sprints?)\b|\b[a-z]{2}\d{2,3}[a-z]?\b", re.I)
+GREEN = dict(covered=SKIP_TIER, covered_by="https://github.com/o/r/runs/555", covered_at="2026-11-18T12:00:00Z", covered_run="777")
+job0 = EVERY[0]
+
+# S1: the nightly, covered: skipped, no job; its line, its warning and its summary name the covering run.
+expect("T11 S1 the nightly at a commit whose tier %s is green" % SKIP_TIER, plan(event="schedule", **GREEN), "skipped", [])
+d = tempfile.mkdtemp(prefix="tiers-test-skip-")
+try:
+    summ, gout = os.path.join(d, "summary.md"), os.path.join(d, "out")
+    args = [sys.executable, PLAN, "plan", "--event", "schedule", "--github-output", gout] + [
+        x for k, v in GREEN.items() for x in ("--" + k.replace("_", "-"), v)]
+    r = subprocess.run(args, capture_output=True, text=True, env=clean_env(GITHUB_STEP_SUMMARY=summ))
+    outs = open(gout, encoding="utf-8").read() if os.path.exists(gout) else ""
+    summary = open(summ, encoding="utf-8").read() if os.path.exists(summ) else ""
+    warn = [l for l in r.stdout.splitlines() if l.startswith("::warning title=nightly skipped::")]
+    said_ = ("nothing tested tonight", "tier %s green at this commit in run 777" % SKIP_TIER, "https://github.com/o/r/runs/555",
+             "completed 2026-11-18T12:00:00Z", "due by 2026-11-24T12:00:00Z")
+    say(r.returncode == 0 and "tier=skipped\n" in outs and "jobs=[]\n" in outs and "covered_by=https://github.com/o/r/runs/555\n" in outs
+        and len(warn) == 1 and all(s in warn[0] for s in said_) and all(s in r.stderr for s in said_) and all(s in summary for s in said_)
+        and not PLAIN_.search(warn[0] + summary),
+        "T11 S1 a skipped night says so in its log, a warning and the run's summary, in plain words, naming the covering run and when a full night is due%s" % (
+            "" if r.returncode == 0 else " (rc %d: %s)" % (r.returncode, r.stderr.strip()[-200:])))
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+# S2: anything else the nightly is told is no skip: the nightly's tier, as today.
+for c in ("none", "", "full", "pr", "partial", "skipped", "noop", "all", SKIP_TIER.upper(), SKIP_TIER + " yes"):
+    expect("T11 S2 the nightly told covered=%r" % c, plan(event="schedule", covered=c), "release", EVERY)
+expect("T11 S2 the nightly told nothing", plan(event="schedule"), "release", EVERY)
+
+# S3: a skip is the nightly's only.
+expect("T11 S3 a push told covered=%s" % SKIP_TIER, plan(event="push", **GREEN), "full", MERGE)
+expect("T11 S3 a dispatch told covered=%s" % SKIP_TIER, plan(event="workflow_dispatch", **GREEN), "full", MERGE)
+expect("T11 S3 a dispatch asking for tier release, told covered=%s" % SKIP_TIER, plan(event="workflow_dispatch", tier="release", **GREEN), "release", EVERY)
+expect("T11 S3 a code pull request told covered=%s" % SKIP_TIER,
+       plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="synchronize", **GREEN), "pr", PR_JOBS)
+say(plan(event="workflow_dispatch", tier="skipped")["tier"].startswith("ERROR rc=2"), "T11 S3 a dispatch asking for tier skipped is refused")
+
+# S4: the verdict of a skipped night.
+vexpect("T11 S4 a skipped night, every job skipped", run_of("skipped", []), 0)
+vexpect("T11 S4 a skipped night in which a job ran", run_of("skipped", [], {job0: {"result": "success", "outputs": {}}}), 1)
+vexpect("T11 S4 a skipped night whose plan chose a job", run_of("skipped", [job0]), 1)
+n_ = run_of("skipped", [])
+n_["plan"]["outputs"]["covered_by"] = "https://github.com/o/r/runs/555"
+rc, text = verdict(n_)
+say(rc == 0 and "nothing was tested" in text and "https://github.com/o/r/runs/555" in text,
+    "T11 S4 the verdict of a skipped night says nothing was tested and names the covering run")
+
+# S5: ci/covered.py against a fake gh.
+FAKE_GH_COV = """#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[1:]
+with open(os.environ["FAKE_GH_LOG"], "a", encoding="utf-8") as f:
+    f.write(json.dumps(a) + "\\n")
+if os.environ.get("FAKE_GH_FAIL"):
+    sys.stderr.write("HTTP 502: the fake refuses\\n")
+    sys.exit(1)
+path = a[-1] if a[:1] == ["api"] else ""
+if "/check-runs" in path:
+    sys.stdout.write(os.environ["FAKE_CHECKS"])
+elif "/actions/runs?" in path:
+    sys.stdout.write(os.environ["FAKE_RUNS"])
+elif "/actions/runs/" in path:
+    sys.stdout.write(os.environ["FAKE_RUN"])
+else:
+    sys.stderr.write("the fake knows no %r\\n" % a)
+    sys.exit(1)
+"""
+COV_SHA = "0e536e8f" + "0" * 32
+
+
+def check(name="tier " + SKIP_TIER, concl="success", done="2026-11-18T12:00:00Z", suite=1, app="github-actions",
+          url="https://github.com/o/r/runs/555", status="completed"):
+    return {"name": name, "status": status, "conclusion": concl, "completed_at": done, "check_suite": {"id": suite},
+            "app": {"slug": app}, "html_url": url}
+
+
+def wrun(suite=1, path=".github/workflows/ci.yml", sha=COV_SHA, rid=777):
+    return {"id": rid, "check_suite_id": suite, "path": path, "head_sha": sha}
+
+
+def covered(checks, runs=None, event="schedule", fail=False, total=None, drop=()):
+    d = tempfile.mkdtemp(prefix="tiers-test-cov-")
+    try:
+        with open(os.path.join(d, "gh"), "w", encoding="utf-8") as f:
+            f.write(FAKE_GH_COV)
+        os.chmod(os.path.join(d, "gh"), 0o755)
+        log = os.path.join(d, "calls.jsonl")
+        runs = [wrun()] if runs is None else runs
+        env = clean_env(PATH=d + os.pathsep + os.environ.get("PATH", ""), FAKE_GH_LOG=log, REPO="o/r", SHA=COV_SHA,
+                        TIER=SKIP_TIER, RUN_ID="999", EVENT=event, GITHUB_EVENT_NAME="schedule",
+                        FAKE_RUN=json.dumps({"id": 999, "check_suite_id": 9, "created_at": "2026-11-20T12:00:00Z"}),
+                        FAKE_CHECKS=json.dumps({"total_count": len(checks) if total is None else total, "check_runs": checks}),
+                        FAKE_RUNS=json.dumps({"total_count": len(runs), "workflow_runs": runs}))
+        for k in drop:
+            env.pop(k, None)
+        if fail:
+            env["FAKE_GH_FAIL"] = "1"
+        r = subprocess.run([sys.executable, COVERED_PY], capture_output=True, text=True, env=env)
+        got = dict(l.split("=", 1) for l in r.stdout.splitlines() if "=" in l)
+        calls = [json.loads(x) for x in open(log, encoding="utf-8")] if os.path.exists(log) else []
+        return r.returncode, got, calls, r.stderr
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def cexpect(name, res, want):
+    rc, got, calls, err = res
+    ok = rc == 0 and got.get("covered") == want and bool(got.get("reason"))
+    say(ok, "T11 S5 %s: covered=%s%s" % (name, got.get("covered"), "" if ok else " (wanted %s; rc %d; %s)" % (want, rc, err.strip()[-200:])))
+
+
+if os.name == "nt":
+    say(True, "T11 S5 skipped: the fake gh is a script with a shebang")
+else:
+    res = covered([check()])
+    rc, got, calls, err = res
+    say(rc == 0 and got.get("covered") == SKIP_TIER and got.get("covered_by") == "https://github.com/o/r/runs/555"
+        and got.get("covered_at") == "2026-11-18T12:00:00Z" and got.get("covered_run") == "777"
+        and any(("check_name=tier%%20%s" % SKIP_TIER) in c[-1] and "filter=all" in c[-1] for c in calls),
+        "T11 S5 (a) a green tier %s of ci.yml at the commit, 2 days old: covered, naming the check run, its time and its run%s" % (
+            SKIP_TIER, "" if rc == 0 and got.get("covered") == SKIP_TIER else " (%s; %s)" % (got, err.strip()[-200:])))
+    cexpect("(b) the same, 7 days old", covered([check(done="2026-11-13T11:00:00Z")]), "none")
+    cexpect("(b) the same, 144 hours old to the second", covered([check(done="2026-11-14T12:00:00Z")]), SKIP_TIER)
+    for nm in ("tier full", "tier pr", "tier partial", "tier skipped", "tier noop", "tier " + SKIP_TIER + "s"):
+        cexpect("(c) a green %s" % nm, covered([check(name=nm)]), "none")
+    cexpect("(d) a green tier %s of another workflow" % SKIP_TIER, covered([check()], runs=[wrun(path=".github/workflows/release.yml")]), "none")
+    cexpect("(d) a green tier %s whose run is of another commit" % SKIP_TIER, covered([check()], runs=[wrun(sha="1" * 40)]), "none")
+    cexpect("(d) a green tier %s whose run is not at this commit at all" % SKIP_TIER, covered([check()], runs=[]), "none")
+    for c in ("failure", "cancelled", "timed_out"):
+        cexpect("(e) the tier %s %s" % (SKIP_TIER, c), covered([check(concl=c)]), "none")
+    cexpect("(e) the tier %s still running" % SKIP_TIER, covered([check(status="in_progress", concl=None, done=None)]), "none")
+    res = covered([check()], fail=True)
+    cexpect("(g) gh exits non-zero", res, "none")
+    say("unanswered" in res[1].get("reason", ""), "T11 S5 (g) the reason says the question went unanswered")
+    cexpect("(h) a green tier %s of another app" % SKIP_TIER, covered([check(app="some-app")]), "none")
+    cexpect("(i) a full page of check runs", covered([check()], total=100), "none")
+    cexpect("(i) a full page of workflow runs", covered([check()], runs=[wrun(rid=700 + i, suite=1 if i == 0 else 100 + i) for i in range(100)]), "none")
+    cexpect("the latest word: a red tier %s after a green one at the commit" % SKIP_TIER,
+            covered([check(), check(concl="failure", done="2026-11-19T12:00:00Z", suite=2, url="https://github.com/o/r/runs/556")],
+                    runs=[wrun(), wrun(suite=2, rid=778)]), "none")
+    cexpect("the latest word: a red first attempt, then a green rerun",
+            covered([check(concl="failure", done="2026-11-18T10:00:00Z"), check(done="2026-11-18T12:00:00Z")]), SKIP_TIER)
+    cexpect("an earlier attempt of tonight's own run, green (a rerun of a green night)",
+            covered([check(suite=9)], runs=[wrun(suite=9, rid=999)]), "none")
+    res = covered([check()], event="push")
+    cexpect("a push: never covered", res, "none")
+    say(res[0] == 0 and not res[2] and "not the nightly" in res[1].get("reason", ""),
+        "T11 S5 a push: covered.py asks GitHub nothing (%d calls) and says why" % len(res[2]))
+    cexpect("no EVENT: GITHUB_EVENT_NAME decides (schedule)", covered([check()], event=""), SKIP_TIER)
+    res = covered([check()], drop=("TIER",))
+    say(res[0] == 2 and "must be set" in res[3] and not res[2], "T11 S5 covered.py refuses to run without TIER, and asks nothing")
+
+# S6: the wiring of the plan job.
+pb = blocks["plan"]
+cov_step = re.search(r"^      - name: what this commit already has green \(ci/covered\.py\)\n((?:        .*\n)+)", pb, re.M)
+cs = cov_step.group(1) if cov_step else ""
+plan_step = re.search(r"^      - id: plan\n((?:        .*\n)+)", pb, re.M)
+ps = plan_step.group(1) if plan_step else ""
+pperms = re.search(r"^    permissions:\n((?:      .*\n)+)", pb, re.M)
+say(bool(cs) and "        id: covered\n" in cs and '        run: python3 ci/covered.py --github-output "$GITHUB_OUTPUT"\n' in cs
+    and all(("          %s\n" % e) in cs for e in ("GH_TOKEN: ${{ github.token }}", "REPO: ${{ github.repository }}",
+                                                   "SHA: ${{ github.sha }}", "RUN_ID: ${{ github.run_id }}", "TIER: %s" % SKIP_TIER))
+    and bool(ps) and pb.index("ci/covered.py") < pb.index("ci/tiers.py plan"),
+    "T11 S6 the plan job asks ci/covered.py, with the nightly's tier, before it plans")
+say(all(("          %s: ${{ steps.covered.outputs.%s }}\n" % (k.upper(), k)) in ps for k in ("covered", "covered_by", "covered_at", "covered_run"))
+    and wf.count("steps.covered.outputs.") == 4 and "      covered_by: ${{ steps.plan.outputs.covered_by }}\n" in pb,
+    "T11 S6 only the plan step reads ci/covered.py's answer, and the plan passes covered_by on to the verdict")
+say(pperms is not None and sorted(pperms.group(1).split()) == sorted(["contents:", "read", "checks:", "read", "actions:", "read"]),
+    "T11 S6 the plan job reads the code, the checks and the runs, and writes nothing")
+
+# S7: the nightly's issue says a skipped night is not a green one.
+# The stand-in logs each call on one line, and the body's own lines after it: read each run's log whole.
+said_ = ["\n".join(nightly_red(existing=e)[1]) for e in ("", "41")]
+say("issue create" in said_[0] and "issue comment 41" in said_[1]
+    and all("close this issue once a nightly is green again (a `tier skipped` night is not one)" in t for t in said_),
+    "T11 S7 the nightly's issue, opened or commented, says to close it once a nightly is green again, and that a tier skipped night is not one")
 
 print("tiers-test: %s" % ("PASS" if fails == 0 else "FAIL (%d)" % fails))
 sys.exit(1 if fails else 0)
