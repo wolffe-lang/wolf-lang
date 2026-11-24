@@ -244,7 +244,7 @@ fn operands(rhs: &str) -> Vec<&str> {
 /// overlap guard in `@shape` (`fact noalias %a %b : guard %g`, `%g` the
 /// `bor` of two `icmp.ule` over the pair's extents) builds each extent
 /// end `ptr.off %base, %len, 8` from a len laid out AFTER the last
-/// in-place grow (`call @__wolf_rt_list_push`) — the len current at the
+/// in-place grow (`call @__wolf_rt_list32_push`) — the len current at the
 /// loop, never the load above the first push. Seen red with #146
 /// planted back (s187, wolf-lang#477): the extent read the load in the
 /// entry block.
@@ -259,7 +259,7 @@ fn the_overlap_guard_extent_reads_the_len_current_at_the_loop() {
     let body = function_body(&module, "shape");
     let last_push = body
         .iter()
-        .rposition(|l| l.contains("call @__wolf_rt_list_push("))
+        .rposition(|l| l.contains("call @__wolf_rt_list32_push("))
         .expect("@shape grows its list in place: a push call in the dump");
     let guards: Vec<&str> = body
         .iter()

@@ -3,7 +3,8 @@
 //!
 //! s44 measured element access at 44–92 ns against C's 0.2–1.0 and
 //! found zero vector instructions in the whole suite, because every
-//! `xs[i]` lowered to `__wolf_rt_list_read(hdr, i, slot)` — an opaque
+//! `xs[i]` lowered to `__wolf_rt_list_read(hdr, i, slot)` (named
+//! `__wolf_rt_list32_read` since wolf-lang#1177) — an opaque
 //! call LLVM cannot move, widen or see through. These tests pin the
 //! four claims that fix costs:
 //!
@@ -74,14 +75,18 @@ fn release_ir(case: &str, src: &str) -> Option<String> {
 }
 
 /// Runtime symbols that must NOT appear in element-access position.
-/// `list_new` and `list_push` are the two the runtime keeps: minting a
-/// header and growing a buffer genuinely need it.
-const BANNED: [&str; 5] = [
+/// `list32_new` and `list32_push` are the two the runtime keeps: minting
+/// a header and growing a buffer genuinely need it. The old names stay
+/// banned too (wolf-lang#1177 renamed the entries whose arguments moved).
+const BANNED: [&str; 8] = [
+    "__wolf_rt_list32_read",
+    "__wolf_rt_list32_write",
+    "__wolf_rt_list_len",
+    "__wolf_rt_list32_pop",
+    "__wolf_rt_list_clear",
     "__wolf_rt_list_read",
     "__wolf_rt_list_write",
-    "__wolf_rt_list_len",
     "__wolf_rt_list_pop",
-    "__wolf_rt_list_clear",
 ];
 
 fn assert_no_element_calls(case: &str, ir: &str) {

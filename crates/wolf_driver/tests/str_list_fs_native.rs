@@ -683,7 +683,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s165 (#344): the key erase.
         "__wolf_rt_map_remove",
         // s165 (#384): `copy` of a List and of a Map.
-        "__wolf_rt_list_copy",
+        "__wolf_rt_list32_copy",
         "__wolf_rt_map_copy",
         // s170 (#110): the blocking join that collects a proc's typed
         // completion value.
@@ -747,7 +747,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_read_link",
         "__wolf_rt_fs_read_dir_entries",
         // s228 (#663): the bulk list slice, `[mem.list.slice]`.
-        "__wolf_rt_list_slice",
+        "__wolf_rt_list32_slice",
         // s230 (#346, #698, #699, #700, #702, #704): the calls that
         // change a file, and the mask — `[os.fs.mode]`,
         // `[os.fs.create.mode]`, `[os.fs.symlink]`, `[os.fs.link]`,
@@ -886,7 +886,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // the argv readers, the shim's first call.
         "__wolf_rt_main_start",
         // s255 (#844): `[type.list.reserve]`.
-        "__wolf_rt_list_reserve",
+        "__wolf_rt_list32_reserve",
+        // wolf-lang#1177: an aimed copy enters a list's region by its header.
+        "__wolf_rt_list32_enter",
         // s261 (#899, #406): the name and all byte arguments.
         "__wolf_rt_env_arg0",
         "__wolf_rt_env_args_bytes",
@@ -907,7 +909,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        291,
+        292,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
