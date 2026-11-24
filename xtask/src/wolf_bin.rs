@@ -46,14 +46,57 @@ pub fn wolf_exe() -> PathBuf {
 /// The debug `wolf`, or an error naming where it was looked for: a step that
 /// cannot run the compiler fails, it never skips.
 pub fn require(step: &str) -> Result<PathBuf, String> {
-    let wolf = wolf_exe();
-    if wolf.is_file() {
-        Ok(wolf)
+    require_file(
+        step,
+        "compiler",
+        wolf_exe(),
+        "build it with `cargo build -p wolf_driver`",
+    )
+}
+
+/// A file cargo's release profile built: `<target dir>/release/<name>`
+/// (the follow-up to wolf-lang#1187: the release artifacts move with the
+/// target directory too).
+pub fn release(name: &str) -> PathBuf {
+    target_dir().join("release").join(name)
+}
+
+/// `path` when it is a file, or an error naming it: a step whose built
+/// artifact is not where cargo put it fails and says where it looked.
+pub fn require_file(step: &str, what: &str, path: PathBuf, how: &str) -> Result<PathBuf, String> {
+    if path.is_file() {
+        Ok(path)
     } else {
         Err(format!(
-            "{step}: no compiler at {} (cargo's target directory); build it with \
-             `cargo build -p wolf_driver`",
-            wolf.display()
+            "{step}: no {what} at {} (cargo's target directory); {how}",
+            path.display()
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A built artifact that is not there is an error that names where it
+    /// was looked for.
+    #[test]
+    fn a_missing_artifact_is_an_error_naming_its_path() {
+        let path = PathBuf::from("/nonexistent/wolf-release-paths/release/examples/fmt_fuzz");
+        let err = require_file("fmt-fuzz", "fuzzer", path, "build it")
+            .expect_err("a missing file is not required");
+        assert!(
+            err.contains("/nonexistent/wolf-release-paths/release/examples/fmt_fuzz"),
+            "the error names the path: {err}"
+        );
+        assert!(err.starts_with("fmt-fuzz: no fuzzer at "), "{err}");
+    }
+
+    #[test]
+    fn a_release_artifact_is_under_the_release_profile_of_the_target_directory() {
+        assert_eq!(
+            release("libwolf_rt.a"),
+            target_dir().join("release/libwolf_rt.a")
+        );
     }
 }
