@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **The release tier no longer proves a list element's range from the
+  wrong list** (wolf-lang#1205, wolf-lang#1207). Its interprocedural
+  range step gave a value it had no rule for (the list `m[k] else [0]`
+  or `xs.get(i) else [0]` hands out, a `copy`) no provenance, and a join
+  took such a value to be the fresh list on its other edge. It also
+  missed a list stored in a struct field or tuple element of a slot
+  handed `mut` to a call. In 0.2.0 through 0.2.40 (read from the source,
+  not run) a release build could print a stale or fallback element, skip
+  a bounds trap, and read past a list's end. Such a value now proves
+  nothing, and every container stored anywhere in a slot handed to a
+  call is clobbered. The checked machine and the native tier were never
+  affected, and `WOLF_MIDEND=0` was the workaround.
+
 - `cargo xtask` finds the compiler where cargo built it, so `CARGO_TARGET_DIR`
   (or `build.target-dir`) no longer hides it (wolf-lang#1187). Before, the
   corpus step skipped every file it could not start and passed having run
