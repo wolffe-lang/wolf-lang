@@ -23,6 +23,11 @@
 //!   the top, `Other`, never the bottom `Unset`, so a join with it
 //!   proves nothing (wolf-lang#1205: left `Unset`, the join took the
 //!   fresh list on its other edge for the whole value);
+//! - a stack slot handed to a call exposes every container whose header
+//!   was stored anywhere in it, at any offset (wolf-lang#1207: the
+//!   channel looked only at the slot's base, so a list in a struct
+//!   field or tuple element handed `mut` to a callee kept the caller's
+//!   stale stores);
 //! - a `wrapping[T]` value needs no special kill because the value
 //!   EVALUATOR is honest: a `*.wrap` op whose mathematical range does
 //!   not fit its type evaluates to the full type bounds — the
@@ -224,6 +229,37 @@ fn has_provenance_rule(f: &Function, inst: &crate::ir::InstData) -> bool {
             matches!(inst.aux, Aux::Callee(ef) if f.ext_funcs[ef].name == "__wolf_rt_list_new")
         }
         _ => false,
+    }
+}
+
+/// wolf-lang#1207 (rule 2): slot `s` reaches a call. Kill every container
+/// whose header was stored anywhere in it, or in a slot whose pointer it
+/// holds (transitively), except `keep`, the header the call's argument flow
+/// carries at the slot's base.
+fn kill_slot_contents(
+    lf: &mut Local,
+    s: u32,
+    keep: Option<Root>,
+    slot_roots: &HashMap<u32, BTreeSet<Root>>,
+    slot_links: &HashMap<u32, BTreeSet<u32>>,
+) {
+    let mut seen: BTreeSet<u32> = BTreeSet::new();
+    let mut todo = vec![s];
+    while let Some(u) = todo.pop() {
+        if !seen.insert(u) {
+            continue;
+        }
+        if let Some(rs) = slot_roots.get(&u) {
+            for &r in rs {
+                if u == s && Some(r) == keep {
+                    continue;
+                }
+                lf.kill(r);
+            }
+        }
+        if let Some(ls) = slot_links.get(&u) {
+            todo.extend(ls.iter().copied());
+        }
     }
 }
 
@@ -600,6 +636,34 @@ fn scan(m: &Module, f: &Function) -> Local {
     let _ = locals;
     let mut lf = Local::default();
     let origin = |v: Value| o.get(&v).copied().unwrap_or(Origin::Unset);
+    // wolf-lang#1207 (rule 2): per stack slot, every container header (or
+    // interior pointer, or `mut` parameter slot) stored anywhere in it, at any
+    // offset and in any block, and every slot whose pointer is stored in it.
+    let mut slot_roots: HashMap<u32, BTreeSet<Root>> = HashMap::new();
+    let mut slot_links: HashMap<u32, BTreeSet<u32>> = HashMap::new();
+    for &b in &cfg.rpo {
+        for &ii in &f.blocks[b].insts {
+            if f.insts[ii].op != Opcode::Store {
+                continue;
+            }
+            let args = f.vpool.get(f.insts[ii].args);
+            let Origin::Stack(s) = origin(args[1]) else {
+                continue;
+            };
+            match origin(args[0]) {
+                Origin::Hdr(r) | Origin::Data(r) | Origin::Elem(r) => {
+                    slot_roots.entry(s).or_default().insert(r);
+                }
+                Origin::MutSlot(p) => {
+                    slot_roots.entry(s).or_default().insert(Root::Param(p));
+                }
+                Origin::Stack(t) => {
+                    slot_links.entry(s).or_default().insert(t);
+                }
+                _ => {}
+            }
+        }
+    }
     // Track param demotion: a param whose value has any non-header use
     // is not a clean container param.
     let mut demoted: BTreeSet<u32> = BTreeSet::new();
@@ -617,6 +681,31 @@ fn scan(m: &Module, f: &Function) -> Local {
         for &ii in &f.blocks[b].insts {
             let inst = &f.insts[ii];
             let args = f.vpool.get(inst.args);
+            // wolf-lang#1207 (rule 2): a stack slot handed to a call exposes
+            // every container stored anywhere in it, and in the slots it
+            // points to: the callee can write each one, or replace it. Each
+            // dies, but for the header at the slot's base that a module call's
+            // argument flow carries (`slot_header`, the `mut` argument pattern
+            // wolf-lang#940's channel follows). The runtime entries the channel
+            // models (`whitelisted_rt`) are read below instead.
+            if matches!(inst.op, Opcode::Call | Opcode::CallInd)
+                && !matches!(inst.aux, Aux::Callee(ef) if whitelisted_rt(&f.ext_funcs[ef].name))
+            {
+                let module_call = inst.op == Opcode::Call
+                    && matches!(inst.aux, Aux::Callee(ef)
+                        if m.funcs.iter().any(|(_, g)| g.name == f.ext_funcs[ef].name));
+                for a in args.iter().copied() {
+                    let Origin::Stack(s) = origin(a) else {
+                        continue;
+                    };
+                    let keep = if module_call {
+                        slot_header(f, b, ii, a, &o)
+                    } else {
+                        None
+                    };
+                    kill_slot_contents(&mut lf, s, keep, &slot_roots, &slot_links);
+                }
+            }
             match inst.op {
                 Opcode::Store => {
                     // Store [val, addr, tok].
