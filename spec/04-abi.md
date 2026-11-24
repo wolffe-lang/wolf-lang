@@ -11,7 +11,7 @@ AAPCS64, win64, Apple arm64 deltas).
 ## §1 wolf-abi-3 `[abi.native]`
 
 - `[abi.native.unstable]` The native ABI is **versioned and unstable**:
-  `wolf-abi-3`. Nothing about it is a compatibility promise; separately
+  `wolf-abi-0`. Nothing about it is a compatibility promise; separately
   compiled wolf artifacts must agree on the version string or fail to
   link. The runtime's entry points are versioned by their names: an
   entry whose contract changes is renamed, so an object compiled against
