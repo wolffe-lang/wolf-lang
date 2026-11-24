@@ -81,16 +81,17 @@ pub const NONE_RT_SYMBOLS: &[&str] = &[
     "__wolf_rt_region_ambient_enter",
     "__wolf_rt_region_ambient_leave",
     "__wolf_rt_closure_alloc",
-    "__wolf_rt_list_new",
-    "__wolf_rt_list_push",
-    "__wolf_rt_list_pop",
-    "__wolf_rt_list_read",
-    "__wolf_rt_list_write",
+    "__wolf_rt_list32_new",
+    "__wolf_rt_list32_push",
+    "__wolf_rt_list32_pop",
+    "__wolf_rt_list32_read",
+    "__wolf_rt_list32_write",
     "__wolf_rt_list_len",
     "__wolf_rt_list_clear",
-    "__wolf_rt_list_reserve",
-    "__wolf_rt_list_copy",
-    "__wolf_rt_list_slice",
+    "__wolf_rt_list32_reserve",
+    "__wolf_rt_list32_copy",
+    "__wolf_rt_list32_slice",
+    "__wolf_rt_list32_enter",
     "__wolf_rt_map_new",
     "__wolf_rt_map_get",
     "__wolf_rt_map_set",
@@ -211,7 +212,7 @@ pub fn runtime_construct(symbol: &str) -> (String, RefusalClass) {
         ("`str` comparison".into(), HostedRuntime)
     } else if let Some(op) = s.strip_prefix("str_") {
         (format!("`str.{op}`"), HostedRuntime)
-    } else if has("list_") {
+    } else if has("list_") || has("list32_") {
         ("`List`".into(), Allocates)
     } else if has("map_") {
         ("`Map`".into(), Allocates)
@@ -227,7 +228,7 @@ pub fn runtime_construct(symbol: &str) -> (String, RefusalClass) {
         ("a channel".into(), HostedRuntime)
     } else if has("scope_") || has("task_") {
         ("`spawn`".into(), HostedRuntime)
-    } else if has("par_") {
+    } else if has("par_") || has("par32_") {
         ("`par`".into(), HostedRuntime)
     } else if has("proc_") {
         ("`spawn proc`".into(), HostedRuntime)
@@ -401,7 +402,7 @@ mod tests {
                 "`print`",
                 RefusalClass::HostedRuntime,
             ),
-            ("__wolf_rt_list_push", "`List`", RefusalClass::Allocates),
+            ("__wolf_rt_list32_push", "`List`", RefusalClass::Allocates),
             ("__wolf_rt_map_new", "`Map`", RefusalClass::Allocates),
             ("__wolf_rt_pool_new", "`Pool`", RefusalClass::Allocates),
             (
