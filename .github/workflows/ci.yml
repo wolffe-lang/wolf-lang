@@ -656,13 +656,21 @@ jobs:
       matrix:
         include:
           - os: macos-latest
+            timeout: 60
           - os: windows-latest
             leg: tests
+            timeout: 30
           - os: windows-latest
             leg: rung
+            timeout: 20
     runs-on: ${{ matrix.os }}
-    # s255 (#878): build + test (macos-latest) ran 25:38 at 89cf0437 (s255 alone), 22:51 at 94cd52bc's PR run (s256 alone) and was cut at 30 on the trunk push of 94cd52bc (an orphan `soak`); the two together sit within minutes of 30. The windows legs share the line and ran well under it.
-    timeout-minutes: 45
+    # Each leg's limit is its longest healthy run plus a third, rounded up to
+    # the next 5 minutes (#1217): macOS 44.6 -> 60, the windows tests leg
+    # 21.2 -> 30, the rung leg 13.7 -> 20, read from each leg's last 100
+    # executions to 2026-11-24. The shared 45 cut the macOS leg twice inside
+    # `cargo test --workspace` (the limit was 30 before #878). The runs are
+    # in ci/job-limits.json; ci/tiers-test.py T12 fails a limit under it.
+    timeout-minutes: ${{ matrix.timeout }}
     env:
       WOLF_RT_NONE_REQUIRE: "1"
     steps:
