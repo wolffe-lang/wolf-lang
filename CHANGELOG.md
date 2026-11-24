@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- **An empty list costs 32 bytes, not 48** (wolf-lang#1177). A `List`'s
+  header no longer stores its element size: compiled code knows every
+  list's element type and hands the size to each runtime call that moves
+  elements. The header is 32 bytes and the native arena charges 32 for it,
+  where it was 40 and charged 48, so every empty list, every copy and
+  every `reserve` costs 16 bytes less: 1,000 `List[int]()` charge their
+  region 32,000 bytes natively where they charged 48,000. The checked
+  machine's ledger never held the header and is unchanged. The native
+  convention is `wolf-abi-3` (the ABI chapter said `wolf-abi-0` while the
+  compiler used `wolf-abi-2`, wolf-lang#1185). The runtime entries whose
+  arguments changed are renamed (`__wolf_rt_list32_*`,
+  `__wolf_rt_par32_map`), and compiled code reaches a list's region, the
+  one word that moved, through a renamed entry instead of reading it, so
+  an object built before this change does not link against the new
+  runtime, nor a new object that depends on the new layout against an old
+  one. A runtime call that refuses a list of the wrong element width still
+  does: the header keeps the width's class in its region word.
+
 - A `push` of a value nothing else holds stores it as it is
   (wolf-lang#1177): a struct, tuple or list literal, a `copy e`, and a
   declared function's answer to primitive arguments (`push(make(i))`).
