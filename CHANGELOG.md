@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.41 — 2026-11-24
+## 0.2.41 — 2026-11-25
 
 Pairs with **lupin 0.1.63**, conformance pin
 `5f1f1c949582f53121e4047bc83c86f23ff72240`, and bundles **wolf-std
