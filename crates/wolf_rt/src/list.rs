@@ -592,6 +592,42 @@ mod tests {
         }
     }
 
+    /// wolf-lang#1177 (part 1): an empty list costs its header and nothing
+    /// else, and the header is 32 bytes: `data`, `len`, `cap` and the
+    /// region it was born in. The element size is the compiled code's to
+    /// pass, so the header does not carry it. A copy of 16 bytes costs the
+    /// header and its 16-byte buffer.
+    #[test]
+    fn an_empty_list_charges_its_32_byte_header_and_a_copy_its_bytes_beside() {
+        let r = crate::native::__wolf_rt_region_new();
+        unsafe {
+            let prev = crate::native::__wolf_rt_region_ambient_enter(r);
+            assert_eq!(crate::native::region_bytes(r), 0);
+            let _h = __wolf_rt_list_new(8);
+            assert_eq!(
+                crate::native::region_bytes(r),
+                32,
+                "one empty list's header"
+            );
+            crate::native::__wolf_rt_region_ambient_leave(prev);
+            let src = __wolf_rt_list_new(1);
+            for b in 0..16u8 {
+                __wolf_rt_list_push(src, (&raw const b) as i64);
+            }
+            let r2 = crate::native::__wolf_rt_region_new();
+            let prev = crate::native::__wolf_rt_region_ambient_enter(r2);
+            let _c = __wolf_rt_list_copy(src);
+            assert_eq!(
+                crate::native::region_bytes(r2),
+                48,
+                "a 16-byte copy: header and buffer"
+            );
+            crate::native::__wolf_rt_region_ambient_leave(prev);
+            crate::native::__wolf_rt_region_free(r2);
+            crate::native::__wolf_rt_region_free(r);
+        }
+    }
+
     // ------------------------------- s76: where a List allocates ----
 
     /// Target 1: header AND element buffer land in the region that was
