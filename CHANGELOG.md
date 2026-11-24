@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **A `let` or `var` pattern's piece of a `read` parameter is lent**
+  (wolf-lang#1192, `[mem.tier0.mode.read]`), as a field read and a
+  `match` binding of it are. `let (a, n) = p` then `a` returned, or
+  carried out in a struct, is E1002, and a write through a `var`
+  pattern's piece that reaches the caller's storage is E1014. In 0.2.40
+  every machine ran them, so the caller and the answer were one list
+  with two writable paths. The fix the reports suggest is `copy` at the
+  initializer, `let (a, n) = copy p`. Nothing in the census of wolf
+  programs or in the corpus is newly refused.
+
 - **`get`, `first` and `last` answer a value of their own**
   (wolf-lang#1184, `[mem.list.pop]`, `[mem.model.value]`). In 0.2.40
   every compiling machine answered with the element itself, so after
