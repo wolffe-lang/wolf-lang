@@ -3,7 +3,7 @@
  "read": "each leg's last 100 executions on GitHub, every attempt, 2026-11-19 to 2026-11-24 UTC; healthy is a success, minutes on the runner",
  "build-test": {
   "macos-latest": {
-   "longest_minutes": 44.6,
+   "longest_minutes": 46.0,
    "longest_run": 45367206012,
    "median_minutes": 34.9,
    "successes": 76,
