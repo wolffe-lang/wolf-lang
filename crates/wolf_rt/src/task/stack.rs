@@ -283,6 +283,13 @@ pub fn enter_main_thread() {
     let Some(bounds) = pthread_bounds() else {
         return;
     };
+    {
+        use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
+        static TOUCHED: [AtomicU8; 128 * 1024] = [const { AtomicU8::new(0) }; 128 * 1024];
+        for i in (0..TOUCHED.len()).step_by(4096) {
+            TOUCHED[i].store(1, Relaxed);
+        }
+    }
     if !install_main_altstack() {
         return;
     }
