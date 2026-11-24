@@ -65,7 +65,7 @@ fn main() -> ExitCode {
                 format!("wolf-cimport-worker{exe}"),
             ];
             for f in &files {
-                let from = std::path::Path::new("target/release").join(f);
+                let from = xtask::wolf_bin::release(f);
                 let to = dest.join(f);
                 // unlink first: a running `wolf lsp` holds the old inode
                 // (ETXTBSY on in-place copy); the unlinked file lives on
@@ -3156,11 +3156,31 @@ fn fmt_fuzz(args: &[String]) -> ExitCode {
         pass.push("--seed=63".to_string());
         pass.push("--allow-open".to_string());
     }
-    let ok = Command::new("target/release/examples/fmt_fuzz")
-        .args(&pass)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    // The loop is where cargo built it (the follow-up to wolf-lang#1187),
+    // and a loop that cannot be started is that, never a finding.
+    let fuzz = match xtask::wolf_bin::require_file(
+        "fmt-fuzz",
+        "fuzzer",
+        xtask::wolf_bin::release(&format!(
+            "examples/fmt_fuzz{}",
+            std::env::consts::EXE_SUFFIX
+        )),
+        "build it with `cargo build --release -p wolf_fmt --example fmt_fuzz`",
+    ) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("fmt-fuzz: running {}", fuzz.display());
+    let ok = match Command::new(&fuzz).args(&pass).status() {
+        Ok(s) => s.success(),
+        Err(e) => {
+            eprintln!("fmt-fuzz: cannot run {}: {e}", fuzz.display());
+            return ExitCode::FAILURE;
+        }
+    };
     if ok {
         eprintln!("fmt-fuzz: invariants held");
         ExitCode::SUCCESS
@@ -5484,10 +5504,9 @@ fn rt_none() -> Result<Option<PathBuf>, ()> {
     // The target's rustflags (a lane may point `--sysroot` at a private
     // copy of the target's rust-std) apply to the probe as to the build.
     let flags = std::env::var("CARGO_TARGET_X86_64_UNKNOWN_NONE_RUSTFLAGS").unwrap_or_default();
-    let tdir = std::env::var_os("CARGO_TARGET_DIR")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target"));
+    // Cargo's own answer, which also follows `build.target-dir` (the
+    // follow-up to wolf-lang#1187).
+    let tdir = xtask::wolf_bin::target_dir().to_path_buf();
     let probe_dir = tdir.join("rt-none-probe");
     let _ = std::fs::create_dir_all(&probe_dir);
     let probe_src = probe_dir.join("probe.rs");
@@ -5593,8 +5612,9 @@ fn dist() -> ExitCode {
     let stage = Path::new("target/dist").join(&name);
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).expect("mkdir dist stage");
-    std::fs::copy(Path::new("target/release").join(exe), stage.join(exe))
-        .expect("stage wolf binary");
+    let wolf_release = xtask::wolf_bin::release(exe);
+    std::fs::copy(&wolf_release, stage.join(exe))
+        .unwrap_or_else(|e| panic!("stage wolf binary {}: {e}", wolf_release.display()));
     // The staticlib's name is the target's: rustc emits `wolf_rt.lib`
     // on MSVC and `libwolf_rt.a` everywhere else. The windows archive
     // stages it under the MSVC name today for the day s60 teaches the
@@ -5605,9 +5625,12 @@ fn dist() -> ExitCode {
     } else {
         "libwolf_rt.a"
     };
-    let rt = Path::new("target/release").join(rt_name);
+    let rt = xtask::wolf_bin::release(rt_name);
     if !rt.exists() {
-        eprintln!("dist: {rt_name} missing — the archive would not link");
+        eprintln!(
+            "dist: {} missing — the archive would not link",
+            rt.display()
+        );
         return ExitCode::FAILURE;
     }
     std::fs::copy(&rt, stage.join(rt_name)).expect("stage runtime lib");
@@ -5618,9 +5641,12 @@ fn dist() -> ExitCode {
     } else {
         "wolf-cimport-worker"
     };
-    let worker = Path::new("target/release").join(worker_exe);
+    let worker = xtask::wolf_bin::release(worker_exe);
     if !worker.exists() {
-        eprintln!("dist: {worker_exe} missing — `import c` would not work from this archive");
+        eprintln!(
+            "dist: {} missing — `import c` would not work from this archive",
+            worker.display()
+        );
         return ExitCode::FAILURE;
     }
     std::fs::copy(&worker, stage.join(worker_exe)).expect("stage importer worker");
