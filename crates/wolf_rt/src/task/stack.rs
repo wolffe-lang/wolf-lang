@@ -262,7 +262,11 @@ pub fn enter_thread() {
 ///   altstack and the handler's installation;
 /// - the altstack lives as long as the process: the main thread's end
 ///   is the process's, so no thread-exit destructor is registered and
-///   nothing is unmapped on the way out.
+///   nothing is unmapped on the way out;
+/// - the altstack is [`MAIN_ALTSTACK`], part of the program's data, given to
+///   the kernel by one `sigaltstack` call that also reads back the one it
+///   replaces ([`install_main_altstack`]): no query first and no mapping, two
+///   system calls fewer at every start.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn enter_main_thread() {
     if CURRENT_GUARD.with(|g| g.get().1 != 0) {
@@ -279,11 +283,48 @@ pub fn enter_main_thread() {
     let Some(bounds) = pthread_bounds() else {
         return;
     };
-    if ensure_altstack().is_none() {
+    if !install_main_altstack() {
         return;
     }
     register_guard(bounds.0, bounds.1);
     install_overflow_handler();
+}
+
+/// The main thread's alternate signal stack, in the program's zero-filled
+/// data: none of its pages is resident until a signal runs on it. It has no
+/// guard page below it (nor did the mapping it replaces); bench-gates' start-up
+/// floor reads how much of it an overflow report uses.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[repr(C, align(16))]
+struct MainAltstack(UnsafeCell<[u8; ALT]>);
+// SAFETY: only the main thread's entry hands it to the kernel, once; after
+// that only a signal handler on the main thread runs on it.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+unsafe impl Sync for MainAltstack {}
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+static MAIN_ALTSTACK: MainAltstack = MainAltstack(UnsafeCell::new([0; ALT]));
+
+/// Make [`MAIN_ALTSTACK`] the calling thread's alternate stack with one call
+/// that reads back the one it replaces. When something before `main` had set
+/// one, put that one back (a second call, on that rare path only): a thread's
+/// own alternate stack is kept, as [`ensure_altstack`] keeps it. `false` when
+/// the host refused.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn install_main_altstack() -> bool {
+    // SAFETY: the stack is a static of ALT bytes that outlives every
+    // handler; `old` is ours.
+    unsafe {
+        let ss = libc::stack_t {
+            ss_sp: MAIN_ALTSTACK.0.get().cast(),
+            ss_flags: 0,
+            ss_size: ALT,
+        };
+        let mut old: libc::stack_t = std::mem::zeroed();
+        if libc::sigaltstack(&ss, &mut old) != 0 {
+            return false;
+        }
+        old.ss_flags & libc::SS_DISABLE != 0 || libc::sigaltstack(&old, std::ptr::null_mut()) == 0
+    }
 }
 
 /// s265: the main thread's guard before its first fault resolves it.
