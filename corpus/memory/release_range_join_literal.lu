@@ -1,0 +1,17 @@
+//! check: run(exit=0, stdout="5 5\n")
+//! phase: run
+//! conforms: mem.model.value
+//! wolf-lang#1205 without a map: a list read through `get ... else`
+//! with a literal fallback (the `eu.ok` join), and a `copy` joined with
+//! a literal (a `__wolf_rt_list_copy` result at the join). The range
+//! channel had no provenance rule for either value and took each join
+//! to be the fresh literal, so release printed `0 0`.
+
+fn main() -> int {
+    var rows = [[5, 6]]
+    let row = rows.get(0) else [0]
+    let a = [5, 6]
+    let r = if a.len > 1 { copy a } else { [0] }
+    print("{row[0]} {r[0]}")
+    0
+}

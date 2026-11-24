@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: type.map, mem.model.value
+//! wolf-lang#1205, the first program of the issue: a callee walks a
+//! map's pairs and returns the first value; the caller writes through
+//! the answer and reads the map's own entry with an `else` fallback.
+//! The release tier's interprocedural range channel had no provenance
+//! rule for the value `eu.ok` hands out of `m["key"] else [0]`, and its
+//! join rule skipped a value with none, so the joined list was taken to
+//! be the fresh `[0]`, the element load was proved to be 0, and release
+//! printed 0 where the checked machine, native and lupin print 1.
+
+fn first_value(m: Map[str, List[int]]) -> List[int] {
+    for pair in m.pairs() {
+        return pair.1
+    }
+    [0]
+}
+
+fn main() -> int {
+    var m = Map[str, List[int]]()
+    m["key"] = [1, 2]
+    var v = first_value(m)
+    v[0] = 9
+    let original = m["key"] else [0]
+    print("{original[0]}")
+    0
+}
