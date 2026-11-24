@@ -659,17 +659,18 @@ jobs:
             timeout: 60
           - os: windows-latest
             leg: tests
-            timeout: 30
+            timeout: 45
           - os: windows-latest
             leg: rung
-            timeout: 20
+            timeout: 45
     runs-on: ${{ matrix.os }}
-    # Each leg's limit is its longest healthy run plus a third, rounded up to
-    # the next 5 minutes (#1217): macOS 44.6 -> 60, the windows tests leg
-    # 21.2 -> 30, the rung leg 13.7 -> 20, read from each leg's last 100
-    # executions to 2026-11-24. The shared 45 cut the macOS leg twice inside
-    # `cargo test --workspace` (the limit was 30 before #878). The runs are
-    # in ci/job-limits.json; ci/tiers-test.py T12 fails a limit under it.
+    # Each leg's limit is at least its longest healthy run plus a third,
+    # rounded up to the next 5 minutes (#1217), read from each leg's last
+    # 100 executions to 2026-11-24: macOS 44.6 -> 60. The windows legs keep
+    # 45 (their longest healthy runs 21.2 and 13.7) until a run whose Rust
+    # cache missed has been measured. The shared 45 cut the macOS leg twice
+    # inside `cargo test --workspace` (the limit was 30 before #878). The runs
+    # are in ci/job-limits.json; ci/tiers-test.py T12 fails a limit under it.
     timeout-minutes: ${{ matrix.timeout }}
     env:
       WOLF_RT_NONE_REQUIRE: "1"

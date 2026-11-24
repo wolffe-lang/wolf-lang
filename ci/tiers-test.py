@@ -759,7 +759,7 @@ says_no = (limit_floor(44.6) == 60 and limit_floor(30.0) == 40 and limit_floor(1
            and not limit_problems({"a": 60}, {"a": {"longest_minutes": 44.6}})
            and limit_problems({"a": 60, "b": 60}, {"a": {"longest_minutes": 44.6}}))
 say(bool(got) and not probs and says_no,
-    "T12 each build + test leg's limit is its longest healthy run plus a third, rounded up to 5 (%s)%s%s"
+    "T12 each build + test leg's limit is at least its longest healthy run plus a third, rounded up to 5 (%s)%s%s"
     % (", ".join("%s %s" % (k, v) for k, v in sorted(got.items())) or "no legs",
        ("; " + "; ".join(probs)) if probs else "", "" if says_no else "; the check does not say no to a limit under the rule"))
 
