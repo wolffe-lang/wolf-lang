@@ -16,8 +16,8 @@
   throw that meets a wolf frame still ends the process by SIGABRT.
   bench-gates' start-up row now also holds the release-linked hello's
   resident memory, minor faults and own text pages over its C twin, read
-  at the exit stop with address randomisation off, and how much of the
-  alternate stack an overflow report uses.
+  at the exit stop with address randomisation off, and holds an overflow
+  report under half of its alternate stack.
 
 - **`get`, `first` and `last` answer a value of their own**
   (wolf-lang#1184, `[mem.list.pop]`, `[mem.model.value]`). In 0.2.40

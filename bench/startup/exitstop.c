@@ -11,12 +11,11 @@
  *       main thread's alternate signal stack. At the exec stop the object is
  *       filled with 0xa5; at the exit stop the lowest byte that is no longer
  *       0xa5 gives how much of it the program used. Prints one line:
- *       "altstack used=N size=SIZE minsigstksz=F exit=E": F is this kernel's
- *       signal frame for this CPU (getauxval(AT_MINSIGSTKSZ), 0 where the
- *       kernel gives none), which the kernel pushes onto the alternate stack
- *       before a handler runs and whose size follows the CPU's saved vector
- *       state, so USED less F is the handler's own use; E is the exit status,
- *       or 128 plus the signal that ended it.
+ *       "altstack used=N size=SIZE minsigstksz=F exit=E": F is the kernel's
+ *       getauxval(AT_MINSIGSTKSZ), the largest signal frame it could push for
+ *       this CPU (0 where it gives none), printed beside USED but not the frame
+ *       it pushed, so USED less F is not the handler's own use; E is the exit
+ *       status, or 128 plus the signal that ended it.
  *
  * The program runs in an empty environment with stdin and stdout on /dev/null
  * and stderr inherited, with address randomisation off
