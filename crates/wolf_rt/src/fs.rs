@@ -1236,7 +1236,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_dir_entries(pp: i64, pl: i64, out: i6
     let hdr = new_list(8);
     for row in &rows {
         let inner = crate::list::from_bytes(row) as i64;
-        crate::list::push_raw(hdr, (&raw const inner).cast());
+        crate::list::push_raw(hdr, (&raw const inner).cast(), 8);
     }
     unsafe { write_word(out, hdr as i64) };
     fs_code::OK
@@ -2118,8 +2118,9 @@ mod tests {
         (0..n)
             .map(|i| {
                 let mut cell = [0u8; 1];
-                let rc =
-                    unsafe { crate::list::__wolf_rt_list_read(hdr, i, cell.as_mut_ptr() as i64) };
+                let rc = unsafe {
+                    crate::list::__wolf_rt_list32_read(hdr, i, 1, cell.as_mut_ptr() as i64)
+                };
                 assert_eq!(rc, 1);
                 cell[0]
             })
@@ -2131,8 +2132,9 @@ mod tests {
         (0..n)
             .map(|i| {
                 let mut pair = [0i64; 2];
-                let rc =
-                    unsafe { crate::list::__wolf_rt_list_read(hdr, i, pair.as_mut_ptr() as i64) };
+                let rc = unsafe {
+                    crate::list::__wolf_rt_list32_read(hdr, i, 16, pair.as_mut_ptr() as i64)
+                };
                 assert_eq!(rc, 1);
                 unsafe { view(pair[0], pair[1]).to_string() }
             })
@@ -2146,7 +2148,7 @@ mod tests {
     fn bytes_list(bs: &[u8]) -> i64 {
         let hdr = crate::list::new_list(1);
         for b in bs {
-            crate::list::push_raw(hdr, core::ptr::from_ref(b));
+            crate::list::push_raw(hdr, core::ptr::from_ref(b), 1);
         }
         hdr as i64
     }

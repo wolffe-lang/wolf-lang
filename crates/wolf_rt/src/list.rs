@@ -1,8 +1,8 @@
 //! The s40 native `List` runtime — a region-backed growable buffer.
 //!
 //! The value form of a `List[T]` at the native tier is ONE pointer to
-//! a 40-byte header `{data: *mut u8, len: i64, cap: i64, elem: i64,
-//! region: *mut c_void}`
+//! a 32-byte header `{data: *mut u8, len: i64, cap: i64, region: *mut
+//! c_void}`
 //! living in the ambient region (see [`crate::str`]'s design note for
 //! the region story: header and buffer land per `[mem.region.create.3]`,
 //! growth copies into a fresh buffer and abandons the old bytes to the
@@ -11,6 +11,27 @@
 //! uses for `mut` arguments — an `int` element is 8 bytes, a `str`
 //! element is its 16-byte `{ptr, len}` pair, a flat struct is its
 //! packed fields.
+//!
+//! # The element size is the caller's (wolf-lang#1177)
+//!
+//! The header does not store the element size: compiled code knows every
+//! list's element type, so every entry that moves elements takes the size
+//! as an argument, and a runtime producer passes the size of the list it
+//! makes. The header was 40 bytes with it, which the arena's 16-byte
+//! rounding charged 48; it is 32 and charged 32. The entries whose
+//! arguments changed with it are named `__wolf_rt_list32_*`, and the old
+//! `__wolf_rt_list_*` names of those seven are not defined, so an object
+//! compiled against the 40-byte header does not link against this
+//! runtime. The other direction: compiled code reads only `data`, `len`
+//! and `cap`, which did not move, and enters a list's region through
+//! [`__wolf_rt_list32_enter`], so an object that depends on the new
+//! layout names a renamed entry and does not link against an old
+//! runtime. `len` and `clear` read only `len` and keep their names.
+//! The header keeps one witness of the size: its width class, in the low
+//! bits of the `region` word, for the whole-list readers' refusal of a
+//! list of another width (only an FFI caller can hand one over). A
+//! zero-sized element moves as one byte, as it did when the header stored
+//! `elem.max(1)`, so every region charge is what it was.
 //!
 //! Every entry point takes the header pointer; element traffic goes
 //! through caller-owned slots (`elem_ptr` in, `out` out), so compiled
@@ -52,7 +73,6 @@ pub(crate) struct ListHdr {
     data: *mut u8,
     len: i64,
     cap: i64,
-    elem: i64,
     /// The region this list was born in (null = the process root). Read
     /// only by [`push_raw`]'s growth path: [mem.region.intra.2] frees
     /// the arena as a unit, so a list's bytes must never be split
@@ -74,13 +94,7 @@ pub const DEBUG_LAYOUT: crate::debug_layout::HeaderLayout = {
     }
     crate::debug_layout::HeaderLayout {
         size: core::mem::size_of::<ListHdr>() as u64,
-        fields: &[
-            field!(data),
-            field!(len),
-            field!(cap),
-            field!(elem),
-            field!(region),
-        ],
+        fields: &[field!(data), field!(len), field!(cap), field!(region)],
     }
 };
 
@@ -100,39 +114,81 @@ pub(crate) fn alloc_in(region: *mut c_void, size: usize) -> *mut u8 {
     }
 }
 
+/// The low bits of a list's `region` word: its elements' width class
+/// (wolf-lang#1177). The header has no element size since it became 32
+/// bytes, and the whole-list readers ([`i64_elems`], [`u8_elems`],
+/// [`u32_elems`], [`str_pair_elems`]) still refuse a list of another
+/// width, which only a direct FFI caller can hand over: the class is
+/// their witness. Region handles are `Box`ed (`native::Region`), so their
+/// low three bits are free; null, the process root, carries a class too.
+const WIDTH_BITS: usize = 0b111;
+
+/// 1, 2, 3 and 4 for elements of 1, 4, 8 and 16 bytes, the widths the
+/// readers take; 0 for any other.
+fn width_class(elem: usize) -> usize {
+    match elem {
+        1 => 1,
+        4 => 2,
+        8 => 3,
+        16 => 4,
+        _ => 0,
+    }
+}
+
+impl ListHdr {
+    /// The region this list was born in, without its width class.
+    fn region(&self) -> *mut c_void {
+        (self.region as usize & !WIDTH_BITS) as *mut c_void
+    }
+
+    /// Whether the list was made for `elem`-byte elements, one of the
+    /// readers' widths.
+    fn holds_width(&self, elem: usize) -> bool {
+        let class = width_class(elem);
+        class != 0 && self.region as usize & WIDTH_BITS == class
+    }
+}
+
 pub(crate) fn new_list(elem: usize) -> *mut ListHdr {
     let region = ambient_region();
+    debug_assert_eq!(
+        region as usize & WIDTH_BITS,
+        0,
+        "a region handle is 8-aligned"
+    );
     let hdr = alloc_in(region, core::mem::size_of::<ListHdr>()) as *mut ListHdr;
     unsafe {
         hdr.write(ListHdr {
             data: core::ptr::null_mut(),
             len: 0,
             cap: 0,
-            elem: elem as i64,
-            region,
+            region: (region as usize | width_class(elem)) as *mut c_void,
         });
     }
     hdr
 }
 
-pub(crate) fn push_raw(hdr: *mut ListHdr, elem_ptr: *const u8) {
+/// Append one `elem`-byte element copied from `elem_ptr`, growing the
+/// buffer in the list's own region when it is full.
+pub(crate) fn push_raw(hdr: *mut ListHdr, elem_ptr: *const u8, elem: usize) {
+    let elem = elem.max(1) as i64;
     unsafe {
         let h = &mut *hdr;
         if h.len == h.cap {
             let ncap = if h.cap == 0 { 8 } else { h.cap * 2 };
             // The list's OWN region, not whatever is ambient now: a
             // region frees as a unit, so the buffer must not migrate.
-            let ndata = alloc_in(h.region, (ncap * h.elem) as usize);
+            let ndata = alloc_in(h.region(), (ncap * elem) as usize);
             if h.len > 0 {
-                core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * h.elem) as usize);
+                core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * elem) as usize);
             }
             h.data = ndata;
             h.cap = ncap;
         }
         core::ptr::copy_nonoverlapping(
             elem_ptr,
-            h.data.add((h.len * h.elem) as usize),
-            h.elem as usize,
+            h.data.add((h.len * elem) as usize),
+            elem as usize,
         );
         h.len += 1;
     }
@@ -153,7 +209,7 @@ pub(crate) fn from_bytes(bytes: &[u8]) -> *mut ListHdr {
     if !bytes.is_empty() {
         unsafe {
             let h = &mut *hdr;
-            let data = alloc_in(h.region, bytes.len());
+            let data = alloc_in(h.region(), bytes.len());
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());
             h.data = data;
             h.len = bytes.len() as i64;
@@ -171,23 +227,24 @@ pub(crate) fn list_from_bytes(elem: usize, bytes: &[u8]) -> *mut ListHdr {
     if !bytes.is_empty() {
         unsafe {
             let h = &mut *hdr;
-            let data = alloc_in(h.region, bytes.len());
+            let data = alloc_in(h.region(), bytes.len());
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());
             h.data = data;
-            h.len = (bytes.len() / h.elem as usize) as i64;
+            h.len = (bytes.len() / elem.max(1)) as i64;
             h.cap = h.len;
         }
     }
     hdr
 }
 
-/// The element buffer, length and element size of a list — the
-/// `par` seam's read of its source (s166, `task::__wolf_rt_par_map`).
-pub(crate) fn raw_parts(hdr: *mut ListHdr) -> (*mut u8, usize, usize) {
+/// The element buffer and length of a list — the `par` seam's read of
+/// its source (s166, `task::__wolf_rt_par32_map`, which is handed the
+/// element size).
+pub(crate) fn raw_parts(hdr: *mut ListHdr) -> (*mut u8, usize) {
     // SAFETY: the caller holds a live header from lowering.
     unsafe {
         let h = &*hdr;
-        (h.data, h.len as usize, h.elem as usize)
+        (h.data, h.len as usize)
     }
 }
 
@@ -203,7 +260,7 @@ pub(crate) fn new_list_len(elem: usize, n: usize) -> (*mut ListHdr, *mut u8) {
     // SAFETY: `hdr` was just minted above.
     unsafe {
         let h = &mut *hdr;
-        let data = alloc_in(h.region, elem * n);
+        let data = alloc_in(h.region(), elem * n);
         h.data = data;
         h.len = n as i64;
         h.cap = n as i64;
@@ -214,7 +271,7 @@ pub(crate) fn new_list_len(elem: usize, n: usize) -> (*mut ListHdr, *mut u8) {
 /// Push one `int` element onto an 8-byte-element list.
 pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
     let cell = [v];
-    push_raw(hdr, cell.as_ptr().cast());
+    push_raw(hdr, cell.as_ptr().cast(), 8);
 }
 
 /// Copy `s` into the LIST's own region and push it as a `{ptr, len}`
@@ -229,30 +286,32 @@ pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
 /// element's BYTES charged the process root, which is the split that
 /// made a `List[str]` the sharpest instance of #191.
 pub(crate) fn push_str(hdr: *mut ListHdr, s: &str) {
-    let region = unsafe { (*hdr).region };
+    let region = unsafe { (*hdr).region() };
     let p = alloc_in(region, s.len());
     if !s.is_empty() {
         unsafe { core::ptr::copy_nonoverlapping(s.as_bytes().as_ptr(), p, s.len()) };
     }
     let pair = [p as i64, s.len() as i64];
-    push_raw(hdr, pair.as_ptr().cast());
+    push_raw(hdr, pair.as_ptr().cast(), 16);
 }
 
-/// `List[T]()` — a fresh empty list of `elem_size`-byte elements.
+/// `List[T]()` — a fresh empty list of `elem_size`-byte elements. The
+/// size is every later entry's argument, not the header's
+/// (wolf-lang#1177); the header keeps only its width class.
 #[unsafe(no_mangle)]
-pub extern "C" fn __wolf_rt_list_new(elem_size: i64) -> i64 {
+pub extern "C" fn __wolf_rt_list32_new(elem_size: i64) -> i64 {
     new_list(elem_size.max(1) as usize) as i64
 }
 
-/// `push` — append one element (copied from `elem_ptr`).
+/// `push` — append one `elem`-byte element (copied from `elem_ptr`).
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`]; `elem_ptr` must address the
-/// list's element size in readable bytes.
+/// `hdr` from [`__wolf_rt_list32_new`]; `elem` is the list's element
+/// size; `elem_ptr` must address `elem` readable bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_push(hdr: i64, elem_ptr: i64) {
-    push_raw(hdr as *mut ListHdr, elem_ptr as *const u8);
+pub unsafe extern "C" fn __wolf_rt_list32_push(hdr: i64, elem: i64, elem_ptr: i64) {
+    push_raw(hdr as *mut ListHdr, elem_ptr as *const u8, elem as usize);
 }
 
 /// `reserve(n)` (s255, wolf-lang#844, `[type.list.reserve]`): grow the
@@ -266,17 +325,19 @@ pub unsafe extern "C" fn __wolf_rt_list_push(hdr: i64, elem_ptr: i64) {
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`] (or any live list header).
+/// `hdr` from [`__wolf_rt_list32_new`] (or any live list header) of
+/// `elem`-byte elements.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_reserve(hdr: i64, n: i64) {
+pub unsafe extern "C" fn __wolf_rt_list32_reserve(hdr: i64, n: i64, elem: i64) {
+    let elem = elem.max(1);
     unsafe {
         let h = &mut *(hdr as *mut ListHdr);
         if n <= h.cap {
             return;
         }
-        let ndata = alloc_in(h.region, (n * h.elem) as usize);
+        let ndata = alloc_in(h.region(), (n * elem) as usize);
         if h.len > 0 {
-            core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * h.elem) as usize);
+            core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * elem) as usize);
         }
         h.data = ndata;
         h.cap = n;
@@ -292,25 +353,27 @@ pub unsafe extern "C" fn __wolf_rt_list_reserve(hdr: i64, n: i64) {
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`] (or any live list header).
+/// `hdr` from [`__wolf_rt_list32_new`] (or any live list header) of
+/// `elem`-byte elements.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_copy(hdr: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_list32_copy(hdr: i64, elem: i64) -> i64 {
+    let elem = elem.max(1);
     unsafe {
         let h = &*(hdr as *const ListHdr);
-        let n = (h.len * h.elem) as usize;
+        let n = (h.len * elem) as usize;
         let bytes: &[u8] = if n == 0 {
             &[]
         } else {
             core::slice::from_raw_parts(h.data, n)
         };
-        list_from_bytes(h.elem as usize, bytes) as i64
+        list_from_bytes(elem as usize, bytes) as i64
     }
 }
 
 /// `xs[lo..hi]` (s228, wolf-lang#663, `[mem.list.slice]`): a fresh list
 /// in the AMBIENT region holding a byte copy of elements `lo..hi`, at
 /// exact capacity — one allocation and one copy, where lowering used to
-/// call [`__wolf_rt_list_push`] once per element (1.9 ns a byte: 7.8 µs
+/// call the push entry once per element (1.9 ns a byte: 7.8 µs
 /// for a 4 KiB `List[byte]` slice that a decode of the same bytes made
 /// in 0.13 µs). The value is the one the loop built: the same elements
 /// in the same order, each a byte copy of its source — which is every
@@ -322,20 +385,22 @@ pub unsafe extern "C" fn __wolf_rt_list_copy(hdr: i64) -> i64 {
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`] (or any live list header).
+/// `hdr` from [`__wolf_rt_list32_new`] (or any live list header) of
+/// `elem`-byte elements.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_slice(hdr: i64, lo: i64, hi: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_list32_slice(hdr: i64, lo: i64, hi: i64, elem: i64) -> i64 {
+    let elem = elem.max(1);
     unsafe {
         let h = &*(hdr as *const ListHdr);
         let lo = lo.clamp(0, h.len);
         let hi = hi.clamp(lo, h.len);
-        let n = ((hi - lo) * h.elem) as usize;
+        let n = ((hi - lo) * elem) as usize;
         let bytes: &[u8] = if n == 0 {
             &[]
         } else {
-            core::slice::from_raw_parts(h.data.add((lo * h.elem) as usize), n)
+            core::slice::from_raw_parts(h.data.add((lo * elem) as usize), n)
         };
-        list_from_bytes(h.elem as usize, bytes) as i64
+        list_from_bytes(elem as usize, bytes) as i64
     }
 }
 
@@ -343,10 +408,11 @@ pub unsafe extern "C" fn __wolf_rt_list_slice(hdr: i64, lo: i64, hi: i64) -> i64
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`]; `out` must address the list's
-/// element size in writable bytes.
+/// `hdr` from [`__wolf_rt_list32_new`] of `elem`-byte elements; `out`
+/// must address `elem` writable bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_pop(hdr: i64, out: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_list32_pop(hdr: i64, elem: i64, out: i64) -> i64 {
+    let elem = elem.max(1);
     unsafe {
         let h = &mut *(hdr as *mut ListHdr);
         if h.len == 0 {
@@ -354,9 +420,9 @@ pub unsafe extern "C" fn __wolf_rt_list_pop(hdr: i64, out: i64) -> i64 {
         }
         h.len -= 1;
         core::ptr::copy_nonoverlapping(
-            h.data.add((h.len * h.elem) as usize),
+            h.data.add((h.len * elem) as usize),
             out as *mut u8,
-            h.elem as usize,
+            elem as usize,
         );
     }
     1
@@ -367,19 +433,20 @@ pub unsafe extern "C" fn __wolf_rt_list_pop(hdr: i64, out: i64) -> i64 {
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`]; `out` must address the list's
-/// element size in writable bytes.
+/// `hdr` from [`__wolf_rt_list32_new`] of `elem`-byte elements; `out`
+/// must address `elem` writable bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_read(hdr: i64, idx: i64, out: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_list32_read(hdr: i64, idx: i64, elem: i64, out: i64) -> i64 {
+    let elem = elem.max(1);
     unsafe {
         let h = &*(hdr as *const ListHdr);
         if idx < 0 || idx >= h.len {
             return 0;
         }
         core::ptr::copy_nonoverlapping(
-            h.data.add((idx * h.elem) as usize),
+            h.data.add((idx * elem) as usize),
             out as *mut u8,
-            h.elem as usize,
+            elem as usize,
         );
     }
     1
@@ -390,10 +457,16 @@ pub unsafe extern "C" fn __wolf_rt_list_read(hdr: i64, idx: i64, out: i64) -> i6
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`]; `elem_ptr` must address the
-/// list's element size in readable bytes.
+/// `hdr` from [`__wolf_rt_list32_new`] of `elem`-byte elements;
+/// `elem_ptr` must address `elem` readable bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_list_write(hdr: i64, idx: i64, elem_ptr: i64) -> i64 {
+pub unsafe extern "C" fn __wolf_rt_list32_write(
+    hdr: i64,
+    idx: i64,
+    elem: i64,
+    elem_ptr: i64,
+) -> i64 {
+    let elem = elem.max(1);
     unsafe {
         let h = &mut *(hdr as *mut ListHdr);
         if idx < 0 || idx >= h.len {
@@ -401,18 +474,36 @@ pub unsafe extern "C" fn __wolf_rt_list_write(hdr: i64, idx: i64, elem_ptr: i64)
         }
         core::ptr::copy_nonoverlapping(
             elem_ptr as *const u8,
-            h.data.add((idx * h.elem) as usize),
-            h.elem as usize,
+            h.data.add((idx * elem) as usize),
+            elem as usize,
         );
     }
     1
+}
+
+/// An aimed copy into an outer list (s255, `[mem.region.outer-write]`):
+/// the region the list was born in becomes ambient, and the previous
+/// ambient handle is the answer, as [`crate::native::__wolf_rt_region_ambient_enter`]
+/// answers it. Compiled code read the region word itself until the
+/// 32-byte header moved it (wolf-lang#1177); now only the runtime reads
+/// it, so an object that depends on where the word is names this entry.
+///
+/// # Safety
+///
+/// `hdr` from [`__wolf_rt_list32_new`] (or any live list header).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_list32_enter(hdr: i64) -> *mut c_void {
+    unsafe {
+        let region = (*(hdr as *const ListHdr)).region();
+        crate::native::__wolf_rt_region_ambient_enter(region)
+    }
 }
 
 /// `len` — live element count.
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`].
+/// `hdr` from [`__wolf_rt_list32_new`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_list_len(hdr: i64) -> i64 {
     unsafe { (*(hdr as *const ListHdr)).len }
@@ -422,19 +513,20 @@ pub unsafe extern "C" fn __wolf_rt_list_len(hdr: i64) -> i64 {
 ///
 /// # Safety
 ///
-/// `hdr` from [`__wolf_rt_list_new`].
+/// `hdr` from [`__wolf_rt_list32_new`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_list_clear(hdr: i64) {
     unsafe { (*(hdr as *mut ListHdr)).len = 0 };
 }
 
 /// The elements of a `List[int]` as a plain slice, or `None` when the
-/// header is not an 8-byte-element list (s81).
+/// header is not an 8-byte-element list (s81; by its width class since
+/// wolf-lang#1177).
 ///
 /// A shim that consumes a whole list at once — [`crate::str`]'s byte
 /// source was the first, until s136 moved the byte tier to
 /// [`u8_elems`] — should not pay a `copy_nonoverlapping` per element
-/// through [`__wolf_rt_list_read`]'s caller slot. The width CHECK is
+/// through [`__wolf_rt_list32_read`]'s caller slot. The width CHECK is
 /// the point of the `Option`: compiled code cannot reach this with the
 /// wrong list (sema types the argument), but a direct FFI caller could
 /// hand over a `List[str]` whose 16-byte elements would overrun an
@@ -444,12 +536,12 @@ pub unsafe extern "C" fn __wolf_rt_list_clear(hdr: i64) {
 ///
 /// # Safety
 ///
-/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// `hdr` must be a live header from [`__wolf_rt_list32_new`], and the
 /// returned slice borrows its buffer — it must not outlive a `push`
 /// that reallocates.
 pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
     let h = unsafe { &*(hdr as *const ListHdr) };
-    if h.elem != 8 || h.len < 0 {
+    if !h.holds_width(8) || h.len < 0 {
         return None;
     }
     if h.len == 0 || h.data.is_null() {
@@ -468,12 +560,12 @@ pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
 ///
 /// # Safety
 ///
-/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// `hdr` must be a live header from [`__wolf_rt_list32_new`], and the
 /// returned slice borrows its buffer — it must not outlive a `push`
 /// that reallocates.
 pub(crate) unsafe fn u8_elems<'a>(hdr: i64) -> Option<&'a [u8]> {
     let h = unsafe { &*(hdr as *const ListHdr) };
-    if h.elem != 1 || h.len < 0 {
+    if !h.holds_width(1) || h.len < 0 {
         return None;
     }
     if h.len == 0 || h.data.is_null() {
@@ -489,13 +581,13 @@ pub(crate) unsafe fn u8_elems<'a>(hdr: i64) -> Option<&'a [u8]> {
 ///
 /// # Safety
 ///
-/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// `hdr` must be a live header from [`__wolf_rt_list32_new`], and the
 /// returned slice borrows its buffer — it must not outlive a `push`
 /// that reallocates.
 #[cfg(test)]
 pub(crate) unsafe fn u32_elems<'a>(hdr: i64) -> Option<&'a [u32]> {
     let h = unsafe { &*(hdr as *const ListHdr) };
-    if h.elem != 4 || h.len < 0 {
+    if !h.holds_width(4) || h.len < 0 {
         return None;
     }
     if h.len == 0 || h.data.is_null() {
@@ -512,12 +604,12 @@ pub(crate) unsafe fn u32_elems<'a>(hdr: i64) -> Option<&'a [u32]> {
 ///
 /// # Safety
 ///
-/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// `hdr` must be a live header from [`__wolf_rt_list32_new`], and the
 /// returned slice borrows its buffer — it must not outlive a `push`
 /// that reallocates.
 pub(crate) unsafe fn str_pair_elems<'a>(hdr: i64) -> Option<&'a [[i64; 2]]> {
     let h = unsafe { &*(hdr as *const ListHdr) };
-    if h.elem != 16 || h.len < 0 {
+    if !h.holds_width(16) || h.len < 0 {
         return None;
     }
     if h.len == 0 || h.data.is_null() {
@@ -532,14 +624,19 @@ mod tests {
 
     #[test]
     fn debug_layout_tracks_the_runtime_header() {
-        assert_eq!(DEBUG_LAYOUT.size, 40);
+        assert_eq!(DEBUG_LAYOUT.size, 32);
         assert_eq!(
             DEBUG_LAYOUT
                 .fields
                 .iter()
-                .map(|f| (f.offset, f.size))
+                .map(|f| (f.name, f.offset, f.size))
                 .collect::<Vec<_>>(),
-            (0..5).map(|i| (i * 8, 8)).collect::<Vec<_>>()
+            vec![
+                ("data", 0, 8),
+                ("len", 8, 8),
+                ("cap", 16, 8),
+                ("region", 24, 8)
+            ]
         );
     }
 
@@ -555,15 +652,17 @@ mod tests {
             data: core::ptr::null_mut(),
             len: 0,
             cap: 0,
-            elem: 0,
             region: core::ptr::null_mut(),
         };
         let base = (&raw const hdr) as usize;
         assert_eq!((&raw const hdr.data) as usize - base, 0, "LIST_DATA_OFF");
         assert_eq!((&raw const hdr.len) as usize - base, 8, "LIST_LEN_OFF");
-        // s76 appended `region` — the two lowering-visible offsets are
-        // unchanged, which is the whole point of appending.
-        assert_eq!(core::mem::size_of::<ListHdr>(), 40);
+        assert_eq!((&raw const hdr.cap) as usize - base, 16, "LIST_CAP_OFF");
+        // wolf-lang#1177 took the element size out: `region` (s76) moved
+        // from 32 to 24 and is read by the runtime alone (an aimed copy
+        // enters it through `__wolf_rt_list32_enter`); a map's stays at 32.
+        assert_eq!((&raw const hdr.region) as usize - base, 24, "region");
+        assert_eq!(core::mem::size_of::<ListHdr>(), 32);
         assert_eq!(core::mem::align_of::<ListHdr>(), 8);
     }
 
@@ -572,22 +671,22 @@ mod tests {
     #[test]
     fn copy_is_independent() {
         unsafe {
-            let a = __wolf_rt_list_new(8);
-            let empty = __wolf_rt_list_copy(a);
+            let a = __wolf_rt_list32_new(8);
+            let empty = __wolf_rt_list32_copy(a, 8);
             assert_eq!(__wolf_rt_list_len(empty), 0);
             for v in [7i64, 8] {
-                __wolf_rt_list_push(a, (&raw const v) as i64);
+                __wolf_rt_list32_push(a, 8, (&raw const v) as i64);
             }
-            let b = __wolf_rt_list_copy(a);
+            let b = __wolf_rt_list32_copy(a, 8);
             assert_ne!(a, b);
             let nine = 9i64;
-            __wolf_rt_list_push(b, (&raw const nine) as i64);
+            __wolf_rt_list32_push(b, 8, (&raw const nine) as i64);
             assert_eq!(__wolf_rt_list_len(a), 2);
             assert_eq!(__wolf_rt_list_len(b), 3);
             let ten = 10i64;
-            __wolf_rt_list_write(b, 0, (&raw const ten) as i64);
+            __wolf_rt_list32_write(b, 0, 8, (&raw const ten) as i64);
             let mut out = 0i64;
-            __wolf_rt_list_read(a, 0, (&raw mut out) as i64);
+            __wolf_rt_list32_read(a, 0, 8, (&raw mut out) as i64);
             assert_eq!(out, 7);
         }
     }
@@ -603,20 +702,20 @@ mod tests {
         unsafe {
             let prev = crate::native::__wolf_rt_region_ambient_enter(r);
             assert_eq!(crate::native::region_bytes(r), 0);
-            let _h = __wolf_rt_list_new(8);
+            let _h = __wolf_rt_list32_new(8);
             assert_eq!(
                 crate::native::region_bytes(r),
                 32,
                 "one empty list's header"
             );
             crate::native::__wolf_rt_region_ambient_leave(prev);
-            let src = __wolf_rt_list_new(1);
+            let src = __wolf_rt_list32_new(1);
             for b in 0..16u8 {
-                __wolf_rt_list_push(src, (&raw const b) as i64);
+                __wolf_rt_list32_push(src, 1, (&raw const b) as i64);
             }
             let r2 = crate::native::__wolf_rt_region_new();
             let prev = crate::native::__wolf_rt_region_ambient_enter(r2);
-            let _c = __wolf_rt_list_copy(src);
+            let _c = __wolf_rt_list32_copy(src, 1);
             assert_eq!(
                 crate::native::region_bytes(r2),
                 48,
@@ -641,11 +740,11 @@ mod tests {
             let prev = crate::native::__wolf_rt_region_ambient_enter(r);
             assert!(prev.is_null(), "a test thread starts at the process root");
             assert_eq!(crate::native::region_bytes(r), 0);
-            let h = __wolf_rt_list_new(8);
+            let h = __wolf_rt_list32_new(8);
             let after_hdr = crate::native::region_bytes(r);
-            assert!(after_hdr >= 40, "the header is region storage: {after_hdr}");
+            assert!(after_hdr >= 32, "the header is region storage: {after_hdr}");
             for v in 0..4096i64 {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             let after_buf = crate::native::region_bytes(r);
             assert!(
@@ -664,9 +763,9 @@ mod tests {
         let r = crate::native::__wolf_rt_region_new();
         unsafe {
             assert!(crate::native::ambient_region().is_null());
-            let h = __wolf_rt_list_new(8);
+            let h = __wolf_rt_list32_new(8);
             for v in 0..1024i64 {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             assert_eq!(
                 crate::native::region_bytes(r),
@@ -675,6 +774,82 @@ mod tests {
             );
             assert_eq!(__wolf_rt_list_len(h), 1024);
             crate::native::__wolf_rt_region_free(r);
+        }
+    }
+
+    /// wolf-lang#1177: the width class rides in the low three bits of the
+    /// region word, and no reader of the word sees it. For each width the
+    /// readers take (1, 4, 8, 16) and one they do not (24), a list born in
+    /// `r` reads back exactly `r`, 8-aligned: the accessor every
+    /// allocation uses, the region `__wolf_rt_list32_enter` makes ambient,
+    /// and the region growth, `reserve`, a minted buffer and a pushed
+    /// `str`'s bytes are charged to. One born at the process root reads
+    /// back null.
+    #[test]
+    fn a_lists_region_word_reads_back_its_handle_without_the_width_class() {
+        for elem in [1usize, 4, 8, 16, 24] {
+            let r = crate::native::__wolf_rt_region_new();
+            unsafe {
+                let prev = crate::native::__wolf_rt_region_ambient_enter(r);
+                let h = new_list(elem);
+                let (minted, _) = new_list_len(elem, 3);
+                let copied = list_from_bytes(elem, &[7u8; 48]);
+                crate::native::__wolf_rt_region_ambient_leave(prev);
+                for l in [h, minted, copied] {
+                    let raw = (*l).region as usize;
+                    assert_eq!(
+                        raw & WIDTH_BITS,
+                        width_class(elem),
+                        "elem {elem}: the class"
+                    );
+                    assert_eq!(
+                        (*l).region(),
+                        r,
+                        "elem {elem}: the accessor strips the class"
+                    );
+                    assert_eq!((*l).region() as usize & 7, 0, "elem {elem}: 8-aligned");
+                }
+                let was = __wolf_rt_list32_enter(h as i64);
+                let entered = crate::native::__wolf_rt_region_ambient_enter(was);
+                assert_eq!(
+                    entered, r,
+                    "elem {elem}: list32_enter makes the list's own region ambient"
+                );
+                assert_eq!(entered as usize & 7, 0, "elem {elem}: an 8-aligned handle");
+                let cell = [0u8; 24];
+                let b0 = crate::native::region_bytes(r);
+                for _ in 0..100 {
+                    push_raw(h, cell.as_ptr(), elem);
+                }
+                let b1 = crate::native::region_bytes(r);
+                assert!(b1 >= b0 + 100 * elem, "elem {elem}: growth charged r");
+                __wolf_rt_list32_reserve(h as i64, 1000, elem as i64);
+                let b2 = crate::native::region_bytes(r);
+                assert!(b2 >= b1 + 1000 * elem, "elem {elem}: reserve charged r");
+                if elem == 16 {
+                    let s = "a string the list's own region holds";
+                    push_str(h, s);
+                    assert!(
+                        crate::native::region_bytes(r) >= b2 + s.len(),
+                        "a pushed str's bytes charged r"
+                    );
+                }
+                crate::native::__wolf_rt_region_free(r);
+            }
+        }
+        let root = new_list(8);
+        unsafe {
+            assert_eq!((*root).region as usize & WIDTH_BITS, width_class(8));
+            assert!(
+                (*root).region().is_null(),
+                "the process root reads back null"
+            );
+            let was = __wolf_rt_list32_enter(root as i64);
+            let entered = crate::native::__wolf_rt_region_ambient_enter(was);
+            assert!(
+                entered.is_null(),
+                "list32_enter makes the process root ambient"
+            );
         }
     }
 
@@ -689,15 +864,15 @@ mod tests {
         let b = crate::native::__wolf_rt_region_new();
         unsafe {
             let outer = crate::native::__wolf_rt_region_ambient_enter(a);
-            let h = __wolf_rt_list_new(8);
+            let h = __wolf_rt_list32_new(8);
             let v = 1i64;
-            __wolf_rt_list_push(h, (&raw const v) as i64);
+            __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             let a_before = crate::native::region_bytes(a);
             crate::native::__wolf_rt_region_ambient_leave(outer);
 
             let outer_b = crate::native::__wolf_rt_region_ambient_enter(b);
             for v in 0..4096i64 {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             crate::native::__wolf_rt_region_ambient_leave(outer_b);
 
@@ -713,7 +888,10 @@ mod tests {
             // The elements survived the reallocation chain.
             let mut out = [0i64; 1];
             assert_eq!(__wolf_rt_list_len(h), 4097);
-            assert_eq!(__wolf_rt_list_read(h, 4096, out.as_mut_ptr() as i64), 1);
+            assert_eq!(
+                __wolf_rt_list32_read(h, 4096, 8, out.as_mut_ptr() as i64),
+                1
+            );
             assert_eq!(out[0], 4095);
             crate::native::__wolf_rt_region_free(b);
             crate::native::__wolf_rt_region_free(a);
@@ -733,9 +911,9 @@ mod tests {
         let a = crate::native::__wolf_rt_region_new();
         unsafe {
             let prev = crate::native::__wolf_rt_region_ambient_enter(a);
-            let h = __wolf_rt_list_new(8);
+            let h = __wolf_rt_list32_new(8);
             for v in 0..64i64 {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             crate::native::__wolf_rt_region_ambient_leave(prev);
 
@@ -746,12 +924,15 @@ mod tests {
             // Growth after the move still lands in the same arena.
             let before = crate::native::region_bytes(adopted);
             for v in 64..4096i64 {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             assert!(crate::native::region_bytes(adopted) > before);
             let mut out = [0i64; 1];
             assert_eq!(__wolf_rt_list_len(h), 4096);
-            assert_eq!(__wolf_rt_list_read(h, 4095, out.as_mut_ptr() as i64), 1);
+            assert_eq!(
+                __wolf_rt_list32_read(h, 4095, 8, out.as_mut_ptr() as i64),
+                1
+            );
             assert_eq!(out[0], 4095);
             crate::native::__wolf_rt_region_free(adopted);
         }
@@ -765,11 +946,11 @@ mod tests {
         let inner = crate::native::__wolf_rt_region_new();
         unsafe {
             let p0 = crate::native::__wolf_rt_region_ambient_enter(outer);
-            let a = __wolf_rt_list_new(8);
+            let a = __wolf_rt_list32_new(8);
             let p1 = crate::native::__wolf_rt_region_ambient_enter(inner);
-            let b = __wolf_rt_list_new(8);
+            let b = __wolf_rt_list32_new(8);
             let v = 7i64;
-            __wolf_rt_list_push(b, (&raw const v) as i64);
+            __wolf_rt_list32_push(b, 8, (&raw const v) as i64);
             crate::native::__wolf_rt_region_ambient_leave(p1);
             assert_eq!(crate::native::ambient_region(), outer);
             // The inner region's list dies with it; the outer list does
@@ -777,7 +958,7 @@ mod tests {
             let inner_bytes = crate::native::region_bytes(inner);
             crate::native::__wolf_rt_region_free(inner);
             assert!(inner_bytes >= 40);
-            __wolf_rt_list_push(a, (&raw const v) as i64);
+            __wolf_rt_list32_push(a, 8, (&raw const v) as i64);
             assert_eq!(__wolf_rt_list_len(a), 1);
             crate::native::__wolf_rt_region_ambient_leave(p0);
             assert!(crate::native::ambient_region().is_null());
@@ -787,21 +968,21 @@ mod tests {
 
     #[test]
     fn push_pop_read_write_len() {
-        let h = __wolf_rt_list_new(8);
+        let h = __wolf_rt_list32_new(8);
         let mut out = [0i64; 1];
         unsafe {
             assert_eq!(__wolf_rt_list_len(h), 0);
-            assert_eq!(__wolf_rt_list_pop(h, out.as_mut_ptr() as i64), 0);
+            assert_eq!(__wolf_rt_list32_pop(h, 8, out.as_mut_ptr() as i64), 0);
             for v in [10i64, 20, 30] {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             assert_eq!(__wolf_rt_list_len(h), 3);
-            assert_eq!(__wolf_rt_list_read(h, 1, out.as_mut_ptr() as i64), 1);
+            assert_eq!(__wolf_rt_list32_read(h, 1, 8, out.as_mut_ptr() as i64), 1);
             assert_eq!(out[0], 20);
-            assert_eq!(__wolf_rt_list_read(h, 3, out.as_mut_ptr() as i64), 0);
+            assert_eq!(__wolf_rt_list32_read(h, 3, 8, out.as_mut_ptr() as i64), 0);
             let nv = 99i64;
-            assert_eq!(__wolf_rt_list_write(h, 0, (&raw const nv) as i64), 1);
-            assert_eq!(__wolf_rt_list_pop(h, out.as_mut_ptr() as i64), 1);
+            assert_eq!(__wolf_rt_list32_write(h, 0, 8, (&raw const nv) as i64), 1);
+            assert_eq!(__wolf_rt_list32_pop(h, 8, out.as_mut_ptr() as i64), 1);
             assert_eq!(out[0], 30);
             __wolf_rt_list_clear(h);
             assert_eq!(__wolf_rt_list_len(h), 0);
@@ -810,15 +991,15 @@ mod tests {
 
     #[test]
     fn growth_preserves_elements() {
-        let h = __wolf_rt_list_new(8);
+        let h = __wolf_rt_list32_new(8);
         let mut out = [0i64; 1];
         unsafe {
             for v in 0..100i64 {
-                __wolf_rt_list_push(h, (&raw const v) as i64);
+                __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
             }
             assert_eq!(__wolf_rt_list_len(h), 100);
             for i in 0..100i64 {
-                assert_eq!(__wolf_rt_list_read(h, i, out.as_mut_ptr() as i64), 1);
+                assert_eq!(__wolf_rt_list32_read(h, i, 8, out.as_mut_ptr() as i64), 1);
                 assert_eq!(out[0], i);
             }
         }

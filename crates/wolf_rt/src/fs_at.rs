@@ -787,7 +787,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_dir_entries_at(dir: i64, out: i64) ->
         let hdr = crate::list::new_list(8);
         for row in &rows {
             let inner = crate::list::from_bytes(row) as i64;
-            crate::list::push_raw(hdr, (&raw const inner).cast());
+            crate::list::push_raw(hdr, (&raw const inner).cast(), 8);
         }
         unsafe { write_word(out, hdr as i64) };
         fs_code::OK

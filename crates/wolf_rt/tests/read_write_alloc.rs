@@ -190,7 +190,7 @@ use wolf_rt::fs::{
     __wolf_rt_fs_close, __wolf_rt_fs_open, __wolf_rt_fs_read_at, __wolf_rt_fs_read_chunk,
     __wolf_rt_fs_seek,
 };
-use wolf_rt::list::{__wolf_rt_list_new, __wolf_rt_list_push};
+use wolf_rt::list::{__wolf_rt_list32_new, __wolf_rt_list32_push};
 use wolf_rt::net::{
     __wolf_rt_net_accept, __wolf_rt_net_close, __wolf_rt_net_connect, __wolf_rt_net_listen,
     __wolf_rt_net_port, __wolf_rt_net_read, __wolf_rt_net_read_bytes, __wolf_rt_net_write,
@@ -224,9 +224,9 @@ fn list_header(hdr: i64) -> [i64; 2] {
 }
 
 fn byte_list(bytes: &[u8]) -> i64 {
-    let hdr = __wolf_rt_list_new(1);
+    let hdr = __wolf_rt_list32_new(1);
     for b in bytes {
-        unsafe { __wolf_rt_list_push(hdr, b as *const u8 as i64) };
+        unsafe { __wolf_rt_list32_push(hdr, 1, b as *const u8 as i64) };
     }
     hdr
 }
@@ -319,8 +319,8 @@ fn a_gathered_write_allocates_nothing() {
     let head = "HTTP/1.1 200 OK\r\nServer: lobo\r\nContent-Type: text/html\r\nContent-Length: 1024\r\n\r\n";
     let (hp, hl) = pair(head);
     let body = byte_list(&[b'b'; 1024]);
-    let parts = __wolf_rt_list_new(8);
-    unsafe { __wolf_rt_list_push(parts, &body as *const i64 as i64) };
+    let parts = __wolf_rt_list32_new(8);
+    unsafe { __wolf_rt_list32_push(parts, 8, &body as *const i64 as i64) };
     let want = head.len() + 1024;
     let mut total = Counts::default();
     for i in 0..WARM + CALLS {

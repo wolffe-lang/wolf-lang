@@ -1155,7 +1155,7 @@ pub unsafe extern "C" fn __wolf_rt_str_split(sp: i64, sl: i64, np: i64, nl: i64,
             p.as_ptr() as i64 - s.as_ptr() as i64
         };
         let pair = [sp + off, p.len() as i64];
-        crate::list::push_raw(hdr, pair.as_ptr().cast());
+        crate::list::push_raw(hdr, pair.as_ptr().cast(), 16);
     }
     hdr as i64
 }
@@ -1203,7 +1203,7 @@ pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
     let hdr = crate::list::new_list(4);
     for c in s.chars() {
         let v = [u32::from(c)];
-        crate::list::push_raw(hdr, v.as_ptr().cast());
+        crate::list::push_raw(hdr, v.as_ptr().cast(), 4);
     }
     hdr as i64
 }
@@ -1237,7 +1237,7 @@ pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
 /// # Safety
 ///
 /// `hdr` must be a live `List[byte]` header from
-/// [`crate::list::__wolf_rt_list_new`]; `out` must address 16 writable
+/// [`crate::list::__wolf_rt_list32_new`]; `out` must address 16 writable
 /// bytes. A header of the wrong ELEMENT WIDTH is refused rather than
 /// misread — compiled code cannot produce one (sema types the argument
 /// `List[byte]`), and a direct FFI caller deserves an answer instead of
@@ -1429,7 +1429,7 @@ mod tests {
             let mut elem = [0i64; 2];
             for i in 0..3 {
                 assert_eq!(
-                    crate::list::__wolf_rt_list_read(hdr, i, elem.as_mut_ptr() as i64),
+                    crate::list::__wolf_rt_list32_read(hdr, i, 16, elem.as_mut_ptr() as i64),
                     1
                 );
                 assert!(inside(elem[0], elem[1]), "split element {i} is a subslice");
@@ -1541,7 +1541,7 @@ mod tests {
     fn byte_list(values: &[u8]) -> i64 {
         let hdr = crate::list::new_list(1);
         for v in values {
-            crate::list::push_raw(hdr, core::ptr::from_ref(v));
+            crate::list::push_raw(hdr, core::ptr::from_ref(v), 1);
         }
         hdr as i64
     }
@@ -1553,7 +1553,7 @@ mod tests {
         let hdr = crate::list::new_list(8);
         for &v in values {
             let cell = [v];
-            crate::list::push_raw(hdr, cell.as_ptr().cast());
+            crate::list::push_raw(hdr, cell.as_ptr().cast(), 8);
         }
         hdr as i64
     }
@@ -1886,7 +1886,7 @@ mod tests {
             let mut elem = [0i64; 2];
             for (i, w) in want.iter().enumerate() {
                 unsafe {
-                    crate::list::__wolf_rt_list_read(hdr, i as i64, elem.as_mut_ptr() as i64);
+                    crate::list::__wolf_rt_list32_read(hdr, i as i64, 16, elem.as_mut_ptr() as i64);
                     assert_eq!(&view(elem[0], elem[1]), w, "mode {mode} element {i}");
                 }
                 // And it is a VIEW: inside the receiver's own storage.
@@ -1994,7 +1994,7 @@ mod tests {
         // Overwrite the source list; the str must not move with it.
         let poison = [0x80u8];
         assert_eq!(
-            unsafe { crate::list::__wolf_rt_list_write(hdr, 0, poison.as_ptr() as i64) },
+            unsafe { crate::list::__wolf_rt_list32_write(hdr, 0, 1, poison.as_ptr() as i64) },
             1
         );
         assert_eq!(read_pair(&out), "wolf", "the str owns its bytes");
