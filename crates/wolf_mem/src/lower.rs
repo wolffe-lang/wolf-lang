@@ -9287,7 +9287,7 @@ impl<'t> Lowerer<'t> {
             return Val::none();
         }
         let mut val = self.val_of_place(ep, sub);
-        if ety.is_none_or(|t| self.may_share(t, 0)) {
+        if false && ety.is_none_or(|t| self.may_share(t, 0)) {
             val.lent = self.lent_of_place(ep, init);
         }
         val
