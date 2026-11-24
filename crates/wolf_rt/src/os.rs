@@ -2544,6 +2544,58 @@ mod tests {
         );
     }
 
+    /// The width check at `os_spawn_with`'s inherit list (wolf-lang#1177:
+    /// the class in the list's region word is its only witness). A list
+    /// of 16-byte elements whose first word is a live listener handle is
+    /// refused by its width, `io` with no child spawned, where the same
+    /// handle in an 8-byte list spawns. The `List[str]` row below cannot
+    /// tell: a string's first word is a pointer, no handle, so it is `io`
+    /// with the check or without.
+    #[cfg(unix)]
+    #[test]
+    fn a_wide_inherit_list_whose_first_word_is_a_live_handle_is_refused_by_width() {
+        let addr = "127.0.0.1:0";
+        let srv =
+            unsafe { crate::net::__wolf_rt_net_listen(addr.as_ptr() as i64, addr.len() as i64) };
+        assert!(srv >= 0);
+        let exe = "/bin/sh";
+        let args = crate::list::new_list(16);
+        crate::list::push_str(args, "-c");
+        crate::list::push_str(args, "exit 0");
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        let spawn = |inherit: *mut crate::list::ListHdr| unsafe {
+            __wolf_rt_os_spawn_with(
+                exe.as_ptr() as i64,
+                exe.len() as i64,
+                args as i64,
+                inherit as i64,
+            )
+        };
+        let wide = crate::list::new_list(16);
+        let pair = [srv, 0i64];
+        crate::list::push_raw(wide, pair.as_ptr().cast(), 16);
+        let h = spawn(wide);
+        if h >= 0 {
+            // a child the check should have refused: reap it before failing
+            let _ = unsafe { __wolf_rt_os_wait(h, o) };
+        }
+        assert_eq!(
+            h,
+            -proc_code::IO,
+            "a 16-byte inherit list whose first word is a live handle is refused by its width"
+        );
+        let narrow = crate::list::new_list(8);
+        crate::list::push_int(narrow, srv);
+        let h = spawn(narrow);
+        assert!(h >= 0, "the same handle in a List[int] spawns: {h}");
+        assert_eq!(unsafe { __wolf_rt_os_wait(h, o) }, proc_code::OK);
+        assert_eq!(
+            crate::net::__wolf_rt_net_close(srv),
+            crate::net::net_code::OK
+        );
+    }
+
     /// s137: the shim maps NET HANDLES (this process's table indexes)
     /// to descriptors — a real listener handle reaches the child as 3;
     /// a forged handle is the `io` code with nothing spawned; a
