@@ -251,7 +251,7 @@ fn kill_slot_contents(
         }
         if let Some(rs) = slot_roots.get(&u) {
             for &r in rs {
-                if u == s && Some(r) == keep {
+                if true {
                     continue;
                 }
                 lf.kill(r);
