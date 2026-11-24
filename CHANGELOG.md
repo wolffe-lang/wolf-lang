@@ -15,9 +15,9 @@
   as before: a foreign library that throws keeps its own unwinder, and a
   throw that meets a wolf frame still ends the process by SIGABRT.
   bench-gates' start-up row now also holds the release-linked hello's
-  resident memory, minor faults and own text pages over its C twin, read
-  at the exit stop with address randomisation off, and holds an overflow
-  report under half of its alternate stack.
+  minor faults and own text pages over its C twin, read at the exit stop
+  with address randomisation off (its resident memory is printed beside
+  them), and holds an overflow report under half of its alternate stack.
 
 - **The release tier no longer proves a list element's range from the
   wrong list** (wolf-lang#1205, wolf-lang#1207). Its interprocedural
