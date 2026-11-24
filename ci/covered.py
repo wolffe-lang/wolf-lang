@@ -69,7 +69,8 @@ def answer(repo, sha, tier, run_id, event):
     checks = cr.get("check_runs") or []
     if (cr.get("total_count") or 0) >= PAGE or len(checks) >= PAGE:
         return "none", "", "", "", "more %s check runs at this commit than one page holds" % name
-    checks = [c for c in checks if c.get("name") == name and c.get("status") == "completed" and c.get("completed_at")
+    # Plant (never merged): any tier's check run counts, so a skipped night or a partial run would cover a night.
+    checks = [c for c in checks if (c.get("name") or "").startswith("tier ") and c.get("status") == "completed" and c.get("completed_at")
               and (c.get("app") or {}).get("slug") == "github-actions"]
     if not checks:
         return "none", "", "", "", "no completed %s check run of GitHub Actions at this commit" % name
