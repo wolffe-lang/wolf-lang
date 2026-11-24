@@ -1966,6 +1966,14 @@ const STARTUP_PATH: &str = "bench/startup.json";
 /// size of the change the gate exists for (the s265 note), so D5 keeps
 /// it out of the merge gate. No `strace` on PATH is a loud skip, or a
 /// failure where `WOLF_SYSCALL_REQUIRE_STRACE` is set (every CI job).
+///
+/// The floor rows ([`floor_rows`]) read the same two programs at their
+/// exit stops with address randomisation off (`bench/startup/exitstop.c`):
+/// the resident memory and minor faults the hello pays over its C twin,
+/// and its own text pages resident, each gated at its record plus a slack;
+/// and a main-thread stack overflow's use of the alternate stack its report
+/// runs on, which has no guard page below it. Every program here links the
+/// release runtime archive, as a release ships it.
 fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String>) {
     let Some(strace) = which_on_path("strace") else {
         if std::env::var_os("WOLF_SYSCALL_REQUIRE_STRACE").is_some() {
@@ -1979,9 +1987,23 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
         }
         return;
     };
+    // Every start-up row reads programs linked against the RELEASE
+    // runtime archive, the one a release ships (the debug archive beside
+    // `target/debug/wolf` makes the same calls and touches the same
+    // pages, but runs slower).
+    let rt = Runtime::resolve();
+    let Some(rt_lib) = rt.lib.clone() else {
+        failures.push(format!(
+            "startup: {} — the start-up rows read a program linked against the release \
+             runtime archive",
+            rt.label
+        ));
+        return;
+    };
     let wolf_bin = dir.join("startup-hello-wolf");
     let c_bin = dir.join("startup-hello-c");
     let built = Command::new(wolf)
+        .env("WOLF_RT_LIB", &rt_lib)
         .args(["build", "corpus/hello.lu", "-o"])
         .arg(&wolf_bin)
         .args(["--release", "--no-cache"])
@@ -2031,10 +2053,12 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
         "bench-gates: startup syscalls wolf {wolf_all} ({wolf_pre} before the first write), \
          C {c_all} ({c_pre}); the runtime's own: {got}"
     );
-    let doc: serde_json::Value = std::fs::read_to_string(STARTUP_PATH)
+    let mut doc: serde_json::Value = std::fs::read_to_string(STARTUP_PATH)
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or(serde_json::Value::Null);
+        .filter(serde_json::Value::is_object)
+        .unwrap_or_else(|| serde_json::json!({}));
+    let mut dirty = false;
     let rec = doc["hello_minus_c_syscalls"].as_i64();
     match rec {
         Some(r) if got > r => failures.push(format!(
@@ -2052,17 +2076,8 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
         )),
     }
     if record && rec.is_none_or(|r| got < r) {
-        let mut doc = if doc.is_object() {
-            doc
-        } else {
-            serde_json::json!({})
-        };
         doc["hello_minus_c_syscalls"] = serde_json::json!(got);
-        let text = serde_json::to_string_pretty(&doc).expect("json") + "\n";
-        match std::fs::write(STARTUP_PATH, text) {
-            Ok(()) => eprintln!("bench-gates: startup: recorded {got} into {STARTUP_PATH}"),
-            Err(e) => failures.push(format!("startup: could not write {STARTUP_PATH}: {e}")),
-        }
+        dirty = true;
     }
     // The wall half, report-only (D5).
     let mut wolf_ns = Vec::new();
@@ -2080,10 +2095,10 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
             }
         }
     }
-    if wolf_ns.len() == 50 && c_ns.len() == 50 {
-        let (Some(w), Some(c)) = (stats::median(&wolf_ns), stats::median(&c_ns)) else {
-            return;
-        };
+    if wolf_ns.len() == 50
+        && c_ns.len() == 50
+        && let (Some(w), Some(c)) = (stats::median(&wolf_ns), stats::median(&c_ns))
+    {
         eprintln!(
             "bench-gates: startup wall (report-only): wolf median {:.1} us, C {:.1} us, \
              ratio {:.2} over 50 interleaved starts",
@@ -2092,6 +2107,333 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
             w / c
         );
     }
+    floor_rows(
+        &FloorInputs {
+            dir,
+            wolf,
+            rt_lib: &rt_lib,
+            wolf_bin: &wolf_bin,
+            c_bin: &c_bin,
+        },
+        record,
+        &mut doc,
+        &mut dirty,
+        failures,
+    );
+    if dirty {
+        let text = serde_json::to_string_pretty(&doc).expect("json") + "\n";
+        match std::fs::write(STARTUP_PATH, text) {
+            Ok(()) => eprintln!("bench-gates: startup: recorded into {STARTUP_PATH}"),
+            Err(e) => failures.push(format!("startup: could not write {STARTUP_PATH}: {e}")),
+        }
+    }
+}
+
+/// The start-up floor rows' slack over their records: one fault-around
+/// window of resident memory, three minor faults, two text pages, and a
+/// kilobyte of the overflow report's alternate stack.
+const FLOOR_VMHWM_SLACK_KB: i64 = 64;
+const FLOOR_MINFLT_SLACK: i64 = 3;
+const FLOOR_TEXT_SLACK_PAGES: i64 = 2;
+const FLOOR_ALTSTACK_SLACK_BYTES: i64 = 1024;
+/// Reads of each program, interleaved; the rows take the medians.
+const FLOOR_READS: usize = 21;
+
+/// What the floor rows read: the two hellos the syscall row built, and the
+/// compiler and runtime archive for the overflow program.
+struct FloorInputs<'a> {
+    dir: &'a Path,
+    wolf: &'a Path,
+    rt_lib: &'a Path,
+    wolf_bin: &'a Path,
+    c_bin: &'a Path,
+}
+
+/// One read at a program's exit stop (`bench/startup/exitstop.c`).
+#[derive(Debug, PartialEq)]
+struct ExitStop {
+    vmhwm_kb: i64,
+    minflt: i64,
+    text_kb: i64,
+}
+
+/// `key=value` out of the reader's one line.
+fn exitstop_field(line: &str, key: &str) -> Option<i64> {
+    line.split_whitespace()
+        .find_map(|w| w.strip_prefix(key)?.strip_prefix('='))
+        .and_then(|v| v.parse().ok())
+}
+
+/// The reader's `mem` line → its three numbers.
+fn parse_exitstop_mem(line: &str) -> Option<ExitStop> {
+    Some(ExitStop {
+        vmhwm_kb: exitstop_field(line, "vmhwm_kb")?,
+        minflt: exitstop_field(line, "minflt")?,
+        text_kb: exitstop_field(line, "text_kb")?,
+    })
+}
+
+/// The reader's `altstack` line → `(used, size, exit)`.
+fn parse_exitstop_altstack(line: &str) -> Option<(i64, i64, i64)> {
+    let rest = line.strip_prefix("altstack ")?;
+    Some((
+        exitstop_field(rest, "used")?,
+        exitstop_field(rest, "size")?,
+        exitstop_field(rest, "exit")?,
+    ))
+}
+
+/// The `nm -S` line naming the runtime's main-thread alternate stack →
+/// `(link-time address, size)`, both hex in the line.
+fn main_altstack_symbol(nm: &str) -> Option<(u64, u64)> {
+    nm.lines().find_map(|l| {
+        let mut w = l.split_whitespace();
+        let (addr, size, kind, name) = (w.next()?, w.next()?, w.next()?, w.next()?);
+        (name.contains("MAIN_ALTSTACK") && matches!(kind, "b" | "B" | "d" | "D")).then_some((
+            u64::from_str_radix(addr, 16).ok()?,
+            u64::from_str_radix(size, 16).ok()?,
+        ))
+    })
+}
+
+/// Run the reader; `Err` carries the failure line to report. A refusal
+/// (exit 3: no address randomisation off, no trace, no exit stop) fails
+/// by name and is never a skip: the rows cannot read without it.
+fn run_exitstop(probe: &Path, args: &[&std::ffi::OsStr]) -> Result<String, String> {
+    let out = Command::new(probe)
+        .args(args)
+        .output()
+        .map_err(|e| format!("startup floor: cannot run the reader: {e}"))?;
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    match out.status.code() {
+        Some(0) => Ok(String::from_utf8_lossy(&out.stdout).trim().to_string()),
+        Some(3) => Err(format!(
+            "startup floor: this host refuses what the floor rows read with ({stderr}): the rows \
+             cannot read without it (a container's default seccomp filter refuses \
+             personality(ADDR_NO_RANDOMIZE)); run on the host, or with a seccomp profile that \
+             allows it"
+        )),
+        _ => Err(format!("startup floor: the reader failed: {stderr}")),
+    }
+}
+
+/// One floor row against its record in `doc[key]`: over the record plus
+/// `slack` fails; no record yet reads REPORT-ONLY and fails, so no run is
+/// green and no head merges while a record is unset; `--record` writes
+/// the reading when there is none or it is lower.
+#[allow(clippy::too_many_arguments)]
+fn floor_row(
+    doc: &mut serde_json::Value,
+    key: &str,
+    label: &str,
+    got: i64,
+    slack: i64,
+    detail: &str,
+    record: bool,
+    dirty: &mut bool,
+    failures: &mut Vec<String>,
+) {
+    let rec = doc[key].as_i64();
+    match rec {
+        None if record => {}
+        None => {
+            eprintln!(
+                "bench-gates: startup floor: {label} REPORT-ONLY (no record in {STARTUP_PATH} \
+                 yet): {got} ({detail})"
+            );
+            failures.push(format!(
+                "startup floor: {label} has no record in {STARTUP_PATH} (`{key}`); a merge \
+                 needs one: the REPORT-ONLY line above is this host's reading, and `cargo xtask \
+                 bench-gates --record` on the gate's host writes it"
+            ));
+        }
+        Some(r) if got > r + slack => failures.push(format!(
+            "startup floor: {label} reads {got}, over its record {r} plus {slack} \
+             ({STARTUP_PATH}, `{key}`): {detail}"
+        )),
+        Some(r) => eprintln!(
+            "bench-gates: startup floor: {label} {got} (record {r}, ceiling {}; {detail})",
+            r + slack
+        ),
+    }
+    if record && rec.is_none_or(|r| got < r) {
+        doc[key] = serde_json::json!(got);
+        *dirty = true;
+    }
+}
+
+/// The start-up floor (the resident, faults and text a hello pays over its
+/// C twin, and how much of the main thread's alternate stack an overflow
+/// report uses), read at each program's exit stop with address
+/// randomisation off, where a program's resident set is the same from read
+/// to read: the kernel maps file pages around each fault (fault-around), and
+/// with randomisation the windows fall differently every run.
+fn floor_rows(
+    inp: &FloorInputs<'_>,
+    record: bool,
+    doc: &mut serde_json::Value,
+    dirty: &mut bool,
+    failures: &mut Vec<String>,
+) {
+    let probe = inp.dir.join("startup-exitstop");
+    if !clang_build(&["-O2"], &probe, Path::new("bench/startup/exitstop.c")) {
+        failures.push("startup floor: bench/startup/exitstop.c would not build".to_string());
+        return;
+    }
+    let mut wolf_reads = Vec::new();
+    let mut c_reads = Vec::new();
+    for _ in 0..FLOOR_READS {
+        for (bin, out) in [(inp.wolf_bin, &mut wolf_reads), (inp.c_bin, &mut c_reads)] {
+            let line = match run_exitstop(&probe, &["mem".as_ref(), bin.as_os_str()]) {
+                Ok(l) => l,
+                Err(e) => {
+                    failures.push(e);
+                    return;
+                }
+            };
+            let Some(r) = parse_exitstop_mem(&line) else {
+                failures.push(format!(
+                    "startup floor: the reader's line is not a read: {line}"
+                ));
+                return;
+            };
+            out.push(r);
+        }
+    }
+    let med = |xs: &[ExitStop], f: fn(&ExitStop) -> i64| -> i64 {
+        let v: Vec<f64> = xs.iter().map(|r| f(r) as f64).collect();
+        stats::median(&v).unwrap_or(0.0).round() as i64
+    };
+    let spread = |xs: &[ExitStop], f: fn(&ExitStop) -> i64| -> i64 {
+        let v: Vec<i64> = xs.iter().map(f).collect();
+        v.iter().max().unwrap_or(&0) - v.iter().min().unwrap_or(&0)
+    };
+    let (w_hwm, c_hwm) = (
+        med(&wolf_reads, |r| r.vmhwm_kb),
+        med(&c_reads, |r| r.vmhwm_kb),
+    );
+    let (w_flt, c_flt) = (med(&wolf_reads, |r| r.minflt), med(&c_reads, |r| r.minflt));
+    let w_text = med(&wolf_reads, |r| r.text_kb);
+    floor_row(
+        doc,
+        "floor_hello_minus_c_vmhwm_kb",
+        "resident (kB, hello minus C)",
+        w_hwm - c_hwm,
+        FLOOR_VMHWM_SLACK_KB,
+        &format!(
+            "VmHWM medians {w_hwm} and {c_hwm} kB over {FLOOR_READS} reads, the hello's spread \
+             {} kB",
+            spread(&wolf_reads, |r| r.vmhwm_kb)
+        ),
+        record,
+        dirty,
+        failures,
+    );
+    floor_row(
+        doc,
+        "floor_hello_minus_c_minflt",
+        "minor faults (hello minus C)",
+        w_flt - c_flt,
+        FLOOR_MINFLT_SLACK,
+        &format!(
+            "medians {w_flt} and {c_flt}, the hello's spread {}",
+            spread(&wolf_reads, |r| r.minflt)
+        ),
+        record,
+        dirty,
+        failures,
+    );
+    floor_row(
+        doc,
+        "floor_hello_text_pages",
+        "the hello's own text pages resident",
+        w_text / 4,
+        FLOOR_TEXT_SLACK_PAGES,
+        &format!("{w_text} kB of its r-x mappings at its exit stop"),
+        record,
+        dirty,
+        failures,
+    );
+    // How much of the main thread's alternate stack the overflow report
+    // uses: it has no guard page below it, so a reporter that grows past it
+    // would write into whatever lies beneath, silently.
+    let ovf = inp.dir.join("startup-overflow");
+    let built = Command::new(inp.wolf)
+        .env("WOLF_RT_LIB", inp.rt_lib)
+        .args(["build", "bench/startup/overflow.lu", "-o"])
+        .arg(&ovf)
+        .arg("--no-cache")
+        .status()
+        .is_ok_and(|s| s.success());
+    if !built {
+        failures.push("startup floor: bench/startup/overflow.lu would not build".to_string());
+        return;
+    }
+    let nm = match Command::new("nm")
+        .arg("-S")
+        .arg("--defined-only")
+        .arg(&ovf)
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => {
+            failures.push("startup floor: `nm -S` could not read the overflow program".to_string());
+            return;
+        }
+    };
+    let Some((addr, size)) = main_altstack_symbol(&nm) else {
+        failures.push(
+            "startup floor: the overflow program has no `MAIN_ALTSTACK` object: the main \
+             thread's alternate stack is not the runtime's own static, so its use cannot be read"
+                .to_string(),
+        );
+        return;
+    };
+    let line = match run_exitstop(
+        &probe,
+        &[
+            "altstack".as_ref(),
+            format!("{addr:x}").as_ref(),
+            size.to_string().as_ref(),
+            ovf.as_os_str(),
+        ],
+    ) {
+        Ok(l) => l,
+        Err(e) => {
+            failures.push(e);
+            return;
+        }
+    };
+    let Some((used, size, exit)) = parse_exitstop_altstack(&line) else {
+        failures.push(format!(
+            "startup floor: the reader's line is not a read: {line}"
+        ));
+        return;
+    };
+    if exit != 134 {
+        failures.push(format!(
+            "startup floor: the overflow program ended with {exit}, not the overflow report's \
+             134: its alternate stack was not where the report ran"
+        ));
+        return;
+    }
+    if used * 2 > size {
+        failures.push(format!(
+            "startup floor: the overflow report uses {used} of its {size}-byte alternate stack, \
+             more than half: the stack has no guard below it"
+        ));
+    }
+    floor_row(
+        doc,
+        "floor_overflow_altstack_bytes",
+        "the overflow report's alternate-stack use (bytes)",
+        used,
+        FLOOR_ALTSTACK_SLACK_BYTES,
+        &format!("{used} of {size} bytes, written below the top by a main-thread overflow"),
+        record,
+        dirty,
+        failures,
+    );
 }
 
 /// `strace -qq` text → `(calls before the first write to stdout, all
@@ -2246,7 +2588,46 @@ pub fn gate_render(path: &str, scored: &[Scored], outcome: &t1::GateOutcome) -> 
 
 #[cfg(test)]
 mod startup_tests {
-    use super::startup_syscalls;
+    use super::{
+        ExitStop, main_altstack_symbol, parse_exitstop_altstack, parse_exitstop_mem,
+        startup_syscalls,
+    };
+
+    #[test]
+    fn the_exit_stop_reader_lines_parse() {
+        assert_eq!(
+            parse_exitstop_mem("vmhwm_kb=1712 minflt=68 text_kb=264 exit=0"),
+            Some(ExitStop {
+                vmhwm_kb: 1712,
+                minflt: 68,
+                text_kb: 264
+            })
+        );
+        assert_eq!(parse_exitstop_mem("vmhwm_kb=1712 minflt=68"), None);
+        assert_eq!(parse_exitstop_mem("exitstop: refused: ..."), None);
+        assert_eq!(
+            parse_exitstop_altstack("altstack used=5376 size=32768 exit=134"),
+            Some((5376, 32768, 134))
+        );
+        assert_eq!(
+            parse_exitstop_altstack("used=5376 size=32768 exit=134"),
+            None
+        );
+    }
+
+    #[test]
+    fn the_main_altstack_is_found_by_its_name_in_nm() {
+        let nm = "0000000000001130 0000000000000026 T main\n\
+                  000000000005d040 0000000000008000 b _ZN7wolf_rt4task5stack13MAIN_ALTSTACK17h0123456789abcdefE\n\
+                  000000000005d000 0000000000000008 b _ZN7wolf_rt4task5stack15MAIN_STACK_HINT17h0123456789abcdefE\n";
+        assert_eq!(main_altstack_symbol(nm), Some((0x5d040, 0x8000)));
+        // A function of that name is not the object.
+        assert_eq!(
+            main_altstack_symbol("0000000000001130 0000000000000026 T MAIN_ALTSTACK_init\n"),
+            None
+        );
+        assert_eq!(main_altstack_symbol(""), None);
+    }
 
     #[test]
     fn startup_counts_skip_execve_and_exit_lines() {
