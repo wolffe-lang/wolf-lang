@@ -39,7 +39,7 @@
 //!   that cannot reach an EXHAUSTIVE local region without its token
 //!   ([`super::memopt::exhaustive_regions`], the s83 theorem) rides
 //!   over; a call that versions the `c` chain (takes and mints a `c`
-//!   token — the growth-capable `__wolf_rt_list_push` shape) becomes
+//!   token — the growth-capable `__wolf_rt_list32_push` shape) becomes
 //!   a BOUNDARY: dirty cells flush before it, every cell reloads
 //!   after it, so the fast path between boundaries carries the header
 //!   in registers while the growth call keeps its full view. Any

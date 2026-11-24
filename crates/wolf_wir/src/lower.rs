@@ -1719,7 +1719,7 @@ fn load_flat_raw(
 /// fn value through its record (`[abi.native.closure]`: the entry is
 /// the record's first word, the record leads the arguments), and stores
 /// the result — the ok half of a fallible one — into the result slot;
-/// a raised tag returns to `__wolf_rt_par_map`, which fails the scope.
+/// a raised tag returns to `__wolf_rt_par32_map`, which fails the scope.
 fn build_par_shim(module: &mut Module, shim: &DynShim, par: ParShim) -> R<()> {
     if module.funcs.iter().any(|(_, f)| f.name == shim.name) {
         return Ok(());
@@ -1908,18 +1908,22 @@ fn membrane_sig_check(table: &TypeTable, sigs: &SigTables, fsig: &FnSig) -> R<()
     Ok(())
 }
 
-/// The two `wolf_rt::list::ListHdr` field offsets compiled code
-/// addresses directly (s75). The header is `#[repr(C)] { data: *mut
-/// u8, len: i64, cap: i64, elem: i64 }`, and these offsets are part
-/// of the runtime ABI the moment element access stops going through
-/// a shim: `wolf_rt::list`'s `header_offsets_are_the_lowering_abi`
-/// test pins them against this pair by name.
+/// The `wolf_rt::list::ListHdr` field offsets compiled code addresses
+/// directly (s75). The header is `#[repr(C)] { data: *mut u8, len: i64,
+/// cap: i64, region: *mut c_void }` (32 bytes since wolf-lang#1177),
+/// and these offsets are part of the runtime ABI the moment element
+/// access stops going through a shim: `wolf_rt::list`'s
+/// `header_offsets_are_the_lowering_abi` test pins them by name. A
+/// map's header (`wolf_rt::map::MapHdr`) agrees on the first three.
 const LIST_DATA_OFF: u64 = 0;
 const LIST_LEN_OFF: u64 = 8;
 const LIST_CAP_OFF: u64 = 16;
-/// The birth region (s255): `{data, len, cap, elem, region}`, the
-/// list's and the map's fifth word alike.
-const LIST_REGION_OFF: u64 = 32;
+/// A map's birth region (s255): its fifth word, after the entry stride
+/// it keeps (`MapHdr`). A list's region (its fourth word since
+/// wolf-lang#1177) is the runtime's alone to read: an aimed copy into a
+/// list enters it through `__wolf_rt_list32_enter`, so every object that
+/// depends on the moved word names a renamed entry.
+const MAP_REGION_OFF: u64 = 32;
 
 /// A `Map[K, V]`'s entry layout at the native tier (s152): see
 /// `wolf_rt::map` — the `(K, V)` tuple's flat layout is the entry.
@@ -3365,14 +3369,17 @@ struct DeferEntry<'t> {
 
 /// s255 (`[mem.region.outer-write]`): where a `copy` written at a store
 /// into an outer value lands — `Enter(h)`: with region handle `h` made
-/// ambient for the copy (a container's birth region, or the ambient
-/// saved where the binding's enclosing block opened); `Here`: in the
-/// current ambient (a `mut` parameter's place with no region block
-/// open: the entry ambient is the current one), materialized all the
-/// same.
+/// ambient for the copy (a map's birth region, or the ambient saved
+/// where the binding's enclosing block opened); `EnterList(hdr)`: with
+/// the birth region of the list whose header is `hdr` made ambient, by
+/// the runtime (`__wolf_rt_list32_enter`: compiled code does not read a
+/// list's region word, wolf-lang#1177); `Here`: in the current ambient
+/// (a `mut` parameter's place with no region block open: the entry
+/// ambient is the current one), materialized all the same.
 #[derive(Clone, Copy)]
 enum CopyTarget {
     Enter(Value),
+    EnterList(Value),
     Here,
 }
 
@@ -5089,13 +5096,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// Whether `value`'s type is a container whose header records its
+    /// birth region: `Some(false)` for a `List`, `Some(true)` for a
+    /// `Map` (their region words differ, wolf-lang#1177), `None` for any
+    /// other type.
+    fn container_kind_of(&self, value: &'t GreenNode) -> Option<bool> {
+        let t = self.expr_sema_ty(value.span)?;
+        match self.table.kind(self.strip_sema(t)) {
+            TyKind::List(_) => Some(false),
+            TyKind::Map(..) => Some(true),
+            _ => None,
+        }
+    }
+
     /// s255: aim the next `copy e` lowered — the right-hand side of a
     /// store into a place rooted at `name` — at the outer value's
-    /// region: a container's own (`hdr` given: the header's birth
-    /// region) when the store replaces or grows a `List`/`Map`, else
-    /// the binding's ambient. A no-op when the value is not written
-    /// `copy`, or the store is not an outer write.
-    fn aim_copy(&mut self, name: Option<String>, value: &'t GreenNode, hdr: Option<Value>) {
+    /// region: a container's own (`hdr` given, with whether it is a
+    /// `Map`: the header's birth region) when the store replaces or
+    /// grows a `List`/`Map`, else the binding's ambient. A no-op when
+    /// the value is not written `copy`, or the store is not an outer
+    /// write.
+    fn aim_copy(&mut self, name: Option<String>, value: &'t GreenNode, hdr: Option<(Value, bool)>) {
         self.copy_target = None;
         let Some(name) = name else { return };
         if !self.is_copy_prefix(value) {
@@ -5105,10 +5126,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return;
         };
         self.copy_target = Some(match hdr {
-            Some(h) => {
-                let region = self.list_region_of(h);
+            Some((h, true)) => {
+                let region = self.map_region_of(h);
                 CopyTarget::Enter(region)
             }
+            Some((h, false)) => CopyTarget::EnterList(h),
             None => scope,
         });
     }
@@ -5127,6 +5149,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     ) -> R<Value> {
         let prev = match target {
             CopyTarget::Enter(h) => self.open_ambient(h),
+            CopyTarget::EnterList(hdr) => {
+                self.rt_call_foreign("__wolf_rt_list32_enter", &[hdr], None, Some(types::PTR))
+            }
             CopyTarget::Here => None,
         };
         let out = self.deep_copy_out(v, table, ty, span, 0)?;
@@ -5330,16 +5355,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // lands in its old header's region, anything else in the
                 // binding's ambient.
                 if self.is_copy_prefix(value_expr) {
-                    let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                        matches!(
-                            self.table.kind(self.strip_sema(t)),
-                            TyKind::List(_) | TyKind::Map(..)
-                        )
-                    });
-                    let hdr = if container && self.outer_scope_target(&name).is_some() {
-                        Some(self.b.use_var(var))
-                    } else {
-                        None
+                    let container = self.container_kind_of(value_expr);
+                    let hdr = match container {
+                        Some(map) if self.outer_scope_target(&name).is_some() => {
+                            Some((self.b.use_var(var), map))
+                        }
+                        _ => None,
                     };
                     self.aim_copy(Some(name.clone()), value_expr, hdr);
                 }
@@ -5390,16 +5411,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // `mut` parameter — a container lands in its old
                 // header's region, anything else in the entry ambient.
                 if self.is_copy_prefix(value_expr) {
-                    let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                        matches!(
-                            self.table.kind(self.strip_sema(t)),
-                            TyKind::List(_) | TyKind::Map(..)
-                        )
-                    });
-                    let hdr = if container {
-                        Some(self.read_mut_ref(ptr, region, elem, stmt.span)?)
-                    } else {
-                        None
+                    let container = self.container_kind_of(value_expr);
+                    let hdr = match container {
+                        Some(map) => Some((self.read_mut_ref(ptr, region, elem, stmt.span)?, map)),
+                        None => None,
                     };
                     self.aim_copy(Some(name.clone()), value_expr, hdr);
                 }
@@ -5676,20 +5691,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // header's region, any other field in the binding's ambient.
         if self.is_copy_prefix(value_expr) {
             let root = self.place_root_name(place);
-            let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                matches!(
-                    self.table.kind(self.strip_sema(t)),
-                    TyKind::List(_) | TyKind::Map(..)
-                )
-            });
-            let hdr = if container
-                && root
-                    .as_deref()
-                    .is_some_and(|n| self.outer_scope_target(n).is_some())
-            {
-                Some(self.place_load(&p, span)?)
-            } else {
-                None
+            let container = self.container_kind_of(value_expr);
+            let hdr = match container {
+                Some(map)
+                    if root
+                        .as_deref()
+                        .is_some_and(|n| self.outer_scope_target(n).is_some()) =>
+                {
+                    Some((self.place_load(&p, span)?, map))
+                }
+                _ => None,
             };
             self.aim_copy(root, value_expr, hdr);
         }
@@ -6239,7 +6250,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// `[a, b, c]` — a list literal (`[type.list.lit.value]`, s158
     /// wolf-lang#154).
     ///
-    /// One `__wolf_rt_list_new` and one push per element: exactly what
+    /// One `__wolf_rt_list32_new` and one push per element: exactly what
     /// the program the literal replaces compiled to, so no runtime
     /// symbol moves for it (`RT_SYMBOLS` is unchanged) and the slice
     /// path's shape is reused straight-line, the count being known.
@@ -6276,12 +6287,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let sz = self.b.iconst(types::I64, esize as i64);
         let hdr = self
-            .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
+            .rt_call_foreign("__wolf_rt_list32_new", &[sz], None, Some(types::PTR))
             .expect("hdr");
         for (v, span) in vals {
             let (region, slot) = self.rt_slot(esize);
             self.store_flat(v, slot, region, span)?;
-            self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
+            self.rt_call_foreign(
+                "__wolf_rt_list32_push",
+                &[hdr, sz],
+                Some((slot, region)),
+                None,
+            );
         }
         Ok(Flow::Val(Some(hdr)))
     }
@@ -13917,13 +13933,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     }
 
     /// `load.ptr %hdr+32` (s255, `[mem.region.outer-write]`): the region
-    /// a `List` or `Map` was born in — the header's fifth word, the one
-    /// the runtime's growth already reads (`wolf_rt::list::ListHdr`,
-    /// `MapHdr`: the same offset) — null for the process root. A copy
-    /// stored into the container is made there.
-    fn list_region_of(&mut self, hdr: Value) -> Value {
+    /// a `Map` was born in — `MapHdr`'s fifth word, the one the runtime's
+    /// growth already reads — null for the process root. A copy stored
+    /// into the map is made there. A list's region is not read here: the
+    /// 32-byte header moved it (wolf-lang#1177), and only the runtime
+    /// reads it (`CopyTarget::EnterList`).
+    fn map_region_of(&mut self, hdr: Value) -> Value {
         let r = self.foreign_hdr_region();
-        let addr = self.field_addr(hdr, LIST_REGION_OFF);
+        let addr = self.field_addr(hdr, MAP_REGION_OFF);
         self.b.ins_load(types::PTR, addr, r)
     }
 
@@ -14003,7 +14020,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// remain `wolf_rt::list` calls. Recoverable reads
     /// (`pop`/`get`/`first`/`last`) are `{none}` rows.
     /// `xs.par(f)` (s166, `[conc.task.par]`): queue the per-element shim
-    /// for this site, call `__wolf_rt_par_map` with the list, the shim,
+    /// for this site, call `__wolf_rt_par32_map` with the list, the shim,
     /// `f`'s record and the result element size, and read the result
     /// header from the out slot. A fallible `f` makes the value
     /// `List[U] ! E`: a nonzero tag is the first failure's.
@@ -14076,11 +14093,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let ext = self.rt_like_import(&name, shim_sig);
         let entry = self.b.ins_func_addr(ext);
         let osz = self.b.iconst(types::I64, osize as i64);
+        // The source's element size, the caller's to pass since
+        // wolf-lang#1177 (the method's caller already refused a list
+        // element without a stride).
+        let ssz = self.list_stride(ewty, e.span)?;
+        let ssz = self.b.iconst(types::I64, ssz as i64);
         let (region, slot) = self.rt_slot(8);
         let tag = self
             .rt_call_foreign(
-                "__wolf_rt_par_map",
-                &[hdr, entry, rec, osz],
+                "__wolf_rt_par32_map",
+                &[hdr, ssz, entry, rec, osz],
                 Some((slot, region)),
                 Some(types::I64),
             )
@@ -14170,7 +14192,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // own region — the copy is made once, there, and the
                 // plain-element copy below is skipped for it.
                 let root = self.place_root_name(recv_place);
-                self.aim_copy(root, vx, Some(hdr));
+                self.aim_copy(root, vx, Some((hdr, false)));
                 let aimed = self.copy_target.is_some();
                 let v = match self.lower_expr(vx) {
                     Ok(Flow::Val(Some(v))) => v,
@@ -14251,7 +14273,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.gvn_push_scope();
                 let (region, slot) = self.rt_slot(esize);
                 self.store_flat(v, slot, region, vx.span)?;
-                self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
+                let sz = self.b.iconst(types::I64, esize as i64);
+                self.rt_call_foreign(
+                    "__wolf_rt_list32_push",
+                    &[hdr, sz],
+                    Some((slot, region)),
+                    None,
+                );
                 self.b.ins_jmp(merge, &[]);
                 self.b.gvn_pop_scope();
                 self.b.seal_block(merge);
@@ -14376,7 +14404,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Flow::Val(None) => return Err(refuse("a unit-typed `reserve` count", nx.span)),
                     Flow::Diverged => return Ok(Flow::Diverged),
                 };
-                self.rt_call_foreign("__wolf_rt_list_reserve", &[hdr, n], None, None);
+                let sz = self.b.iconst(types::I64, esize as i64);
+                self.rt_call_foreign("__wolf_rt_list32_reserve", &[hdr, n, sz], None, None);
                 Ok(Flow::Val(None))
             }
             _ => Err(refuse("this List method", e.span)),
@@ -17237,9 +17266,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                     // The element type must still have a stride (the
                     // refusal for one that has none is this call's).
-                    self.list_stride(ewty, e.span)?;
+                    let esize = self.list_stride(ewty, e.span)?;
                     // s228 (wolf-lang#663): ONE copy. Until here this
-                    // was a loop of `__wolf_rt_list_push` calls, one
+                    // was a loop of push calls, one
                     // per element, into a list that grew by doubling —
                     // 7.8 µs for a 4 KiB `List[byte]` slice. The value
                     // is the same fresh list (the same elements, each
@@ -17247,10 +17276,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // capacity in the ambient region; every element
                     // type that reaches here is flat, so every one
                     // takes it.
+                    let sz = self.b.iconst(types::I64, esize as i64);
                     let out = self
                         .rt_call_foreign(
-                            "__wolf_rt_list_slice",
-                            &[hdr, lo, hi],
+                            "__wolf_rt_list32_slice",
+                            &[hdr, lo, hi, sz],
                             None,
                             Some(types::PTR),
                         )
@@ -17460,7 +17490,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // own region — the map keeps its key (s227) as it keeps the
         // value.
         let root = self.place_root_name(recv);
-        self.aim_copy(root.clone(), kx, Some(hdr));
+        self.aim_copy(root.clone(), kx, Some((hdr, true)));
         let kval = flow_val!(self.lower_expr(kx));
         self.copy_target = None;
         let Some(kval) = kval else {
@@ -17469,7 +17499,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(vx) = d.value() else {
             return Ok(Flow::Val(None));
         };
-        self.aim_copy(root, vx, Some(hdr));
+        self.aim_copy(root, vx, Some((hdr, true)));
         let vval = flow_val!(self.lower_expr(vx));
         self.copy_target = None;
         let Some(vval) = vval else {
@@ -17548,7 +17578,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// of `v`, a value of `ty` (ids in `table`), matching the checked
     /// machine's `deep_copy`. A value that reaches no heap storage IS
     /// its copy (inline words). A `List` is a fresh header and buffer
-    /// (`__wolf_rt_list_copy`, the ambient region), then — for an
+    /// (`__wolf_rt_list32_copy`, the ambient region), then — for an
     /// element type that reaches heap storage — each element replaced
     /// by its own copy; a `Map` is a fresh header and entry buffer
     /// (`__wolf_rt_map_copy`); a struct or tuple is rebuilt field by
@@ -17573,8 +17603,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let ty = strip_sema_in(table, ty);
         match table.kind(ty).clone() {
             TyKind::List(elem) => {
+                let sz = self.list_elem_size(table, elem, span);
                 let out = self
-                    .rt_call_foreign("__wolf_rt_list_copy", &[v], None, Some(types::PTR))
+                    .rt_call_foreign("__wolf_rt_list32_copy", &[v, sz], None, Some(types::PTR))
                     .expect("hdr");
                 if self.copy_reaches_heap(table, elem, 0) {
                     let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
@@ -17964,8 +17995,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.load_str_slot(slot, region, span)
             }
             TyKind::List(elem) => {
+                let sz = self.list_elem_size(table, elem, span);
                 let out = self
-                    .rt_call_foreign("__wolf_rt_list_copy", &[v], None, Some(types::PTR))
+                    .rt_call_foreign("__wolf_rt_list32_copy", &[v, sz], None, Some(types::PTR))
                     .expect("hdr");
                 if self.copy_out_reaches(table, elem, 0) {
                     let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
@@ -19145,7 +19177,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // s255 (`[mem.region.outer-write]`): `xs[i] = copy e` into an
         // outer list materializes the element in the list's own region.
         let root = self.place_root_name(recv);
-        self.aim_copy(root, vx, Some(hdr));
+        self.aim_copy(root, vx, Some((hdr, false)));
         let rhs = flow_val!(self.lower_expr(vx));
         self.copy_target = None;
         let Some(rhs) = rhs else {
@@ -21125,6 +21157,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         wir_ty(&mut self.b.module.types, table, self.sigs, ty, span)
     }
 
+    /// The element size a list entry is handed (wolf-lang#1177): the
+    /// stride of `elem`, which is what the list's constructor and every
+    /// push computed for it. It never refuses: an element type without a
+    /// stride cannot have made a list, and 0 is what the runtime stores
+    /// as one byte, as the header's `elem.max(1)` did.
+    fn list_elem_size(&mut self, table: &'t TypeTable, elem: TyId, span: Span) -> Value {
+        let size = match self.wir_ty_in(table, elem, span) {
+            Ok(Some(t)) => list_stride_of(&self.b.module.types, t).unwrap_or(0),
+            _ => 0,
+        };
+        self.b.iconst(types::I64, size as i64)
+    }
+
     /// Field `i` of an aggregate value, typed through `table`; `None`
     /// for a unit-typed field (which the aggregate has no slot for).
     fn agg_field(
@@ -22496,7 +22541,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // Threads the foreign token: the fresh header is storage
             // compiled code will load from, so the chain must know.
             let hdr = self
-                .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
+                .rt_call_foreign("__wolf_rt_list32_new", &[sz], None, Some(types::PTR))
                 .expect("hdr");
             return Ok(Flow::Val(Some(hdr)));
         }
@@ -25919,8 +25964,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             // s273 (wolf-lang#972): `for pat in m.pairs()` whose body
             // never names `m` walks the map's OWN entries — the counted
-            // List loop over the map header, whose first five words are
-            // a ListHdr and whose entry stride is the `(K, V)` tuple's
+            // List loop over the map header, whose `data` and `len` are
+            // a ListHdr's (the first three words agree, wolf-lang#1177)
+            // and whose entry stride is the `(K, V)` tuple's
             // list stride (`wolf_rt::map`), so each element loads as the
             // tuple `pairs()` would have copied. No list is minted.
             if let Some(recv) = self.pairs_walk_recv(d)

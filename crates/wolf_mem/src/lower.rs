@@ -7630,7 +7630,7 @@ impl<'t> Lowerer<'t> {
         // s270b (wolf-lang#948, `[mem.region.outer-write]`): a builtin
         // store's PLAIN element whose copy reaches the heap — the value
         // wolf-lang#385 copies into the container, in the AMBIENT region
-        // (`deep_copy_in`, `__wolf_rt_list_copy`): its span and type.
+        // (`deep_copy_in`, `__wolf_rt_list32_copy`): its span and type.
         let mut stored_copy: Option<(Span, String)> = None;
         // s255: each `mut` argument's place with the callee's declared
         // index for it (the receiver is 0), for the ambient-clean table.

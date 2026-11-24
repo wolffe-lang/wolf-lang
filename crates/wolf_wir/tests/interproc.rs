@@ -165,7 +165,7 @@ fn a_zero_index_element_access_is_still_an_element() {
 /// Nothing here is optimized: the analysis reads the bodies as built.
 fn relay_chain(hops: usize, external_sink: bool) -> String {
     let mut t = String::new();
-    t.push_str("decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n");
+    t.push_str("decl @__wolf_rt_list32_new(i64, mem.r0, mem.r1) -> ptr\n");
     t.push_str("decl @__wolf_rt_print_i64(i64)\n");
     if external_sink {
         t.push_str("decl @sink(ptr)\n");
@@ -212,7 +212,7 @@ fn relay_chain(hops: usize, external_sink: bool) -> String {
          %0: mem.r1 = region.foreign 1\n  \
          %1: mem.r0 = region.foreign 0\n  \
          %2 = iconst.i64 8\n  \
-         %3, %4, %5 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+         %3, %4, %5 = call @__wolf_rt_list32_new(%2, %1, %0)\n  \
          %6: ptr, %7: mem.r2 = stack.alloc %2\n  \
          %8 = store.ptr %3, %6, %7\n  \
          %9 = call @r{hops}(%6, %8)\n  \
@@ -294,7 +294,7 @@ fn copy_join(fresh_side: bool) -> String {
          jmp b3(%12)\n"
     };
     format!(
-        "decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n\
+        "decl @__wolf_rt_list32_new(i64, mem.r0, mem.r1) -> ptr\n\
          decl @__wolf_rt_list_copy(ptr, mem.r0, mem.r1) -> ptr\n\
          decl @__wolf_rt_print_i64(i64)\n\n\
          fn @main() {{\n\
@@ -304,7 +304,7 @@ fn copy_join(fresh_side: bool) -> String {
          %2 = iconst.i64 8\n  \
          %3 = iconst.i64 0\n  \
          %4 = iconst.i64 5\n  \
-         %5, %6, %7 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+         %5, %6, %7 = call @__wolf_rt_list32_new(%2, %1, %0)\n  \
          %8 = load.ptr %5, %6\n  \
          %9 = ptr.off %8, %3, 8\n  \
          %10 = store.i64 %4, %9, %7\n  \
@@ -312,7 +312,7 @@ fn copy_join(fresh_side: bool) -> String {
          br %11, b1, b2\n\
          b1:\n{copy_edge}\
          b2:\n  \
-         %15, %16, %17 = call @__wolf_rt_list_new(%2, %6, %10)\n  \
+         %15, %16, %17 = call @__wolf_rt_list32_new(%2, %6, %10)\n  \
          %18 = load.ptr %15, %16\n  \
          %19 = ptr.off %18, %3, 8\n  \
          %20 = store.i64 %3, %19, %17\n\
@@ -351,7 +351,7 @@ fn a_fresh_lists_own_load_still_carries_its_stores() {
 /// the field from the slot after the call; this load does not, so only
 /// the slot rule (rule 2) stands between it and the stale 0.
 fn slot_field_write() -> String {
-    "decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n\
+    "decl @__wolf_rt_list32_new(i64, mem.r0, mem.r1) -> ptr\n\
      decl @__wolf_rt_print_i64(i64)\n\
      decl @fill(mut ptr, mem.r0)\n\n\
      fn @fill(mut ptr, mem.r0) {\n\
@@ -372,7 +372,7 @@ fn slot_field_write() -> String {
      %0: mem.r1 = region.foreign 1\n  \
      %1: mem.r0 = region.foreign 0\n  \
      %2 = iconst.i64 8\n  \
-     %3, %4, %5 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+     %3, %4, %5 = call @__wolf_rt_list32_new(%2, %1, %0)\n  \
      %6 = load.ptr %3, %4\n  \
      %7 = iconst.i64 0\n  \
      %8 = ptr.off %6, %7, 8\n  \
@@ -410,7 +410,7 @@ fn a_header_stored_inside_a_slot_handed_to_a_call_is_clobbered() {
 /// list's LENGTH field one hop on reads as an element: the grant puts
 /// `main`'s element stores (0) on `size`'s length load.
 fn struct_by_read_reads_length() -> String {
-    "decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n\
+    "decl @__wolf_rt_list32_new(i64, mem.r0, mem.r1) -> ptr\n\
      decl @__wolf_rt_print_i64(i64)\n\
      decl @size(read ptr, mem.r0, mem.r1) -> i64\n\n\
      fn @size(read ptr, mem.r0, mem.r1) -> i64 {\n\
@@ -425,7 +425,7 @@ fn struct_by_read_reads_length() -> String {
      %0: mem.r1 = region.foreign 1\n  \
      %1: mem.r0 = region.foreign 0\n  \
      %2 = iconst.i64 8\n  \
-     %3, %4, %5 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+     %3, %4, %5 = call @__wolf_rt_list32_new(%2, %1, %0)\n  \
      %6 = load.ptr %3, %4\n  \
      %7 = iconst.i64 0\n  \
      %8 = ptr.off %6, %7, 8\n  \

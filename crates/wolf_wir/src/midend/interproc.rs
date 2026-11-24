@@ -19,7 +19,7 @@
 //!   address-taken function's parameters (the C membrane and function
 //!   pointers can deliver anything);
 //! - a value the scan has no provenance rule for (an `eu.ok`, a call
-//!   result other than `__wolf_rt_list_new`, any op without an arm) is
+//!   result other than `__wolf_rt_list32_new`, any op without an arm) is
 //!   the top, `Other`, never the bottom `Unset`, so a join with it
 //!   proves nothing (wolf-lang#1205: left `Unset`, the join took the
 //!   fresh list on its other edge for the whole value);
@@ -52,9 +52,9 @@
 //! The lowering gives a `List` one shape (s75/s113): a header pointer
 //! `hdr`; `load.ptr hdr` is the element buffer; `ptr.off hdr, 8|16`
 //! are len/cap; element access is `ptr.off buffer, idx, esize` +
-//! `load`/`store`; growth pushes cross `__wolf_rt_list_push(hdr,
-//! slot, …)` with the pushed value in a fresh stack slot. Two lists
-//! from two `__wolf_rt_list_new` calls own disjoint buffers (runtime
+//! `load`/`store`; growth pushes cross `__wolf_rt_list32_push(hdr,
+//! esize, slot, …)` with the pushed value in a fresh stack slot. Two lists
+//! from two `__wolf_rt_list32_new` calls own disjoint buffers (runtime
 //! allocation semantics — the same tier of knowledge as "push appends
 //! the slot's value"). The channel keys groups by their root — a
 //! local `list_new` site or a parameter — and the meet of every
@@ -91,7 +91,7 @@ type Rng = (i128, i128);
 /// A container group's identity inside one function.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Root {
-    /// The k-th `__wolf_rt_list_new` call site, in RPO order — the
+    /// The k-th `__wolf_rt_list32_new` call site, in RPO order — the
     /// summary's `a<k>` site id.
     Local(u32),
     /// The container reachable from parameter `i` (directly for a
@@ -226,7 +226,7 @@ fn has_provenance_rule(f: &Function, inst: &crate::ir::InstData) -> bool {
         | Opcode::Jmp
         | Opcode::Br => true,
         Opcode::Call => {
-            matches!(inst.aux, Aux::Callee(ef) if f.ext_funcs[ef].name == "__wolf_rt_list_new")
+            matches!(inst.aux, Aux::Callee(ef) if f.ext_funcs[ef].name == "__wolf_rt_list32_new")
         }
         _ => false,
     }
@@ -284,7 +284,7 @@ pub struct Ipr {
 /// the group (`import c` and the whole unknown world live behind the
 /// same door).
 fn whitelisted_rt(name: &str) -> bool {
-    matches!(name, "__wolf_rt_list_new" | "__wolf_rt_list_push")
+    matches!(name, "__wolf_rt_list32_new" | "__wolf_rt_list32_push")
 }
 
 fn int_bounds(m: &Module, f: &Function, v: Value) -> Option<Rng> {
@@ -512,7 +512,7 @@ fn scan(m: &Module, f: &Function) -> Local {
                     }
                     Opcode::Call => {
                         if let Aux::Callee(ef) = inst.aux
-                            && f.ext_funcs[ef].name == "__wolf_rt_list_new"
+                            && f.ext_funcs[ef].name == "__wolf_rt_list32_new"
                             && let Some(&r0) = results.first()
                         {
                             let seq = *local_seq.entry(ii.as_u32()).or_insert_with(|| {
@@ -621,7 +621,7 @@ fn scan(m: &Module, f: &Function) -> Local {
                 // wolf-lang#1205 (rule 1): a value this scan has no provenance
                 // rule for is `Other`, the lattice's top, from the round it is
                 // reached. `Unset` is only "not reached yet": left there, an
-                // `eu.ok` or a call result other than `__wolf_rt_list_new` met a
+                // `eu.ok` or a call result other than `__wolf_rt_list32_new` met a
                 // fresh header at a join as if its edge were not there, and the
                 // join's loads were proved from the fresh list's stores alone.
                 if !has_provenance_rule(f, inst) {
@@ -828,16 +828,16 @@ fn scan(m: &Module, f: &Function) -> Local {
                             args: flows,
                         });
                     } else if whitelisted_rt(&name) {
-                        if name == "__wolf_rt_list_push" {
-                            // push(hdr, slot, …): the pushed value is
-                            // the slot's dominating store in this
+                        if name == "__wolf_rt_list32_push" {
+                            // push(hdr, esize, slot, …): the pushed value
+                            // is the slot's dominating store in this
                             // block.
                             let hdr = origin(args[0]);
                             let Origin::Hdr(r) = hdr else {
                                 lf.dirty = true;
                                 continue;
                             };
-                            match slot_value(f, b, ii, args[1]) {
+                            match slot_value(f, b, ii, args[2]) {
                                 Some(v) => {
                                     let vr = eval(m, f, &empty_rets, &mut memo, v, 8);
                                     let e = lf.meets.entry(r).or_insert(Meet::Empty);

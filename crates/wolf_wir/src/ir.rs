@@ -289,7 +289,7 @@ pub struct Function {
     /// C membrane export (s29, D19): the function is defined under the
     /// C convention with an UNMANGLED linker symbol (its WIR name) and
     /// external linkage. Textually `export fn @name…`. Everything else
-    /// stays `wolf-abi-0` internal.
+    /// stays `wolf-abi-3` internal.
     pub export: bool,
     /// kw02 (`[abi.c.export]`): how an EXPORT widens a narrow integer
     /// or `bool` result to 32 bits before it returns — [`Mode::Sext`],
