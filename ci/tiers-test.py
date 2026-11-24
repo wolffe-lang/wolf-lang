@@ -64,10 +64,16 @@ the nightly's issue). python3, git and bash only.
       The plan job asks it before it plans, with read-only permissions,
       and only the plan step reads the answer (S6). The nightly's issue
       says a `tier skipped` night is not a green one (S7).
+  T12 every leg of `build + test` has a limit of its own, read from the
+      matrix, at least its longest healthy run in ci/job-limits.json plus
+      a third, rounded up to the next 5 minutes; a leg with no record, or a
+      record with no leg, fails too (#1217). The check is shown to say no
+      to a limit under that bound and to pass one at it.
 
 Exit 0 when every check passes, 1 otherwise.
 """
 import json
+import math
 import os
 import re
 import shutil
@@ -705,6 +711,57 @@ said_ = ["\n".join(nightly_red(existing=e)[1]) for e in ("", "41")]
 say("issue create" in said_[0] and "issue comment 41" in said_[1]
     and all("close this issue once a nightly is green again (a `tier skipped` night is not one)" in t for t in said_),
     "T11 S7 the nightly's issue, opened or commented, says to close it once a nightly is green again, and that a tier skipped night is not one")
+
+# T12 each `build + test` leg's limit is its longest healthy run plus a third, rounded up to 5 minutes (#1217).
+# The macOS leg filled the 45 minutes the matrix shared: healthy runs reached 44.6, and two were cut inside
+# `cargo test --workspace`. ci/job-limits.json holds each leg's longest healthy run and the runs it was read from.
+LIMITS = json.load(open(os.path.join(ROOT, "ci", "job-limits.json"), encoding="utf-8"))
+
+
+def limit_floor(longest):
+    """The least limit the rule allows: the longest healthy run plus a third, rounded up to the next 5 minutes."""
+    return math.ceil(round(longest * 4 / 3, 6) / 5) * 5
+
+
+def leg_limits(block):
+    """{leg name: limit in minutes} for a matrix job: the matrix's `timeout` when the job reads it, else the job's own."""
+    own = re.search(r"^    timeout-minutes: (.+)$", block, re.M)
+    own = own.group(1).strip() if own else ""
+    legs = {}
+    for entry in re.findall(r"^          - (os: .*\n(?:            .*\n)*)", block, re.M):
+        keys = dict(re.findall(r"(\w+): (.+)", entry))
+        name = keys["os"].strip() + (", " + keys["leg"].strip() if "leg" in keys else "")
+        value = keys.get("timeout", "").strip() if own == "${{ matrix.timeout }}" else own
+        legs[name] = int(value) if value.isdigit() else None
+    return legs
+
+
+def limit_problems(legs, record):
+    found = []
+    for name in sorted(set(legs) | set(record)):
+        if name not in record:
+            found.append("%s: no record in ci/job-limits.json" % name)
+        elif name not in legs:
+            found.append("%s: a record but no leg" % name)
+        elif legs[name] is None:
+            found.append("%s: no limit in minutes" % name)
+        elif legs[name] < limit_floor(record[name]["longest_minutes"]):
+            found.append("%s: limit %d under %d (longest healthy %.1f, plus a third, rounded up to 5)"
+                         % (name, legs[name], limit_floor(record[name]["longest_minutes"]), record[name]["longest_minutes"]))
+    return found
+
+
+record = LIMITS["build-test"]
+got = leg_limits(blocks.get("build-test", ""))
+probs = limit_problems(got, record)
+says_no = (limit_floor(44.6) == 60 and limit_floor(30.0) == 40 and limit_floor(15.1) == 25
+           and limit_problems({"a": 59}, {"a": {"longest_minutes": 44.6}})
+           and not limit_problems({"a": 60}, {"a": {"longest_minutes": 44.6}})
+           and limit_problems({"a": 60, "b": 60}, {"a": {"longest_minutes": 44.6}}))
+say(bool(got) and not probs and says_no,
+    "T12 each build + test leg's limit is its longest healthy run plus a third, rounded up to 5 (%s)%s%s"
+    % (", ".join("%s %s" % (k, v) for k, v in sorted(got.items())) or "no legs",
+       ("; " + "; ".join(probs)) if probs else "", "" if says_no else "; the check does not say no to a limit under the rule"))
 
 print("tiers-test: %s" % ("PASS" if fails == 0 else "FAIL (%d)" % fails))
 sys.exit(1 if fails else 0)
