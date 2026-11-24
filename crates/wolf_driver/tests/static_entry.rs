@@ -263,7 +263,13 @@ mod linux {
                 // the `-fuse-ld=lld` it adds where lld is found.
                 let mut c = Command::new(std::env::var("CC").unwrap_or_else(|_| "cc".into()));
                 c.arg("-o").arg(out).args(&o.files).arg(glibc_rt());
-                c.args(["-lpthread", "-ldl", "-lm", "-Wl,--gc-sections"]);
+                c.args([
+                    "-lpthread",
+                    "-ldl",
+                    "-lm",
+                    "-static-libgcc",
+                    "-Wl,--gc-sections",
+                ]);
                 c
             }
             Link::Musl { linker } => {
