@@ -779,7 +779,7 @@ extern "C" fn overflow_handler(
     if guard_hit(addr) {
         // "wolf-rt: stack overflow in task '<label>'\n" — byte-built,
         // write(2) direct, then a deterministic trap-discipline exit.
-        let mut msg = [0u8; 256];
+        let mut msg = [0u8; 20 * 1024];
         let mut n = 0;
         let mut put = |s: &[u8]| {
             let k = s.len().min(msg.len() - n);
