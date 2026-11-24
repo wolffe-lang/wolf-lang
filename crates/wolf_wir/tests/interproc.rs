@@ -398,3 +398,68 @@ fn a_header_stored_inside_a_slot_handed_to_a_call_is_clobbered() {
     // element.
     assert_eq!(main_elems(&slot_field_write()), None);
 }
+
+/// The latent parameter-demotion gap, pinned (found by #1205's sweep).
+/// `interproc.rs` documents that an entry pointer parameter is demoted
+/// from a container root the moment a use is not header-shaped, but the
+/// `demoted` set is never filled. Here `size` takes a pointer to a struct
+/// whose first field is a list's header; `main` builds that struct in a
+/// stack slot (the header at the base, an integer at offset 8) and passes
+/// the slot. The channel takes the struct pointer for the list's header,
+/// so `load.ptr param` (the header) reads as the element buffer, and the
+/// list's LENGTH field one hop on reads as an element: the grant puts
+/// `main`'s element stores (0) on `size`'s length load.
+fn struct_by_read_reads_length() -> String {
+    "decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n\
+     decl @__wolf_rt_print_i64(i64)\n\
+     decl @size(read ptr, mem.r0, mem.r1) -> i64\n\n\
+     fn @size(read ptr, mem.r0, mem.r1) -> i64 {\n\
+     b0(%0: ptr, %1: mem.r0, %2: mem.r1):\n  \
+     %3 = load.ptr %0, %1\n  \
+     %4 = iconst.i64 8\n  \
+     %5 = ptr.off %3, %4, 1\n  \
+     %6 = load.i64 %5, %2\n  \
+     ret %6\n}\n\n\
+     fn @main() {\n\
+     b0:\n  \
+     %0: mem.r1 = region.foreign 1\n  \
+     %1: mem.r0 = region.foreign 0\n  \
+     %2 = iconst.i64 8\n  \
+     %3, %4, %5 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+     %6 = load.ptr %3, %4\n  \
+     %7 = iconst.i64 0\n  \
+     %8 = ptr.off %6, %7, 8\n  \
+     %9 = store.i64 %7, %8, %5\n  \
+     %10 = iconst.i64 16\n  \
+     %11: ptr, %12: mem.r2 = stack.alloc %10\n  \
+     %13 = store.ptr %3, %11, %12\n  \
+     %14 = iconst.i64 1\n  \
+     %15 = ptr.off %11, %2, 1\n  \
+     %16 = store.i64 %14, %15, %13\n  \
+     %17, %18, %19 = call @size(%11, %16, %9)\n  \
+     call @__wolf_rt_print_i64(%17)\n  \
+     ret\n}\n"
+        .to_string()
+}
+
+/// A characterization test: it asserts today's UNSOUND grant on
+/// purpose. The gap is latent: safe wolf's lowering of a struct passed by
+/// read does not reach this shape (a struct whose first field is a list,
+/// by read to a callee that is not inlined, reading the list's length and
+/// an element, answers right on the release tier), so no program gets
+/// the wrong fact today. Two changes flip it:
+/// - implementing the documented demotion (a pointer parameter whose
+///   uses are not header-shaped stops being a container root) makes the
+///   grant `None`: update this test to say so;
+/// - a lowering change that makes this shape reachable from wolf source
+///   turns the latent gap live, and this test is where to start.
+#[test]
+fn latent_a_struct_pointer_parameter_is_taken_for_a_list_header() {
+    let m = wolf_wir::parse_module(&struct_by_read_reads_length()).expect("parse");
+    let ipr = interproc::analyze(&m);
+    assert_eq!(
+        ipr.grants.get("size").and_then(|g| g.get(&0)).copied(),
+        Some((0, 0)),
+        "the demotion gap moved: re-read the doc on `scan`'s entry parameters"
+    );
+}
