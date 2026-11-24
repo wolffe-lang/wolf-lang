@@ -179,7 +179,9 @@ fn dwarf_v1_list() {
         "fn inspect(value: List[int]) -> int { value.len - 2 }\nfn main() -> int { var xs = List[int]()\n(mut xs).push(31)\n(mut xs).push(47)\ninspect(xs) }\n",
         "print *value\nprint value->data[0]\nprint value->data[1]",
         "frame variable --ptr-depth 1 value\nframe variable value->data[0]\nframe variable value->data[1]",
-        &["len = 2", "elem = 8", "region", "= 31", "= 47"],
+        // The header is `{data, len, cap, region}` since wolf-lang#1177:
+        // no element size to print.
+        &["len = 2", "cap = 8", "region", "= 31", "= 47"],
     );
 }
 
