@@ -2174,14 +2174,37 @@ fn parse_exitstop_mem(line: &str) -> Option<ExitStop> {
     })
 }
 
-/// The reader's `altstack` line → `(used, size, exit)`.
-fn parse_exitstop_altstack(line: &str) -> Option<(i64, i64, i64)> {
+/// One read of the main thread's alternate stack (`exitstop altstack`).
+#[derive(Debug, PartialEq)]
+struct AltStackRead {
+    /// Bytes written below the top, by the kernel and the report together.
+    used: i64,
+    size: i64,
+    /// The kernel's signal frame for this CPU (`AT_MINSIGSTKSZ`), pushed onto
+    /// the alternate stack before the handler runs; 0 where the kernel gives
+    /// none.
+    frame: i64,
+    exit: i64,
+}
+
+/// The reader's `altstack` line → its four numbers.
+fn parse_exitstop_altstack(line: &str) -> Option<AltStackRead> {
     let rest = line.strip_prefix("altstack ")?;
-    Some((
-        exitstop_field(rest, "used")?,
-        exitstop_field(rest, "size")?,
-        exitstop_field(rest, "exit")?,
-    ))
+    Some(AltStackRead {
+        used: exitstop_field(rest, "used")?,
+        size: exitstop_field(rest, "size")?,
+        frame: exitstop_field(rest, "minsigstksz")?,
+        exit: exitstop_field(rest, "exit")?,
+    })
+}
+
+/// The overflow report's own use of the alternate stack: all that was used,
+/// less the kernel's signal frame, whose size follows the CPU's saved vector
+/// state and so differs from host to host. `None` where the kernel gives no
+/// frame size; a frame larger than all the use (a kernel that counts state the
+/// program never enabled) leaves none of it to the report.
+fn report_own_use(r: &AltStackRead) -> Option<i64> {
+    (r.frame > 0).then_some((r.used - r.frame).max(0))
 }
 
 /// The `nm -S` line naming the runtime's main-thread alternate stack →
@@ -2410,12 +2433,18 @@ fn floor_rows(
             return;
         }
     };
-    let Some((used, size, exit)) = parse_exitstop_altstack(&line) else {
+    let Some(read) = parse_exitstop_altstack(&line) else {
         failures.push(format!(
             "startup floor: the reader's line is not a read: {line}"
         ));
         return;
     };
+    let AltStackRead {
+        used,
+        size,
+        frame,
+        exit,
+    } = read;
     if exit != 134 {
         failures.push(format!(
             "startup floor: the overflow program ended with {exit}, not the overflow report's \
@@ -2429,13 +2458,26 @@ fn floor_rows(
              more than half: the stack has no guard below it"
         ));
     }
+    // Gated without the kernel's frame, so one host's record holds on
+    // another; the half rule above reads everything, frame included.
+    let Some(own) = report_own_use(&read) else {
+        failures.push(
+            "startup floor: this kernel gives no AT_MINSIGSTKSZ, so the overflow report's own \
+             use of its alternate stack cannot be told from the signal frame beneath it"
+                .to_string(),
+        );
+        return;
+    };
     floor_row(
         doc,
-        "floor_overflow_altstack_bytes",
-        "the overflow report's alternate-stack use (bytes)",
-        used,
+        "floor_overflow_report_bytes",
+        "the overflow report's own alternate-stack use, less the kernel's signal frame (bytes)",
+        own,
         FLOOR_ALTSTACK_SLACK_BYTES,
-        &format!("{used} of {size} bytes, written below the top by a main-thread overflow"),
+        &format!(
+            "{used} of {size} bytes written below the top by a main-thread overflow, {frame} of \
+             them the kernel's signal frame (AT_MINSIGSTKSZ)"
+        ),
         record,
         dirty,
         failures,
@@ -2595,8 +2637,8 @@ pub fn gate_render(path: &str, scored: &[Scored], outcome: &t1::GateOutcome) -> 
 #[cfg(test)]
 mod startup_tests {
     use super::{
-        ExitStop, main_altstack_symbol, parse_exitstop_altstack, parse_exitstop_mem,
-        startup_syscalls,
+        AltStackRead, ExitStop, main_altstack_symbol, parse_exitstop_altstack, parse_exitstop_mem,
+        report_own_use, startup_syscalls,
     };
 
     #[test]
@@ -2612,13 +2654,40 @@ mod startup_tests {
         assert_eq!(parse_exitstop_mem("vmhwm_kb=1712 minflt=68"), None);
         assert_eq!(parse_exitstop_mem("exitstop: refused: ..."), None);
         assert_eq!(
-            parse_exitstop_altstack("altstack used=5376 size=32768 exit=134"),
-            Some((5376, 32768, 134))
+            parse_exitstop_altstack("altstack used=5376 size=32768 minsigstksz=3000 exit=134"),
+            Some(AltStackRead {
+                used: 5376,
+                size: 32768,
+                frame: 3000,
+                exit: 134
+            })
         );
+        // A reader that names no signal frame is not a read.
         assert_eq!(
-            parse_exitstop_altstack("used=5376 size=32768 exit=134"),
+            parse_exitstop_altstack("altstack used=5376 size=32768 exit=134"),
             None
         );
+        assert_eq!(
+            parse_exitstop_altstack("used=5376 size=32768 minsigstksz=3000 exit=134"),
+            None
+        );
+    }
+
+    #[test]
+    fn the_reports_own_use_leaves_the_kernels_frame_out() {
+        let read = |used, frame| AltStackRead {
+            used,
+            size: 32768,
+            frame,
+            exit: 134,
+        };
+        // The same report under two frame sizes reads the same.
+        assert_eq!(report_own_use(&read(5376, 3000)), Some(2376));
+        assert_eq!(report_own_use(&read(7176, 4800)), Some(2376));
+        // A kernel that gives no frame size: the own use cannot be told.
+        assert_eq!(report_own_use(&read(5376, 0)), None);
+        // A frame larger than all the use reads none of the report's.
+        assert_eq!(report_own_use(&read(2000, 3000)), Some(0));
     }
 
     #[test]
