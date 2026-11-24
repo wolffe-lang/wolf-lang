@@ -1,0 +1,71 @@
+//! check: run(exit=0, stdout="5 3 9 1 wolf 3 9 1\n1 2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1, mem.tier0.move.3
+//! wolf-lang#1192 — what the pattern rule leaves alone, on every
+//! machine. A piece of a `read` parameter bound by a pattern is lent,
+//! and only a lent piece that can reach shared storage AND leaves the
+//! call (or is written through) is refused:
+//! - `total`: the pieces read inside the call.
+//! - `reset`: a `var` piece replaced whole writes nothing of the caller's.
+//! - `corner`: a struct of scalars is inline words; returning it copies.
+//! - `label`: a `str` is an immutable view.
+//! - `count`: a `Copy` piece is a copy.
+//! - `own`: a `take` parameter is the callee's own.
+//! - `fresh`: `copy` at the initializer hands back an independent value.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn total(p: (List[int], int)) -> int {
+    let (a, n) = p
+    a.len + n
+}
+
+fn reset(p: (List[int], int)) -> int {
+    var (a, _) = p
+    a = [5, 6, 7]
+    a.len
+}
+
+fn corner(p: (Point, List[int])) -> Point {
+    let (pt, _) = p
+    pt
+}
+
+fn label(p: (str, List[int])) -> str {
+    let (s, _) = p
+    s
+}
+
+fn count(p: (List[int], int)) -> int {
+    let (_, n) = p
+    n
+}
+
+fn own(take p: (List[int], int)) -> List[int] {
+    let (a, _) = p
+    a
+}
+
+fn fresh(p: (List[int], int)) -> List[int] {
+    let (a, _) = copy p
+    a
+}
+
+fn main() -> !int {
+    let p = ([1, 2], 3)
+    let q = (Point { x: 1, y: 2 }, [3])
+    let r = ("wolf", [4])
+    var c = corner(q)
+    c.x = 9
+    var f = fresh(p)
+    f[0] = 9
+    print("{total(p)} {reset(p)} {c.x} {q.0.x} {label(r)} {count(p)} {f[0]} {p.0[0]}")
+    var tp = ([7, 8], 0)
+    var o = own(take tp)
+    o[0] = 1
+    print("{o[0]} {o.len}")
+    0
+}

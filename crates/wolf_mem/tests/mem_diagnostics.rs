@@ -1681,6 +1681,53 @@ fn e1014_read_param_through_a_rebinding() {
 }
 
 #[test]
+fn e1002_read_param_pattern_piece() {
+    // wolf-lang#1192: a `let` or `var` pattern's piece of a `read`
+    // parameter is lent, as a field read is — a tuple, a struct and a
+    // nested pattern, each returned. The report names the initializer as
+    // the move, so the `copy` it suggests lands there (`= copy p`), never
+    // inside the pattern.
+    snap(
+        "e1002_read_param_pattern_piece",
+        "struct Bag { items: List[int], n: int }\n\
+         fn left(p: (List[int], int)) -> List[int] {\n    \
+             let (a, _) = p\n    \
+             a\n\
+         }\n\
+         fn items_of(b: Bag) -> List[int] {\n    \
+             let Bag { items, .. } = b\n    \
+             items\n\
+         }\n\
+         fn inner(p: ((List[int], int), int)) -> List[int] {\n    \
+             var ((a, _), _) = p\n    \
+             a\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1014_read_param_pattern_piece() {
+    // wolf-lang#1192: a write through a `var` pattern's piece of a `read`
+    // parameter reaches the caller's storage — E1014, as through
+    // `var a = p.0`. Replacing the piece whole stays legal.
+    snap(
+        "e1014_read_param_pattern_piece",
+        "fn poke(p: (List[int], int)) -> int {\n    \
+             var (a, _) = p\n    \
+             a[0] = 9\n    \
+             a.len\n\
+         }\n\
+         fn reset(p: (List[int], int)) -> int {\n    \
+             var (a, _) = p\n    \
+             a = [5]\n    \
+             a.len\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
 fn read_param_moves_that_stay_legal() {
     // s165 (#366): no alias, or no escape — a struct of scalars, a
     // `str`, an `int ! {none}` fallback, a scrutinee piece read in
