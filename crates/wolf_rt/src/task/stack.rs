@@ -860,4 +860,111 @@ mod tests {
         // SAFETY: writing inside our own mapping.
         unsafe { *alt = 1 };
     }
+
+    /// Run `f` in a forked child and return its exit code. The child does
+    /// only what `f` does (libc calls and this module's entry, which takes
+    /// no lock and allocates nothing) and ends with `_exit`.
+    #[cfg(target_os = "linux")]
+    fn in_child(f: fn() -> i32) -> i32 {
+        // SAFETY: the child runs `f` alone and leaves by `_exit`; the parent
+        // waits for that one pid.
+        unsafe {
+            let pid = libc::fork();
+            assert!(pid >= 0, "fork");
+            if pid == 0 {
+                libc::_exit(f());
+            }
+            let mut status = 0;
+            assert_eq!(libc::waitpid(pid, &mut status, 0), pid);
+            assert!(
+                libc::WIFEXITED(status),
+                "the child ended by a signal: {status:#x}"
+            );
+            libc::WEXITSTATUS(status)
+        }
+    }
+
+    /// The thread's alternate signal stack, or `None` when it has none.
+    #[cfg(target_os = "linux")]
+    fn current_altstack() -> Option<(usize, usize)> {
+        // SAFETY: a query into a local descriptor.
+        unsafe {
+            let mut cur: libc::stack_t = std::mem::zeroed();
+            (libc::sigaltstack(std::ptr::null(), &mut cur) == 0
+                && cur.ss_flags & libc::SS_DISABLE == 0)
+                .then_some((cur.ss_sp as usize, cur.ss_size))
+        }
+    }
+
+    /// The main thread's entry gives it an alternate stack of `ALT` bytes
+    /// that is part of the program's own data (the mapping that holds the
+    /// runtime's statics, or its neighbour: a static may fall in the
+    /// file-backed or the zero-filled half of `.bss`), not a fresh mapping.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn the_main_thread_entry_gives_it_an_alternate_stack_in_the_programs_data() {
+        let code = in_child(|| {
+            // A test thread has std's alternate stack; the main thread of a
+            // wolf program starts with none.
+            let off = libc::stack_t {
+                ss_sp: std::ptr::null_mut(),
+                ss_flags: libc::SS_DISABLE,
+                ss_size: 0,
+            };
+            // SAFETY: disabling this thread's alternate stack.
+            if unsafe { libc::sigaltstack(&off, std::ptr::null_mut()) } != 0 {
+                return 10;
+            }
+            enter_main_thread();
+            let Some((sp, len)) = current_altstack() else {
+                return 11;
+            };
+            if len != ALT {
+                return 12;
+            }
+            let hint = &raw const MAIN_STACK_HINT as usize;
+            let (Some(a), Some(h)) = (mapping_holding(sp), mapping_holding(hint)) else {
+                return 13;
+            };
+            if a.0 == h.0 || a.0 == h.1 || a.1 == h.0 {
+                0
+            } else {
+                14
+            }
+        });
+        assert_eq!(
+            code, 0,
+            "the main thread's alternate stack (10: could not clear std's, 11: none installed, \
+             12: not ALT bytes, 13: an address no mapping holds, 14: a mapping apart from the \
+             runtime's statics, a fresh one)"
+        );
+    }
+
+    /// An alternate stack something set before the entry stays the thread's.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn the_main_thread_entry_keeps_an_alternate_stack_set_before_it() {
+        let code = in_child(|| {
+            let mut foreign = [0u8; 16 * 1024];
+            let ss = libc::stack_t {
+                ss_sp: foreign.as_mut_ptr().cast(),
+                ss_flags: 0,
+                ss_size: foreign.len(),
+            };
+            // SAFETY: installing a buffer that outlives this child's use of it.
+            if unsafe { libc::sigaltstack(&ss, std::ptr::null_mut()) } != 0 {
+                return 10;
+            }
+            enter_main_thread();
+            match current_altstack() {
+                Some((sp, len)) if sp == foreign.as_ptr() as usize && len == foreign.len() => 0,
+                Some(_) => 11,
+                None => 12,
+            }
+        });
+        assert_eq!(
+            code, 0,
+            "the foreign alternate stack (10: could not install it, 11: replaced, 12: removed)"
+        );
+    }
 }
