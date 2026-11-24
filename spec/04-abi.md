@@ -8,10 +8,10 @@ AAPCS64, win64, Apple arm64 deltas).
 
 ---
 
-## §1 wolf-abi-0 `[abi.native]`
+## §1 wolf-abi-3 `[abi.native]`
 
 - `[abi.native.unstable]` The native ABI is **versioned and unstable**:
-  `wolf-abi-0`. Nothing about it is a compatibility promise; separately
+  `wolf-abi-3`. Nothing about it is a compatibility promise; separately
   compiled wolf artifacts must agree on the version string or fail to
   link. Stability is a post-1.0 question.
 - `[abi.native.layout]` Layout freedom is the point (T1): outside
@@ -42,7 +42,7 @@ AAPCS64, win64, Apple arm64 deltas).
   of the slot's first member there. A payload-free enum is the tag
   alone. The union is per slot, never one blob for the whole payload:
   a slot every variant agrees on keeps its plain type and layout.
-  Everything here is `wolf-abi-0` internal (`[abi.native.layout]`,
+  Everything here is `wolf-abi-3` internal (`[abi.native.layout]`,
   `[abi.native.unstable]`): an enum never crosses a C membrane by
   value (`[abi.c.types]`), and the checked machine and the reference
   interpreter keep the variant and its typed payloads and have no
@@ -67,7 +67,7 @@ AAPCS64, win64, Apple arm64 deltas).
   not enable exception propagation or change the `nounwind` contract.
 - `[abi.native.taskenv]` A spawned task's captures cross to the
   runtime as ONE pointer to a **capture record** whose layout is
-  `wolf-abi-0` internal, paired with a task-entry function that reads
+  `wolf-abi-3` internal, paired with a task-entry function that reads
   it (`[conc.task.spawn]`). The record's storage is charged to the
   spawning `scope`, and the scope may not release it before
   `[conc.task.join]` completes — so the record is live for at least as
@@ -175,7 +175,7 @@ AAPCS64, win64, Apple arm64 deltas).
 - `[abi.c.seams]` Exactly three ABI seams exist: `extern "c"` function
   types/imports, `export`ed wolf functions (C-callable), and
   `#[repr(c)]` (+ `packed`, `transparent`, not yet implemented) data.
-  There is no fourth mechanism; everything else is `wolf-abi-0`
+  There is no fourth mechanism; everything else is `wolf-abi-3`
   internal. **The only ABI string is `"c"`**: `extern "S"` with any
   other `S` is **E0818**, naming it (K7, STATUS #31 — wolf-lang#524).
   In particular wolf has no interrupt calling convention: an interrupt
@@ -478,7 +478,7 @@ C membranes are extended: `import c` still admits only its modelled set
   on the discriminant; there is no unwinding, no landing pads, no
   side-channel (errno-shaped) state — ever.
 - `[abi.err.row]` Error rows lower to a tag + payload slots whose
-  layout is `wolf-abi-0` internal — `[abi.native.enum]`'s slots, a
+  layout is `wolf-abi-3` internal — `[abi.native.enum]`'s slots, a
   union slot where the tags' payloads disagree (rows never cross C
   membranes; an `export`ed function returning `!T` is E1201 with a
   fix-it to flatten).
