@@ -1,0 +1,22 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read
+//! wolf-lang#1192 — the write half of `read_param_escape_pattern.lu`.
+//! `var (a, _) = p` binds a piece of the `read` parameter `p`, so a
+//! write through `a` that reaches the caller's storage is the write
+//! E1014 refuses on `p` itself, as it is through `var a = p.0`. Before
+//! this row every machine ran it and the caller's list changed (`9`;
+//! lupin answers `1`). A whole reassignment of `a` writes nothing of
+//! the caller's and stays legal (`read_param_pattern_legal.lu`).
+
+fn poke(p: (List[int], int)) {
+    var (a, _) = p
+    a[0] = 9                       // ERROR E1014: a write to `p`'s value, through `a`
+}
+
+fn main() -> !int {
+    let p = ([1, 2], 3)
+    poke(p)
+    print("{p.0[0]}")
+    0
+}

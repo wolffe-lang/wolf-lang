@@ -1,0 +1,68 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! wolf-lang#1192 — a `let` or `var` pattern that takes a `read`
+//! parameter apart binds pieces of it, and a piece is lent exactly as a
+//! field read (`let a = p.0`) or a `match` binding is: returning one,
+//! or carrying one out inside a struct, is a second live path to the
+//! caller's value. Before this row every machine ran these clean, and
+//! a caller that wrote through the answer changed its own value (`9`,
+//! where lupin, which copies at the crossing, answers `1`: the
+//! conservatism `read_param_return.lu` records). A tuple, a struct, a
+//! generic tuple, a `var` pattern, a nested pattern, a struct literal
+//! and a pattern over a binding that holds the parameter, each refused.
+//! The fix the report suggests is `copy` at the initializer:
+//! `let (a, n) = copy p`.
+
+struct Bag {
+    items: List[int],
+    n: int,
+}
+
+struct Wrap {
+    items: List[int],
+}
+
+fn left(p: (List[int], int)) -> List[int] {
+    let (a, _) = p
+    a                              // ERROR E1002: `a` is a piece of `p`
+}
+
+fn items_of(b: Bag) -> List[int] {
+    let Bag { items, .. } = b
+    items                          // ERROR E1002: `items` is a piece of `b`
+}
+
+fn first_of[A, B](p: (A, B)) -> A {
+    let (a, _) = p
+    a                              // ERROR E1002: a type parameter can share
+}
+
+fn left_var(p: (List[int], int)) -> List[int] {
+    var (a, _) = p
+    a                              // ERROR E1002: `var` binds the same piece
+}
+
+fn inner(p: ((List[int], int), int)) -> List[int] {
+    let ((a, _), _) = p
+    a                              // ERROR E1002: a nested piece
+}
+
+fn rewrap(p: (List[int], int)) -> Wrap {
+    let (a, _) = p
+    Wrap { items: a }              // ERROR E1002: `a` leaves inside the struct
+}
+
+fn left_held(p: (List[int], int)) -> List[int] {
+    let q = p
+    let (a, _) = q
+    a                              // ERROR E1002: `q` holds `p`'s value
+}
+
+fn main() -> !int {
+    let p = ([1, 2], 3)
+    var t = left(p)
+    t[0] = 9
+    print("t={t[0]} p={p.0[0]}")
+    0
+}
