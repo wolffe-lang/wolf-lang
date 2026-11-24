@@ -20,7 +20,7 @@ set -euo pipefail
 
 label=nightly-red
 title="nightly red: $WORKFLOW on trunk"
-body=$(printf 'The scheduled run of `%s` on trunk is red: %s\n\nThe next lane on this repository owes it (crawl 54, ruling #92). A further red night comments here; close this issue once a nightly is green again.\n' "$WORKFLOW" "$RUN_URL")
+body=$(printf 'The scheduled run of `%s` on trunk is red: %s\n\nThe next lane on this repository owes it (crawl 54, ruling #92). A further red night comments here; close this issue once a nightly is green again (a `tier skipped` night is not one).\n' "$WORKFLOW" "$RUN_URL")
 
 # The label may exist already; that is not a failure.
 gh label create "$label" --repo "$REPO" --color B60205 \
