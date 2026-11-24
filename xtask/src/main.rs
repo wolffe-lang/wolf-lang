@@ -5504,10 +5504,9 @@ fn rt_none() -> Result<Option<PathBuf>, ()> {
     // The target's rustflags (a lane may point `--sysroot` at a private
     // copy of the target's rust-std) apply to the probe as to the build.
     let flags = std::env::var("CARGO_TARGET_X86_64_UNKNOWN_NONE_RUSTFLAGS").unwrap_or_default();
-    let tdir = std::env::var_os("CARGO_TARGET_DIR")
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target"));
+    // Cargo's own answer, which also follows `build.target-dir` (the
+    // follow-up to wolf-lang#1187).
+    let tdir = xtask::wolf_bin::target_dir().to_path_buf();
     let probe_dir = tdir.join("rt-none-probe");
     let _ = std::fs::create_dir_all(&probe_dir);
     let probe_src = probe_dir.join("probe.rs");
