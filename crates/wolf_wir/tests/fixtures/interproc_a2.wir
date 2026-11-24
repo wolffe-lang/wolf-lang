@@ -1,6 +1,6 @@
 decl @__wolf_rt_env_args() -> ptr
-decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr
-decl @__wolf_rt_list_push(ptr, ptr, mem.r0, mem.r1, mem.r2)
+decl @__wolf_rt_list32_new(i64, mem.r0, mem.r1) -> ptr
+decl @__wolf_rt_list32_push(ptr, i64, ptr, mem.r0, mem.r1, mem.r2)
 decl @__wolf_rt_print_begin()
 decl @__wolf_rt_print_end(i64)
 decl @__wolf_rt_print_i64(i64)
@@ -162,8 +162,8 @@ b0:
   %3 = call @ops_arg(%2)
   %4 = iconst.i64 4096
   %5 = iconst.i64 8
-  %6, %7, %8 = call @__wolf_rt_list_new(%5, %1, %0)
-  %9, %10, %11 = call @__wolf_rt_list_new(%5, %7, %8)
+  %6, %7, %8 = call @__wolf_rt_list32_new(%5, %1, %0)
+  %9, %10, %11 = call @__wolf_rt_list32_new(%5, %7, %8)
   %12 = iconst.i64 0
   jmp b1(%12, %10, %11)
 b1(%13: i64, %14: mem.r0, %15: mem.r1):
@@ -190,7 +190,7 @@ b3:
 b4:
   %31: ptr, %32: mem.r2 = stack.alloc %5
   %33 = store.i64 %18, %31, %32
-  %34, %35, %36 = call @__wolf_rt_list_push(%6, %31, %33, %14, %15)
+  %34, %35, %36 = call @__wolf_rt_list32_push(%6, %5, %31, %33, %14, %15)
   jmp b5(%35, %36)
 b5(%37: mem.r0, %38: mem.r1):
   %39 = ptr.off %9, %5, 1
@@ -210,7 +210,7 @@ b6:
 b7:
   %50: ptr, %51: mem.r3 = stack.alloc %5
   %52 = store.i64 %12, %50, %51
-  %53, %54, %55 = call @__wolf_rt_list_push(%9, %50, %52, %37, %38)
+  %53, %54, %55 = call @__wolf_rt_list32_push(%9, %5, %50, %52, %37, %38)
   jmp b8(%54, %55)
 b8(%56: mem.r0, %57: mem.r1):
   %58 = iconst.i64 1

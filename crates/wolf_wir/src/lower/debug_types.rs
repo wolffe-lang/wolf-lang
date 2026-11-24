@@ -364,10 +364,18 @@ impl Describer<'_> {
 
     fn header(&self, name: &str, element: DebugType, map: bool) -> DebugType {
         let mut fields = vec![member("data", 0, pointer(element))];
-        for (i, name) in ["len", "cap", "elem"].iter().enumerate() {
+        // A list's header is `{data, len, cap, region}` since
+        // wolf-lang#1177; a map's keeps its entry stride before the region.
+        let words: &[&str] = if map {
+            &["len", "cap", "elem"]
+        } else {
+            &["len", "cap"]
+        };
+        for (i, name) in words.iter().enumerate() {
             fields.push(member(*name, (i as u64 + 1) * 8, int()));
         }
-        fields.push(member("region", 32, pointer(opaque("opaque region"))));
+        let region = if map { 32 } else { 24 };
+        fields.push(member("region", region, pointer(opaque("opaque region"))));
         if map {
             for (i, name) in ["key_kind", "key_size", "val_off", "val_size"]
                 .iter()
@@ -380,7 +388,7 @@ impl Describer<'_> {
             fields.push(member("index", 72, pointer(opaque("opaque map index"))));
             fields.push(member("index_cap", 80, int()));
         }
-        Type::new(name, if map { 88 } else { 40 }, Kind::Struct(fields))
+        Type::new(name, if map { 88 } else { 32 }, Kind::Struct(fields))
     }
 
     #[allow(clippy::too_many_arguments)]
