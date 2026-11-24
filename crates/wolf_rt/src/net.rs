@@ -3312,7 +3312,7 @@ mod tests {
     fn bytes_list(bs: &[u8]) -> i64 {
         let hdr = crate::list::new_list(1);
         for b in bs {
-            crate::list::push_raw(hdr, core::ptr::from_ref(b));
+            crate::list::push_raw(hdr, core::ptr::from_ref(b), 1);
         }
         hdr as i64
     }
@@ -3331,8 +3331,9 @@ mod tests {
         (0..n)
             .map(|i| {
                 let mut cell = [0u8; 1];
-                let rc =
-                    unsafe { crate::list::__wolf_rt_list_read(hdr, i, cell.as_mut_ptr() as i64) };
+                let rc = unsafe {
+                    crate::list::__wolf_rt_list32_read(hdr, i, 1, cell.as_mut_ptr() as i64)
+                };
                 assert_eq!(rc, 1);
                 cell[0]
             })

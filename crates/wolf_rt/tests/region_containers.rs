@@ -32,7 +32,7 @@
 //! `wolf_rt::list`, where per-region attribution makes them immune to
 //! test parallelism.
 
-use wolf_rt::list::{__wolf_rt_list_len, __wolf_rt_list_new, __wolf_rt_list_push};
+use wolf_rt::list::{__wolf_rt_list_len, __wolf_rt_list32_new, __wolf_rt_list32_push};
 use wolf_rt::native::{
     __wolf_rt_live_region_bytes, __wolf_rt_region_ambient_enter, __wolf_rt_region_ambient_leave,
     __wolf_rt_region_bytes, __wolf_rt_region_free, __wolf_rt_region_new, live_region_bytes,
@@ -51,15 +51,15 @@ fn region_free_reclaims_container_storage() {
     // ---- a large List built inside a region --------------------------
     let r = __wolf_rt_region_new();
     // SAFETY: `r` is a fresh live handle; every list handle below comes
-    // from `__wolf_rt_list_new`, and the element slots are stack i64s of
+    // from `__wolf_rt_list32_new`, and the element slots are stack i64s of
     // exactly the list's element size.
     let (grew, charged) = unsafe {
         let prev = __wolf_rt_region_ambient_enter(r);
         assert!(prev.is_null(), "the test thread starts at the process root");
 
-        let h = __wolf_rt_list_new(8);
+        let h = __wolf_rt_list32_new(8);
         for v in 0..N {
-            __wolf_rt_list_push(h, (&raw const v) as i64);
+            __wolf_rt_list32_push(h, 8, (&raw const v) as i64);
         }
         assert_eq!(__wolf_rt_list_len(h), N, "the list holds every element");
 

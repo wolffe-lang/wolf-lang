@@ -345,20 +345,27 @@ type ParShim = unsafe extern "C" fn(*mut c_void, *const u8, *mut u8) -> i64;
 /// cancellation between elements. Writes the result header to
 /// `out_hdr` and returns 0, or the first failure's tag.
 ///
+/// The source's element size is `elem`, the caller's to pass since the
+/// list header stopped carrying it (wolf-lang#1177); the entry was
+/// `__wolf_rt_par_map` before, without it, and that name is not defined
+/// any more, so an object compiled for the old header does not link.
+///
 /// # Safety
 ///
-/// `hdr` must be a live list header; `shim` must be callable with
-/// `rec` and element/result slots of the list's element size and
+/// `hdr` must be a live list header of `elem`-byte elements; `shim` must
+/// be callable with `rec` and element/result slots of `elem` and
 /// `out_elem` bytes; `out_hdr` must address a writable `i64`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_par_map(
+pub unsafe extern "C" fn __wolf_rt_par32_map(
     hdr: i64,
+    elem: i64,
     shim: ParShim,
     rec: *mut c_void,
     out_elem: i64,
     out_hdr: *mut i64,
 ) -> i64 {
-    let (sdata, n, selem) = crate::list::raw_parts(hdr as *mut crate::list::ListHdr);
+    let (sdata, n) = crate::list::raw_parts(hdr as *mut crate::list::ListHdr);
+    let selem = elem.max(1) as usize;
     let oelem = out_elem.max(1) as usize;
     let (out, odata) = crate::list::new_list_len(oelem, n);
     // SAFETY: the caller's slot.
@@ -819,7 +826,7 @@ mod tests {
     }
 }
 
-/// s166 — `__wolf_rt_par_map` driven through its C surface with a
+/// s166 — `__wolf_rt_par32_map` driven through its C surface with a
 /// Rust shim standing in for the one lowering builds per call site.
 #[cfg(test)]
 mod par_tests {
@@ -836,9 +843,9 @@ mod par_tests {
     }
 
     fn read(hdr: i64, i: usize) -> i64 {
-        let (data, _, elem) = crate::list::raw_parts(hdr as *mut crate::list::ListHdr);
-        // SAFETY: `i` is in range at every call site below.
-        unsafe { data.add(i * elem).cast::<i64>().read_unaligned() }
+        let (data, _) = crate::list::raw_parts(hdr as *mut crate::list::ListHdr);
+        // SAFETY: `i` is in range at every call site below; 8-byte slots.
+        unsafe { data.add(i * 8).cast::<i64>().read_unaligned() }
     }
 
     unsafe extern "C" fn double(_rec: *mut c_void, inp: *const u8, out: *mut u8) -> i64 {
@@ -858,9 +865,10 @@ mod par_tests {
             let src = list_of(n);
             let mut out = 0i64;
             // SAFETY: a live list, a shim for 8-byte slots, a writable out.
-            let tag = unsafe { __wolf_rt_par_map(src, double, std::ptr::null_mut(), 8, &mut out) };
+            let tag =
+                unsafe { __wolf_rt_par32_map(src, 8, double, std::ptr::null_mut(), 8, &mut out) };
             assert_eq!(tag, 0);
-            let (_, len, _) = crate::list::raw_parts(out as *mut crate::list::ListHdr);
+            let (_, len) = crate::list::raw_parts(out as *mut crate::list::ListHdr);
             assert_eq!(len, n);
             for i in 0..n {
                 assert_eq!(read(out, i), 2 * i as i64, "slot {i} of {n}");
@@ -895,7 +903,8 @@ mod par_tests {
         let mut out = 0i64;
         RAN.store(0, SeqCst);
         // SAFETY: as in the order test.
-        let tag = unsafe { __wolf_rt_par_map(src, fail_first, std::ptr::null_mut(), 8, &mut out) };
+        let tag =
+            unsafe { __wolf_rt_par32_map(src, 8, fail_first, std::ptr::null_mut(), 8, &mut out) };
         assert_eq!(tag, 7, "the first failure's tag re-raises");
         let ran = RAN.load(SeqCst);
         assert!(
