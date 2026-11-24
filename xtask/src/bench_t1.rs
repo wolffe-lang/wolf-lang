@@ -2185,12 +2185,17 @@ fn parse_exitstop_altstack(line: &str) -> Option<(i64, i64, i64)> {
 }
 
 /// The `nm -S` line naming the runtime's main-thread alternate stack →
-/// `(link-time address, size)`, both hex in the line.
+/// `(link-time address, size)`, both hex in the line. Rust's std has a
+/// `MAIN_ALTSTACK` of its own in every program, so the name must carry the
+/// runtime's path, `wolf_rt::task::stack` (both manglings spell it
+/// `7wolf_rt4task5stack13MAIN_ALTSTACK`).
 fn main_altstack_symbol(nm: &str) -> Option<(u64, u64)> {
     nm.lines().find_map(|l| {
         let mut w = l.split_whitespace();
         let (addr, size, kind, name) = (w.next()?, w.next()?, w.next()?, w.next()?);
-        (name.contains("MAIN_ALTSTACK") && matches!(kind, "b" | "B" | "d" | "D")).then_some((
+        (name.contains("7wolf_rt4task5stack13MAIN_ALTSTACK")
+            && matches!(kind, "b" | "B" | "d" | "D"))
+        .then_some((
             u64::from_str_radix(addr, 16).ok()?,
             u64::from_str_radix(size, 16).ok()?,
         ))
@@ -2384,7 +2389,7 @@ fn floor_rows(
     };
     let Some((addr, size)) = main_altstack_symbol(&nm) else {
         failures.push(
-            "startup floor: the overflow program has no `MAIN_ALTSTACK` object: the main \
+            "startup floor: the overflow program has no runtime `MAIN_ALTSTACK` object: the main \
              thread's alternate stack is not the runtime's own static, so its use cannot be read"
                 .to_string(),
         );
@@ -2618,10 +2623,20 @@ mod startup_tests {
 
     #[test]
     fn the_main_altstack_is_found_by_its_name_in_nm() {
+        // Rust's std has a MAIN_ALTSTACK of its own (an 8-byte pointer in its
+        // stack_overflow module), linked into every program; nm lists it first
+        // here, as its sorted names may.
         let nm = "0000000000001130 0000000000000026 T main\n\
+                  000000000005c000 0000000000000008 b _RNvNtNtNtNtCs0123456789a_3std3sys3pal4unix14stack_overflow3imp13MAIN_ALTSTACK\n\
                   000000000005d040 0000000000008000 b _ZN7wolf_rt4task5stack13MAIN_ALTSTACK17h0123456789abcdefE\n\
                   000000000005d000 0000000000000008 b _ZN7wolf_rt4task5stack15MAIN_STACK_HINT17h0123456789abcdefE\n";
         assert_eq!(main_altstack_symbol(nm), Some((0x5d040, 0x8000)));
+        // Both manglings name the runtime's own.
+        let v0 = "0000000000060cd0 0000000000008000 B _RNvNtNtCshrGjEGBuzaY_7wolf_rt4task5stack13MAIN_ALTSTACK\n";
+        assert_eq!(main_altstack_symbol(v0), Some((0x60cd0, 0x8000)));
+        // Only std's: the runtime has none (the base, before its static).
+        let std_only = "000000000005c000 0000000000000008 b _RNvNtNtNtNtCs0123456789a_3std3sys3pal4unix14stack_overflow3imp13MAIN_ALTSTACK\n";
+        assert_eq!(main_altstack_symbol(std_only), None);
         // A function of that name is not the object.
         assert_eq!(
             main_altstack_symbol("0000000000001130 0000000000000026 T MAIN_ALTSTACK_init\n"),
