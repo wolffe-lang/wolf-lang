@@ -437,6 +437,12 @@ fn the_implemented_attributes_still_compile() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            // And the published 0.1.63 at 2becebc.
+            Pin {
+                version: "0.1.63",
+                verdict: "unsupported",
+                stdout: "",
+            },
         ],
     );
 }
