@@ -1,0 +1,15 @@
+//! member: false
+//! wolf calls a C++ function that throws, through an `extern "c"`
+//! declaration: the throw meets a wolf frame on its way up. Linked by
+//! `unwind_foreign_lanes.rs` through `wolf build` with `CC` adding the
+//! thrower library to the driver's own link line.
+extern "c" fn foreign_thrower(x: i32) -> i32
+
+fn main() -> int {
+    print("before")
+    // # Safety: foreign_thrower reads its argument and throws; it touches no
+    // memory of ours.
+    let r = unsafe { foreign_thrower(7) }
+    print("after {r}")
+    0
+}
