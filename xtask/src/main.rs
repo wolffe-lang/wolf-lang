@@ -3156,31 +3156,12 @@ fn fmt_fuzz(args: &[String]) -> ExitCode {
         pass.push("--seed=63".to_string());
         pass.push("--allow-open".to_string());
     }
-    // The loop is where cargo built it (the follow-up to wolf-lang#1187),
-    // and a loop that cannot be started is that, never a finding.
-    let fuzz = match xtask::wolf_bin::require_file(
-        "fmt-fuzz",
-        "fuzzer",
-        xtask::wolf_bin::release(&format!(
-            "examples/fmt_fuzz{}",
-            std::env::consts::EXE_SUFFIX
-        )),
-        "build it with `cargo build --release -p wolf_fmt --example fmt_fuzz`",
-    ) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::FAILURE;
-        }
-    };
-    eprintln!("fmt-fuzz: running {}", fuzz.display());
-    let ok = match Command::new(&fuzz).args(&pass).status() {
-        Ok(s) => s.success(),
-        Err(e) => {
-            eprintln!("fmt-fuzz: cannot run {}: {e}", fuzz.display());
-            return ExitCode::FAILURE;
-        }
-    };
+    // PLANT: the fixed path and the silent `false`, back.
+    let ok = Command::new("target/release/examples/fmt_fuzz")
+        .args(&pass)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
     if ok {
         eprintln!("fmt-fuzz: invariants held");
         ExitCode::SUCCESS
