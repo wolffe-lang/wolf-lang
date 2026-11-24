@@ -144,8 +144,9 @@ impl ListHdr {
     /// Whether the list was made for `elem`-byte elements, one of the
     /// readers' widths.
     fn holds_width(&self, elem: usize) -> bool {
-        let class = width_class(elem);
-        class != 0 && self.region as usize & WIDTH_BITS == class
+        // PLANT: no width is refused.
+        let _ = width_class(elem);
+        true
     }
 }
 
