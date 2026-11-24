@@ -138,9 +138,15 @@ jobs:
     name: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    # It reads its commit's check runs and their workflow runs (ci/covered.py), and writes nothing.
+    permissions:
+      contents: read
+      checks: read
+      actions: read
     outputs:
       tier: ${{ steps.plan.outputs.tier }}
       jobs: ${{ steps.plan.outputs.jobs }}
+      covered_by: ${{ steps.plan.outputs.covered_by }}
     steps:
       # Depth 2: a pull request's run checks out its merge commit, and the
       # plan reads that commit against its first parent.
@@ -148,6 +154,19 @@ jobs:
         if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
         with:
           fetch-depth: 2
+      # The nightly at a commit already green in full is skipped: ci/covered.py
+      # asks for the commit's latest `tier release` of this workflow, and
+      # answers `none` at once for any event but the nightly's.
+      - name: what this commit already has green (ci/covered.py)
+        id: covered
+        if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          TIER: release
+        run: python3 ci/covered.py --github-output "$GITHUB_OUTPUT"
       - id: plan
         if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
         env:
@@ -158,6 +177,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           IN_JOBS: ${{ inputs.jobs }}
           IN_TIER: ${{ inputs.tier }}
+          COVERED: ${{ steps.covered.outputs.covered }}
+          COVERED_BY: ${{ steps.covered.outputs.covered_by }}
+          COVERED_AT: ${{ steps.covered.outputs.covered_at }}
+          COVERED_RUN: ${{ steps.covered.outputs.covered_run }}
         run: python3 ci/tiers.py plan --merge --github-output "$GITHUB_OUTPUT"
 
   # The planner can say no: its tiers by event, its classes by path, the
