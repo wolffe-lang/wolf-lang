@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Every program on Linux with glibc starts with fewer system calls and
+  less memory.** The hosted link carries GCC's unwinder statically
+  (`-static-libgcc`) instead of loading `libgcc_s.so.1` at start: nine
+  system calls and about 180 kB of resident memory fewer for every
+  program. The main thread's alternate signal stack, where the
+  stack-overflow report runs, now lies in the program's own zero-filled
+  data and is installed by one `sigaltstack` call instead of a query, a
+  mapping and an install: two system calls fewer (macOS installs it the
+  same way). A hello world now makes one system call more than its C
+  twin, where it made twelve. Only the runtime's own Rust frames unwind,
+  as before: a foreign library that throws keeps its own unwinder, and a
+  throw that meets a wolf frame still ends the process by SIGABRT.
+  bench-gates' start-up row now also holds the release-linked hello's
+  resident memory, minor faults and own text pages over its C twin, read
+  at the exit stop with address randomisation off, and how much of the
+  alternate stack an overflow report uses.
+
 - **The release tier no longer proves a list element's range from the
   wrong list** (wolf-lang#1205, wolf-lang#1207). Its interprocedural
   range step gave a value it had no rule for (the list `m[k] else [0]`
