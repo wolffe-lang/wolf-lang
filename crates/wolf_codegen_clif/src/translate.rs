@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 291] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 292] = [
     ("__wolf_rt_assert_buf", 2, false),
     ("__wolf_rt_assert_detail", 3, false),
     ("__wolf_rt_trap", 1, false),
@@ -158,17 +158,24 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 291] = [
     // rejection comes back as a code lowering turns into the `utf8`
     // row.
     ("__wolf_rt_str_from_utf8", 2, true),
-    ("__wolf_rt_list_new", 1, true),
-    ("__wolf_rt_list_push", 2, false),
-    ("__wolf_rt_list_pop", 2, true),
-    ("__wolf_rt_list_read", 3, true),
-    ("__wolf_rt_list_write", 3, true),
+    // wolf-lang#1177: the 32-byte header carries no element size, so
+    // every entry that moves elements takes it, and those entries are
+    // the `list32` names (the old names are not defined any more).
+    ("__wolf_rt_list32_new", 1, true),
+    ("__wolf_rt_list32_push", 3, false),
+    ("__wolf_rt_list32_pop", 3, true),
+    ("__wolf_rt_list32_read", 4, true),
+    ("__wolf_rt_list32_write", 4, true),
     ("__wolf_rt_list_len", 1, true),
     ("__wolf_rt_list_clear", 1, false),
     // s255 (wolf-lang#844, `[type.list.reserve]`): the capacity hint —
-    // the header and the count; grows the buffer in the list's birth
-    // region, a no-op when the capacity is already there.
-    ("__wolf_rt_list_reserve", 2, false),
+    // the header, the count and the element size; grows the buffer in
+    // the list's birth region, a no-op when the capacity is already there.
+    ("__wolf_rt_list32_reserve", 3, false),
+    // wolf-lang#1177: an aimed copy into an outer list enters the list's
+    // birth region by its header (the previous ambient handle back);
+    // compiled code does not read a list's region word.
+    ("__wolf_rt_list32_enter", 1, true),
     // s152 (`[type.map]`, wolf_rt::map): the keyed store — `new` takes
     // the entry layout (key kind, key size, value offset and size,
     // stride); `get`/`set` take the header and one entry-shaped slot
@@ -182,12 +189,13 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 291] = [
     // s165 (#344): the key erase — the get slot shape, a hit flag.
     ("__wolf_rt_map_remove", 2, true),
     // s165 (#384): `copy` of a List and of a Map — a fresh header and
-    // buffer in the ambient region.
-    ("__wolf_rt_list_copy", 1, true),
+    // buffer in the ambient region (a list's with its element size).
+    ("__wolf_rt_list32_copy", 2, true),
     ("__wolf_rt_map_copy", 1, true),
-    // s228 (#663): `xs[lo..hi]` — the header and the two resolved
-    // endpoints in, a fresh header out; one copy, not a push a slot.
-    ("__wolf_rt_list_slice", 3, true),
+    // s228 (#663): `xs[lo..hi]` — the header, the two resolved
+    // endpoints and the element size in, a fresh header out; one copy,
+    // not a push a slot.
+    ("__wolf_rt_list32_slice", 4, true),
     // s173 (#31/#268, `wolf_rt::pool`): the generational slot arena.
     // `new` takes the payload size; every other entry takes the
     // header and a packed handle word. `addr` is the odd one out and
@@ -549,9 +557,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 291] = [
     // frame did not open the scope (scope, env, len) -> the copy.
     ("__wolf_rt_scope_env_copy", 3, true),
     ("__wolf_rt_scope_join_free", 1, true),
-    // s166: `xs.par(f)` — `[conc.task.par]`'s chunked map (list, shim,
-    // record, result element size, out slot) -> failure tag.
-    ("__wolf_rt_par_map", 5, true),
+    // s166: `xs.par(f)` — `[conc.task.par]`'s chunked map (list, its
+    // element size since wolf-lang#1177, shim, record, result element
+    // size, out slot) -> failure tag.
+    ("__wolf_rt_par32_map", 6, true),
     ("__wolf_rt_task_killed", 0, true),
     // s143 (#268): a proc body's `int` result, stashed by its entry
     // shim for `[conc.proc.exit]`'s `normal(value)`.
