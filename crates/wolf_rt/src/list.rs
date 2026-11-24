@@ -314,6 +314,16 @@ pub unsafe extern "C" fn __wolf_rt_list32_push(hdr: i64, elem: i64, elem_ptr: i6
     push_raw(hdr as *mut ListHdr, elem_ptr as *const u8, elem as usize);
 }
 
+/// PLANT: the old push name kept, for 8-byte elements.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_list32_push`] with `elem` 8.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_list_push(hdr: i64, elem_ptr: i64) {
+    push_raw(hdr as *mut ListHdr, elem_ptr as *const u8, 8);
+}
+
 /// `reserve(n)` (s255, wolf-lang#844, `[type.list.reserve]`): grow the
 /// capacity to at least `n` elements, in the list's OWN region (the one
 /// `push_raw`'s growth uses: a region frees as a unit, so the buffer
