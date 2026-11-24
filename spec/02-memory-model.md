@@ -318,7 +318,8 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   not this one, and it carries that clause's code rather than E1014.
   **Enforced 2026-09-15 (wolf-lang#366).** A value reached by a move
   out of a `read` parameter — the parameter itself, a piece of it (an
-  element, a field, a match binding), or a binding it was moved into —
+  element, a field, a match binding, a `let` or `var` pattern
+  binding), or a binding it was moved into —
   is **lent**, and a lent value whose type can reach shared storage (a
   `List`, `Map` or `Pool`, directly or through a field, payload, tuple
   element or row — and a type parameter always can, because a generic
