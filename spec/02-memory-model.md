@@ -1052,7 +1052,7 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   shared a `str`'s bytes: a byte copy per `str` reached, charged to
   the ledger of the region it lands in on every machine (the checked
   machine charges each `str` its length and each container its slots;
-  the native arena its 16-byte-rounded bytes and 40-byte headers). The
+  the native arena its 16-byte-rounded bytes and 32-byte headers). The
   verdict pass lowers a recursive component's members once more per
   verdict that falls (measured over yew's and aspen's trees in s255's
   note). The repair for a refused program is one word at the store, or
