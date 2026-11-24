@@ -15,7 +15,9 @@
 //! bug is a step that ran nothing, and four files prove it ran something),
 //! and fmt-lu and audit-surface whole. Each step's seconds are printed.
 //! A second row holds `xtask fmt-fuzz` to the release loop cargo built in the
-//! same relocated directory (the follow-up for the `target/release` lookups).
+//! same relocated directory (the follow-up for the `target/release` lookups),
+//! and a third holds `xtask rt-none` to the freestanding runtime cargo built
+//! when the directory moves by `build.target-dir`.
 //! **Where it runs:** on linux, where CI's `lint + test + corpus` job runs it
 //! inside `cargo xtask ci`. The macOS and windows `build + test` legs would
 //! pay the same build again on the slowest and scarcest runners for the same
@@ -283,4 +285,71 @@ fn fmt_fuzz_runs_the_loop_cargo_built_under_a_relocated_target() {
         out.status.success() && text.contains("fmt-fuzz: invariants held"),
         "xtask fmt-fuzz failed:\n{text}"
     );
+}
+
+/// The follow-up to wolf-lang#1187: `xtask rt-none` finds the freestanding
+/// runtime where cargo built it when the target directory moves by
+/// `build.target-dir`, here by its environment form `CARGO_BUILD_TARGET_DIR`
+/// with `CARGO_TARGET_DIR` removed. It read `CARGO_TARGET_DIR` alone, so it
+/// looked for the archive cargo had just built under `target/`.
+/// **What it costs, stated:** one release build of `wolf_rt_none` (a `no_std`
+/// crate with no dependencies) for `x86_64-unknown-none` into the relocated
+/// directory, inside the step's printed seconds. A toolchain without that
+/// target makes rt-none skip loudly, and the row with it; under
+/// `WOLF_RT_NONE_REQUIRE=1` (every CI job) that is rt-none's own failure.
+#[test]
+fn rt_none_builds_where_cargo_puts_it_under_build_target_dir() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    if !runs_here() {
+        loud(
+            "SKIP: the relocated-target rt-none row runs on linux (set WOLF_XTASK_TARGET_DIR_ROW=1 to run it here)",
+        );
+        return;
+    }
+    let tmp = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
+    let tree = Tree::new(tmp.join("relocated-tree-rt-none"));
+    let dir = tmp.join("relocated-target");
+    std::fs::create_dir_all(&dir).expect("relocated target dir");
+    let lib = dir
+        .join("x86_64-unknown-none")
+        .join("release")
+        .join("libwolf_rt_none.a");
+
+    let start = Instant::now();
+    let out = Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .arg("rt-none")
+        .current_dir(&tree.0)
+        .env_remove("CARGO_TARGET_DIR")
+        .env("CARGO_BUILD_TARGET_DIR", &dir)
+        .stdin(Stdio::null())
+        .output()
+        .expect("xtask runs");
+    let secs = start.elapsed().as_secs();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    for line in text.lines().filter(|l| l.starts_with("rt-none: ")) {
+        loud(&format!("REPORT {line}"));
+    }
+    loud(&format!("REPORT xtask rt-none took {secs} s"));
+    if text.contains("rt-none: SKIP") {
+        loud(
+            "SKIP: rt_none_builds_where_cargo_puts_it_under_build_target_dir: this toolchain has no x86_64-unknown-none target",
+        );
+        return;
+    }
+    assert!(
+        !text.contains("did not produce"),
+        "xtask rt-none under build.target-dir looked for the archive where cargo did not \
+         put it: it printed `did not produce` (the follow-up to wolf-lang#1187):\n{text}"
+    );
+    let built = format!("rt-none: {}", lib.display());
+    assert!(
+        text.contains(&built),
+        "xtask rt-none did not name the archive cargo built ({built}):\n{text}"
+    );
+    assert!(lib.is_file(), "the archive is at {}", lib.display());
+    assert!(out.status.success(), "xtask rt-none failed:\n{text}");
 }
