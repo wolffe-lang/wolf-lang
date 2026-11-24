@@ -13,7 +13,13 @@ AAPCS64, win64, Apple arm64 deltas).
 - `[abi.native.unstable]` The native ABI is **versioned and unstable**:
   `wolf-abi-3`. Nothing about it is a compatibility promise; separately
   compiled wolf artifacts must agree on the version string or fail to
-  link. Stability is a post-1.0 question.
+  link. The runtime's entry points are versioned by their names: an
+  entry whose contract changes is renamed, so an object compiled against
+  the old contract fails to link against the new runtime; and compiled
+  code reads a runtime record's words directly only where no later
+  convention has moved them, reaching a moved word through a renamed
+  entry, so an object compiled against the new contract fails to link
+  against an older runtime. Stability is a post-1.0 question.
 - `[abi.native.layout]` Layout freedom is the point (T1): outside
   `#[repr(c)]`, field order is unspecified, niches are packed, and
   **no address identity** exists for value fields (s04 §7/O10). Programs
