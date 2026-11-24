@@ -75,11 +75,12 @@ impl Runtime {
                 label: "wolf_rt: debug (-O0) — the release build failed",
             };
         }
-        let p = PathBuf::from("target/release/libwolf_rt.a");
+        let p = xtask::wolf_bin::release("libwolf_rt.a");
         if !p.is_file() {
             eprintln!(
-                "t1: target/release/libwolf_rt.a is missing after a successful build — the wolf \
-                 lanes fall back to the DEBUG runtime and the report says so"
+                "t1: {} is missing after a successful build — the wolf lanes fall back to the \
+                 DEBUG runtime and the report says so",
+                p.display()
             );
             return Runtime {
                 lib: None,
