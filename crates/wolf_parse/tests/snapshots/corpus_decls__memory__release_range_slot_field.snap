@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 718..766 name=Box fields=2
+FnDecl 768..879 name=fill body=Block
+FnDecl 881..992 name=refill body=Block
+FnDecl 994..1115 name=fill_pair body=Block
+FnDecl 1117..1242 name=grow body=Block
+FnDecl 1244..1560 name=main body=Block
