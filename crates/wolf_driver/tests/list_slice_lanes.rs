@@ -7,7 +7,7 @@
 //! bytes took 0.13 µs), and every abandoned buffer stayed charged to
 //! the region. It is now one runtime call — a bounds check the caller
 //! already made, one allocation at exact capacity, one copy
-//! (`wolf_rt::list::__wolf_rt_list_slice`) — for every element type,
+//! (`wolf_rt::list::__wolf_rt_list32_slice`) — for every element type,
 //! since every element type a slice is lowered for is flat.
 //!
 //! What a program observes must not move, and one thing must start to

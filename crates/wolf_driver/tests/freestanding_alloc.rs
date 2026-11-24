@@ -282,7 +282,7 @@ fn allocating_kernels_build_and_import_only_the_runtime_and_the_hooks() {
                  and the program's externs: {stray:?} (all: {undef:?})"
             );
             assert!(
-                undef.iter().any(|s| s == "__wolf_rt_list_new")
+                undef.iter().any(|s| s == "__wolf_rt_list32_new")
                     && undef.iter().any(|s| s == "__wolf_rt_region_new"),
                 "{case} ({tier}): the kernel calls the runtime's list and region: {undef:?}"
             );
@@ -440,7 +440,7 @@ hooks frees>0=true frees<allocs=true bad=0\n";
         assert!(dis.status.success(), "objdump: {}", text(&dis.stderr));
         let dis = text(&dis.stdout);
         assert!(
-            dis.contains("<__wolf_rt_list_push>:") && dis.contains("<wolf_alloc>:"),
+            dis.contains("<__wolf_rt_list32_push>:") && dis.contains("<wolf_alloc>:"),
             "the image carries the runtime and the hook"
         );
         let sse: Vec<&str> = dis
