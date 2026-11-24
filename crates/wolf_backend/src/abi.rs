@@ -706,6 +706,26 @@ mod tests {
     use wolf_wir::ir::{Module, Param};
     use wolf_wir::types;
 
+    /// wolf-lang#1185: the spec's `[abi.native.unstable]` names the native
+    /// convention's version string, and it must be the one this compiler
+    /// folds into every mangled symbol.
+    #[test]
+    fn the_spec_names_the_convention_version_the_compiler_mangles_with() {
+        let spec = include_str!("../../../spec/04-abi.md");
+        let at = spec
+            .find("`[abi.native.unstable]`")
+            .expect("spec/04-abi.md has [abi.native.unstable]");
+        let clause = &spec[at..at + spec[at..].find("\n- ").unwrap_or(spec.len() - at)];
+        let named = clause
+            .split('`')
+            .find(|w| w.starts_with("wolf-abi-"))
+            .expect("[abi.native.unstable] names a wolf-abi version");
+        assert_eq!(
+            named, CONVENTION_VERSION,
+            "spec/04-abi.md [abi.native.unstable]"
+        );
+    }
+
     #[test]
     fn scalars_pass_direct_and_tokens_erase() {
         let mut m = Module::new();
