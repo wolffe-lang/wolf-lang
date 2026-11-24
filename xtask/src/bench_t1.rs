@@ -2131,12 +2131,10 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
 }
 
 /// The start-up floor rows' slack over their records: one fault-around
-/// window of resident memory, three minor faults, two text pages, and a
-/// kilobyte of the overflow report's alternate stack.
+/// window of resident memory, three minor faults and two text pages.
 const FLOOR_VMHWM_SLACK_KB: i64 = 64;
 const FLOOR_MINFLT_SLACK: i64 = 3;
 const FLOOR_TEXT_SLACK_PAGES: i64 = 2;
-const FLOOR_ALTSTACK_SLACK_BYTES: i64 = 1024;
 /// Reads of each program, interleaved; the rows take the medians.
 const FLOOR_READS: usize = 21;
 
@@ -2180,9 +2178,8 @@ struct AltStackRead {
     /// Bytes written below the top, by the kernel and the report together.
     used: i64,
     size: i64,
-    /// The kernel's signal frame for this CPU (`AT_MINSIGSTKSZ`), pushed onto
-    /// the alternate stack before the handler runs; 0 where the kernel gives
-    /// none.
+    /// The kernel's `AT_MINSIGSTKSZ`: the largest signal frame it could push
+    /// for this CPU, not the one it pushed; 0 where the kernel gives none.
     frame: i64,
     exit: i64,
 }
@@ -2198,13 +2195,28 @@ fn parse_exitstop_altstack(line: &str) -> Option<AltStackRead> {
     })
 }
 
-/// The overflow report's own use of the alternate stack: all that was used,
-/// less the kernel's signal frame, whose size follows the CPU's saved vector
-/// state and so differs from host to host. `None` where the kernel gives no
-/// frame size; a frame larger than all the use (a kernel that counts state the
-/// program never enabled) leaves none of it to the report.
-fn report_own_use(r: &AltStackRead) -> Option<i64> {
-    (r.frame > 0).then_some((r.used - r.frame).max(0))
+/// The alternate-stack row's report-only line: everything written below the
+/// top, the kernel's `AT_MINSIGSTKSZ` beside it, and the difference. The byte
+/// count gates nothing: it differs between hosts (5960 and 7944 bytes on two
+/// hosted runners, 7816 in a container on another machine), and
+/// `AT_MINSIGSTKSZ` is the largest frame the kernel could push, not the one it
+/// pushed (11952 on the second runner, more than everything written), so the
+/// report's own share cannot be told apart. Only the half rule gates.
+fn altstack_report(r: &AltStackRead) -> String {
+    let frame = if r.frame > 0 {
+        format!(
+            "AT_MINSIGSTKSZ {}, the difference {}",
+            r.frame,
+            r.used - r.frame
+        )
+    } else {
+        "the kernel gives no AT_MINSIGSTKSZ".to_string()
+    };
+    format!(
+        "the overflow report's alternate-stack use (report-only): {} of {} bytes written \
+         below the top by a main-thread overflow; {frame}",
+        r.used, r.size
+    )
 }
 
 /// The `nm -S` line naming the runtime's main-thread alternate stack →
@@ -2440,10 +2452,7 @@ fn floor_rows(
         return;
     };
     let AltStackRead {
-        used,
-        size,
-        frame,
-        exit,
+        used, size, exit, ..
     } = read;
     if exit != 134 {
         failures.push(format!(
@@ -2458,30 +2467,7 @@ fn floor_rows(
              more than half: the stack has no guard below it"
         ));
     }
-    // Gated without the kernel's frame, so one host's record holds on
-    // another; the half rule above reads everything, frame included.
-    let Some(own) = report_own_use(&read) else {
-        failures.push(
-            "startup floor: this kernel gives no AT_MINSIGSTKSZ, so the overflow report's own \
-             use of its alternate stack cannot be told from the signal frame beneath it"
-                .to_string(),
-        );
-        return;
-    };
-    floor_row(
-        doc,
-        "floor_overflow_report_bytes",
-        "the overflow report's own alternate-stack use, less the kernel's signal frame (bytes)",
-        own,
-        FLOOR_ALTSTACK_SLACK_BYTES,
-        &format!(
-            "{used} of {size} bytes written below the top by a main-thread overflow, {frame} of \
-             them the kernel's signal frame (AT_MINSIGSTKSZ)"
-        ),
-        record,
-        dirty,
-        failures,
-    );
+    eprintln!("bench-gates: startup floor: {}", altstack_report(&read));
 }
 
 /// `strace -qq` text → `(calls before the first write to stdout, all
@@ -2637,8 +2623,8 @@ pub fn gate_render(path: &str, scored: &[Scored], outcome: &t1::GateOutcome) -> 
 #[cfg(test)]
 mod startup_tests {
     use super::{
-        AltStackRead, ExitStop, main_altstack_symbol, parse_exitstop_altstack, parse_exitstop_mem,
-        report_own_use, startup_syscalls,
+        AltStackRead, ExitStop, altstack_report, main_altstack_symbol, parse_exitstop_altstack,
+        parse_exitstop_mem, startup_syscalls,
     };
 
     #[test]
@@ -2674,20 +2660,26 @@ mod startup_tests {
     }
 
     #[test]
-    fn the_reports_own_use_leaves_the_kernels_frame_out() {
+    fn the_alternate_stacks_byte_count_is_printed_beside_the_kernels_maximum_frame() {
         let read = |used, frame| AltStackRead {
             used,
             size: 32768,
             frame,
             exit: 134,
         };
-        // The same report under two frame sizes reads the same.
-        assert_eq!(report_own_use(&read(5376, 3000)), Some(2376));
-        assert_eq!(report_own_use(&read(7176, 4800)), Some(2376));
-        // A kernel that gives no frame size: the own use cannot be told.
-        assert_eq!(report_own_use(&read(5376, 0)), None);
-        // A frame larger than all the use reads none of the report's.
-        assert_eq!(report_own_use(&read(2000, 3000)), Some(0));
+        // A container's reading, and a hosted runner's whose AT_MINSIGSTKSZ is
+        // more than everything written: the difference is printed as it is.
+        assert_eq!(
+            altstack_report(&read(7816, 3632)),
+            "the overflow report's alternate-stack use (report-only): 7816 of 32768 bytes \
+             written below the top by a main-thread overflow; AT_MINSIGSTKSZ 3632, the \
+             difference 4184"
+        );
+        assert!(
+            altstack_report(&read(7944, 11952))
+                .ends_with("AT_MINSIGSTKSZ 11952, the difference -4008")
+        );
+        assert!(altstack_report(&read(5960, 0)).ends_with("; the kernel gives no AT_MINSIGSTKSZ"));
     }
 
     #[test]
