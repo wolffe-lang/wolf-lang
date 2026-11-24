@@ -1,0 +1,14 @@
+//! bench-gates' start-up floor: a stack overflow on the main thread,
+//! reported by the runtime's guard handler on the main thread's alternate
+//! stack. The row reads how much of that stack the report used. A non-tail
+//! call that can never return keeps the recursion real on every tier.
+
+fn deep(n: int) -> int {
+    if n < 0 { 0 } else { deep(n + 1) + 1 }
+}
+
+fn main() -> int {
+    let x = deep(0)
+    print("unreachable: {x}")
+    0
+}
