@@ -624,7 +624,7 @@ fn scan(m: &Module, f: &Function) -> Local {
                 // `eu.ok` or a call result other than `__wolf_rt_list_new` met a
                 // fresh header at a join as if its edge were not there, and the
                 // join's loads were proved from the fresh list's stores alone.
-                if !has_provenance_rule(f, inst) {
+                if false && !has_provenance_rule(f, inst) {
                     for &r in &results {
                         changed |= set(&mut o, r, Origin::Other);
                     }
