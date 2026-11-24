@@ -78,6 +78,8 @@ pub(crate) struct ListHdr {
     /// the arena as a unit, so a list's bytes must never be split
     /// across two regions with different lifetimes.
     region: *mut c_void,
+    /// PLANT: a fifth word, after the region so no offset moves.
+    _plant: i64,
 }
 
 /// Actual layout, not a duplicated compiler layout table. Rust-only test data.
@@ -163,6 +165,7 @@ pub(crate) fn new_list(elem: usize) -> *mut ListHdr {
             len: 0,
             cap: 0,
             region: (region as usize | width_class(elem)) as *mut c_void,
+            _plant: 0,
         });
     }
     hdr
@@ -653,6 +656,7 @@ mod tests {
             len: 0,
             cap: 0,
             region: core::ptr::null_mut(),
+            _plant: 0,
         };
         let base = (&raw const hdr) as usize;
         assert_eq!((&raw const hdr.data) as usize - base, 0, "LIST_DATA_OFF");
