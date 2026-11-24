@@ -494,7 +494,8 @@ pub unsafe extern "C" fn __wolf_rt_list32_write(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_list32_enter(hdr: i64) -> *mut c_void {
     unsafe {
-        let region = (*(hdr as *const ListHdr)).region();
+        // PLANT: the class bits go with the handle.
+        let region = (*(hdr as *const ListHdr)).region;
         crate::native::__wolf_rt_region_ambient_enter(region)
     }
 }
