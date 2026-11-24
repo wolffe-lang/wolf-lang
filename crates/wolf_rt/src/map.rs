@@ -2,8 +2,11 @@
 //! buffer discipline (`[type.map]`, `[mem.map.absent]`).
 //!
 //! The value form of a `Map[K, V]` at the native tier is ONE pointer to
-//! a header whose first five words ARE a [`crate::list::ListHdr`] —
-//! `{data, len, cap, elem, region}` at the same offsets — so lowering
+//! a header whose first three words agree with a [`crate::list::ListHdr`]'s
+//! — `{data, len, cap}` at the same offsets, then the entry stride and
+//! the birth region (`{data, len, cap, elem, region}`; a list's header
+//! stops after `cap` with its region since wolf-lang#1177, so a map's
+//! region is its fifth word and a list's its fourth) — so lowering
 //! reads the entry count through the list header's `len` slot and the
 //! region story is the list's word for word (`[mem.region.create.3]`:
 //! header and buffer land in the ambient region at the constructor,
@@ -50,8 +53,9 @@ use crate::native::ambient_region;
 
 #[repr(C)]
 pub(crate) struct MapHdr {
-    /// The [`ListHdr`] prefix: the entry buffer, live count, capacity
-    /// (in entries), entry stride, birth region.
+    /// The [`ListHdr`] prefix (`data`, `len`, `cap`: the entry buffer,
+    /// live count, capacity in entries), then the entry stride and the
+    /// birth region a list's header does not share since wolf-lang#1177.
     data: *mut u8,
     len: i64,
     cap: i64,
@@ -482,7 +486,7 @@ mod tests {
                 .map(|i| {
                     let mut kv = [0i64; 2];
                     assert_eq!(
-                        crate::list::__wolf_rt_list_read(pairs, i, kv.as_mut_ptr() as i64),
+                        crate::list::__wolf_rt_list32_read(pairs, i, 16, kv.as_mut_ptr() as i64),
                         1
                     );
                     let direct = (h.data.add((i * h.elem) as usize) as *const i64).read_unaligned();
@@ -842,7 +846,7 @@ mod tests {
             assert_eq!(crate::list::__wolf_rt_list_len(pairs as i64), 2);
             let mut out = [0i64; 2];
             assert_eq!(
-                crate::list::__wolf_rt_list_read(pairs as i64, 1, out.as_mut_ptr() as i64),
+                crate::list::__wolf_rt_list32_read(pairs as i64, 1, 16, out.as_mut_ptr() as i64),
                 1
             );
             assert_eq!(out, [9, 200]);

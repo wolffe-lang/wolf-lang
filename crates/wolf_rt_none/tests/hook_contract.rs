@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use wolf_rt_none::list::{
-    __wolf_rt_list_copy, __wolf_rt_list_len, __wolf_rt_list_new, __wolf_rt_list_pop,
-    __wolf_rt_list_push, __wolf_rt_list_read,
+    __wolf_rt_list_len, __wolf_rt_list32_copy, __wolf_rt_list32_enter, __wolf_rt_list32_new,
+    __wolf_rt_list32_pop, __wolf_rt_list32_push, __wolf_rt_list32_read, __wolf_rt_list32_reserve,
 };
 use wolf_rt_none::map::{
     __wolf_rt_map_clear, __wolf_rt_map_copy, __wolf_rt_map_get, __wolf_rt_map_new,
@@ -103,6 +103,61 @@ fn interpolate(f: impl FnOnce(i64)) -> Vec<u8> {
     unsafe { std::slice::from_raw_parts(out[0] as *const u8, out[1] as usize) }.to_vec()
 }
 
+/// wolf-lang#1177, on the freestanding runtime (the same `list.rs`): a
+/// list's region word carries its width class in its low three bits, and
+/// no reader sees them. For each width the readers take (1, 4, 8, 16) and
+/// one they do not (24), a list born in `r` makes exactly `r` ambient
+/// through `__wolf_rt_list32_enter`, an 8-aligned handle, and its growth,
+/// its `reserve` and a copy made with `r` ambient are charged to `r`.
+#[test]
+fn a_lists_region_word_reads_back_its_handle_without_the_width_class() {
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    for elem in [1i64, 4, 8, 16, 24] {
+        let r = __wolf_rt_region_new();
+        unsafe {
+            __wolf_rt_region_set_cap(r, 1 << 40);
+            let prev = __wolf_rt_region_ambient_enter(r);
+            let h = __wolf_rt_list32_new(elem);
+            __wolf_rt_region_ambient_leave(prev);
+            let was = __wolf_rt_list32_enter(h);
+            let entered = __wolf_rt_region_ambient_enter(was);
+            assert_eq!(
+                entered, r,
+                "elem {elem}: list32_enter makes the list's own region ambient"
+            );
+            assert_eq!(entered as usize & 7, 0, "elem {elem}: an 8-aligned handle");
+            let cell = [0u8; 24];
+            let b0 = __wolf_rt_region_bytes(r);
+            for _ in 0..100 {
+                __wolf_rt_list32_push(h, elem, cell.as_ptr() as i64);
+            }
+            let b1 = __wolf_rt_region_bytes(r);
+            assert!(b1 >= b0 + 100 * elem, "elem {elem}: growth charged r");
+            __wolf_rt_list32_reserve(h, 1000, elem);
+            let b2 = __wolf_rt_region_bytes(r);
+            assert!(b2 >= b1 + 1000 * elem, "elem {elem}: reserve charged r");
+            let was = __wolf_rt_list32_enter(h);
+            let c = __wolf_rt_list32_copy(h, elem);
+            __wolf_rt_region_ambient_leave(was);
+            assert_eq!(__wolf_rt_list_len(c), 100);
+            assert!(
+                __wolf_rt_region_bytes(r) >= b2 + 100 * elem,
+                "elem {elem}: a copy made with the list's region ambient charged r"
+            );
+            __wolf_rt_region_free(r);
+        }
+    }
+    let root = __wolf_rt_list32_new(8);
+    unsafe {
+        let was = __wolf_rt_list32_enter(root);
+        let entered = __wolf_rt_region_ambient_enter(was);
+        assert!(
+            entered.is_null(),
+            "list32_enter makes the process root ambient"
+        );
+    }
+}
+
 #[test]
 fn a_region_hands_every_block_back_by_its_own_size() {
     let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
@@ -113,13 +168,13 @@ fn a_region_hands_every_block_back_by_its_own_size() {
         __wolf_rt_region_set_cap(r, 1 << 40);
         let prev = __wolf_rt_region_ambient_enter(r);
         // A list grown in the region: header and every buffer land in it.
-        let xs = __wolf_rt_list_new(8);
+        let xs = __wolf_rt_list32_new(8);
         for i in 0..5000i64 {
-            __wolf_rt_list_push(xs, (&raw const i) as i64);
+            __wolf_rt_list32_push(xs, 8, (&raw const i) as i64);
         }
         assert_eq!(__wolf_rt_list_len(xs), 5000);
         let mut v = 0i64;
-        assert_eq!(__wolf_rt_list_read(xs, 4321, (&raw mut v) as i64), 1);
+        assert_eq!(__wolf_rt_list32_read(xs, 4321, 8, (&raw mut v) as i64), 1);
         assert_eq!(v, 4321);
         // A closure record and an interpolated str, ambient too.
         let rec = __wolf_rt_closure_alloc(24);
@@ -298,7 +353,10 @@ fn map_index_growth_removal_and_copy_obey_the_allocator_hook() {
         assert_eq!(__wolf_rt_list_len(pairs), 256);
         for i in 0..256i64 {
             let mut kv = [0i64; 2];
-            assert_eq!(__wolf_rt_list_read(pairs, i, kv.as_mut_ptr() as i64), 1);
+            assert_eq!(
+                __wolf_rt_list32_read(pairs, i, 16, kv.as_mut_ptr() as i64),
+                1
+            );
             assert_eq!(kv[0], if i < 128 { i } else { i + 1 });
         }
         let charged = __wolf_rt_region_bytes(birth);
@@ -329,13 +387,13 @@ fn map_index_growth_removal_and_copy_obey_the_allocator_hook() {
 fn lists_and_maps_are_the_hosted_families() {
     let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     unsafe {
-        let xs = __wolf_rt_list_new(8);
+        let xs = __wolf_rt_list32_new(8);
         for v in [3i64, 1, 4] {
-            __wolf_rt_list_push(xs, (&raw const v) as i64);
+            __wolf_rt_list32_push(xs, 8, (&raw const v) as i64);
         }
-        let ys = __wolf_rt_list_copy(xs);
+        let ys = __wolf_rt_list32_copy(xs, 8);
         let mut out = 0i64;
-        assert_eq!(__wolf_rt_list_pop(xs, (&raw mut out) as i64), 1);
+        assert_eq!(__wolf_rt_list32_pop(xs, 8, (&raw mut out) as i64), 1);
         assert_eq!(out, 4);
         assert_eq!(__wolf_rt_list_len(xs), 2);
         assert_eq!(__wolf_rt_list_len(ys), 3, "the copy is independent");

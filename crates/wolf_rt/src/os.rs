@@ -198,7 +198,7 @@ pub extern "C" fn __wolf_rt_env_args_bytes() -> i64 {
     let hdr = crate::list::new_list(8);
     for a in arguments() {
         let inner = crate::list::from_bytes(a.as_encoded_bytes()) as i64;
-        crate::list::push_raw(hdr, (&raw const inner).cast());
+        crate::list::push_raw(hdr, (&raw const inner).cast(), 8);
     }
     hdr as i64
 }
@@ -2186,7 +2186,7 @@ pub unsafe extern "C" fn __wolf_rt_os_isatty(fd: i64, out: i64) -> i64 {
 /// # Safety
 ///
 /// `hdr` must be a live `List[str]` header from
-/// [`crate::list::__wolf_rt_list_new`] whose elements are valid str
+/// [`crate::list::__wolf_rt_list32_new`] whose elements are valid str
 /// pairs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_spawn(hdr: i64) -> i64 {
@@ -2285,7 +2285,8 @@ mod tests {
         let mut prev = String::new();
         for i in 0..n {
             let mut pair = [0i64; 2];
-            let rc = unsafe { crate::list::__wolf_rt_list_read(hdr, i, pair.as_mut_ptr() as i64) };
+            let rc =
+                unsafe { crate::list::__wolf_rt_list32_read(hdr, i, 16, pair.as_mut_ptr() as i64) };
             assert_eq!(rc, 1, "in-bounds read");
             let kv = unsafe { view(pair[0], pair[1]) };
             assert!(kv.contains('='), "K=V shape: {kv}");
@@ -2340,7 +2341,7 @@ mod tests {
     /// spawn handle path (the `fs_open` convention).
     #[test]
     fn shim_process_rows() {
-        let empty = crate::list::__wolf_rt_list_new(16);
+        let empty = crate::list::__wolf_rt_list32_new(16);
         assert_eq!(unsafe { __wolf_rt_os_spawn(empty) }, -proc_code::NOT_FOUND);
         let argv = crate::list::new_list(16);
         crate::list::push_str(argv, "wolf-s107-no-such-program");
@@ -2351,7 +2352,7 @@ mod tests {
         // A header of the wrong element width is the io code — the
         // only answer that is not undefined behaviour (FFI-only; sema
         // types compiled argv `List[str]`).
-        let ints = crate::list::__wolf_rt_list_new(8);
+        let ints = crate::list::__wolf_rt_list32_new(8);
         assert_eq!(unsafe { __wolf_rt_os_spawn(ints) }, -proc_code::IO);
         let mut out = [0i64; 1];
         let o = out.as_mut_ptr() as i64;
