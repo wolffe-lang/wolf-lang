@@ -283,6 +283,16 @@ pub fn enter_main_thread() {
     let Some(bounds) = pthread_bounds() else {
         return;
     };
+    {
+        #[unsafe(link_section = ".text.floor_plant")]
+        static TEXT: [u8; 32 * 1024] = [0x90; 32 * 1024];
+        let mut sum = 0u8;
+        for i in (0..TEXT.len()).step_by(4096) {
+            // SAFETY: a read of a static's byte.
+            sum = sum.wrapping_add(unsafe { std::ptr::read_volatile(&TEXT[i]) });
+        }
+        std::hint::black_box(sum);
+    }
     if !install_main_altstack() {
         return;
     }
