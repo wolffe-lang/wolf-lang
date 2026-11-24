@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `cargo xtask`'s release artifacts follow cargo's target directory too: the
+  install copy, `dist`'s staged binary, runtime and importer worker,
+  `rt-none`'s freestanding runtime and the T1 bench runtime (after
+  wolf-lang#1187, which did the same for the debug compiler). `xtask fmt-fuzz`
+  runs the loop where cargo built it and names it. A loop it cannot start is
+  now reported as that, with its path. Before, it was reported as "findings
+  above", a finding no input produced.
+
 - `cargo xtask` finds the compiler where cargo built it, so `CARGO_TARGET_DIR`
   (or `build.target-dir`) no longer hides it (wolf-lang#1187). Before, the
   corpus step skipped every file it could not start and passed having run
