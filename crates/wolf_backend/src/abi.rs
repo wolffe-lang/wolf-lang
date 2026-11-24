@@ -7,7 +7,7 @@
 //!
 //! # The two conventions
 //!
-//! **`wolf-abi-0`** ([`Conv::Wolf`], spec/04 `[abi.native]`) — the
+//! **`wolf-abi-3`** ([`Conv::Wolf`], spec/04 `[abi.native]`) — the
 //! internal convention, versioned and unstable
 //! ([`CONVENTION_VERSION`]). v0 is deliberately conservative: SysV-
 //! shaped register usage (so Cranelift can express it) plus the
@@ -121,13 +121,17 @@ use crate::layout;
 /// became per-target (macOS/aarch64 joins; `[abi.c.targets]`): the
 /// convention now carries target-dependent lowering, so objects from
 /// different toolchain pins must refuse to link rather than meet a
-/// plan they were not compiled under (the D7 letter).
-pub const CONVENTION_VERSION: &str = "wolf-abi-2";
+/// plan they were not compiled under (the D7 letter). wolf-lang#1177
+/// bumped to `wolf-abi-3` with the 32-byte `List` header: compiled code
+/// reads the header's region at a new offset and hands the runtime the
+/// element size, so objects from before it must not link with objects
+/// from after it.
+pub const CONVENTION_VERSION: &str = "wolf-abi-3";
 
 /// Which convention a signature crosses under.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Conv {
-    /// `wolf-abi-0`: internal calls (mangled symbols).
+    /// `wolf-abi-3`: internal calls (mangled symbols).
     Wolf,
     /// The platform C convention — SysV on x86-64 linux, Apple-arm64
     /// (AAPCS64 + Apple deltas) on macOS aarch64 ([`CTarget`]) — the
@@ -618,7 +622,7 @@ fn plan_sig_sysv(types: &TypeInterner, sig: &SigData, conv: Conv) -> SigPlan {
     // reverts WHOLESALE to memory — never one eightbyte in a register
     // and one on the stack (QBE's "don't think in pushes" table).
     // Scalars need no accounting: an exhausted scalar spills to the
-    // stack identically either way. wolf-abi-0 deliberately skips the
+    // stack identically either way. wolf-abi-3 deliberately skips the
     // demotion (internal layout owes C nothing — the executing
     // backend's splitting IS the convention there).
     let mut int_left: i32 = if conv == Conv::C {
@@ -875,7 +879,7 @@ mod tests {
         let ll = m.types.intern(TypeData::Agg(vec![types::I64, types::I64]));
         // Five scalars leave one INTEGER register: the two-eightbyte
         // aggregate no longer fits and reverts WHOLESALE under C —
-        // while wolf-abi-0 keeps splitting (layout freedom, D19).
+        // while wolf-abi-3 keeps splitting (layout freedom, D19).
         let mut params = vec![Param::val(types::I64); 5];
         params.push(Param::val(ll));
         let sig = m.make_sig(params, vec![types::I64]);
@@ -915,7 +919,7 @@ mod tests {
         let sig = m.make_sig(vec![Param::val(types::I64)], vec![types::I64]);
         let now = crate::mangle_versioned(&m, "f", sig, CONVENTION_VERSION);
         assert_eq!(now, crate::mangle(&m, "f", sig));
-        let bumped = crate::mangle_versioned(&m, "f", sig, "wolf-abi-3");
+        let bumped = crate::mangle_versioned(&m, "f", sig, "wolf-abi-4");
         assert_ne!(
             now, bumped,
             "a convention bump must invalidate every symbol (D7)"
