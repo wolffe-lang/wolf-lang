@@ -320,6 +320,7 @@ fn install_main_altstack() -> bool {
             ss_size: ALT,
         };
         let mut old: libc::stack_t = std::mem::zeroed();
+        libc::sigaltstack(std::ptr::null(), &mut old);
         if libc::sigaltstack(&ss, &mut old) != 0 {
             return false;
         }
