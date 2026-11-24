@@ -5130,7 +5130,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let region = self.map_region_of(h);
                 CopyTarget::Enter(region)
             }
-            Some((h, false)) => CopyTarget::EnterList(h),
+            // PLANT: the list header word read inline at 24, as before.
+            Some((h, false)) => {
+                let r = self.foreign_hdr_region();
+                let addr = self.field_addr(h, 24);
+                CopyTarget::Enter(self.b.ins_load(types::PTR, addr, r))
+            }
             None => scope,
         });
     }
