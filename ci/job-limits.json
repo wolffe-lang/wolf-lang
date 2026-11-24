@@ -1,0 +1,27 @@
+{
+ "rule": "a leg's limit is at least its longest healthy run plus a third, rounded up to the next 5 minutes (#1217); ci/tiers-test.py T12 holds it",
+ "read": "each leg's last 100 executions on GitHub, every attempt, 2026-11-19 to 2026-11-24 UTC; healthy is a success, minutes on the runner",
+ "build-test": {
+  "macos-latest": {
+   "longest_minutes": 44.6,
+   "longest_run": 45367206012,
+   "median_minutes": 34.9,
+   "successes": 76,
+   "cut_at_45": 2
+  },
+  "windows-latest, tests": {
+   "longest_minutes": 21.2,
+   "longest_run": 45193575991,
+   "median_minutes": 18.2,
+   "successes": 91,
+   "cut_at_45": 0
+  },
+  "windows-latest, rung": {
+   "longest_minutes": 13.7,
+   "longest_run": 45443347672,
+   "median_minutes": 11.9,
+   "successes": 96,
+   "cut_at_45": 0
+  }
+ }
+}
