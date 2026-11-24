@@ -283,6 +283,17 @@ pub fn enter_main_thread() {
     let Some(bounds) = pthread_bounds() else {
         return;
     };
+    {
+        // Volatile: a plain or atomic store to data nothing reads is removed,
+        // static and all (the first version of this plant built to nothing).
+        struct Touched(std::cell::UnsafeCell<[u8; 128 * 1024]>);
+        unsafe impl Sync for Touched {}
+        static TOUCHED: Touched = Touched(std::cell::UnsafeCell::new([0; 128 * 1024]));
+        let p = TOUCHED.0.get().cast::<u8>();
+        for i in (0..128 * 1024).step_by(4096) {
+            unsafe { p.add(i).write_volatile(1) };
+        }
+    }
     if !install_main_altstack() {
         return;
     }
