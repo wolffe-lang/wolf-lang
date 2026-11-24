@@ -284,6 +284,7 @@ the wall numbers become publishable, not so they become gates.
 | correctness sinks across all lanes | equality, not timing |
 | `bench diff --gate` on `*_hits` / `*hit_rate` counters | unchanged from s31 |
 | **the runtime's own start-up and exit, in system calls** (s265, wolf-lang#918): a release-tier `corpus/hello.lu` against its C twin `bench/startup/hello.c`, each traced once by `strace`, the difference held at or below `bench/startup.json` | a count of calls, not a clock: the loader's calls appear in both binaries and cancel, so it is a property of the wolf build on a given C library. 0.2.35's entry made every program pay seventeen more (a main-thread stack query through stdio, an altstack unmapped at exit) and nothing saw it |
+| **the start-up floor** (bench-gates' floor rows, `bench/startup.json`): a release-tier `corpus/hello.lu`'s minor faults and own text pages over its C twin, each read at the program's exit stop with address randomisation off (`bench/startup/exitstop.c`, the medians of 21 interleaved reads), and a main-thread overflow's report held under half of its 32 KiB alternate stack; the hello's resident memory and the stack's byte count are printed beside them, report-only | with randomisation off each reading is the same from read to read on one host. Faults read 5 over C on every host tried (two hosted runners and a container on another machine), against a slack of 3; text pages read 66, 67 and 66, against 2: one page of spread, so a host that reads 68 or more puts text pages report-only rather than widening them. Resident memory cannot gate: the same three hosts read 328, 396 and 316 kB over C with the same five faults, because how many file pages the kernel maps for each fault is the host's. Faults carry what resident carried: 128 KiB of data touched at entry adds 31 faults and the shared unwinder 10, each over the faults row's ceiling; a regression that adds resident memory without adding a fault or a text page (a larger mapping behind a fault that already happens) is not caught. The stack's byte count cannot gate either: 5960 and 7944 bytes on the two runners and 7816 in the container, and the kernel's `AT_MINSIGSTKSZ` printed beside it is the largest frame the kernel could push, not the one it pushed (11952 on the second runner, more than everything written). The half rule reads everything, the kernel's frame included, and every host is far under it |
 
 **Report-only** (nightly, dedicated runner, published with distributions):
 every `ns_per_op`, every speedup and geomean, the X3 overhead delta, the
@@ -291,7 +292,9 @@ metadata-bonus delta, LLVM's share of build wall time, `max_rss`, all
 `*_per_sec` throughput, and the start-up wall time `bench-gates` prints
 beside its count (fifty interleaved starts of the wolf and C hellos, the
 medians and their ratio: on kasumi the start's spread is about the size
-of the change the count exists for, s265). These decide **M2** — over three consecutive
+of the change the count exists for, s265), and the start-up floor's
+resident memory and alternate-stack byte count (see the floor row above:
+both differ between hosts). These decide **M2** — over three consecutive
 nightly runs on the dedicated runner — but they never fail a PR.
 
 ## 8. The M2 gate
