@@ -1,11 +1,11 @@
 # An agent's guide to writing good wolf
 
 This guide is for a model (or a person) about to write wolf. Read it before
-the first line. It is current at **wolf 0.2.40** (`wolf 0.2.40 (wolfgang, pin
-b333b9d)`), **lupin 0.1.62** and the standard library bundled in the 0.2.40
-archive (wolf-std `be1d10fa`). No model has seen much wolf in training, so
-what you think you remember about it is probably a guess; this file is what
-the released toolchain actually does.
+the first line. It is current at **wolf 0.2.41**, **lupin 0.1.63** and the
+standard library bundled in the 0.2.41 archive (wolf-std `32a1cd06`). No
+model has seen much wolf in training, so what you think you remember about
+it is probably a guess; this file is what the released toolchain actually
+does.
 
 - The spec wins. [`spec/`](../spec/) is normative; read it at the tag you
   build with. When this file and the spec disagree, the spec is right and
@@ -17,7 +17,7 @@ the released toolchain actually does.
   answer differently, and the header says how.
 - The check is [`agents-guide-check.sh`](agents-guide-check.sh) beside this
   file. Each release runs it with that release's archives before the tag,
-  and moves the version line above. At 0.2.40 it ran on macOS arm64.
+  and moves the version line above. At 0.2.41 it ran on macOS arm64.
 
 ```sh
 WOLF=path/to/wolf LUPIN=path/to/lupin docs/agents-guide-check.sh docs/agents-guide.md
@@ -88,7 +88,7 @@ prevents it. They are written to be pasted into a brief.
 | A keyword as a field or function name | There are no raw identifiers; see [Names](#names) for the 50 keywords. |
 | A function with a `mut` parameter used as a value | Not yet compilable (wolf-lang#917). A table of handlers is an id per row and one `match`. |
 | Deep recursion over input | Parse and walk with explicit stacks. Native code traps `stack-overflow`; the checked machine and lupin stop far sooner. |
-| `if let x = e; cond { }` | Specified for the next release and not in 0.2.40. Do not write it until a release carries it. |
+| `if let x = e; cond { }` | Specified for a later release and not in 0.2.41. Do not write it until a release carries it. |
 | A checked-machine claim from `wolf run --checked`, or from a `wolf` on `PATH` | The checked machine is `wolf conform-run FILE --json --checked`, run with the pinned binary. Quote the command. |
 | Reading exit 2 or 4 from `wolf build` as a skip | 2 is a rejected program, 4 is "cannot compile this yet". Neither is a skip. |
 | An expected answer computed by code you also wrote | Expected answers come from the reference tool or the spec, never from a second program with the same misunderstanding. |
@@ -367,9 +367,9 @@ fn main() {
 }
 ```
 
-`wolf prelude` prints the list your binary has (244 names at 0.2.40, and
-`--json` for a program to read). These 128 joined the prelude between 0.2.14
-and 0.2.40; none left. If code you are reading defines one of them itself, it
+`wolf prelude` prints the list your binary has (248 names at 0.2.41, and
+`--json` for a program to read). These 132 joined the prelude between 0.2.14
+and 0.2.41; none left. If code you are reading defines one of them itself, it
 was written for an older pin.
 
 <!-- prelude-since:begin -->
@@ -386,15 +386,16 @@ was written for an older pin.
   `fs_set_owner_fd` `fs_set_times` `fs_stat` `fs_stat_at` `fs_statfs`
   `fs_symlink` `fs_symlink_at` `fs_sync` `fs_sync_dir` `fs_tell`
   `fs_truncate` `fs_unlock` `fs_write_some`
-- Sockets: `net_peer_cred` `net_write_some`
+- Sockets: `net_connect_within` `net_peer_cred` `net_write_some`
 - Processes and identity: `os_arch` `os_chdir` `os_chroot` `os_clock_ns`
   `os_core_limit` `os_core_off` `os_egid` `os_error` `os_error_text`
   `os_euid` `os_exec` `os_fork` `os_getpriority` `os_gid` `os_groups`
   `os_isatty` `os_name` `os_pgid` `os_pid` `os_pipe` `os_ppid`
   `os_proc_pid` `os_set_core_limit` `os_set_ids` `os_set_pgid`
   `os_setpriority` `os_setsid` `os_sid` `os_spawn_fds` `os_spawn_job`
-  `os_spawn_session` `os_uid` `os_umask` `os_wait_poll` `os_wait_poll_core`
-  `os_wait_status` `os_wait_status_core`
+  `os_spawn_session` `os_subreaper` `os_subreaper_set` `os_uid` `os_umask`
+  `os_wait_adopted_poll` `os_wait_poll` `os_wait_poll_core` `os_wait_status`
+  `os_wait_status_core`
 - Waiting: `os_ready_close` `os_ready_open` `os_ready_set` `os_ready_wait`
   `os_wait_ready`
 - Signals: `os_exit_signal` `os_signal_action_one` `os_signal_default`
@@ -620,7 +621,9 @@ fn main() {
 
 A `read` parameter is lent, never given. Returning it, sending it, storing
 it into module state or a `mut` parameter, or carrying it into a `take` is
-E1002; lending it `mut`, taking it or writing through it is E1014. Only
+E1002; lending it `mut`, taking it or writing through it is E1014. A
+closure's parameter written without a mode is `read` too, so assigning it is
+E1014 (since 0.2.41; before, every machine ran the write). Only
 values that can reach shared storage are refused (a `List`, a `Map`, a
 `Pool`, or a type parameter). Write `copy`, or make the parameter `take`.
 lupin runs this program, so a lupin run is not evidence that a move is
@@ -676,7 +679,9 @@ leave a region block normally.
 A value allocated in a region may not outlive it: returning it, sending it
 or storing it outside is E1010. That includes every built `str` (an
 interpolation with a hole, `+`, `upper`, `lower`, `repeat`, `replace`,
-`str_from_utf8`).
+`str_from_utf8`), and an error payload built inside the block that a `?`
+carries out of it (since 0.2.41): make the call before the block, or handle
+the error inside it and raise one built outside.
 
 ```wolf expect=fail:E1010 lupin=trap:region-fault
 fn label(n: int) -> str {
@@ -1202,7 +1207,9 @@ fn main() {
 cancels its siblings and re-raises at the scope's exit. Report results
 through channels: a task that writes a captured `var` is E1101 on both
 machines (under `--deny-warnings` the compiler reports its companion warning
-W1101 first). `select` picks a ready arm, `when (a, b) { }` acquires a whole
+W1101 first). `select` picks a ready arm (one that can block with no `timeout`
+arm needs a row with `cancelled`: E0604 in a function with no row, E0602
+where a declared row lacks it), `when (a, b) { }` acquires a whole
 set at once (a nested `when` is E1103), and `spawn proc f(args)` starts a
 supervised failure domain whose exit reason is a value. Schedules are seeded
 and replayable (`wolf test --schedules=N`, `--replay=`); a program whose
@@ -1261,6 +1268,45 @@ not use tasks for I/O. They wait in one place for whatever is ready:
   say how much; `fs_set_nonblock` makes a handle non-blocking.
 - `os_term_open_pty`, `os_spawn_session` and `os_setsid` give a program a
   pseudo-terminal and a child in a session of its own.
+- `net_connect_within(addr, within_ms)` dials as `net_connect` does, or
+  answers `timeout` once the budget is spent. One budget covers every
+  address the name resolves to; a budget of zero or less is `invalid`.
+  `net_connect` itself waits as long as the host's own connect timeout
+  (about two minutes on Linux for an address that drops the handshake), so
+  dial with a budget anywhere a peer can stall.
+- `os_subreaper_set(on)` and `os_subreaper()` make a supervisor adopt the
+  orphans its children leave behind, and `os_wait_adopted_poll()` reaps
+  them without waiting, answering `(0, 0)` when none has ended. Linux only:
+  macOS and windows answer `unsupported`.
+
+```wolf lupin=unsupported
+fn dial(addr: str, within_ms: int) -> str {
+    let c = net_connect_within(addr, within_ms) else |e| match e {
+        invalid => { return "invalid" },
+        refused => { return "refused" },
+        timeout => { return "timeout" },
+        io => { return "io" },
+    }
+    net_close(c) else |_| {}
+    "connected"
+}
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    print(dial("127.0.0.1:{port}", 2000))
+    print(dial("127.0.0.1:{port}", 0))
+    net_close(srv)?
+    print(dial("127.0.0.1:{port}", 10000))
+    0
+}
+```
+
+```output
+connected
+invalid
+refused
+```
 
 lupin declines every wait that would reach the host, and says so. `os_fork`
 answers `busy` while any task is live.
@@ -1547,7 +1593,7 @@ line 2
 | a function with a `mut` or `take` parameter as a value | wolf-lang#917, open |
 | integers past 64 bits | wolf-std#100, open (`std.bigint` or `u128`) |
 | `print` reporting a failed write | wolf-lang#408, open; write through `fs_write_chunk(1, …)` to see `io` |
-| `if let x = e; cond { }` and `while var x = e; cond { }` | specified for the next release, not in 0.2.40 |
+| `if let x = e; cond { }` and `while var x = e; cond { }` | specified for a later release, not in 0.2.41 |
 
 Permissions, process ids, `chdir`, `isatty`, symbolic and hard links,
 owners, file times, the directory-relative `*_at` calls, `statfs`,
@@ -1745,11 +1791,14 @@ verifies at 0.2.40 with the mid-end on.
 - Every example in a README is pasted from the binary, and licence text is
   copied from the official file, byte for byte.
 
-## Not in 0.2.40
+## Not in 0.2.41
 
 - The binding header `if let x = e; cond { }` and `while var x = e; cond
   { }` (one binder, a literal `;`, braces only) is specified
-  (`[gram.expr.if.head]`) and planned for the next release. The 0.2.40
+  (`[gram.expr.if.head]`) and planned for a later release. The 0.2.41
   compiler does not accept it.
-- `wolf fmt` keeping a one-statement `if c then …` on one line merged after
-  0.2.40 (wolf-lang#1125). At 0.2.40, run `wolf fmt` and keep what it gives.
+- `os_hostname` (wolf-lang#858) merged after 0.2.41 was cut.
+
+Since 0.2.41, `wolf fmt` keeps a one-statement `if c then …` with no `else`
+on one line even past the width (wolf-lang#1125); a file 0.2.40 already
+formatted keeps its braces.
