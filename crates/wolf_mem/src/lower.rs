@@ -9233,7 +9233,7 @@ impl<'t> Lowerer<'t> {
                 && !self.is_raw_index(init)
                 && let Some((place, ty)) = self.as_place(init)
             {
-                self.bind_tuple_from_place(pat, place, ty);
+                self.bind_tuple_from_place(pat, place, ty, init.span);
                 continue;
             }
             // s129 (#179): a struct pattern over a PLACE initializer —
@@ -9247,7 +9247,7 @@ impl<'t> Lowerer<'t> {
                 && !self.is_raw_index(init)
                 && let Some((place, ty)) = self.as_place(init)
             {
-                self.bind_struct_from_place(pat, place, ty);
+                self.bind_struct_from_place(pat, place, ty, init.span);
                 continue;
             }
             self.last_spawn = None;
@@ -9272,17 +9272,41 @@ impl<'t> Lowerer<'t> {
         Ok(())
     }
 
+    /// wolf-lang#1192 (`[mem.tier0.mode.read]`): the value a pattern
+    /// binds for one leaf `sub` over the element place `ep` — nothing
+    /// for a `Copy` piece, else the place's value with its lent set, so
+    /// a piece of a `read` parameter (or of a binding that holds one) is
+    /// lent exactly as a field read of it is: E1002 when it leaves the
+    /// call, E1014 when a write through it reaches the caller's storage.
+    /// A piece whose type cannot reach shared storage carries none. The
+    /// lent set records the INITIALIZER's span, where the `copy` both
+    /// reports suggest belongs (`let (a, n) = copy p`); at the binder it
+    /// would read `let (copy a, n) = p`, which does not parse.
+    fn pattern_piece(&self, ep: PlaceId, ety: Option<Ty<'t>>, sub: Span, init: Span) -> Val {
+        if self.places.is_copy(ep) {
+            return Val::none();
+        }
+        let mut val = self.val_of_place(ep, sub);
+        if ety.is_none_or(|t| self.may_share(t, 0)) {
+            val.lent = self.lent_of_place(ep, init);
+        }
+        val
+    }
+
     /// `let (x, y) = p` where `p` names a place: every element place
     /// is interned first (the move analysis expands partial residue
     /// over the interned universe), then each BOUND element is
     /// consumed from its own sub-place — a copy for Copy elements, a
     /// move otherwise — and bound as a single binding. Nested tuple
     /// patterns recurse; `_` elements are interned but never touched.
+    /// `init` is the initializer's span: a bound piece's lent set
+    /// records it ([`Self::pattern_piece`]).
     fn bind_tuple_from_place(
         &mut self,
         pat: &'t GreenNode,
         base: PlaceId,
         base_ty: Option<Ty<'t>>,
+        init: Span,
     ) {
         let subs: Vec<&'t GreenNode> = pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
         let elems = base_ty.and_then(|t| self.fields_of(t));
@@ -9310,18 +9334,14 @@ impl<'t> Lowerer<'t> {
                 continue;
             };
             if sub.kind == SyntaxKind::TuplePat {
-                self.bind_tuple_from_place(sub, ep, ety);
+                self.bind_tuple_from_place(sub, ep, ety, init);
                 continue;
             }
             if sub.kind == SyntaxKind::StructPat {
-                self.bind_struct_from_place(sub, ep, ety);
+                self.bind_struct_from_place(sub, ep, ety, init);
                 continue;
             }
-            let val = if self.places.is_copy(ep) {
-                Val::none()
-            } else {
-                self.val_of_place(ep, sub.span)
-            };
+            let val = self.pattern_piece(ep, ety, sub.span, init);
             if !self.places.is_copy(ep) {
                 self.pattern_moves.push(sub.span);
             }
@@ -9347,6 +9367,7 @@ impl<'t> Lowerer<'t> {
         pat: &'t GreenNode,
         base: PlaceId,
         base_ty: Option<Ty<'t>>,
+        init: Span,
     ) {
         let d = wolf_ast::StructPat::cast(pat).expect("kind");
         let declared = base_ty.and_then(|t| self.fields_of(t));
@@ -9394,18 +9415,14 @@ impl<'t> Lowerer<'t> {
                 }
             };
             if sub.kind == SyntaxKind::TuplePat {
-                self.bind_tuple_from_place(sub, ep, ety);
+                self.bind_tuple_from_place(sub, ep, ety, init);
                 continue;
             }
             if sub.kind == SyntaxKind::StructPat {
-                self.bind_struct_from_place(sub, ep, ety);
+                self.bind_struct_from_place(sub, ep, ety, init);
                 continue;
             }
-            let val = if self.places.is_copy(ep) {
-                Val::none()
-            } else {
-                self.val_of_place(ep, sub.span)
-            };
+            let val = self.pattern_piece(ep, ety, sub.span, init);
             if !self.places.is_copy(ep) {
                 self.pattern_moves.push(sub.span);
             }
