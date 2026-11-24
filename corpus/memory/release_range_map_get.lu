@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: type.map, mem.model.value
+//! wolf-lang#1205, the second program of the issue: std.map's `get`
+//! (its body copied here as `map_get`, so the row needs no std root), a
+//! write through its answer, then the map's own entry read with an
+//! `else` fallback. Release printed 0 (the `[0]` fallback's store,
+//! proved onto the map's value through the `eu.ok` join) where every
+//! other machine prints 1.
+
+// std.map's `get`, for one key and value type: an independent copy of
+// the value bound to `k`, or `none`.
+fn map_get(m: Map[str, List[int]], k: str) -> List[int] ! {none} {
+    let v = m[k] else { return none }
+    copy v
+}
+
+fn main() -> int {
+    var m = Map[str, List[int]]()
+    m["key"] = [1, 2]
+    var v = map_get(m, "key") else [0]
+    v[0] = 9
+    let original = m["key"] else [0]
+    print("{original[0]}")
+    0
+}

@@ -1,0 +1,62 @@
+//! check: run(exit=0, stdout="7 7 7 7 2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.model.value
+//! wolf-lang#1207, #1205's twin: a list held in a struct field or a
+//! tuple element, in a stack slot handed `mut` to a callee the mid-end
+//! does not inline. The range channel looked for a header handed to a
+//! call only at the slot's base (where `n` sits), so the callee's write
+//! never reached the caller's list, and the caller's reload after the
+//! call was read back from its own store before it: release printed the
+//! caller's stale `0` for a write through the field, a replacement of
+//! the field, a tuple element and a push, where every other machine
+//! prints what the callee put there.
+
+struct Box {
+    n: int,
+    items: List[int],
+}
+
+fn fill(mut b: Box, k: int) {
+    if k > 0 {
+        b.items[0] = 7
+    } else {
+        b.items[0] = 8
+    }
+}
+
+fn refill(mut b: Box, k: int) {
+    if k > 0 {
+        b.items = [7]
+    } else {
+        b.items = [8]
+    }
+}
+
+fn fill_pair(mut t: (int, List[int]), k: int) {
+    if k > 0 {
+        t.1[0] = 7
+    } else {
+        t.1[0] = 8
+    }
+}
+
+fn grow(mut b: Box, k: int) {
+    if k > 0 {
+        (mut b.items).push(7)
+    } else {
+        (mut b.items).push(8)
+    }
+}
+
+fn main() -> int {
+    var a = Box { n: 1, items: [0] }
+    fill(mut a, 1)
+    var b = Box { n: 1, items: [0] }
+    refill(mut b, 1)
+    var t = (1, [0])
+    fill_pair(mut t, 1)
+    var g = Box { n: 1, items: [0] }
+    grow(mut g, 1)
+    print("{a.items[0]} {b.items[0]} {t.1[0]} {g.items[1]} {g.items.len}")
+    0
+}

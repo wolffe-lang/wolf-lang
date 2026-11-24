@@ -1,0 +1,21 @@
+//! check: run(exit=trap(bounds))
+//! phase: run
+//! conforms: mem.model.value
+//! wolf-lang#1205's out-of-bounds read: `i` is 3 and `xs` has two
+//! elements, so `xs[i]` must trap. The `[0, 1]` fallback gave the
+//! range channel the unproved fact `i` in `0..=1` (the `eu.ok` join
+//! again); with the dominating `xs[1]` check proving `1 < xs.len`,
+//! the release build discharged the second bounds check and read past
+//! the list's end (`20 0`), where the checked machine, native and lupin
+//! trap.
+
+fn main() -> int {
+    var m = Map[str, List[int]]()
+    m["k"] = [3]
+    let row = m["k"] else [0, 1]
+    let i = row[0]
+    let xs = [10, 20]
+    let first = xs[1]
+    print("{first} {xs[i]}")
+    0
+}

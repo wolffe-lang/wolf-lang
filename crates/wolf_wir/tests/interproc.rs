@@ -262,3 +262,139 @@ fn a_mut_param_reaching_an_unknown_external_kills_the_callers_list() {
     // see into: whatever it does to the list, `main` may not claim 7.
     assert_eq!(main_elems(&relay_chain(1, true)), None);
 }
+
+/// wolf-lang#1205's join at the WIR level: `main` stores 5 into a list,
+/// then on one edge copies it (`__wolf_rt_list_copy`, a call result the
+/// channel has no provenance rule for) and on the other makes a fresh
+/// list holding 0; the join's element load is printed. `fresh_side`
+/// false keeps the copy edge; true drops the copy and loads the fresh
+/// list alone (the control: a list's own loads still carry its stores).
+fn copy_join(fresh_side: bool) -> String {
+    let join = if fresh_side {
+        "  %21 = load.ptr %15, %16\n  \
+         %22 = ptr.off %21, %3, 8\n  \
+         %23 = load.i64 %22, %20\n  \
+         call @__wolf_rt_print_i64(%23)\n  \
+         ret\n}\n"
+            .to_string()
+    } else {
+        "  jmp b3(%15)\n\
+         b3(%21: ptr):\n  \
+         %22 = load.ptr %21, %6\n  \
+         %23 = ptr.off %22, %3, 8\n  \
+         %24 = load.i64 %23, %10\n  \
+         call @__wolf_rt_print_i64(%24)\n  \
+         ret\n}\n"
+            .to_string()
+    };
+    let copy_edge = if fresh_side {
+        "  jmp b2\n"
+    } else {
+        "  %12, %13, %14 = call @__wolf_rt_list_copy(%5, %6, %10)\n  \
+         jmp b3(%12)\n"
+    };
+    format!(
+        "decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n\
+         decl @__wolf_rt_list_copy(ptr, mem.r0, mem.r1) -> ptr\n\
+         decl @__wolf_rt_print_i64(i64)\n\n\
+         fn @main() {{\n\
+         b0:\n  \
+         %0: mem.r1 = region.foreign 1\n  \
+         %1: mem.r0 = region.foreign 0\n  \
+         %2 = iconst.i64 8\n  \
+         %3 = iconst.i64 0\n  \
+         %4 = iconst.i64 5\n  \
+         %5, %6, %7 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+         %8 = load.ptr %5, %6\n  \
+         %9 = ptr.off %8, %3, 8\n  \
+         %10 = store.i64 %4, %9, %7\n  \
+         %11 = icmp.slt %3, %4\n  \
+         br %11, b1, b2\n\
+         b1:\n{copy_edge}\
+         b2:\n  \
+         %15, %16, %17 = call @__wolf_rt_list_new(%2, %6, %10)\n  \
+         %18 = load.ptr %15, %16\n  \
+         %19 = ptr.off %18, %3, 8\n  \
+         %20 = store.i64 %3, %19, %17\n\
+         {join}"
+    )
+}
+
+/// Every range fact `mint` puts into `main`.
+fn main_minted(text: &str) -> usize {
+    let mut m = wolf_wir::parse_module(text).expect("parse");
+    let ipr = interproc::analyze(&m);
+    let _ = interproc::mint(&mut m, &ipr, 0);
+    fn_text(&m, "main").matches("fact range").count()
+}
+
+#[test]
+fn a_join_with_a_value_of_unknown_provenance_proves_nothing() {
+    // wolf-lang#1205 (rule 1): the copy's result had no provenance rule,
+    // stayed `Unset`, and the join skipped its edge, so the joined list
+    // was taken to be the fresh one and its load was proved to be 0 —
+    // the release tier printed 0 for the copy's 5.
+    assert_eq!(main_minted(&copy_join(false)), 0, "{}", copy_join(false));
+}
+
+#[test]
+fn a_fresh_lists_own_load_still_carries_its_stores() {
+    // The control: rule 1 takes nothing a modelled value proves.
+    assert_eq!(main_minted(&copy_join(true)), 1, "{}", copy_join(true));
+}
+
+/// wolf-lang#1207 (found by #1205's sweep) at the WIR level: `main`
+/// stores a list's header at offset 8 of a stack slot (an integer at the
+/// base, as a struct `{ n, items }` lays out), hands the slot to
+/// `fill`, which writes 7 into the list's element 0, and then loads that
+/// element through the header it still holds. Safe wolf always reloads
+/// the field from the slot after the call; this load does not, so only
+/// the slot rule (rule 2) stands between it and the stale 0.
+fn slot_field_write() -> String {
+    "decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr\n\
+     decl @__wolf_rt_print_i64(i64)\n\
+     decl @fill(mut ptr, mem.r0)\n\n\
+     fn @fill(mut ptr, mem.r0) {\n\
+     b0(%0: ptr, %1: mem.r0):\n  \
+     %2: mem.r2 = region.foreign 1\n  \
+     %3: mem.r1 = region.foreign 0\n  \
+     %4 = iconst.i64 8\n  \
+     %5 = ptr.off %0, %4, 1\n  \
+     %6 = load.ptr %5, %1\n  \
+     %7 = load.ptr %6, %3\n  \
+     %8 = iconst.i64 0\n  \
+     %9 = ptr.off %7, %8, 8\n  \
+     %10 = iconst.i64 7\n  \
+     %11 = store.i64 %10, %9, %2\n  \
+     ret\n}\n\n\
+     fn @main() {\n\
+     b0:\n  \
+     %0: mem.r1 = region.foreign 1\n  \
+     %1: mem.r0 = region.foreign 0\n  \
+     %2 = iconst.i64 8\n  \
+     %3, %4, %5 = call @__wolf_rt_list_new(%2, %1, %0)\n  \
+     %6 = load.ptr %3, %4\n  \
+     %7 = iconst.i64 0\n  \
+     %8 = ptr.off %6, %7, 8\n  \
+     %9 = store.i64 %7, %8, %5\n  \
+     %10 = iconst.i64 16\n  \
+     %11: ptr, %12: mem.r2 = stack.alloc %10\n  \
+     %13 = iconst.i64 1\n  \
+     %14 = store.i64 %13, %11, %12\n  \
+     %15 = ptr.off %11, %2, 1\n  \
+     %16 = store.ptr %3, %15, %14\n  \
+     %17 = call @fill(%11, %16)\n  \
+     %18 = load.i64 %8, %9\n  \
+     call @__wolf_rt_print_i64(%18)\n  \
+     ret\n}\n"
+        .to_string()
+}
+
+#[test]
+fn a_header_stored_inside_a_slot_handed_to_a_call_is_clobbered() {
+    // wolf-lang#1207 (rule 2): the channel looked for a header handed to
+    // a call only at the slot's base, where the integer is, read the
+    // argument as opaque, and kept main's own 0 as the list's every
+    // element.
+    assert_eq!(main_elems(&slot_field_write()), None);
+}

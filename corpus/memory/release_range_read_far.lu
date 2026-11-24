@@ -1,0 +1,19 @@
+//! check: run(exit=trap(bounds))
+//! phase: run
+//! conforms: mem.model.value
+//! wolf-lang#1205's out-of-bounds read, far: `release_range_read_past_end.lu`
+//! with `i` at 100000000. The release build discharged the bounds check
+//! on the same unproved fact and read so far outside the buffer that the
+//! process died with no exit code, where the checked machine, native and
+//! lupin trap.
+
+fn main() -> int {
+    var m = Map[str, List[int]]()
+    m["k"] = [100000000]
+    let row = m["k"] else [0, 1]
+    let i = row[0]
+    let xs = [10, 20]
+    let first = xs[1]
+    print("{first} {xs[i]}")
+    0
+}
