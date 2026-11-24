@@ -2675,8 +2675,6 @@ fn link_staged(
     // (`[abi.native.nounwind]`), so a foreign library that throws keeps
     // its own unwinder, and a throw reaching a wolf frame ends the
     // process, as before.
-    #[cfg(all(target_os = "linux", target_env = "gnu"))]
-    cmd.arg("-static-libgcc");
     // s32 Target 1 ("a wolf binary that never spawns is a C binary"):
     // rustc emits function sections, so section GC drops every
     // wolf_rt entry point the program never calls — the no-spawn CI
