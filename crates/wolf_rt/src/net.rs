@@ -3967,6 +3967,38 @@ mod tests {
         assert_eq!(wait_ready(&[a], 0), Err("io"), "a closed handle");
     }
 
+    /// The width check at `net_wait` (wolf-lang#1177: the class in the
+    /// list's region word is its only witness). A list of 16-byte elements
+    /// whose first word is a live listener handle is refused by its width,
+    /// `io`, where the same handle in an 8-byte list is a set the wait
+    /// takes. The `List[str]` row below cannot tell: a string's first word
+    /// is a pointer, no handle, so it is `io` with the check or without.
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn a_wide_list_whose_first_word_is_a_live_handle_is_refused_by_width() {
+        let addr = "127.0.0.1:0";
+        let srv = unsafe { __wolf_rt_net_listen(addr.as_ptr() as i64, addr.len() as i64) };
+        assert!(srv >= 0);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        let wide = crate::list::new_list(16);
+        let pair = [srv, 0i64];
+        crate::list::push_raw(wide, pair.as_ptr().cast(), 16);
+        assert_eq!(
+            unsafe { __wolf_rt_net_wait(wide as i64, 0, o) },
+            net_code::IO,
+            "a 16-byte list whose first word is a live handle is refused by its width"
+        );
+        let set = crate::list::new_list(8);
+        crate::list::push_int(set, srv);
+        assert_eq!(
+            unsafe { __wolf_rt_net_wait(set as i64, 0, o) },
+            net_code::OK,
+            "the same handle in a List[int] is a set the wait takes"
+        );
+        assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
+    }
+
     /// s137 (#127): the shim boundary — the ready subset arrives as a
     /// minted `List[int]` through the out slot, the code is 0 or `io`,
     /// and a header of the wrong element width is `io`.
