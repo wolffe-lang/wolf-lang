@@ -374,16 +374,21 @@ mod linux {
             .collect()
     }
 
-    /// The cc-shaped line from `-o` on, exactly as before stable layout.
-    fn assert_cc_shaped(args: &[String], all: &str) {
+    /// The cc-shaped line from `-o` on, exactly as before stable layout. The
+    /// platform's default link (`link_staged`) also links GCC's unwinder
+    /// statically on linux-gnu, `-static-libgcc` after the libraries: the same
+    /// flag `unwind_foreign_lanes` reads from the other side, from the line its
+    /// own CC receives. A selected linker's line does not carry it.
+    fn assert_cc_shaped(args: &[String], all: &str, default_link: bool) {
         assert_eq!(&args[..2], ["-o", "output program"], "{all}");
         assert!(args[2].ends_with("00-root.o"), "{all}");
         assert!(args[3].ends_with("libwolf_rt.a"), "{all}");
-        assert_eq!(
-            &args[4..],
-            ["-lpthread", "-ldl", "-lm", "-Wl,--gc-sections"],
-            "{all}"
-        );
+        let mut want = vec!["-lpthread", "-ldl", "-lm"];
+        if default_link && cfg!(target_env = "gnu") {
+            want.push("-static-libgcc");
+        }
+        want.push("-Wl,--gc-sections");
+        assert_eq!(&args[4..], want.as_slice(), "{all}");
     }
 
     /// Stable-layout input sections (hot or cold) in one staged object.
@@ -471,7 +476,7 @@ mod linux {
                 "round {round}: an ordinary ligature build is silent"
             );
             let args = argv(&dir);
-            assert_cc_shaped(&args, &args.join("\n"));
+            assert_cc_shaped(&args, &args.join("\n"), false);
             assert_eq!(
                 ordered_sections(&dir.join("seen/00-root.o")),
                 0,
@@ -536,7 +541,7 @@ mod linux {
             if default_path && rest.last().is_some_and(|a| a == "-fuse-ld=lld") {
                 rest = &rest[..rest.len() - 1];
             }
-            assert_cc_shaped(rest, &all);
+            assert_cc_shaped(rest, &all, default_path);
             let hot = std::fs::read_to_string(dir.join("seen/hot.ld")).unwrap();
             assert!(
                 hot.contains("*(SORT_BY_NAME(.text.wolf.*))")

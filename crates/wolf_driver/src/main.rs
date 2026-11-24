@@ -2668,6 +2668,15 @@ fn link_staged(
     cmd.args(["-lpthread", "-lm"]);
     #[cfg(not(target_os = "macos"))]
     cmd.args(["-lpthread", "-ldl", "-lm"]);
+    // GCC's unwinder linked in (`libgcc_eh.a`) instead of loading
+    // `libgcc_s.so.1` at start: nine system calls and about 120 kB less
+    // resident for every program. Only the runtime's own Rust frames
+    // unwind (a task's caught panic); wolf frames carry no unwind tables
+    // (`[abi.native.nounwind]`), so a foreign library that throws keeps
+    // its own unwinder, and a throw reaching a wolf frame ends the
+    // process, as before.
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    cmd.arg("-static-libgcc");
     // s32 Target 1 ("a wolf binary that never spawns is a C binary"):
     // rustc emits function sections, so section GC drops every
     // wolf_rt entry point the program never calls — the no-spawn CI
