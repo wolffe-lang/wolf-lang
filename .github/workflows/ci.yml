@@ -236,6 +236,10 @@ jobs:
       # QEMU (freestanding_interrupt.rs). QEMU is installed below, so a
       # missing one here is a broken job, never a quiet skip.
       WOLF_INTERRUPT_REQUIRE_QEMU: "1"
+      # The foreign-unwinder row (unwind_foreign_lanes.rs) builds a C++
+      # thrower with the image's g++, so a missing compiler here is a broken
+      # job, never a quiet skip.
+      WOLF_FOREIGN_UNWIND_REQUIRE: "1"
       # kw12 ([abi.target.none.alloc]): the freestanding runtime archive is
       # built for x86_64-unknown-none (added below), so a skipped archive
       # here is a broken job, never a quiet skip.
