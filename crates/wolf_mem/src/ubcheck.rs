@@ -5794,12 +5794,7 @@ impl<'t> Machine<'t> {
                 d,
                 src,
                 &|sp| self.expr_ty(sp).cloned(),
-                &|sp| {
-                    self.ctx()
-                        .calls
-                        .get(&sp)
-                        .is_some_and(|c| crate::forcopy::declared_call(c))
-                },
+                &|sp| self.ctx().calls.get(&sp).copied(),
                 holds_str,
             )
         } else {
@@ -14471,21 +14466,14 @@ impl<'t> Machine<'t> {
                                     val!(x)
                                 } else if crate::forcopy::fresh_operand(
                                     v,
-                                    &|sp| {
-                                        self.ctx()
-                                            .calls
-                                            .get(&sp)
-                                            .is_some_and(|c| crate::forcopy::declared_call(c))
-                                    },
+                                    &|sp| self.ctx().calls.get(&sp).copied(),
                                     &|sp| self.expr_ty(sp).cloned(),
                                 ) {
-                                    // wolf-lang#1177: a FRESH operand (a
-                                    // literal, a `copy`, a declared
-                                    // function's answer to primitive
-                                    // arguments: the predicate `wolf_wir`
-                                    // lowers by too) is held by nothing
-                                    // else, so it is stored as it is, as
-                                    // `take` would store it.
+                                    // wolf-lang#1177, #1221: a FRESH operand
+                                    // (`crate::forcopy::fresh_operand`, the
+                                    // predicate `wolf_wir` lowers by too) is
+                                    // held by nothing else, so it is stored
+                                    // as it is, as `take` would store it.
                                     val!(self.eval_arg(v, None))
                                 } else {
                                     let x = val!(self.eval_arg(v, None));

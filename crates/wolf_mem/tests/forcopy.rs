@@ -9,8 +9,8 @@
 //! resolves clean, and the types the predicate reads are the checker's own.
 
 use wolf_ast::{ForExpr, GreenNode, SyntaxKind};
-use wolf_mem::forcopy::{OwnCopy, declared_call, needs_own_copy, own_copy, reaches_str};
-use wolf_sema::check::BodyResult;
+use wolf_mem::forcopy::{OwnCopy, needs_own_copy, own_copy, reaches_str};
+use wolf_sema::check::{BodyResult, CallSig};
 use wolf_sema::types::TyKind;
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
 use wolf_span::Span;
@@ -72,10 +72,10 @@ fn answer(src: &str, typed: bool, known: bool) -> (bool, OwnCopy) {
             _ => None,
         })
     };
-    let declared = |sp: Span| -> bool {
-        tc.bodies.iter().any(|b| match &b.result {
-            BodyResult::Checked(tb) => tb.calls.iter().any(|(s, c)| *s == sp && declared_call(c)),
-            _ => false,
+    let call = |sp: Span| -> Option<&CallSig> {
+        tc.bodies.iter().find_map(|b| match &b.result {
+            BodyResult::Checked(tb) => tb.calls.iter().find(|(s, _)| *s == sp).map(|(_, c)| c),
+            _ => None,
         })
     };
     let holds_str = !known
@@ -95,8 +95,8 @@ fn answer(src: &str, typed: bool, known: bool) -> (bool, OwnCopy) {
             })
             .unwrap_or(true);
     (
-        needs_own_copy(d, src, &ty, &declared),
-        own_copy(d, src, &ty, &declared, holds_str),
+        needs_own_copy(d, src, &ty, &call),
+        own_copy(d, src, &ty, &call, holds_str),
     )
 }
 
@@ -718,13 +718,13 @@ fn fresh(src: &str) -> bool {
             _ => None,
         })
     };
-    let declared = |sp: Span| -> bool {
-        tc.bodies.iter().any(|b| match &b.result {
-            BodyResult::Checked(tb) => tb.calls.iter().any(|(s, c)| *s == sp && declared_call(c)),
-            _ => false,
+    let call = |sp: Span| -> Option<&CallSig> {
+        tc.bodies.iter().find_map(|b| match &b.result {
+            BodyResult::Checked(tb) => tb.calls.iter().find(|(s, _)| *s == sp).map(|(_, c)| c),
+            _ => None,
         })
     };
-    wolf_mem::forcopy::fresh_operand(v, &declared, &ty)
+    wolf_mem::forcopy::fresh_operand(v, &call, &ty)
 }
 
 /// wolf-lang#1177, #1221: which pushed operands are fresh. A literal, a
@@ -756,7 +756,11 @@ fn a_fresh_operand_is_a_value_nothing_else_holds() {
             "(mut o).push(yss.get(1) else [9])",
             true,
         ),
-        ("a last behind else", "(mut o).push(yss.last() else [9])", true),
+        (
+            "a last behind else",
+            "(mut o).push(yss.last() else [9])",
+            true,
+        ),
         (
             "a pop behind else",
             "(mut o).push((mut yss).pop() else [9])",
@@ -778,7 +782,11 @@ fn a_fresh_operand_is_a_value_nothing_else_holds() {
             true,
         ),
         ("an enum constructor", "(mut es).push(E.Full([1]))", true),
-        ("an if with a place", "(mut o).push(if c { yss[0] } else { [0] })", false),
+        (
+            "an if with a place",
+            "(mut o).push(if c { yss[0] } else { [0] })",
+            false,
+        ),
         (
             "an else with a place",
             "(mut o).push(yss.get(5) else yss[0])",
@@ -789,7 +797,11 @@ fn a_fresh_operand_is_a_value_nothing_else_holds() {
             "(mut o).push(match yss[0] {\n        xs => xs,\n    })",
             false,
         ),
-        ("a user method named first", "(mut o).push(hh.first())", false),
+        (
+            "a user method named first",
+            "(mut o).push(hh.first())",
+            false,
+        ),
         (
             "a declared call on a list",
             "(mut o).push(first_of(yss))",
