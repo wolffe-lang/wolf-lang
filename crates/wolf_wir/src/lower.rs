@@ -18871,7 +18871,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     &|sp| self.calls.get(&sp).copied(),
                     &|sp| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone()),
                 );
-                let val = if moves_in || fresh {
+                let val = if moves_in && fresh || moves_in {
                     val
                 } else {
                     let table = self.table;

@@ -14678,7 +14678,7 @@ impl<'t> Machine<'t> {
                                     val!(self.eval_arg(v, Some(wolf_ast::ParamMode::Take)))
                                 }
                                 Some(v)
-                                    if crate::forcopy::fresh_operand(
+                                    if false && crate::forcopy::fresh_operand(
                                         v,
                                         &|sp| self.ctx().calls.get(&sp).copied(),
                                         &|sp| self.expr_ty(sp).cloned(),
