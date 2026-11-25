@@ -70,6 +70,9 @@ type AssertionOperands = [(Value, TyId, Span); 2];
 /// Package-wide facts needed by every body and specialization.
 struct LoweringContext<'t> {
     byteviews: Lender<'t>,
+    /// Shared only within this unit's immutable signature universe; temporary
+    /// specialization tables never become persistent cache identities.
+    debug_types: std::cell::RefCell<debug_types::Context>,
     assertion_details: bool,
     /// wolf-lang#730 (`[conc.proc.kill]` step 2): the spawns that raise
     /// `[conc.proc.arg]`'s obligation (`wolf_mem::owed_spawns`), whose
@@ -204,6 +207,7 @@ fn lower_package_impl(
     // (see this crate's Cargo comment).
     let lender = LoweringContext {
         byteviews: Lender::new(pkg, &tc.sigs),
+        debug_types: std::cell::RefCell::new(debug_types::Context::new()),
         assertion_details,
         owed_spawns: wolf_mem::owed_spawns(pkg, tc),
     };
@@ -3921,19 +3925,11 @@ struct PendingTask<'t> {
 
 impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     fn annotate_debug_var(&mut self, table: &TypeTable, ty: TyId, span: Span, reference: bool) {
-        use crate::debug::{DebugKind, DebugTypeData};
-        let storage = if reference {
-            debug_types::Storage::Flat
-        } else {
-            debug_types::Storage::Native
-        };
-        let ty = debug_types::source_type(table, self.sigs, ty, span, storage).map(|ty| {
-            if reference {
-                DebugTypeData::new(format!("mut {}", ty.name), 8, DebugKind::Reference(ty))
-            } else {
-                ty
-            }
-        });
+        let ty = self
+            .lender
+            .debug_types
+            .borrow_mut()
+            .binding_type(table, self.sigs, ty, span, reference);
         if let Some(var) = self.b.func.debug_vars.last_mut() {
             var.ty = ty;
         }
@@ -4002,7 +3998,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // two-word view instead of claiming the pointer names one.
                 self.b.func.add_debug_var(p.name.clone(), ptr, true);
                 let view = self.b.func.debug_vars.last_mut().expect("view binding");
-                view.ty = Some(debug_types::byte_view());
+                view.ty = Some(self.lender.debug_types.borrow_mut().byte_view());
                 view.pieces.push((len, 8));
                 self.scopes
                     .last_mut()
