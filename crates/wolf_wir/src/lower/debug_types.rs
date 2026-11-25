@@ -61,7 +61,7 @@ impl Context {
         } else {
             None
         };
-        if let Some(ty) = key.as_ref().and_then(|key| self.roots.get(key)) {
+        if false && let Some(ty) = key.as_ref().and_then(|key| self.roots.get(key)) {
             return Some(ty.clone());
         }
         // The test-only reference path recreates the old per-binding interner
