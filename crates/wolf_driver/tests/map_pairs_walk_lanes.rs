@@ -319,13 +319,15 @@ fn refill_before_mirror(version: &str, commit: &str) -> bool {
     // r43: the 0.1.60 candidate at its release head keeps the forward pin
     // (`8 false true`, wolf-interp's retirement-checked witness); r44: so
     // does the 0.1.61 candidate at its release head; r45: and the 0.1.62
-    // candidate at its release head.
+    // candidate at its release head; and the published 0.1.63 at its release
+    // commit.
     [
         ("0.1.58", "6240efe"),
         ("0.1.59", "668fb75"),
         ("0.1.60", "17bd522"),
         ("0.1.61", "a10cbe5"),
         ("0.1.62", "72eff3c"),
+        ("0.1.63", "2becebc"),
     ]
     .iter()
     .any(|(v, c)| *v == version && commit.starts_with(c))
@@ -348,6 +350,9 @@ fn the_refill_pin_names_only_the_measured_release_record() {
     assert!(refill_before_mirror("0.1.62", "72eff3c"));
     assert!(!refill_before_mirror("0.1.62", "a10cbe5"));
     assert!(!refill_before_mirror("0.1.62", "unknown"));
+    assert!(refill_before_mirror("0.1.63", "2becebc"));
+    assert!(!refill_before_mirror("0.1.63", "72eff3c"));
+    assert!(!refill_before_mirror("0.1.63", "unknown"));
 }
 
 fn corpus(rel: &str) -> PathBuf {

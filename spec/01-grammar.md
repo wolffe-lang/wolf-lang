@@ -953,7 +953,8 @@ spellings. Files: `grammar/if_then_let.lu`, `grammar/if_then_arm.lu`,
 `grammar/if_then_mixed.lu`, `grammar/if_then_let_body.lu`.
 
 **Scoped binding headers `[gram.expr.if.head]`** (approved for the language;
-planned for 0.2.41). The braced `if` and `while` forms admit exactly one
+planned for a later release; no released compiler accepts them yet). The
+braced `if` and `while` forms admit exactly one
 `let` or `var` binder before the condition:
 
 ```wolf

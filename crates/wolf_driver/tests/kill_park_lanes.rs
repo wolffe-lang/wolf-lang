@@ -203,11 +203,53 @@ fn every_lane(name: &str, compiled: &str, machine: &str) {
     let mut l = Command::new(lupin);
     l.args(["conform-run", "main.lu", "--json"]);
     let out = run_in(l, &dir);
+    if SIGNAL_SITES.contains(&name) {
+        let rec: serde_json::Value = serde_json::from_slice(&out.stdout)
+            .unwrap_or_else(|e| panic!("lupin record: {e}: {out:?}"));
+        if ends_on_a_proc_refusal(&rec) {
+            assert_eq!(rec["verdict"], "unsupported", "{name} on lupin: {rec}");
+            let why = rec["x-unsupported"].as_str().unwrap_or("");
+            assert!(
+                why.contains("`os_signal_listen`"),
+                "{name} on lupin is refused for another reason than `os_signal_listen`: {why}"
+            );
+            return;
+        }
+    }
     assert_eq!(
         record_stdout(&out, "lupin"),
         machine,
         "{name} on lupin, the reference"
     );
+}
+
+/// The two signal sites arm `os_signal_listen` in the proc that parks.
+/// lupin declines that call by name: it would need `sigaction`, which its
+/// standard library does not have and it admits no `unsafe`. Before
+/// lupin 0.1.63 the refusal went to the proc's `join` as an error value,
+/// and the run printed the clause's line. From 0.1.63 on, a refusal on a
+/// proc's task ends the run `unsupported` (`[conc.proc.exit]`,
+/// wolf-interp#228), so lupin's answer at these sites is that refusal.
+const SIGNAL_SITES: &[&str] = &["signal_wait", "signal_wait_fds"];
+
+/// A lupin of 0.1.63 or later, by the record's `impl_version` (a branch
+/// build's `+dev.<commit>` suffix ignored).
+fn ends_on_a_proc_refusal(rec: &serde_json::Value) -> bool {
+    let v = rec["impl_version"].as_str().unwrap_or("");
+    let base = v.split('+').next().unwrap_or(v);
+    let n: Vec<u64> = base.split('.').filter_map(|p| p.parse().ok()).collect();
+    n.len() == 3 && (n[0], n[1], n[2]) >= (0, 1, 63)
+}
+
+#[test]
+fn only_lupin_0_1_63_and_later_end_on_the_proc_refusal() {
+    let rec = |v: &str| serde_json::json!({ "impl_version": v });
+    assert!(!ends_on_a_proc_refusal(&rec("0.1.62")));
+    assert!(!ends_on_a_proc_refusal(&rec("0.1.62+dev.72eff3c")));
+    assert!(ends_on_a_proc_refusal(&rec("0.1.63")));
+    assert!(ends_on_a_proc_refusal(&rec("0.1.63+dev.2becebc")));
+    assert!(ends_on_a_proc_refusal(&rec("0.2.0")));
+    assert!(!ends_on_a_proc_refusal(&rec("")));
 }
 
 macro_rules! site {

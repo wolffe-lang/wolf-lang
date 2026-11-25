@@ -213,6 +213,7 @@ fn measured_pre_mirror(version: &str, name: &str, calls: &[&str]) -> bool {
         "0.1.60" => MEASURED_060,
         "0.1.61" => MEASURED_061,
         "0.1.62" => MEASURED_062,
+        "0.1.63" => MEASURED_063,
         _ => &[],
     };
     PRE_MIRROR_LUPIN.contains(&version)
@@ -260,6 +261,12 @@ const MEASURED_061: &[(&str, &[&str])] = MEASURED_060;
 /// directly on their fixtures; its mirror adds only the seven one-wait names.
 const MEASURED_062: &[(&str, &[&str])] = MEASURED_060;
 
+/// The published 0.1.63 at its release commit `2becebc` answers the four
+/// container rows as 0.1.62 does, "does not resolve" at `fs_lock`,
+/// `fs_mkfifo` and `fs_set_nonblock` (wolf-interp#278 still open), measured
+/// directly on their fixtures; it mirrors no new name.
+const MEASURED_063: &[(&str, &[&str])] = MEASURED_060;
+
 /// The calls each container row's lupin leg names, shared by the row and
 /// the predicate's test so the two cannot drift apart.
 const LOCK_CALLS: &[&str] = &["fs_lock", "fs_unlock"];
@@ -288,11 +295,11 @@ fn published_059_keeps_the_six_measured_fs_gap_cells() {
     ] {
         assert!(measured_pre_mirror("0.1.59", name, calls), "{name}");
         assert!(!measured_pre_mirror("0.1.59+dev", name, calls), "{name}");
-        assert!(!measured_pre_mirror("0.1.63", name, calls), "{name}");
+        assert!(!measured_pre_mirror("0.1.64", name, calls), "{name}");
     }
     // r43: 0.1.60 keeps exactly the four container cells; r44: so does 0.1.61;
-    // r45: and 0.1.62.
-    for version in ["0.1.60", "0.1.61", "0.1.62"] {
+    // r45: and 0.1.62; and the published 0.1.63.
+    for version in ["0.1.60", "0.1.61", "0.1.62", "0.1.63"] {
         for (name, calls) in [
             ("lock_rows.lu", LOCK_CALLS),
             ("fifo_rows.lu", FIFO_CALLS),

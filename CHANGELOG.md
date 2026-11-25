@@ -193,6 +193,57 @@
   holds it against the runtime's source so that a call which copies into
   the current region cannot be left off it again.
 
+## 0.2.41 — 2026-11-25
+
+Pairs with **lupin 0.1.63**, conformance pin
+`5f1f1c949582f53121e4047bc83c86f23ff72240`, and bundles **wolf-std
+`32a1cd062e215f80c97572f984e5bec2c927e6d8`**: Bech32, strict raw base64,
+a guarded OS random source (`std.os.random`), fixed-work byte comparison,
+the crypto modules without division on secrets, and `std.poll`,
+`net.write_some` and `unix.peer_credentials` on 0.2.40's one wait.
+lupin 0.1.63 carries six fixes of answers lupin 0.1.62 gave without a
+diagnostic, and does not resolve this release's four new names. See
+[the release note](docs/releases/0.2.41.md).
+
+### Read this before you bump the pin
+
+- **Four new prelude names**: `net_connect_within`, `os_subreaper_set`,
+  `os_subreaper` and `os_wait_adopted_poll` (a function of one of these
+  names now shadows a builtin, W0304, fatal under `--deny-warnings`). No
+  program in the org's repositories declares any of them.
+- **New refusals.** A `?` that carries an error payload built inside a
+  `region` block out of that block is E1010 at the `?`; a write to a
+  closure parameter written without a mode is E1014; a `select` that can
+  block, has no `timeout` arm and sits in a function with no row is E0604
+  (E0602 where a declared row lacks `cancelled`; an inferred row gains
+  `cancelled`). Each refused program read freed memory, wrote a copy the
+  caller never saw, or trapped `assert`.
+- **Function placement.** Hosted ELF and Mach-O builds now order
+  functions by module, qualified name and ABI symbol across codegen
+  units, so a program's bytes differ from 0.2.40's even where nothing it
+  does changes; a repository that pins an output digest records a new one.
+  A linker selected with `--linker` or `WOLF_LD` must accept the
+  ordering arguments and supplemental linker scripts, or the build fails
+  by name; an executable named `ligature` is the exception and keeps the
+  old placement.
+- **Smaller wait-only programs.** A program that names a runtime wait but
+  never starts a task no longer links the worker start, its guard, or (on
+  static glibc) `pthread_getattr_np` and `sscanf`.
+- **`wolf fmt`** keeps a one-armed `then` guard on one line even past the
+  width, where 0.2.40 broke it to the braced form. A file 0.2.40 already
+  formatted keeps its braces.
+- **Known issue (wolf-lang#1216):** since 0.2.38, a native build of a very
+  large program needs far more memory than it did with 0.2.37. A native
+  build of one of yew's editor tests peaks at 5.3 GiB with 0.2.37. With
+  this release, under an 11 GiB address-space cap, the same build is
+  stopped after 70 s, just after lowering, when hashing one module's
+  lowered code for its cache key needs another 453 MiB; it then has 9.6
+  GiB (9,876 MiB) resident, and its peak without the cap is at least that
+  and is not yet known. Programs of that size cannot build natively on a 7
+  GB hosted macOS runner. yew stays on 0.2.36 until this is fixed.
+
+### The changes
+
 - A program that names a runtime wait (`time_sleep_ms`, `fs_sync`,
   `fs_sync_dir`, `net_connect`, `net_connect_within`, `net_connect_unix`,
   `net_wait`) but never starts a task no longer links the runtime's
@@ -265,7 +316,7 @@
   0.1.62 reads `check: pass` as a clean program and lets a literal adopt
   a `distinct` type; both are the reference interpreter's to change.
 
-- **Language (planned for 0.2.41, after implementation):** scoped binding
+- **Language (specified, planned for a later release):** scoped binding
   headers on braced `if` and `while`: `if let x = e; cond { ... }` and
   `while var x = e; cond { ... }` (both accept `let` or `var`). Exactly
   one binder and a literal `;`; the name scopes over the whole conditional
@@ -273,7 +324,7 @@
   `while` binding before every test, including after `continue`.
   `[gram.expr.if.head]` specifies the language; its ten pending conformance
   programs are outside the gated corpus until compiler support lands.
-  This entry records the specification, not support in the current compiler.
+  The 0.2.41 compiler does not accept them.
 
 - On the checked machine (`wolf conform-run --checked`) a `select`'s
   `timeout` arm beside a task waiting on host I/O now fires when the wait
@@ -364,6 +415,38 @@
 
 - The checked machine frees a killed proc's regions, the region blocks its
   tasks had open included, before it delivers the reason (wolf-lang#1141).
+
+- **Stable function placement and cold code.** Source builds order
+  functions by defining module, qualified function name and ABI symbol,
+  and the final link enforces that order across codegen units, so
+  optimization clusters and the order workers finish no longer decide
+  placement. `--cold-function <qualified-name>`, repeated for several,
+  places selected out-of-line functions in a region of their own: on ELF
+  `.wolf.cold`, whole pages apart from startup code; on Mach-O
+  `__TEXT,__wolf_cold` through an order file. Measure it on the program:
+  cold placement can move hot code and resident memory either way. A
+  selected `ligature` cannot order input sections yet, so a link through
+  it keeps the old placement, `--verbose` says so, and `--cold-function`
+  is refused by name. COFF builds keep their behaviour; the note that the
+  layout guarantee does not apply appears only under `--verbose`. The
+  layout policy, the cold selection and whether objects are ordered are
+  part of the object cache key. See
+  [function placement](docs/cli.md#function-placement).
+
+- **`wolf fmt` keeps a one-statement guard on one line**
+  (`[gram.fmt.if]`). `if c then f(x)` with no `else` stays on one line
+  even past the width, unless its contents require a line break (a
+  comment, a multiline literal). Other bare `if`s past the width still
+  break to the braced form, once.
+
+- **One wreck, one report, for nested type lists** (wolf-lang#1057). A
+  type list nested inside one that has already reported stays silent, as
+  a nested argument list does, so a call statement read as an error row's
+  payload draws one diagnostic instead of three.
+
+- **The agents' guide** (`docs/agents-guide.md`): whole programs, each
+  compiled and run by the release archives and by lupin, checked before
+  every release tag with `docs/agents-guide-check.sh`.
 
 ## 0.2.40 — 2026-11-12
 

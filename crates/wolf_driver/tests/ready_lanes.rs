@@ -406,7 +406,8 @@ const PRE_MIRROR_LUPIN: &[&str] = &["0.1.61"];
 /// the corpus rows, never a wrong answer. A release before its mirror
 /// (`PRE_MIRROR_LUPIN`) refuses them because the names do not resolve; any
 /// other resolves them and is refused at run, by name, at the first wait,
-/// before a line prints (r45: the 0.1.62 candidate at `72eff3c`).
+/// before a line prints (r45: the 0.1.62 candidate at `72eff3c`; and the
+/// published 0.1.63 at `2becebc`).
 #[test]
 fn lupin_refuses_the_one_wait_by_name() {
     let Some(lupin) = sibling_lupin() else {

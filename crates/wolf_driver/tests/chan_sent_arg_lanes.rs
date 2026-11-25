@@ -184,9 +184,10 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 // r43: the 0.1.60 candidate at 17bd522 answers the same 21 rows (#232 still open).
 // r44: so does the 0.1.61 candidate at a10cbe5.
 // r45: and the 0.1.62 candidate at 72eff3c.
+// And the published 0.1.63 at 2becebc.
 const LUPIN_MISSES_CHANNEL_PAYLOADS: &[&str] = &[
     "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55", "0.1.56", "0.1.57", "0.1.58",
-    "0.1.59", "0.1.60", "0.1.61", "0.1.62",
+    "0.1.59", "0.1.60", "0.1.61", "0.1.62", "0.1.63",
 ];
 
 fn base_version(v: &str) -> &str {

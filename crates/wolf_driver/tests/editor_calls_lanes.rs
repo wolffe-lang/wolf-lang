@@ -188,6 +188,8 @@ fn realpath_served_tree_boundary(version: &str, commit: &str) -> bool {
         ("0.1.61", "a10cbe5"),
         // r45: and the 0.1.62 candidate at its release head.
         ("0.1.62", "72eff3c"),
+        // And the published 0.1.63 at its release commit.
+        ("0.1.63", "2becebc"),
     ]
     .iter()
     .any(|(v, c)| *v == version && commit.starts_with(c))
@@ -215,6 +217,9 @@ fn only_measured_realpath_boundaries_are_pinned() {
     assert!(realpath_served_tree_boundary("0.1.62", "72eff3c"));
     assert!(!realpath_served_tree_boundary("0.1.62", "a10cbe5"));
     assert!(!realpath_served_tree_boundary("0.1.62", "unknown"));
+    assert!(realpath_served_tree_boundary("0.1.63", "2becebc"));
+    assert!(!realpath_served_tree_boundary("0.1.63", "72eff3c"));
+    assert!(!realpath_served_tree_boundary("0.1.63", "unknown"));
 }
 
 /// lupin 0.1.54 and 0.1.55 stop at one of `calls`, which they do not

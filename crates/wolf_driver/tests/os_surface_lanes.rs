@@ -36,7 +36,7 @@
 //!
 //! **lupin 0.1.58 and 0.1.59** predate every new name: each is pinned
 //! here by version, exactly as measured ("does not resolve"). **lupin
-//! 0.1.60**, **0.1.61** and **0.1.62** resolve the five names, check their
+//! 0.1.60**, **0.1.61**, **0.1.62** and **0.1.63** resolve the five names, check their
 //! shapes and decline each by name; they are pinned by version too, as
 //! measured. A newer lupin is held
 //! to the mirror (tracked in wolf-interp issue 315).
@@ -67,8 +67,8 @@ const PRE_MIRROR_LUPIN: &[&str] = &["0.1.58", "0.1.59"];
 /// shapes and then decline each by name (wolf-interp#315 still open),
 /// measured on the 0.1.60 candidate at its release head `17bd522`; r44: and
 /// on the 0.1.61 candidate at `a10cbe5`; r45: and on the 0.1.62 candidate at
-/// `72eff3c`.
-const DECLINED_LUPIN: &[&str] = &["0.1.60", "0.1.61", "0.1.62"];
+/// `72eff3c`; and on the published 0.1.63 at `2becebc`.
+const DECLINED_LUPIN: &[&str] = &["0.1.60", "0.1.61", "0.1.62", "0.1.63"];
 
 /// The call a declining release names on a row where it is not the row's
 /// own s272 call: `signal_action_rows.lu` reaches `os_signal_ignored`
