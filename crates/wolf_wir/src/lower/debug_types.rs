@@ -122,7 +122,7 @@ fn root_key(table: &TypeTable, id: TyId) -> Option<Bound> {
             TyKind::Row { tags, tail } => {
                 tags.iter()
                     .all(|(_, payload)| payload.iter().all(|t| child(*t)))
-                    && tail.is_none_or(|t| child(t))
+                    && tail.is_none_or(child)
             }
             _ => false,
         }
