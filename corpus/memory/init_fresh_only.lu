@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="answer: yss10=3 pool=5\nplace: xs0=1 pool=6\nfor: rows00=1 bag=9\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.excl.1
+//!
+//! wolf-lang#1221 — a pool's `init`, the other builtin store that keeps its
+//! argument (`[mem.region.edge.elem]`, ruled with `push` in wolf-lang#385),
+//! stores as it is an operand nothing else holds and copies the rest. Each
+//! line writes through the pool's value and reads the value it came from.
+//!
+//! - `answer`: an element `last` answers is a copy of its own (#1200), so
+//!   `init` keeps it as it is.
+//! - `place`: a value handed plainly by name is still copied in (#1183).
+//! - `for`: a struct literal over a `for` binding. `init` keeps the literal
+//!   as it is, so the binding inside must be the loop's own copy (#1169's
+//!   predicate, told that `init` keeps a literal as `push` does).
+
+struct S {
+    a: List[int],
+}
+
+fn main() -> int {
+    var yss = [[1, 2], [3]]
+    var pool = Pool[List[int]]()
+    let h = (mut pool).reserve()
+    (mut pool).init(h, yss.last() else [9])
+    pool[h][0] = 5
+    print("answer: yss10={yss[1][0]} pool={pool[h][0]}")
+
+    var xs = [1, 2]
+    let h2 = (mut pool).reserve()
+    (mut pool).init(h2, xs)
+    pool[h2][0] = 6
+    print("place: xs0={xs[0]} pool={pool[h2][0]}")
+
+    var rows = [[1, 2], [3]]
+    var bags = Pool[S]()
+    var hs = List[handle S]()
+    for row in rows {
+        let hb = (mut bags).reserve()
+        (mut bags).init(hb, S { a: row })
+        (mut hs).push(hb)
+    }
+    bags[hs[0]].a[0] = 9
+    print("for: rows00={rows[0][0]} bag={bags[hs[0]].a[0]}")
+    0
+}
