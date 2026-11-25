@@ -808,7 +808,7 @@ mod tests {
             "struct Pair { small: i8, wide: int }\n\
              struct Node { value: int, next: List[Node] }\n\
              fn views(mut value: Pair, raw: *Pair, xs: List[Pair], pairs: Map[int, Pair], optional: int ! {none}, node: Node) -> int { let pointer = raw\n0 }\n\
-             fn carry[T](value: T) -> T { let local = value\nlocal }\n\
+             fn carry[T](value: T) -> T { let local = value\ncopy local }\n\
              fn main() -> int { carry(3 as u8)\ncarry(4 as byte)\n0 }\n",
             "fn total(bs: List[byte]) -> int { var n = 0\nfor b in bs { n = n + b }\nn + bs.len + bs[0] as int }\n\
              fn main() -> !int { total(\"wolf\".bytes()) - 563 }\n",
