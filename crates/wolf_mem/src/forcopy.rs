@@ -570,7 +570,7 @@ impl Walk<'_, '_, '_, '_> {
                     .callee()
                     .and_then(MemberExpr::cast)
                     .and_then(|m| m.member())
-                    .is_some_and(|t| matches!(text(self.src, t.span).as_str(), "push" | "init"));
+                    .is_some_and(|t| matches!(text(self.src, t.span).as_str(), "push"));
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     let kept = keeps
                         && a.value()
