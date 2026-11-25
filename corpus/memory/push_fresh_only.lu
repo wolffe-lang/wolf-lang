@@ -4,20 +4,19 @@
 //!
 //! wolf-lang#1177 (part 2) — a `push` stores a fresh operand as it is (a
 //! struct, tuple or list literal, a `copy e`, a declared function's answer
-//! to primitive arguments) and copies every other plain operand, as it
-//! always did (#385). This row holds the other side: each line pushes an
-//! operand that may still reach a place, writes through the pushed element,
-//! and reads the place back unchanged.
+//! to primitive arguments; since #1221 also an element a list answers, an
+//! arm over fresh values and an enum constructor) and copies every other
+//! plain operand, as it always did (#385). Each line pushes, writes through
+//! the pushed element, and reads the value it came from back unchanged.
 //!
-//! - `first`, `get`: an element read behind `else` is the receiver's own
-//!   element on the compiling machines (#1184); only the push's copy keeps
-//!   the list's element apart from it.
-//! - `if`, `block`: either may yield such an element. (Yielding a place
-//!   by name, `if c { yss[0] } else { .. }`, moves it: a later read of
-//!   `yss[0]` is E1001, so there is nothing left to alias.)
+//! - `first`, `get`: an element read behind `else` is a copy of its own
+//!   (#1200), so the push keeps it as it is and the receiver is untouched.
+//! - `if`, `block`: either yields such a copy, and the push keeps it too.
+//!   (Yielding a place by name, `if c { yss[0] } else { .. }`, moves it:
+//!   E1001 rejects a later read of `yss[0]`, so nothing is left to alias.)
 //! - `place`: an element pushed by name.
-//! - `call`: a declared function handed a list may answer its first
-//!   element (#1184 again), so its answer is not fresh.
+//! - `call`: a declared function handed a list may still answer a piece of
+//!   it (#1197, #1198, #1199), so its answer is copied.
 //! - `copy`: fresh, and the copy is the only one made.
 //! - `for`: a literal over a `for` binding, pushed. The push keeps the
 //!   literal as it is, so the binding inside it must be the loop's own

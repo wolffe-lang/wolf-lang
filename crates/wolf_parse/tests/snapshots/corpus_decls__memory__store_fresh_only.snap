@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1455..1485 name=S fields=1
+EnumDecl 1487..1529 name=E variants=2
+FnDecl 1531..1597 name=mk body=Block
+FnDecl 1599..1690 name=via body=Block
+FnDecl 1692..1787 name=pick body=Block
+FnDecl 1789..1864 name=bad body=Block
+FnDecl 1866..2018 name=lift body=Block
+FnDecl 2020..2162 name=from_param body=Block
+FnDecl 2164..2318 name=arm_of body=Block
+FnDecl 2320..3886 name=main body=Block

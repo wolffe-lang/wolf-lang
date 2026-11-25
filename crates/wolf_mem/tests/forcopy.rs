@@ -9,8 +9,8 @@
 //! resolves clean, and the types the predicate reads are the checker's own.
 
 use wolf_ast::{ForExpr, GreenNode, SyntaxKind};
-use wolf_mem::forcopy::{OwnCopy, declared_call, needs_own_copy, own_copy, reaches_str};
-use wolf_sema::check::BodyResult;
+use wolf_mem::forcopy::{OwnCopy, needs_own_copy, own_copy, reaches_str};
+use wolf_sema::check::{BodyResult, CallSig};
 use wolf_sema::types::TyKind;
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
 use wolf_span::Span;
@@ -72,10 +72,10 @@ fn answer(src: &str, typed: bool, known: bool) -> (bool, OwnCopy) {
             _ => None,
         })
     };
-    let declared = |sp: Span| -> bool {
-        tc.bodies.iter().any(|b| match &b.result {
-            BodyResult::Checked(tb) => tb.calls.iter().any(|(s, c)| *s == sp && declared_call(c)),
-            _ => false,
+    let call = |sp: Span| -> Option<&CallSig> {
+        tc.bodies.iter().find_map(|b| match &b.result {
+            BodyResult::Checked(tb) => tb.calls.iter().find(|(s, _)| *s == sp).map(|(_, c)| c),
+            _ => None,
         })
     };
     let holds_str = !known
@@ -95,8 +95,8 @@ fn answer(src: &str, typed: bool, known: bool) -> (bool, OwnCopy) {
             })
             .unwrap_or(true);
     (
-        needs_own_copy(d, src, &ty, &declared),
-        own_copy(d, src, &ty, &declared, holds_str),
+        needs_own_copy(d, src, &ty, &call),
+        own_copy(d, src, &ty, &call, holds_str),
     )
 }
 
@@ -634,6 +634,52 @@ fn a_literal_over_the_binding_pushed_copies() {
     }
 }
 
+/// wolf-lang#1221: `init` keeps a fresh operand as `push` does, and an `if`,
+/// `match`, block or `else` whose every value is fresh is kept as it is, and
+/// so is an enum constructor. A literal over the binding inside any of them
+/// carries the binding into the container: the binding must be the loop's
+/// own copy. A literal of a part, and a value handed by name, still read it.
+#[test]
+fn a_literal_over_the_binding_kept_by_init_an_arm_or_a_constructor_copies() {
+    let head = "struct W { items: List[int] }\n\nenum Bag { Full(List[int]), Empty }\n\nfn f() -> int {\n    let c = true\n    let rows = [[1, 2], [3, 4]]\n    var ws = List[W]()\n    var bs = List[Bag]()\n    var ns = List[List[int]]()\n    var pool = Pool[W]()\n    var i = 0\n    for row in rows {\n        let h = (mut pool).reserve()\n        ";
+    let tail = "\n        i += 1\n    }\n    ws.len + bs.len + ns.len + i\n}\n\nfn main() {}\n";
+    for (name, body) in [
+        (
+            "a struct literal, by init",
+            "(mut pool).init(h, W { items: row })",
+        ),
+        (
+            "an if over literals",
+            "(mut ws).push(if c { W { items: row } } else { W { items: [0] } })",
+        ),
+        (
+            "a match over literals",
+            "(mut ws).push(match c {\n            true => W { items: row },\n            false => W { items: [0] },\n        })",
+        ),
+        (
+            "a block over a literal",
+            "(mut ws).push({\n            let k = 1\n            W { items: row }\n        })",
+        ),
+        ("an enum constructor", "(mut bs).push(Bag.Full(row))"),
+    ] {
+        let src = format!("{head}{body}{tail}");
+        assert!(ask(&src, true, true), "must copy: {name}\n{src}");
+    }
+    for (name, body) in [
+        (
+            "an if over literals of a part",
+            "(mut ns).push(if c { [row[0]] } else { [0] })",
+        ),
+        (
+            "a copy of the binding, by init",
+            "(mut pool).init(h, W { items: copy row })",
+        ),
+    ] {
+        let src = format!("{head}{body}{tail}");
+        assert!(!ask(&src, true, true), "must not copy: {name}\n{src}");
+    }
+}
+
 /// The operand `push` may store as it is: the first `push` in `src`'s `f`,
 /// asked with the checker's own types and call records.
 fn fresh(src: &str) -> bool {
@@ -672,23 +718,26 @@ fn fresh(src: &str) -> bool {
             _ => None,
         })
     };
-    let declared = |sp: Span| -> bool {
-        tc.bodies.iter().any(|b| match &b.result {
-            BodyResult::Checked(tb) => tb.calls.iter().any(|(s, c)| *s == sp && declared_call(c)),
-            _ => false,
+    let call = |sp: Span| -> Option<&CallSig> {
+        tc.bodies.iter().find_map(|b| match &b.result {
+            BodyResult::Checked(tb) => tb.calls.iter().find(|(s, _)| *s == sp).map(|(_, c)| c),
+            _ => None,
         })
     };
-    wolf_mem::forcopy::fresh_operand(v, &declared, &ty)
+    wolf_mem::forcopy::fresh_operand(v, &call, &ty)
 }
 
-/// wolf-lang#1177: which pushed operands are fresh. A literal, a `copy` and a
-/// declared function's answer to primitive arguments are; a place, a method
-/// call, an `else`, `if` or block, and a declared function handed a list (it
-/// may answer that list's own element, wolf-lang#1184) are not.
+/// wolf-lang#1177, #1221: which pushed operands are fresh. A literal, a
+/// `copy`, a declared function's answer to primitive arguments, an element a
+/// list's `get`, `first`, `last` or `pop` answers (#1200), an enum
+/// constructor, and an `if`, `match`, block or `else` whose every value is
+/// fresh are; a place, a user method, an arm or fallback that is a place or
+/// a pattern's binding, and a declared function handed a list (it may answer
+/// a piece of it, #1197, #1198, #1199) are not.
 #[test]
-fn a_fresh_operand_is_a_literal_a_copy_or_a_call_on_primitives() {
-    let head = "struct S { a: List[int] }\n\nfn make(i: int) -> S {\n    S { a: [i] }\n}\n\nfn mk() -> List[int] {\n    [1]\n}\n\nfn first_of(xs: List[List[int]]) -> List[int] {\n    xs.first() else [0]\n}\n\nfn f() -> int {\n    let c = true\n    var yss = [[1, 2], [3]]\n    var ss = List[S]()\n    var o = List[List[int]]()\n    ";
-    let tail = "\n    ss.len + o.len\n}\n\nfn main() {}\n";
+fn a_fresh_operand_is_a_value_nothing_else_holds() {
+    let head = "struct S { a: List[int] }\n\nstruct H { xs: List[int] }\n\nimpl H {\n    fn first(self) -> List[int] {\n        copy self.xs\n    }\n}\n\nenum E { Full(List[int]), Empty }\n\nfn make(i: int) -> S {\n    S { a: [i] }\n}\n\nfn mk() -> List[int] {\n    [1]\n}\n\nfn first_of(xs: List[List[int]]) -> List[int] {\n    xs.first() else [0]\n}\n\nfn f() -> int {\n    let c = true\n    let hh = H { xs: [1] }\n    var yss = [[1, 2], [3]]\n    var ss = List[S]()\n    var es = List[E]()\n    var o = List[List[int]]()\n    ";
+    let tail = "\n    ss.len + o.len + es.len\n}\n\nfn main() {}\n";
     for (name, body, want) in [
         ("a struct literal", "(mut ss).push(S { a: [1] })", true),
         ("a list literal", "(mut o).push([1, 2])", true),
@@ -698,16 +747,61 @@ fn a_fresh_operand_is_a_literal_a_copy_or_a_call_on_primitives() {
         ("a declared call on nothing", "(mut o).push(mk())", true),
         ("a place", "(mut o).push(yss[0])", false),
         (
-            "a method's element behind else",
+            "a first behind else",
             "(mut o).push(yss.first() else [9])",
-            false,
+            true,
         ),
         (
             "a get behind else",
             "(mut o).push(yss.get(1) else [9])",
+            true,
+        ),
+        (
+            "a last behind else",
+            "(mut o).push(yss.last() else [9])",
+            true,
+        ),
+        (
+            "a pop behind else",
+            "(mut o).push((mut yss).pop() else [9])",
+            true,
+        ),
+        (
+            "an if over literals",
+            "(mut o).push(if c { [1] } else { [2] })",
+            true,
+        ),
+        (
+            "a match over literals",
+            "(mut o).push(match c {\n        true => [1],\n        false => mk(),\n    })",
+            true,
+        ),
+        (
+            "a block over a literal",
+            "(mut o).push({\n        let k = 1\n        [k]\n    })",
+            true,
+        ),
+        ("an enum constructor", "(mut es).push(E.Full([1]))", true),
+        (
+            "an if with a place",
+            "(mut o).push(if c { yss[0] } else { [0] })",
             false,
         ),
-        ("an if", "(mut o).push(if c { yss[0] } else { [0] })", false),
+        (
+            "an else with a place",
+            "(mut o).push(yss.get(5) else yss[0])",
+            false,
+        ),
+        (
+            "a match answering its binding",
+            "(mut o).push(match yss[0] {\n        xs => xs,\n    })",
+            false,
+        ),
+        (
+            "a user method named first",
+            "(mut o).push(hh.first())",
+            false,
+        ),
         (
             "a declared call on a list",
             "(mut o).push(first_of(yss))",

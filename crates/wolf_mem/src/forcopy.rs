@@ -78,7 +78,7 @@ use std::collections::HashSet;
 
 use wolf_ast::{
     Arg, AssignStmt, Block, BracketApply, BreakExpr, CallExpr, ElseExpr, ForExpr, GreenNode,
-    MatchExpr, MemberExpr, ParenExpr, PrefixExpr, ReturnExpr, StructLit, SyntaxKind,
+    IfExpr, MatchExpr, MemberExpr, ParenExpr, PrefixExpr, ReturnExpr, StructLit, SyntaxKind,
 };
 use wolf_sema::check::CallSig;
 use wolf_sema::sig::{ItemSig, SigTables};
@@ -103,13 +103,13 @@ pub enum OwnCopy {
 /// Must the `for` loop `d` bind a deep copy of each element (`true`), or may
 /// it bind the element itself (`false`)? `false` only when the body provably
 /// only reads what the header binds; see the module documentation.
-pub fn needs_own_copy(
+pub fn needs_own_copy<'c>(
     d: ForExpr<'_>,
     src: &[u8],
     expr_ty: &dyn Fn(Span) -> Option<TyKind>,
-    declared: &dyn Fn(Span) -> bool,
+    call: &dyn Fn(Span) -> Option<&'c CallSig>,
 ) -> bool {
-    own_copy(d, src, expr_ty, declared, true) != OwnCopy::Element
+    own_copy(d, src, expr_ty, call, true) != OwnCopy::Element
 }
 
 /// The binding the `for` loop `d` needs: the element itself, a copy freed
@@ -120,11 +120,13 @@ pub fn needs_own_copy(
 /// and a `str` stored into the copy may have its bytes in the copy's own
 /// region (a list's growth and its `str` pushes land in the region the
 /// list was born in).
-pub fn own_copy(
+/// `call` is the consumer's own call record at a span, as [`fresh_operand`]
+/// reads it.
+pub fn own_copy<'c>(
     d: ForExpr<'_>,
     src: &[u8],
     expr_ty: &dyn Fn(Span) -> Option<TyKind>,
-    declared: &dyn Fn(Span) -> bool,
+    call: &dyn Fn(Span) -> Option<&'c CallSig>,
     holds_str: bool,
 ) -> OwnCopy {
     let Some(pat) = d.pattern() else {
@@ -150,7 +152,7 @@ pub fn own_copy(
         src,
         names: &names,
         expr_ty,
-        declared,
+        call,
         wrote: false,
         escaped: false,
     };
@@ -212,66 +214,114 @@ pub fn declared_call(c: &CallSig) -> bool {
     !c.has_self && c.decl_span.is_some() && !c.ctor && !c.c_call && !c.variadic
 }
 
-/// wolf-lang#1177 (part 2): is `push`'s operand `e` FRESH — a value no
-/// other place can reach once the push holds it — so the push may store it
+/// wolf-lang#1177 (part 2), #1221: is the operand `e` of a store that keeps
+/// its argument (`push`'s value, a pool's `init` value) FRESH — a value no
+/// other place can reach once the store holds it — so the store may keep it
 /// as it is instead of deep-copying it? `[mem.region.edge.elem]` states the
-/// copy's cost as paid once per plain push, a ceiling, and a push of a value
-/// nobody else holds needs no copy to keep the list's element independent.
+/// copy's cost as paid once per plain store, a ceiling, and a store of a
+/// value nobody else holds needs no copy to keep the container's value
+/// independent.
 ///
 /// `true` only for, parentheses seen through:
 /// - a struct, tuple or list literal: it owns its parts. A local, a field or
 ///   an element it names is moved into it (a later use is E1001 on every
 ///   compiling machine, a `use-after-move` trap on lupin);
+/// - an enum constructor (`E.Full(xs)`): its payloads are moved in as a
+///   struct literal's fields are (`CallSig::ctor`);
 /// - `copy e`, `copy region { … }` among them: its answer is a new value;
 /// - a call to a declared function ([`declared_call`]) whose every argument
 ///   is a primitive (`expr_ty`): nothing it could hand back was reachable
 ///   before the call, since module state holds no heap value
 ///   (`[mem.static.3]`) and its arguments hold none. A declared call with a
-///   heap argument is not fresh while wolf-lang#1184 stands: a function may
-///   answer `xs.first() else [..]`, the caller's own element, and E1002 does
-///   not see it.
+///   heap argument is not fresh while wolf-lang#1197, #1198 and #1199 stand:
+///   each lets a function answer a piece of a `read` argument without E1002;
+/// - a list's `get`, `first`, `last` (each answers a copy of the element,
+///   wolf-lang#1200) and `pop` (the element has left the list): the receiver
+///   typed `List` (`expr_ty`), so the call is the builtin, never a user's
+///   method;
+/// - an `if` with an `else`, a `match`, a block or an `else` whose every
+///   value is fresh by this same rule: its value is one of them. An arm, a
+///   tail or a fallback that is a place or a pattern's binding is not fresh,
+///   and a `return`, `break` or `continue` yields no value.
 ///
-/// `false` for everything else, which keeps the copy: a place, a method call
-/// (`get` and `first` may hand out the receiver's own element), an `else`,
-/// `if`, `match` or block expression (each may yield a place's value), a
-/// constructor, a fn value's call, a C call. A wrong `false` costs one copy;
-/// a wrong `true` is a second writable path to one value, so the list is
-/// short on purpose. `declared` answers whether the call at a span is a
-/// [`declared_call`], from the consumer's own call records; `expr_ty` is the
-/// checker's type at a span, as [`needs_own_copy`] reads it.
-pub fn fresh_operand(
+/// `false` for everything else, which keeps the copy: a place, a user
+/// method (`self`), a fn value's call, a C call, an `if` with no `else`. A
+/// wrong `false` costs one copy; a wrong `true` is a second writable path to
+/// one value, so the list is short on purpose. `call` is the consumer's own
+/// call record at a span; `expr_ty` is the checker's type at a span, as
+/// [`needs_own_copy`] reads it. Both machines' `push` and `init` and the
+/// `for` binding's walk ask this one function.
+pub fn fresh_operand<'c>(
     e: &GreenNode,
-    declared: &dyn Fn(Span) -> bool,
+    call: &dyn Fn(Span) -> Option<&'c CallSig>,
     expr_ty: &dyn Fn(Span) -> Option<TyKind>,
 ) -> bool {
+    let fresh = |x: &GreenNode| fresh_operand(x, call, expr_ty);
     match e.kind {
         SyntaxKind::ParenExpr => {
             // `(mut x)` and `(take x)` are modes, not values.
             !e.tokens()
                 .any(|t| matches!(t.kind, SyntaxKind::MutKw | SyntaxKind::TakeKw))
-                && ParenExpr::cast(e)
-                    .and_then(|p| p.expr())
-                    .is_some_and(|inner| fresh_operand(inner, declared, expr_ty))
+                && ParenExpr::cast(e).and_then(|p| p.expr()).is_some_and(fresh)
         }
         SyntaxKind::StructLit | SyntaxKind::TupleExpr | SyntaxKind::ListLit => true,
         SyntaxKind::PrefixExpr => PrefixExpr::cast(e)
             .and_then(|p| p.op())
             .is_some_and(|t| t.kind == SyntaxKind::CopyKw),
-        SyntaxKind::CallExpr => {
-            declared(e.span)
-                && CallExpr::cast(e).is_some_and(|d| {
-                    d.args().into_iter().flat_map(|l| l.args()).all(|a| {
-                        a.value().is_some_and(|v| {
-                            matches!(
-                                expr_ty(v.span),
-                                Some(TyKind::Prim(_) | TyKind::Unit | TyKind::Never)
-                            )
-                        })
-                    })
-                })
-        }
+        SyntaxKind::CallExpr => call(e.span).is_some_and(|c| fresh_call(e, c, expr_ty)),
+        SyntaxKind::IfExpr => IfExpr::cast(e).is_some_and(|d| {
+            d.then_block().is_some_and(|b| fresh(b.syntax())) && d.else_branch().is_some_and(fresh)
+        }),
+        SyntaxKind::MatchExpr => MatchExpr::cast(e).is_some_and(|d| {
+            let mut any = false;
+            d.arms().all(|a| {
+                any = true;
+                a.body().is_some_and(fresh)
+            }) && any
+        }),
+        SyntaxKind::Block => Block::cast(e)
+            .and_then(|b| b.trailing_expr())
+            .is_some_and(fresh),
+        SyntaxKind::ElseExpr => ElseExpr::cast(e)
+            .is_some_and(|d| d.scrutinized().is_some_and(fresh) && d.fallback().is_some_and(fresh)),
+        SyntaxKind::ReturnExpr | SyntaxKind::BreakExpr | SyntaxKind::ContinueExpr => true,
         _ => false,
     }
+}
+
+/// [`fresh_operand`]'s call arm: a constructor, a declared function on
+/// primitive arguments, or a list's own answer.
+fn fresh_call(e: &GreenNode, c: &CallSig, expr_ty: &dyn Fn(Span) -> Option<TyKind>) -> bool {
+    if c.ctor {
+        return true;
+    }
+    let Some(d) = CallExpr::cast(e) else {
+        return false;
+    };
+    if declared_call(c) {
+        return d.args().into_iter().flat_map(|l| l.args()).all(|a| {
+            a.value().is_some_and(|v| {
+                matches!(
+                    expr_ty(v.span),
+                    Some(TyKind::Prim(_) | TyKind::Unit | TyKind::Never)
+                )
+            })
+        });
+    }
+    if !c.has_self || c.c_call || !matches!(c.callee.as_str(), "get" | "first" | "last" | "pop") {
+        return false;
+    }
+    let Some(mut recv) = d.callee().and_then(MemberExpr::cast).and_then(|m| m.base()) else {
+        return false;
+    };
+    // `(mut xs).pop()`: the receiver under its mode.
+    while recv.kind == SyntaxKind::ParenExpr {
+        match ParenExpr::cast(recv).and_then(|p| p.expr()) {
+            Some(inner) => recv = inner,
+            None => return false,
+        }
+    }
+    matches!(expr_ty(recv.span), Some(TyKind::List(_)))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -282,20 +332,20 @@ enum Pos {
     Escape,
 }
 
-struct Walk<'s, 'n, 'f> {
+struct Walk<'s, 'n, 'f, 'c> {
     src: &'s [u8],
     names: &'n HashSet<String>,
     expr_ty: &'f dyn Fn(Span) -> Option<TyKind>,
-    /// Is the call at this span one to a declared function ([`declared_call`]
-    /// of the checker's record there)?
-    declared: &'f dyn Fn(Span) -> bool,
+    /// The checker's call record at a span ([`declared_call`] and
+    /// [`fresh_operand`] read it).
+    call: &'f dyn Fn(Span) -> Option<&'c CallSig>,
     /// A store through a derived name, or a `mut` lend of one.
     wrote: bool,
     /// Any other use that may keep or hand on a derived value.
     escaped: bool,
 }
 
-impl Walk<'_, '_, '_> {
+impl Walk<'_, '_, '_, '_> {
     fn prim(&self, span: Span) -> bool {
         matches!(
             (self.expr_ty)(span),
@@ -471,7 +521,7 @@ impl Walk<'_, '_, '_> {
                 //   method, a fn value or a C call is not known to be held
                 //   to E1002 here: their plain arguments take the call's own
                 //   position.
-                let plain = if (self.declared)(e.span) {
+                let plain = if (self.call)(e.span).is_some_and(declared_call) {
                     Pos::Read
                 } else {
                     pos
@@ -510,20 +560,21 @@ impl Walk<'_, '_, '_> {
                         _ => self.expr(c, Pos::Read),
                     }
                 }
-                // wolf-lang#1177: a `push` stores a fresh operand as it is
-                // ([`fresh_operand`]), so the parts of a literal it is handed
-                // go where the list goes: they escape. Any method named
-                // `push` counts, a builtin or not; for a declared one the
+                // wolf-lang#1177, #1221: `push` and a pool's `init` store a
+                // fresh operand as it is ([`fresh_operand`]), so the parts of
+                // a literal, an arm or a constructor they are handed go where
+                // the container goes: they escape. Any method named `push`
+                // or `init` counts, a builtin or not; for a declared one the
                 // only cost is a copy.
-                let pushes = d
+                let keeps = d
                     .callee()
                     .and_then(MemberExpr::cast)
                     .and_then(|m| m.member())
-                    .is_some_and(|t| text(self.src, t.span) == "push");
+                    .is_some_and(|t| matches!(text(self.src, t.span).as_str(), "push" | "init"));
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
-                    let kept = pushes
+                    let kept = keeps
                         && a.value()
-                            .is_some_and(|v| fresh_operand(v, self.declared, self.expr_ty));
+                            .is_some_and(|v| fresh_operand(v, self.call, self.expr_ty));
                     self.arg(a, if kept { Pos::Escape } else { plain });
                 }
             }
