@@ -24,14 +24,18 @@ pub fn sha256_hex(data: &[u8]) -> String {
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
         0x5be0cd19,
     ];
-    let mut msg = data.to_vec();
+    // Borrow complete blocks. Only the final one or two padded blocks need
+    // storage: copying the whole message and then pushing 0x80 doubles a large
+    // Vec just to append the first padding byte (including native cache keys).
+    let blocks = data.chunks_exact(64);
+    let tail = blocks.remainder();
     let bitlen = (data.len() as u64) * 8;
-    msg.push(0x80);
-    while msg.len() % 64 != 56 {
-        msg.push(0);
-    }
-    msg.extend_from_slice(&bitlen.to_be_bytes());
-    for chunk in msg.chunks(64) {
+    let mut padding = [0u8; 128];
+    padding[..tail.len()].copy_from_slice(tail);
+    padding[tail.len()] = 0x80;
+    let padded_len = if tail.len() < 56 { 64 } else { 128 };
+    padding[padded_len - 8..padded_len].copy_from_slice(&bitlen.to_be_bytes());
+    for chunk in blocks.chain(padding[..padded_len].chunks_exact(64)) {
         let mut w = [0u32; 64];
         for (i, word) in chunk.chunks(4).enumerate() {
             w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
