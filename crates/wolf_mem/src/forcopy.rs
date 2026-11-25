@@ -308,7 +308,7 @@ fn fresh_call(e: &GreenNode, c: &CallSig, expr_ty: &dyn Fn(Span) -> Option<TyKin
             })
         });
     }
-    if !c.has_self || c.c_call || !matches!(c.callee.as_str(), "get" | "first" | "last" | "pop") {
+    if !c.has_self || c.c_call || !matches!(c.callee.as_str(), "get" | "last" | "pop") {
         return false;
     }
     let Some(mut recv) = d.callee().and_then(MemberExpr::cast).and_then(|m| m.base()) else {
