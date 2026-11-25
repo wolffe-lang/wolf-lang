@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- A pool's `init`, and `push` in more cases, store a value nothing else
+  holds as it is (wolf-lang#1221). `init` now keeps every operand `push`
+  keeps (wolf-lang#1177): 64 `init`s of a struct of two one-element lists
+  charged their region 22,336 bytes natively where 64 `init(h, take v)`
+  charge 16,192, and now charge the same. Both also keep an element a
+  list's `get`, `first` or `last` answers (a copy of its own since
+  wolf-lang#1200) or `pop` hands out, an enum constructor, and an `if`,
+  `match`, block or `else` whose every value is one of these, so
+  `push(xs.first() else [])` copies the element once instead of twice. A
+  place, a method of a user type, a fn value's call and a declared function
+  handed a heap value are still copied. A literal over a `for` binding that
+  `init` or such an arm keeps now makes the binding the loop's own copy.
+
 - **A `let` or `var` pattern's piece of a `read` parameter is lent**
   (wolf-lang#1192, `[mem.tier0.mode.read]`), as a field read and a
   `match` binding of it are. `let (a, n) = p` then `a` returned, or
