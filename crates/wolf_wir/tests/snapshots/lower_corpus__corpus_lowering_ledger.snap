@@ -544,6 +544,7 @@ memory/index_store_read_param.lu: lowers
 memory/index_store_take_list.lu: not mem-clean (pre-wir rungs own it)
 memory/index_store_take_map.lu: not mem-clean (pre-wir rungs own it)
 memory/index_store_take_read_param.lu: not mem-clean (pre-wir rungs own it)
+memory/init_fresh_only.lu: lowers
 memory/list_elem_assign.lu: lowers
 memory/list_elem_copy_loop.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
@@ -841,6 +842,7 @@ memory/static_var_call_deep.lu: lowers
 memory/static_var_call_writes.lu: lowers
 memory/static_var_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
 memory/static_wrapping.lu: lowers
+memory/store_fresh_only.lu: lowers
 memory/store_rhs_first_list.lu: lowers
 memory/store_rhs_first_map.lu: lowers
 memory/store_rhs_first_pool.lu: lowers
