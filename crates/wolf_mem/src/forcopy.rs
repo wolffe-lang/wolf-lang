@@ -276,7 +276,7 @@ pub fn fresh_operand<'c>(
             let mut any = false;
             d.arms().all(|a| {
                 any = true;
-                a.body().is_some_and(fresh)
+                a.body().is_some()
             }) && any
         }),
         SyntaxKind::Block => Block::cast(e)
