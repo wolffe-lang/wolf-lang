@@ -27,6 +27,8 @@ pub fn sha256_hex(data: &[u8]) -> String {
     // Borrow complete blocks. Only the final one or two padded blocks need
     // storage: copying the whole message and then pushing 0x80 doubles a large
     // Vec just to append the first padding byte (including native cache keys).
+    let owned = data.to_vec();
+    let data = owned.as_slice();
     let blocks = data.chunks_exact(64);
     let tail = blocks.remainder();
     let bitlen = (data.len() as u64) * 8;
