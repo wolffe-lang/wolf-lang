@@ -39,6 +39,14 @@ diagnostic, and does not resolve this release's four new names. See
 - **`wolf fmt`** keeps a one-armed `then` guard on one line even past the
   width, where 0.2.40 broke it to the braced form. A file 0.2.40 already
   formatted keeps its braces.
+- **Known issue (wolf-lang#1216):** since 0.2.38, WIR lowering at the
+  native tier needs far more memory on very large programs than 0.2.37
+  did. A native build of one of yew's editor tests peaks at 5.3 GiB with
+  0.2.37. With this release, under an 11 GiB address-space cap, the same
+  build is stopped after 70 s, still in WIR lowering, with 9.6 GiB (9,876
+  MiB) resident; its peak without the cap is at least that and is not yet
+  known. Programs of that size cannot build natively on a 7 GB hosted
+  macOS runner. yew stays on 0.2.36 until this is fixed.
 
 ### The changes
 
