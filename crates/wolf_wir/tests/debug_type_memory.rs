@@ -169,6 +169,57 @@ fn source_description_sharing_crosses_body_tables() {
 }
 
 #[test]
+fn reassignments_keep_shared_source_descriptions() {
+    fn reassigned(assignments: usize) -> Build {
+        let mut body = String::from("var state = seed\n");
+        for _ in 0..assignments {
+            body.push_str("state = seed\n");
+        }
+        let marker = "fn probe0(seed: *N7) -> int {\n";
+        let text = source(7, 1, 0);
+        assert!(text.contains(marker));
+        lower(&text.replacen(marker, &format!("{marker}{body}"), 1))
+    }
+    fn assignment_roots(build: &Build, assignments: usize) -> Vec<&DebugType> {
+        let function = build
+            .module
+            .funcs
+            .values()
+            .find(|f| f.name == "probe0")
+            .expect("probe0 lowered");
+        assert_eq!(function.debug_vars.len(), assignments + 2);
+        let mut roots = Vec::new();
+        for (index, binding) in function.debug_vars.iter().enumerate() {
+            assert_eq!(binding.name, if index == 0 { "seed" } else { "state" });
+            assert_eq!(binding.param, index == 0);
+            let ty = binding.ty.as_ref().expect("assignment retains source type");
+            assert!(matches!(&ty.kind, DebugKind::Pointer(_)));
+            roots.push(ty);
+        }
+        for ty in &roots[1..] {
+            assert_eq!(*ty, roots[0], "assignment does not change the source type");
+        }
+        roots
+    }
+    let initial = reassigned(0);
+    let repeated = reassigned(64);
+    assert_eq!(
+        print_module(&initial.module),
+        print_module(&repeated.module)
+    );
+    let initial_roots = assignment_roots(&initial, 0);
+    let repeated_roots = assignment_roots(&repeated, 64);
+    assert_eq!(initial_roots[0], repeated_roots[0]);
+    // add_debug_var already reuses the latest same-name/same-shape type. A new
+    // annotation must not replace that sharing with a separately allocated tree.
+    budget(
+        "debug-description-reassignment-nodes",
+        retained_nodes(&repeated_roots),
+        2 * retained_nodes(&initial_roots) + 32,
+    );
+}
+
+#[test]
 fn source_dag_does_not_expand_into_a_description_tree() {
     for depth in [5, 7] {
         let build = lower(&source(depth, 1, 1));
