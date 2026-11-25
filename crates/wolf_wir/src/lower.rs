@@ -18855,7 +18855,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // plainly is COPIED into the pool, so the caller keeps an
                 // independent value; `init(h, take v)` moves it instead.
                 // `deep_copy_in` returns a value that reaches no heap
-                // storage untouched.
+                // storage untouched. wolf-lang#1221: a FRESH operand
+                // (`wolf_mem::forcopy::fresh_operand`, as `push` reads it,
+                // and the checked machine's `init` too) is held by nothing
+                // else, so it is stored as it is.
                 let moves_in = d
                     .args()
                     .into_iter()
@@ -18863,7 +18866,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .nth(1)
                     .and_then(Arg::mode)
                     == Some(wolf_ast::ParamMode::Take);
-                let val = if moves_in {
+                let fresh = wolf_mem::forcopy::fresh_operand(
+                    vx,
+                    &|sp| self.calls.get(&sp).copied(),
+                    &|sp| self.expr_sema_ty(sp).map(|t| self.table.kind(t).clone()),
+                );
+                let val = if moves_in || fresh {
                     val
                 } else {
                     let table = self.table;
