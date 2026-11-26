@@ -1284,8 +1284,7 @@ fn for_in_replaced_by_match_keeps_the_tight_bound() {
     let s = subject(&corpus_root().join(FILE), &mut sm);
     let m = mutation_of(&s, 50).expect("the loop-header mutation still has a target");
     assert_eq!(
-        m.describe,
-        "replace token 60 at 458..460 with `match`",
+        m.describe, "replace token 60 at 458..460 with `match`",
         "the pinned loop-header mutation changed"
     );
     let (found, mutated) = violations(&s, &m, 50, &mut sm);
@@ -1312,8 +1311,7 @@ fn call_name_replaced_by_comma_keeps_the_tight_bound() {
     let s = subject(&corpus_root().join(FILE), &mut sm);
     let m = mutation_of(&s, 70).expect("the call-name mutation still has a target");
     assert_eq!(
-        m.describe,
-        "replace token 131 at 784..787 with `,`",
+        m.describe, "replace token 131 at 784..787 with `,`",
         "the pinned call-name mutation changed"
     );
     let (found, mutated) = violations(&s, &m, 70, &mut sm);
@@ -1373,8 +1371,14 @@ fn signed_patterns_still_report_in_an_otherwise_clean_tuple() {
         let src = format!("fn f() {{ let {pattern} = xs\n}}\nfn sentinel() {{}}\n");
         let parse = util::parse(&src);
         assert_eq!(parse.diagnostics.len(), 1, "{:?}", parse.diagnostics);
-        assert_eq!(parse.diagnostics[0].code, wolf_parse::codes::EXPECTED_PATTERN);
-        assert_eq!(parse.diagnostics[0].message, "a literal pattern has no sign");
+        assert_eq!(
+            parse.diagnostics[0].code,
+            wolf_parse::codes::EXPECTED_PATTERN
+        );
+        assert_eq!(
+            parse.diagnostics[0].message,
+            "a literal pattern has no sign"
+        );
     }
 }
 
