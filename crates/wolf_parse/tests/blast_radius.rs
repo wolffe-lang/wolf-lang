@@ -1301,6 +1301,42 @@ fn for_in_replaced_by_match_keeps_the_tight_bound() {
     assert!(!has_damage(node), "the assignment resynchronizes cleanly");
 }
 
+/// A missing call name must not report the same argument-expression
+/// tail again as an invalid signed literal in a phantom tuple binder.
+#[test]
+fn call_name_replaced_by_comma_keeps_the_tight_bound() {
+    const FILE: &str = "net/connect_within_invalid.lu";
+    let mut sm = wolf_span::SourceMap::new();
+    let s = subject(&corpus_root().join(FILE), &mut sm);
+    let m = mutation_of(&s, 70).expect("the call-name mutation still has a target");
+    assert_eq!(
+        m.describe,
+        "replace token 131 at 784..787 with `,`",
+        "the pinned call-name mutation changed"
+    );
+    let (found, mutated) = violations(&s, &m, 70, &mut sm);
+    assert!(found.is_empty(), "{}", found.join("\n"));
+
+    let (parse, sites) = pinned_case(
+        FILE,
+        b"let b = tag(\"127.0.0.1:{port}\", 0 - 5)",
+        b"let b = ".len(),
+        3,
+        b" , ",
+    );
+    assert_eq!(sites.len(), 1, "one tuple wreck: {sites:?}");
+    assert!(sites[0].len() <= 3, "within the tight bound: {sites:?}");
+    for probe in [b"print(\"{a} {b}\")".as_slice(), b"net_close(srv)?"] {
+        let start = mutated
+            .windows(probe.len())
+            .position(|w| w == probe)
+            .expect("the following statement remains in the source") as u32;
+        let node = find_start(&parse.root, wolf_ast::SyntaxKind::ExprStmt, start)
+            .expect("the following statement is still present");
+        assert!(!has_damage(node), "the following statement parses cleanly");
+    }
+}
+
 /// The exact #283 counter-example, pinned deterministically (no
 /// seed) so it runs in the ordinary gauntlet, not only the nightly:
 /// replacing the `fn` of `fn main` in
