@@ -877,16 +877,27 @@ class T13API:
         return 404, {"message": "Not Found"}, {}
 
 
+T13_GIT = """#!/bin/sh
+# A stand-in for git: the plan's two questions about the checkout, the
+# pushed commit and its tree, and nothing else (any other call fails, so a
+# plan that asks git anything more fails its rows).
+[ "$1" = "-C" ] && shift 2
+if [ "$*" = "rev-parse HEAD" ]; then echo "$T13_HEAD"; exit 0; fi
+if [ "$*" = "rev-parse HEAD^{tree}" ]; then echo "$T13_TREE"; exit 0; fi
+echo "stand-in git: not answered: $*" >&2
+exit 1
+"""
+
+
 def t13_repo():
+    """The checkout a trunk push plans in: a directory whose `git` (first on
+    the plan's PATH) answers for a pushed commit and its tree, so these rows
+    need no git of their own."""
     d = tempfile.mkdtemp(prefix="tiers-test-push-")
-    g = ["git", "-C", d, "-c", "user.name=tiers-test", "-c", "user.email=tiers-test@invalid", "-c", "commit.gpgsign=false"]
-    subprocess.run(["git", "-c", "init.defaultBranch=trunk", "init", "-q", d], check=True)
-    with open(os.path.join(d, "f"), "w") as f:
-        f.write("the pushed commit\n")
-    subprocess.run(g + ["add", "f"], check=True)
-    subprocess.run(g + ["commit", "-q", "-m", "the pushed commit"], check=True)
-    rev = lambda r: subprocess.run(["git", "-C", d, "rev-parse", r], capture_output=True, text=True, check=True).stdout.strip()
-    return d, rev("HEAD"), rev("HEAD^{tree}")
+    with open(os.path.join(d, "git"), "w") as f:
+        f.write(T13_GIT)
+    os.chmod(os.path.join(d, "git"), 0o755)
+    return d, "a1" * 20, "b2" * 20
 
 
 T13_DIR, T13_SHA, T13_TREE = t13_repo()
@@ -900,7 +911,8 @@ def t13_plan(api, event="push", event_name="push", ref="refs/heads/trunk", sha=N
     open(out, "w").close()
     env = {k: v for k, v in os.environ.items() if k not in T13_SCRUB}
     env.update(GITHUB_EVENT_NAME=event_name, GITHUB_REF=ref, GITHUB_SHA=sha or T13_SHA, GITHUB_REPOSITORY=T13_REPO,
-               GITHUB_API_URL=api.url, GITHUB_SERVER_URL="https://github.com")
+               GITHUB_API_URL=api.url, GITHUB_SERVER_URL="https://github.com", T13_HEAD=T13_SHA, T13_TREE=T13_TREE)
+    env["PATH"] = T13_DIR + os.pathsep + env.get("PATH", "")
     if token:
         env["PLAN_TOKEN"] = token
     if timeout:
