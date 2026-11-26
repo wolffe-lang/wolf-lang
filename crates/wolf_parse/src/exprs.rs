@@ -1720,7 +1720,7 @@ fn for_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
             return m.complete(p, SyntaxKind::ForExpr);
         }
     }
-    if !p.expect_kw(Keyword::In, "`in` in the for loop")
+    if p.expect_kw(Keyword::In, "`in` in the for loop")
         && p.at_kw(Keyword::Match)
         && match_header_has_statement_body(p)
     {
