@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **A very large program builds in about the memory 0.2.37 needed
+  again** (wolf-lang#1216, the known issue of 0.2.41, present since
+  0.2.38). Lowering built a fresh description of a binding's source
+  type, for its debug information, at every binding that named the
+  type, so a program with many bindings of a deep type kept one copy of
+  that description per binding. Each lowering unit now describes a type
+  once, and every binding of it shares that description. Separately,
+  hashing a module's lowered code for its cache key copied the whole
+  text, and appending the padding to the copy reallocated it at twice
+  its size. The hash now reads its input in place and builds only the
+  final padding, in at most 128 bytes. The descriptions, the DWARF
+  bytes, the lowered code and every cache key are unchanged, byte for
+  byte. A native build of one of yew's editor tests, which 0.2.41 could
+  not finish under an 11 GiB address-space cap, peaks within 5 % of
+  0.2.37's peak again. Its release build needs about 4 GB, as with
+  0.2.37, where the compiler before this change needed more than 9 GB.
+
 - **A `let` or `var` pattern's piece of a `read` parameter is lent**
   (wolf-lang#1192, `[mem.tier0.mode.read]`), as a field read and a
   `match` binding of it are. `let (a, n) = p` then `a` returned, or
