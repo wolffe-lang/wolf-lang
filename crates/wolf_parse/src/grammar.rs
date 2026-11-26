@@ -2402,12 +2402,26 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
                         )
                     });
                 }
+                let separator_diags = p.diag_count();
                 pattern_separator(
                     p,
                     Punct::RParen,
                     "the tuple pattern's elements",
                     &mut list_diags,
                 );
+                if p.diag_count() > separator_diags && at_signed_literal(p) {
+                    // An expression tail such as `0 - 5` just failed
+                    // the pattern's separator. It is one reported
+                    // region, not another signed-literal pattern.
+                    p.recover_until(true, |k| {
+                        matches!(k, TokenKind::Punct(Punct::RParen | Punct::Eq))
+                            || k == TokenKind::Term
+                    });
+                    if !p.at_punct(Punct::RParen) {
+                        unclosed(p, opener, "(");
+                        break;
+                    }
+                }
                 if p.pos() == before {
                     unclosed(p, opener, "(");
                     break;
