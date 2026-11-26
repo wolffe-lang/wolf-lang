@@ -1720,24 +1720,67 @@ fn for_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
             return m.complete(p, SyntaxKind::ForExpr);
         }
     }
-    p.expect_kw(Keyword::In, "`in` in the for loop");
+    if !p.expect_kw(Keyword::In, "`in` in the for loop")
+        && p.at_kw(Keyword::Match)
+        && match_header_has_statement_body(p)
+    {
+        // The missing separator already reported this header. Do not
+        // read a statement-shaped loop body as match arms, then demand
+        // another loop block after the match has swallowed its braces.
+        p.recover_until(true, |k| {
+            k == TokenKind::Punct(Punct::LBrace) || k == TokenKind::Term
+        });
+        p.missing(); // the damaged iterable
+        block_required(p);
+        return m.complete(p, SyntaxKind::ForExpr);
+    }
     condition_required(p, ctx, "the iterable expression");
     block_required(p);
     m.complete(p, SyntaxKind::ForExpr)
 }
 
-/// Do the braces at the current position (`p` at `{`) enclose
-/// arm-shaped content — a `=>` at nesting depth 1 before the matching
-/// `}`? Lookahead, bounded by the brace's own extent, used only on the
-/// wreck path (a `match` whose scrutinee is missing): committing such
+/// A `match` after a missing loop separator may really be the lost
+/// `in`. Look only to the header's first top-level brace or line end;
+/// real arm-shaped content still belongs to a match iterable. Nested
+/// delimiters and string episodes cannot supply the loop's brace.
+fn match_header_has_statement_body(p: &Parser<'_>) -> bool {
+    let mut depth = 0usize;
+    for i in 0.. {
+        match p.nth(i) {
+            TokenKind::Eof => return false,
+            TokenKind::Term if depth == 0 => return false,
+            TokenKind::Kw(k) if depth == 0 && is_decl_keyword(k) => return false,
+            TokenKind::Punct(Punct::LBrace) if depth == 0 => {
+                return !braces_enclose_arms(p, i);
+            }
+            TokenKind::Punct(Punct::LParen | Punct::LBracket | Punct::LBrace)
+            | TokenKind::StrBegin(_)
+            | TokenKind::InterpOpen => depth += 1,
+            TokenKind::Punct(Punct::RParen | Punct::RBracket | Punct::RBrace)
+            | TokenKind::StrEnd { .. }
+            | TokenKind::InterpClose => {
+                if depth == 0 {
+                    return false;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Do the braces at lookahead `opener` enclose arm-shaped content — a
+/// `=>` at nesting depth 1 before the matching `}`? Lookahead, bounded by
+/// the brace's own extent, used only on wreck paths: committing such
 /// a brace to the arm grammar when its content is statement-shaped
-/// misreads every statement as a pattern and over-cascades recovery
-/// (#109's neighbor case), while refusing a genuine arm list would
-/// wreck the honest `match { A => … }` typo. The content decides.
-fn braces_enclose_arms(p: &Parser<'_>) -> bool {
-    debug_assert!(p.at_punct(Punct::LBrace), "lookahead off `{{`");
+/// misreads every statement as a pattern and over-cascades recovery,
+/// while refusing a genuine arm list would wreck the honest
+/// `match { A => … }` typo. The content decides.
+fn braces_enclose_arms(p: &Parser<'_>, opener: usize) -> bool {
+    debug_assert_eq!(p.nth(opener), TokenKind::Punct(Punct::LBrace));
     let mut depth = 1usize;
-    for i in 1.. {
+    for i in opener + 1.. {
         match p.nth(i) {
             TokenKind::Punct(Punct::LBrace | Punct::LParen | Punct::LBracket) => depth += 1,
             TokenKind::Punct(Punct::RBrace | Punct::RParen | Punct::RBracket) => {
@@ -1773,7 +1816,7 @@ fn match_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         });
         p.fold_line_end();
     }
-    if !p.at_punct(Punct::LBrace) || (!scrutinee_ok && !braces_enclose_arms(p)) {
+    if !p.at_punct(Punct::LBrace) || (!scrutinee_ok && !braces_enclose_arms(p, 0)) {
         p.error_unless_folded(
             codes::EXPECTED_TOKEN,
             p.here(),
