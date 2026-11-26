@@ -45,6 +45,8 @@ use std::path::{Path, PathBuf};
 use wolf_ast::{Child, GreenNode};
 use wolf_lex::TokenKind;
 
+mod util;
+
 // ------------------------------------------------------- tiny PRNG ------
 
 /// xorshift64* — deterministic, seedable, no deps.
@@ -1334,6 +1336,45 @@ fn call_name_replaced_by_comma_keeps_the_tight_bound() {
         let node = find_start(&parse.root, wolf_ast::SyntaxKind::ExprStmt, start)
             .expect("the following statement is still present");
         assert!(!has_damage(node), "the following statement parses cleanly");
+    }
+}
+
+#[test]
+fn genuine_match_iterables_keep_their_arms_and_loop_body() {
+    for (header, errors) in [
+        ("for x in match xs { _ => xs }", 0),
+        ("for x match xs { _ => xs }", 1),
+        ("for x match choose(fn() { xs }) { _ => xs }", 1),
+        ("for x match \"{{\" { _ => xs }", 1),
+    ] {
+        let src = format!("fn f() {{ {header} {{ use_x(x) }} }}\nfn sentinel() {{}}\n");
+        let parse = util::parse(&src);
+        assert_eq!(
+            parse.diagnostics.len(),
+            errors,
+            "{header}: {:?}",
+            parse.diagnostics
+        );
+        for (probe, kind) in [
+            ("match ", wolf_ast::SyntaxKind::MatchExpr),
+            ("use_x(x)", wolf_ast::SyntaxKind::ExprStmt),
+            ("fn sentinel", wolf_ast::SyntaxKind::FnDecl),
+        ] {
+            let at = src.find(probe).expect("fixture contains the construct") as u32;
+            let node = find_start(&parse.root, kind, at).expect("construct retained");
+            assert!(!has_damage(node), "{header}: {probe} remains clean");
+        }
+    }
+}
+
+#[test]
+fn signed_patterns_still_report_in_an_otherwise_clean_tuple() {
+    for pattern in ["(-1, x)", "(0, -1)"] {
+        let src = format!("fn f() {{ let {pattern} = xs\n}}\nfn sentinel() {{}}\n");
+        let parse = util::parse(&src);
+        assert_eq!(parse.diagnostics.len(), 1, "{:?}", parse.diagnostics);
+        assert_eq!(parse.diagnostics[0].code, wolf_parse::codes::EXPECTED_PATTERN);
+        assert_eq!(parse.diagnostics[0].message, "a literal pattern has no sign");
     }
 }
 
