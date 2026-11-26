@@ -539,7 +539,7 @@ def tested_tree(jobs):
 def green_kind(jobs, names, label):
     """Whether every job named is in the run once, green, on its macOS runner."""
     found = [[j for j in jobs if j.get("name") == n] for n in names]
-    return all(len(f) == 1 and f[0].get("conclusion") == "success" and label in (f[0].get("labels") or []) for f in found)
+    return all(len(f) == 1 and f[0].get("conclusion") == "success" and label in (f[0].get("labels") or []) for f in found if f)
 
 
 def macos_green(kinds, repo, log):
