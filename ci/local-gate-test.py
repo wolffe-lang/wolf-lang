@@ -20,6 +20,14 @@ GATE = "github.event_name != 'pull_request' || contains(github.event.pull_reques
 EVENT = "github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'release-matrix') && 'push' || github.event_name"
 
 
+PARSER_SWEEP = """      - name: parser recovery, full mutation sweep
+        if: github.event_name == 'pull_request'
+        env:
+          MUTATE_BUDGET: "300"
+        run: /usr/bin/time -f 'parser recovery full sweep elapsed=%e s maxrss=%M KiB' cargo test --locked -p wolf_parse --test blast_radius single_token_mutations_have_bounded_blast_radius -- --exact --nocapture
+"""
+
+
 def blocks(text):
     jobs = text.split("\njobs:\n", 1)[1]
     return dict(re.findall(r"^  ([A-Za-z0-9_-]+):\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", jobs, re.M | re.S))
@@ -134,6 +142,14 @@ class Gate(unittest.TestCase):
             for key, value in BASE["full"].items():
                 self.assertEqual(json.loads(result.stdout)[key], value)
 
+    def test_parser_full_sweep_is_a_separate_linux_pr_step(self):
+        text = self.main()
+        self.assertIn(PARSER_SWEEP, blocks(text)["lint-test"])
+        self.assertEqual(text.count(PARSER_SWEEP), 1)
+        self.assertTrue(expression("github.event_name == 'pull_request'", "pull_request"))
+        for event in ("push", "schedule", "workflow_dispatch"):
+            self.assertFalse(expression("github.event_name == 'pull_request'", event))
+
     def test_nightly_release_and_commands_preserved(self):
         for name, old_jobs in BASE["workflows"].items():
             text = (ROOT / ".github/workflows" / name).read_text()
@@ -155,6 +171,8 @@ class Gate(unittest.TestCase):
                 new = new.replace(cheap, "")
                 # New wiring proof steps add coverage, not replacement commands.
                 new = new.replace("      - name: local gate wiring proof\n        run: python3 -I ci/local-gate-test.py\n", "")
+                # The separately proven deep sweep adds PR coverage only.
+                new = new.replace(PARSER_SWEEP, "")
                 self.assertEqual(new, old, (name, job))
         for event in ("schedule", "workflow_dispatch", "push"):
             self.assertTrue(expression(GATE, event))
