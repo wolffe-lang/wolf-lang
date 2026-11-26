@@ -338,6 +338,11 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: parser recovery, full mutation sweep
+        if: github.event_name == 'pull_request'
+        env:
+          MUTATE_BUDGET: "300"
+        run: /usr/bin/time -f 'parser recovery full sweep elapsed=%e s maxrss=%M KiB' cargo test --locked -p wolf_parse --test blast_radius single_token_mutations_have_bounded_blast_radius -- --exact --nocapture
       - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
         run: rustup target add x86_64-unknown-none
       - name: the musl portability target (#886)
