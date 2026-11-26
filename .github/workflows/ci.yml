@@ -147,6 +147,8 @@ jobs:
       tier: ${{ steps.plan.outputs.tier }}
       jobs: ${{ steps.plan.outputs.jobs }}
       covered_by: ${{ steps.plan.outputs.covered_by }}
+      matrix_build_test: ${{ steps.plan.outputs.matrix_build_test }}
+      macos_covered: ${{ steps.plan.outputs.macos_covered }}
     steps:
       # Depth 2: a pull request's run checks out its merge commit, and the
       # plan reads that commit against its first parent.
@@ -167,6 +169,19 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           TIER: release
         run: python3 ci/covered.py --github-output "$GITHUB_OUTPUT"
+      # The tree this run tests, in a step's name, where the jobs listing
+      # shows it: a trunk push leaves the macOS leg a run at its commit
+      # already ran green over the same tree (a pull request's run tests
+      # its merge with the base).
+      - name: the tree under test
+        if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
+        id: tree
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+      - name: the tree under test is ${{ steps.tree.outputs.tree }}
+        if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
+        run: test "$(git rev-parse 'HEAD^{tree}')" = "${{ steps.tree.outputs.tree }}"
       - id: plan
         if: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-matrix') || contains(github.event.pull_request.labels.*.name, 'ci') || contains(github.event.pull_request.labels.*.name, 'release-matrix') }}
         env:
@@ -181,6 +196,8 @@ jobs:
           COVERED_BY: ${{ steps.covered.outputs.covered_by }}
           COVERED_AT: ${{ steps.covered.outputs.covered_at }}
           COVERED_RUN: ${{ steps.covered.outputs.covered_run }}
+          # the workflow's own token, read-only: a trunk push reads its commit's runs
+          PLAN_TOKEN: ${{ github.token }}
         run: python3 ci/tiers.py plan --merge --github-output "$GITHUB_OUTPUT"
 
   # The planner can say no: its tiers by event, its classes by path, the
@@ -654,15 +671,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            timeout: 60
-          - os: windows-latest
-            leg: tests
-            timeout: 45
-          - os: windows-latest
-            leg: rung
-            timeout: 45
+        # The legs are the plan's (ci/tiers.py MATRIX, with each leg's limit):
+        # macos-latest, windows-latest tests and rung. A trunk push leaves the
+        # macOS leg when a run at its commit already ran it green over the same
+        # tree; its Rust cache then saves nothing that run's restore did not
+        # already match (the nightly saves trunk's).
+        include: ${{ fromJSON(needs.plan.outputs.matrix_build_test || '[]') }}
     runs-on: ${{ matrix.os }}
     # Each leg's limit is at least its longest healthy run plus a third,
     # rounded up to the next 5 minutes (#1217), read from each leg's last
