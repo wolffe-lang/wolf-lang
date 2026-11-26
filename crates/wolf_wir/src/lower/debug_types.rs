@@ -688,7 +688,6 @@ mod tests {
         // freeze; they must never silently become persistent keys.
         let anonymous = left.intern(TyKind::Distinct(int));
         assert!(root_key(&left, anonymous).is_none());
-        println!("PASS debug-description-table-identity");
     }
 
     #[test]
@@ -751,7 +750,6 @@ mod tests {
         let expected =
             uncached(|| source_type(&table, &sigs, root, span, Storage::Native)).unwrap();
         assert!(format!("{expected:?}").contains("opaque recursive"));
-        println!("PASS debug-description-recursion-context");
     }
 
     #[test]
@@ -806,7 +804,6 @@ mod tests {
             .unwrap();
         assert_eq!((a.name.as_str(), a.size), ("int", 8));
         assert_eq!((b.name.as_str(), b.size), ("byte", 1));
-        println!("PASS debug-description-rigid-context");
     }
 
     #[test]
@@ -879,12 +876,8 @@ mod tests {
                 );
             }
             let got = dump(&cached);
-            if got != want {
-                eprintln!("FAIL debug-description-byte-identity");
-            }
-            assert_eq!(got, want);
+            assert_eq!(got, want, "debug-description-byte-identity");
         }
-        println!("PASS debug-description-byte-identity");
     }
 
     #[test]
