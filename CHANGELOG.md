@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Damaged loop headers and tuple patterns recover without cascades**
+  (wolf-lang#1231). A `match` in place of a loop's `in` no longer reads
+  its statement body as match arms. An expression tail mistaken for a
+  tuple pattern stops at the tuple boundary after the missing-comma
+  report. Diagnostic wording is unchanged. The Linux pull-request job
+  also runs the complete parser mutation sweep at the nightly budget.
+
 - **A very large program builds in about the memory 0.2.37 needed
   again** (wolf-lang#1216, the known issue of 0.2.41, present since
   0.2.38). Lowering built a fresh description of a binding's source
