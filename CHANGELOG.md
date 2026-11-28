@@ -1,6 +1,53 @@
 # Changelog
 
-## Unreleased
+## 0.2.42 — 2026-11-28
+
+Pairs with **lupin 0.1.63** again, conformance pin
+`5f1f1c949582f53121e4047bc83c86f23ff72240` (the interpreter has not
+changed since 0.2.41's pairing), and bundles **wolf-std
+`d58f9e1ce3af39b65a1502db21c7e6656b9f2b64`**: std.fs's wrappers of the
+released fs builtins (`fs.copy_chunk`, `fs.set_file_mode`, `fs.statfs`
+and `FileSystem`, held directories with `fs.open_dir` and the `_at`
+calls). See [the release note](docs/releases/0.2.42.md).
+
+### Read this before you bump the pin
+
+- **The native ABI is `wolf-abi-3`.** A list's header no longer stores its
+  element size, and the runtime entries whose arguments changed are
+  renamed (`__wolf_rt_list32_*`, `__wolf_rt_par32_map`). An object or
+  static archive compiled by 0.2.41 or earlier does not link against
+  0.2.42's runtime (`libwolf_rt.a`), nor a 0.2.42 object against an older
+  one. A project that keeps a prebuilt runtime or prebuilt objects moves
+  both together: in this organisation PAX (its musl `libwolf_rt.a` and the
+  programs built against it), ligature (its link bundle) and fenrir (its
+  runtime artifacts).
+- **One new prelude name**: `os_hostname` (a function of that name now
+  shadows a builtin, W0304, fatal under `--deny-warnings`). No program in
+  the org's repositories declares it.
+- **New refusals.** A `let` or `var` pattern's piece of a `read`
+  parameter is lent: keeping or returning it is E1002, writing through it
+  is E1014. A pty's name returned out of the region it was asked in is
+  E1010. No program in the org's repositories, and no corpus file, is
+  newly refused.
+- **Answers that change.** A `for` loop's binding, `get`, `first` and
+  `last`, a slice's elements and a pool's `init` each hold their own
+  value, where every compiling machine shared it; each is charged as
+  `copy`. A loop that only reads its binding compiles to the same code.
+- **Memory.** A very large program builds in about the memory 0.2.37
+  needed again (wolf-lang#1216, 0.2.41's known issue). Measured on one
+  Linux host with this release's archive, a native build of yew's editor
+  peaks at 5.7 GiB (0.2.41: 12.1 to 12.3 GiB), and its release build at
+  4.5 GiB (0.2.41: 10.9 GiB).
+- **Known issues:** the nightly's large property sweep allows three
+  cascade diagnostics at one wreck site after a single-token mutation, and
+  two mutations give four (wolf-lang#1178, wolf-lang#1231; diagnostics on
+  invalid source only); every socket call on every thread takes one
+  runtime mutex (wolf-lang#1230); a struct passed by value from a `mut`
+  binding is copied whole, even at the binding's last use (wolf-lang#1235);
+  `net_wait` starts compensation threads even when it does not block
+  (wolf-lang#836).
+
+### The changes
 
 - **A very large program builds in about the memory 0.2.37 needed
   again** (wolf-lang#1216, the known issue of 0.2.41, present since
