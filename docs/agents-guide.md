@@ -1,8 +1,8 @@
 # An agent's guide to writing good wolf
 
 This guide is for a model (or a person) about to write wolf. Read it before
-the first line. It is current at **wolf 0.2.41**, **lupin 0.1.63** and the
-standard library bundled in the 0.2.41 archive (wolf-std `32a1cd06`). No
+the first line. It is current at **wolf 0.2.42**, **lupin 0.1.63** and the
+standard library bundled in the 0.2.42 archive (wolf-std `d58f9e1c`). No
 model has seen much wolf in training, so what you think you remember about
 it is probably a guess; this file is what the released toolchain actually
 does.
@@ -17,7 +17,7 @@ does.
   answer differently, and the header says how.
 - The check is [`agents-guide-check.sh`](agents-guide-check.sh) beside this
   file. Each release runs it with that release's archives before the tag,
-  and moves the version line above. At 0.2.41 it ran on macOS arm64.
+  and moves the version line above. At 0.2.42 it ran on macOS arm64.
 
 ```sh
 WOLF=path/to/wolf LUPIN=path/to/lupin docs/agents-guide-check.sh docs/agents-guide.md
@@ -88,7 +88,7 @@ prevents it. They are written to be pasted into a brief.
 | A keyword as a field or function name | There are no raw identifiers; see [Names](#names) for the 50 keywords. |
 | A function with a `mut` parameter used as a value | Not yet compilable (wolf-lang#917). A table of handlers is an id per row and one `match`. |
 | Deep recursion over input | Parse and walk with explicit stacks. Native code traps `stack-overflow`; the checked machine and lupin stop far sooner. |
-| `if let x = e; cond { }` | Specified for a later release and not in 0.2.41. Do not write it until a release carries it. |
+| `if let x = e; cond { }` | Specified for a later release and not in 0.2.42. Do not write it until a release carries it. |
 | A checked-machine claim from `wolf run --checked`, or from a `wolf` on `PATH` | The checked machine is `wolf conform-run FILE --json --checked`, run with the pinned binary. Quote the command. |
 | Reading exit 2 or 4 from `wolf build` as a skip | 2 is a rejected program, 4 is "cannot compile this yet". Neither is a skip. |
 | An expected answer computed by code you also wrote | Expected answers come from the reference tool or the spec, never from a second program with the same misunderstanding. |
@@ -367,9 +367,9 @@ fn main() {
 }
 ```
 
-`wolf prelude` prints the list your binary has (248 names at 0.2.41, and
-`--json` for a program to read). These 132 joined the prelude between 0.2.14
-and 0.2.41; none left. If code you are reading defines one of them itself, it
+`wolf prelude` prints the list your binary has (249 names at 0.2.42, and
+`--json` for a program to read). These 133 joined the prelude between 0.2.14
+and 0.2.42; none left. If code you are reading defines one of them itself, it
 was written for an older pin.
 
 <!-- prelude-since:begin -->
@@ -390,7 +390,7 @@ was written for an older pin.
 - Processes and identity: `os_arch` `os_chdir` `os_chroot` `os_clock_ns`
   `os_core_limit` `os_core_off` `os_egid` `os_error` `os_error_text`
   `os_euid` `os_exec` `os_fork` `os_getpriority` `os_gid` `os_groups`
-  `os_isatty` `os_name` `os_pgid` `os_pid` `os_pipe` `os_ppid`
+  `os_hostname` `os_isatty` `os_name` `os_pgid` `os_pid` `os_pipe` `os_ppid`
   `os_proc_pid` `os_set_core_limit` `os_set_ids` `os_set_pgid`
   `os_setpriority` `os_setsid` `os_sid` `os_spawn_fds` `os_spawn_job`
   `os_spawn_session` `os_subreaper` `os_subreaper_set` `os_uid` `os_umask`
@@ -623,7 +623,11 @@ A `read` parameter is lent, never given. Returning it, sending it, storing
 it into module state or a `mut` parameter, or carrying it into a `take` is
 E1002; lending it `mut`, taking it or writing through it is E1014. A
 closure's parameter written without a mode is `read` too, so assigning it is
-E1014 (since 0.2.41; before, every machine ran the write). Only
+E1014 (since 0.2.41; before, every machine ran the write). Since 0.2.42 a
+piece of a `read` parameter taken apart by a `let` or `var` pattern is lent
+the same way: `let (a, n) = p` then returning `a` is E1002, and a write
+through a `var` pattern's piece is E1014; `let (a, n) = copy p` keeps one of
+your own. Only
 values that can reach shared storage are refused (a `List`, a `Map`, a
 `Pool`, or a type parameter). Write `copy`, or make the parameter `take`.
 lupin runs this program, so a lupin run is not evidence that a move is
@@ -781,7 +785,7 @@ fn main() {
 compare relations, never numbers. `shared T` is reference counted and must
 be acyclic (E1006; use `weak` for back-edges). A `handle T` into a `Pool[T]`
 traps `stale-handle` on a freed slot. A `List` slice `xs[a..b]` is a fresh
-copy; a `str` slice is a view.
+copy, down to its elements' own lists since 0.2.42; a `str` slice is a view.
 
 The stack is the other memory. A native main thread that overflows it traps
 `stack-overflow` (exit 134) instead of dying of a bare signal, and the
@@ -889,7 +893,11 @@ error: parse
 
 The recoverable reads answer `none`: `xs.pop()`, `xs.get(i)`, `first`,
 `last`, `s.get(a..b)` and `m[k]` on a `Map`. `m[k] = v` inserts; `m[k] += v`
-is E0417 (write `m[k] = (m[k] else 0) + v`).
+is E0417 (write `m[k] = (m[k] else 0) + v`). Since 0.2.42, `get`, `first`
+and `last` answer a value of their own, as `push` copies one in, and a `for`
+loop's binding holds its own value: a write to it never reaches the list.
+Walk by index (`for i in 0..xs.len { xs[i] = … }`) to change the list in
+place.
 
 ```wolf
 fn main() {
@@ -1593,7 +1601,7 @@ line 2
 | a function with a `mut` or `take` parameter as a value | wolf-lang#917, open |
 | integers past 64 bits | wolf-std#100, open (`std.bigint` or `u128`) |
 | `print` reporting a failed write | wolf-lang#408, open; write through `fs_write_chunk(1, …)` to see `io` |
-| `if let x = e; cond { }` and `while var x = e; cond { }` | specified for a later release, not in 0.2.41 |
+| `if let x = e; cond { }` and `while var x = e; cond { }` | specified for a later release, not in 0.2.42 |
 
 Permissions, process ids, `chdir`, `isatty`, symbolic and hard links,
 owners, file times, the directory-relative `*_at` calls, `statfs`,
@@ -1791,13 +1799,12 @@ verifies at 0.2.40 with the mid-end on.
 - Every example in a README is pasted from the binary, and licence text is
   copied from the official file, byte for byte.
 
-## Not in 0.2.41
+## Not in 0.2.42
 
 - The binding header `if let x = e; cond { }` and `while var x = e; cond
   { }` (one binder, a literal `;`, braces only) is specified
-  (`[gram.expr.if.head]`) and planned for a later release. The 0.2.41
+  (`[gram.expr.if.head]`) and planned for a later release. The 0.2.42
   compiler does not accept it.
-- `os_hostname` (wolf-lang#858) merged after 0.2.41 was cut.
 
 Since 0.2.41, `wolf fmt` keeps a one-statement `if c then …` with no `else`
 on one line even past the width (wolf-lang#1125); a file 0.2.40 already
