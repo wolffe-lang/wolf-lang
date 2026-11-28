@@ -46,12 +46,13 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-The current release is v0.2.41, under the codename wolfgang. See the
-[0.2.41 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.41.md)
-for a dial with a budget, a subreaper and the orphans it adopts, the
-region and closure escapes the checker now refuses, stable function
-placement, the checked machine's agreements, the bundled std's Bech32,
-base64 and guarded OS randomness, and the paired interpreter's fixes.
+The current release is v0.2.42, under the codename wolfgang. See the
+[0.2.42 release note](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/releases/0.2.42.md)
+for the native ABI change (`wolf-abi-3`) a project with a prebuilt runtime
+must move with, building very large programs in about the memory 0.2.37
+needed, the values a `for` binding, `get`, `first`, `last`, a slice and a
+pool's `init` now hold of their own, the release tier's bounds fix, the
+machine's host name, and the bundled std's fs wrappers.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -136,6 +137,11 @@ windows answer `unsupported`. See `[os.net.connect.within]`,
 `[os.proc.subreaper]` and `[os.proc.poll.adopted]` in
 [the OS chapter](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/11-os.md).
 
+From 0.2.42, `os_hostname()` answers the name of the machine a program runs
+on: the kernel's node name, read on every call, with no domain added and no
+lookup made. Windows answers `unsupported`. See `[os.hostname]` in
+[the OS chapter](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/11-os.md).
+
 ### Debugging native programs
 
 Native debug builds describe source scalars, structs, tuples, strings, container
@@ -164,7 +170,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.41 by campaign, and
+tells the history of v0.2.42 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 
